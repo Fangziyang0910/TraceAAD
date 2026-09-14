@@ -7,6 +7,7 @@ import pytest
 from llm4ad.base import Evaluation
 from llm4ad.base.evaluate import EvaluationOutcome
 from llm4ad.method.traceaad_v10_11 import TraceAADV1011
+from llm4ad.method.traceaad_v10_11.traceaad import mix_uniform
 from llm4ad.method.traceaad_v10_11.core import UnknownEvaluation, read_journal
 from llm4ad.method.traceaad_v10_11.errors import repair_prompt, template_target
 from llm4ad.method.traceaad_v10_11.trajectory import (
@@ -339,6 +340,10 @@ def test_quality_and_pivot_distributions(tmp_path):
     )
     assert m.mechanism["quality_ess_target"] == 8
     assert m.mechanism["pivot_uniform_probability"] == 0.5
+
+
+def test_mix_uniform_uses_remaining_quality_mass():
+    assert mix_uniform([0.8, 0.2], 0.2) == pytest.approx([0.74, 0.26])
 
 
 @pytest.mark.parametrize("kind", ["prepare_error", "evaluation_error"])

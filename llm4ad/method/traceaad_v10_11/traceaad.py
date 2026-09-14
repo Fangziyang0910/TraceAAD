@@ -35,7 +35,7 @@ def _restore_rng(rng, state):
 
 def mix_uniform(probabilities, mass):
     n = len(probabilities)
-    return [mass * value + mass / n for value in probabilities]
+    return [(1.0 - mass) * value + mass / n for value in probabilities]
 
 
 @lru_cache(maxsize=8192)
