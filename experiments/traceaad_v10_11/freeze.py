@@ -24,6 +24,7 @@ def freeze(batch, prefix='v1011'):
         root / 'llm4ad/base',
         root / 'llm4ad/tools',
         root / 'llm4ad/method/traceaad_v10_11',
+        root / 'llm4ad/method/traceaad_v10_11_rand_ctx',
         root / 'experiments/infra',
         root / 'experiments/traceaad_v10_11',
     ]

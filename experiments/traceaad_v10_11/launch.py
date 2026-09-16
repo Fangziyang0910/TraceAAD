@@ -54,16 +54,17 @@ def healthy_slots(available, backend_pool):
 
 
 def build_plan(batch, prefix, thinking=False, history_code=False, repeats=3, traj_gens=8,
-               cvrp_last=False):
+               cvrp_last=False, rand_context=False, n_references=8):
     order = [(repeat, task) for repeat in range(1, repeats + 1) for task in TASKS]
     if cvrp_last:
         order.sort(key=lambda item: item[1] == 'cvrp_aco')
     return [dict(task=task, repeat=repeat, seed=repeat-1, backend=None,
                  run_name=f'{batch}_{TASK_SHORT[task]}_v1011_rep{repeat}',
                  session=f'{prefix}_{TASK_SHORT[task]}_r{repeat}', attempts=0, status='queued',
-                 traj_gens=traj_gens,
+                 traj_gens=0 if rand_context else traj_gens,
                  **({'thinking': True} if thinking else {}),
-                 **({'history_code': True} if history_code else {}))
+                 **({'history_code': True} if history_code else {}),
+                 **({'rand_context': True, 'n_references': n_references} if rand_context else {}))
             for repeat, task in order]
 
 
@@ -78,14 +79,19 @@ def cvrp_group_finished(batch):
 
 
 def launch_item(row):
+    flags = [flag for flag, enabled in (
+        ('--thinking', row.get('thinking')),
+        ('--history-code', row.get('history_code')),
+    ) if enabled]
+    if row.get('rand_context'):
+        flags += ['--rand-context', '--n-references', str(row.get('n_references', 8))]
+    else:
+        flags += ['--traj-gens', str(row.get('traj_gens', 8))]
     return LaunchItem(task=row['task'], repeat=row['repeat'], seed=row['seed'],
                       backend=row['backend'], session=row['session'], run_name=row['run_name'],
                       run_dir=RESULTS_ROOT / row['task'] / row['run_name'],
                       module='experiments.traceaad_v10_11.run',
-                      extra_args=tuple(arg for arg, enabled in (
-                          ('--thinking', row.get('thinking')),
-                          ('--history-code', row.get('history_code')),
-                      ) if enabled) + ('--traj-gens', str(row.get('traj_gens', 8))))
+                      extra_args=tuple(flags))
 
 
 def refresh(plan, max_attempts):
@@ -133,6 +139,10 @@ def main(argv=None):
                         help='stamp every run of this batch with model thinking mode')
     parser.add_argument('--history-code', action='store_true',
                         help='include historical programs in each formation path')
+    parser.add_argument('--rand-context', action='store_true',
+                        help='replace formation history with rank-sampled archive references')
+    parser.add_argument('--n-references', type=int, default=8,
+                        help='number of archive reference cards in random-context mode')
     parser.add_argument('--cvrp-last', action='store_true',
                         help='queue all CVRP repeats after the other twelve runs')
     parser.add_argument('--cvrp-barrier-batches', default='',
@@ -142,6 +152,12 @@ def main(argv=None):
         parser.error('interval and max-attempts must be positive')
     if args.traj_gens < 0:
         parser.error('traj-gens must be nonnegative')
+    if args.n_references < 1:
+        parser.error('n-references must be positive')
+    if args.rand_context and (args.history_code or args.traj_gens != 8):
+        parser.error('--rand-context excludes --history-code and non-default --traj-gens')
+    if not args.rand_context and args.n_references != 8:
+        parser.error('--n-references requires --rand-context')
     if not all(re.fullmatch(r'[A-Za-z0-9_-]+', s) for s in (args.batch, args.session_prefix)):
         parser.error('batch and prefix must contain only letters, numbers, underscore or hyphen')
     cvrp_barriers = tuple(filter(None, args.cvrp_barrier_batches.split(',')))
@@ -165,6 +181,9 @@ def main(argv=None):
                 raise ValueError('batch history-code mismatch')
             if (payload.get('repeats', 3), payload.get('traj_gens', 8)) != (args.repeats, args.traj_gens):
                 raise ValueError('batch repeats or history-length mismatch')
+            if (bool(payload.get('rand_context')), payload.get('n_references', 8)) != (
+                    args.rand_context, args.n_references):
+                raise ValueError('batch random-context mismatch')
             if (bool(payload.get('cvrp_last')), tuple(payload.get('cvrp_barriers', ()))) != (args.cvrp_last, cvrp_barriers):
                 raise ValueError('batch CVRP scheduling mismatch')
             if not args.dry_run and payload['source_identity'] != identity:
@@ -174,11 +193,12 @@ def main(argv=None):
                            source_identity=identity, created_at=datetime.now().astimezone().isoformat(),
                            thinking=args.thinking, history_code=args.history_code,
                            repeats=args.repeats, traj_gens=args.traj_gens,
+                           rand_context=args.rand_context, n_references=args.n_references,
                            cvrp_last=args.cvrp_last, cvrp_barriers=cvrp_barriers,
                            backends=backend_pool, direct=args.direct,
                            plan=build_plan(args.batch, args.session_prefix, args.thinking,
                                            args.history_code, args.repeats, args.traj_gens,
-                                           args.cvrp_last))
+                                           args.cvrp_last, args.rand_context, args.n_references))
             if any(item_is_running(launch_item(r)) or launch_item(r).run_dir.exists()
                    for r in payload['plan']):
                 raise ValueError('existing session or run directory without matching batch manifest')
