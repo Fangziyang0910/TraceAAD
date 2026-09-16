@@ -956,9 +956,10 @@ def make_request_handler(engine: MonitorDataEngine) -> type[BaseHTTPRequestHandl
 
             if path == "/api/versions":
                 versions = engine.get_available_versions()
+                latest = next((item["id"] for item in versions if item.get("is_latest")), None)
                 return self._send_json(
                     {
-                        "current": version or engine.default_version,
+                        "current": version or engine.default_version or latest,
                         "versions": versions,
                     }
                 )
@@ -1044,7 +1045,6 @@ def main() -> None:
     engine = MonitorDataEngine(
         results_root=args.results_dir,
         default_version=args.version,
-        default_session_prefix=args.session_prefix,
     )
 
     server_address = (args.host, args.port)

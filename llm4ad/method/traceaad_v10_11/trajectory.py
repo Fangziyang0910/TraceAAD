@@ -109,9 +109,7 @@ class TrajectoryBuilder:
                     )
                     if target.idea:
                         history.append("Idea: " + " ".join(target.idea.split()))
-                    # The newest step is the parent itself, already shown in full
-                    # as the Current Algorithm; do not send that code twice.
-                    if self.include_history_code and target.id != parent.id:
+                    if self.include_history_code:
                         history.append("Code:\n```python\n" + self.function_view(target) + "\n```")
                 parts.append("\n\n".join(history))
         if donor is not None:

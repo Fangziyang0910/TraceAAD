@@ -921,10 +921,6 @@ async function loadVersions() {
     const latestVer = availableVersions.find(v => v.is_latest)?.id;
     if (urlVer && availableVersions.some(v => v.id === urlVer)) {
       currentVersion = urlVer;
-    } else if (currentVersion && availableVersions.some(v => v.id === currentVersion)) {
-      // keep
-    } else if (data.current && availableVersions.some(v => v.id === data.current)) {
-      currentVersion = data.current;
     } else if (latestVer) {
       currentVersion = latestVer;
     } else {

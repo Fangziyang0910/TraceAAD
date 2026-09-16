@@ -218,12 +218,37 @@ def test_v1011_history_preserves_the_full_bounded_idea(tmp_path):
 def test_v1011_history_code_is_explicitly_opt_in(tmp_path):
     m = method(tmp_path, budget=1, history_code=True)
     root = add(m.tree, 1)
-    child = add(m.tree, 2, root.id, code="def score(x):\n    return x + 1")
+    middle = add(m.tree, 2, root.id, code="def score(x):\n    return x + 1")
+    child = add(m.tree, 3, middle.id, code="def score(x):\n    return x + 2")
+    default = method(tmp_path / "default", budget=1)
+    default.tree = m.tree
+    default.builder.lookup = m.tree.nodes.get
     prompt = m.builder.build(child, "Refine")
     assert "Step 1 | Refine" in prompt
-    # The parent program appears exactly once: as Current Algorithm, not
-    # again as the newest history step's Code block.
+    assert "Step 2 | Refine" in prompt
     assert prompt.count("```python\ndef score(x):\n    return x + 1\n```") == 1
+    assert prompt.count("```python\ndef score(x):\n    return x + 2\n```") == 2
+    default_history = default.builder.build(child, "Refine").split("# Design Task", 1)[0]
+    assert "Code:" not in default_history
+    assert m.mechanism["history_code"] is True
+
+
+def test_v1011_zero_history_omits_only_the_trajectory_context(tmp_path):
+    baseline = method(tmp_path / "baseline")
+    ablation = method(tmp_path / "ablation", traj_gens=0)
+    for m in (baseline, ablation):
+        root = add(m.tree, 1)
+        add(m.tree, 2, root.id, code="def score(x):\n    return x")
+        add(m.tree, 3, code="def score(x):\n    return x + 1")
+    assert ablation.mechanism["traj_gens"] == 0
+    assert ablation.builder.build_initial() == baseline.builder.build_initial()
+    for operator in ("Refine", "Tune", "Pivot", "Fuse"):
+        def prompt(m):
+            return m.builder.build(m.tree.nodes[1], operator,
+                                   m.tree.nodes[2] if operator == "Fuse" else None)
+        expected = "\n\n\n".join(part for part in prompt(baseline).split("\n\n\n")
+                                 if not part.startswith("# Design History"))
+        assert prompt(ablation) == expected
 
 
 def test_v1011_generation_uses_fixed_output_budget(tmp_path):

@@ -54,3 +54,4 @@ def test_v1011_monitor_resolves_version_meta_and_manifest_per_batch(tmp_path):
     # No version given: the newest manifest wins.
     vid, _, prefix, _ = engine._resolve_version_meta(None)
     assert (vid, prefix) == (history["batch"], "p_20260914_v1011_q38_history_code")
+    assert engine.get_available_versions()[0]["id"] == history["batch"]
