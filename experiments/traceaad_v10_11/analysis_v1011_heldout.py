@@ -13,7 +13,7 @@ import statistics
 import sys
 from pathlib import Path
 
-ROOT = Path('/home/fang/code/LLM4AD/LLM4AD')
+ROOT = Path(__file__).resolve().parents[2]
 GEN = ROOT / 'experiments/traceaad_v10_11/results_heldout_20260915_v1011_generic'
 NTJ = ROOT / 'experiments/traceaad_v10_11/results_heldout_20260915_v1011_no_traj_idea'
 SUMMARY = ROOT / 'docs/02-实验结果/00-主实验结果.md'
