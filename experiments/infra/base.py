@@ -103,8 +103,8 @@ BACKENDS: dict[BackendName, BackendProfile] = {
 BACKEND_CAPACITY: dict[BackendName, int] = {
     "zhong": 0,  # 暂时不用
     "server1": 6,
-    "server3": 9,
-    "server3b": 9,
+    "server3": 8,   # 2026-09-17 起 gpu1 单卡 :8000（tp2 已拆回两卡各一实例）
+    "server3b": 8,  # gpu0 单卡 :8001
     "local": 3,  # llama.cpp 32k × 3 slots; 正式调度仍只用 PRIMARY_BACKENDS
 }
 PRIMARY_BACKENDS: tuple[BackendName, ...] = ("server3", "server3b", "server1")

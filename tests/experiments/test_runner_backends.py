@@ -7,8 +7,10 @@ from experiments.infra import base as _common
 
 
 def test_server1_capacity_matches_current_service_limit() -> None:
+    # 2026-09-17 起 server3 恢复 gpu0/gpu1 各一单卡实例，各 8 路
     assert _common.BACKEND_CAPACITY["server1"] == 6
-    assert _common.BACKEND_CAPACITY["server3b"] == 9
+    assert _common.BACKEND_CAPACITY["server3"] == 8
+    assert _common.BACKEND_CAPACITY["server3b"] == 8
 
 
 def test_select_backend_balances_to_the_side_with_more_free_slots() -> None:
