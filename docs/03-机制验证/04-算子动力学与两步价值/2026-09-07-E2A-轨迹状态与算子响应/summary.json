@@ -3,8 +3,8 @@
     "stage": "E2-A",
     "protocol_frozen_before_suffix_outcomes_read": true,
     "source_batch": "experiments/traceaad_v10_6/results/batch_20260906_215231_revised.json",
-    "prefix_cutoffs": "experiments/_logs/refine_e1_20260907/snapshot.json",
-    "output": "experiments/_logs/traceaad_e2_a_20260907",
+    "prefix_cutoffs": "experiments/traceaad_refine_e1/raw/refine_e1_20260907/snapshot.json",
+    "output": "experiments/traceaad_e2_a/raw/traceaad_e2_a_20260907",
     "behavior_primary_tasks": [
       "tsp_construct",
       "online_bin_packing",
@@ -53,7 +53,7 @@
   "snapshot": {
     "frozen_at": "2026-09-07T05:09:30.837188+00:00",
     "source_batch": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_6/results/batch_20260906_215231_revised.json",
-    "e1_snapshot": "/home/fang/code/LLM4AD/TraceAAD/experiments/_logs/refine_e1_20260907/snapshot.json",
+    "e1_snapshot": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_refine_e1/raw/refine_e1_20260907/snapshot.json",
     "runs": [
       {
         "task": "tsp_construct",
