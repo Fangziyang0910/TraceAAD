@@ -1,14 +1,12 @@
-# Python bytecode and local tool caches
+# Python caches and test output
 __pycache__/
 *.py[cod]
-*.pyo
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .pytype/
 .ipynb_checkpoints/
-.coverage
-.coverage.*
+.coverage*
 htmlcov/
 .cache/
 
@@ -26,6 +24,16 @@ dist/
 *.egg
 *.egg-info/
 
+# Editor, operating system, and temporary files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.zcode/
+*.swp
+*.swo
+*~
+
 # Logs and local runtime output
 *.log
 *.out
@@ -35,11 +43,21 @@ wandb/
 .wandb/
 GUI/outputs/
 
-# Raw experiment artifacts stay local. Git tracks experiment entrypoints and
-# the condensed reports under docs/results/, never individual runs/evaluations.
+# Local helper files from legacy GUI/scripts
+sample2pkl.py
+gui_test.py
+ysy_main.py
+
+# Local scheduler and browser state
+experiments/.traceaad_v4_slot_queue.json
+experiments/.traceaad_v8_scheduler/
+.dispatch_state.json
+.playwright-mcp/
+
+# Generated experiment runs and evaluation artifacts.
+# Experiment entrypoints and condensed reports under docs/ remain trackable.
 experiments/_logs/
 experiments/**/results/
-experiments/**/results/**
 experiments/**/results_*/
 experiments/**/20[0-9]*/
 experiments/**/tm_*/
@@ -47,6 +65,10 @@ experiments/**/v[0-9]*/
 experiments/**/smoke_*/
 experiments/**/eval*/
 experiments/**/_eval*/
+experiments/**/logs/
+experiments/**/logs_*/
+experiments/**/artifacts/
+experiments/**/checkpoints/
 experiments/**/run_config.json
 experiments/**/results.json
 experiments/**/best_curve.csv
@@ -57,34 +79,11 @@ experiments/**/*_sample_*_program.py
 experiments/**/heldout_selection_note.json
 experiments/**/selected_finite.json
 experiments/**/tmux_run.log
-experiments/**/logs/
-experiments/**/logs_*/
-experiments/**/artifacts/
-experiments/**/checkpoints/
 
-# Historical experiment artifacts are local-only (repo-root archive/).
+# Historical experiment artifacts are local-only.
 /archive/
 
 # Local task datasets and downloaded model/data caches
 llm4ad/task/optimization/*/data/
 .huggingface/
 unsloth_compiled_cache/
-
-# OS, editor, and temporary files
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-.zcode/
-*.swp
-*.swo
-*~
-
-# Local helper files from the legacy GUI/scripts
-sample2pkl.py
-gui_test.py
-ysy_main.py
-experiments/.traceaad_v4_slot_queue.json
-experiments/.traceaad_v8_scheduler/
-.dispatch_state.json
-.playwright-mcp/

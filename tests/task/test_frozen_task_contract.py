@@ -33,7 +33,7 @@ from llm4ad.task.optimization.op_aco import template as op_template
 from llm4ad.task.optimization.tsp_construct import template as tsp_template
 from llm4ad.task.optimization.vrptw_construct import template as vrptw_template
 
-CONTRACT_DOC = "docs/02-实验结果/主实验配置与冻结契约.md"
+CONTRACT_DOC = "docs/02-实验结果/00-主实验配置与冻结契约.md"
 CONTRACT_MSG = (
     "冻结契约被打破：任务公共文本或种子/数据配置发生变化。"
     "除非用户明确指示，不得修改这些内容；如确需变更，须先获得用户许可"
