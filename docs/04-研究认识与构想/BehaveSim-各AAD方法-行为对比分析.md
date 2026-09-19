@@ -81,6 +81,6 @@ V9.16 的行为分布比 PathWise、ReEvo 更分散，抽样突破率也更高�
 
 ## 工件
 
-汇总文件为 `experiments/_logs/behavesim_v3/aggregate.json`，外部方法入口为`run_all_baselines_behavesim.py`，协议见 BehaveSim 行为度量校正。
+汇总文件为历史 v3 本地工件（当前仓库未保留），外部方法入口为 `run_all_baselines_behavesim.py`，协议见 BehaveSim 行为度量校正。
 
 `*` CALM 为 `final_archive_only`：其行为距离指标只描述最终 archive，时间行为列保持 `n/a`，不作为完整搜索时间轴的等价样本。

@@ -4,7 +4,7 @@ The measured object is a problem-solving trajectory (PSTraj): a sequence of
 intermediate solutions produced by the same decision process used by the task
 evaluator. Pairwise trajectory distance follows the paper definition:
 normalized solution edit distance, DTW alignment, then division by the shorter
-trajectory length. Raw artifacts are local-only under ``experiments/_logs``.
+trajectory length. Raw artifacts are local-only under this experiment's ``raw/`` directory.
 """
 
 from __future__ import annotations

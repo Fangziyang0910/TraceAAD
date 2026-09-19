@@ -27,8 +27,8 @@ from llm4ad.method.traceaad_v10_6 import prompts
 from llm4ad.method.traceaad_v10_6.traceaad import CODE_RE, SUMMARY_RE, _strip_thinking
 
 PROTOCOL = "traceaad-e2-b-prime-v1"
-SOURCE = REPO_ROOT / "experiments/_logs/traceaad_e2_a_20260907"
-DEFAULT = REPO_ROOT / "experiments/_logs/traceaad_e2_b_20260907"
+SOURCE = REPO_ROOT / "experiments/traceaad_e2_a/raw/traceaad_e2_a_20260907"
+DEFAULT = REPO_ROOT / "experiments/traceaad_e2_b/raw/traceaad_e2_b_20260907"
 CONFIG_PATH = Path(__file__).with_name("e2b_config.json")
 TASKS = ("tsp_construct", "online_bin_packing", "vrptw_construct")
 STATES = ("experienced", "fresh")

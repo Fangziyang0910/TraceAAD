@@ -277,7 +277,7 @@ def prediction_metrics(rows, model):
 
 def q_audit(out, manifest):
     saved_e1 = {(r['run'], r['candidate_id']): r for r in map(
-        json.loads, (ROOT / 'experiments/_logs/refine_e1_20260907/replay_predictions.jsonl').read_text().splitlines())}
+        json.loads, (ROOT / 'experiments/traceaad_refine_e1/raw/refine_e1_20260907/replay_predictions.jsonl').read_text().splitlines())}
     suffix = []
     q_errors = []
     m1_errors = []
@@ -428,7 +428,7 @@ def write_report(manifest, behavior_rows, behavior, qsummary, profile_coverage):
         'E1已经关闭静态行为邻域的Refine响应共享；E2-A只检验行为作为轨迹传感器的一个固定状态定义。未通过不否定行为移动、重访对Pivot/Fuse或多步continuation的其他作用，但后续问题必须用新的独立数据或固定锚点回答，不能继续在本suffix寻找切点。', '',
         '## 5. 成本与复现', '',
         f'行为画像覆盖：{sum(r["valid_profiles"] for r in profile_coverage["runs"])}/{sum(r["nodes"] for r in profile_coverage["runs"])} 个archive节点；复用E1成功画像 {profile_coverage["reused_success_profiles"]} 个，新画像任务 {profile_coverage["new_profile_jobs"]} 个。新增画像worker池墙钟 {profile_coverage["new_profile_wall_seconds"]/60:.1f} 分钟，不含随后距离矩阵汇总时间。', '',
-        '[执行入口](../../../../experiments/traceaad_e2_a/README.md)。机器可读产物位于 `experiments/_logs/traceaad_e2_a_20260907/`。', '']
+        '[执行入口](../../../../experiments/traceaad_e2_a/README.md)。机器可读产物位于 `experiments/traceaad_e2_a/raw/traceaad_e2_a_20260907/`。', '']
     DOC.mkdir(parents=True, exist_ok=True)
     (DOC / 'README.md').write_text('\n'.join(lines))
 

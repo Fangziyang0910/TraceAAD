@@ -56,7 +56,7 @@ experiments/.traceaad_v8_scheduler/
 
 # Generated experiment runs and evaluation artifacts.
 # Experiment entrypoints and condensed reports under docs/ remain trackable.
-experiments/_logs/
+experiments/**/raw/
 experiments/**/results/
 experiments/**/results_*/
 experiments/**/20[0-9]*/

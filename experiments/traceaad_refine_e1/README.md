@@ -1,13 +1,13 @@
 # E1-A：V10.6 Refine 局部响应的历史回放
 
-独立离线实验；不修改正式调度器、不调用生成模型、不写入搜索评价账本。完整研究协议与实验数据保存在 `experiments/_logs/refine_e1_20260907/`。
+独立离线实验；不修改正式调度器、不调用生成模型、不写入搜索评价账本。完整研究协议与实验数据保存在 `experiments/traceaad_refine_e1/raw/refine_e1_20260907/`。
 
 2026-09-07 冻结批次已完成，E1-A 离线回放与 E1-A.1 质量条件行为增量检验均未通过筛选门槛。`report.py` 中的研究判断针对该冻结批次；更换数据时须重新审读，不能沿用这些判断。固定参数保存在 `e1a1_config.json`，结果写入同一冻结日志目录及文档目录。
 
 
 ## 实际执行协议
 
-冻结 15 路 `20260906_215231_revised` 运行的原子 checkpoint 和对应已完成事件。每路截点、状态/事件/配置哈希存于 `experiments/_logs/refine_e1_20260907/snapshot.json`。排除 smoke 和未完成 pending 请求。
+冻结 15 路 `20260906_215231_revised` 运行的原子 checkpoint 和对应已完成事件。每路截点、状态/事件/配置哈希存于 `experiments/traceaad_refine_e1/raw/refine_e1_20260907/snapshot.json`。排除 smoke 和未完成 pending 请求。
 
 所有 Refine parent 均安排画像，历史邻域只含当前时刻以前**曾被选择为 Refine parent**的节点，且主比较排除当前 parent。这样避免用最终“哪些节点以后会被选中”泄漏未来，也把画像成本限制在研究的父代集合。这里的密度是历史父代观测子集密度，不是全 archive 密度。M2/M3 采用同一可见节点规则。
 
@@ -24,8 +24,8 @@ embedding 对照固定为 [all-MiniLM-L6-v2](https://huggingface.co/sentence-tra
 从仓库根目录执行。首次建立独立的embedding环境：
 
 ```bash
-uv venv --python .venv/bin/python experiments/_logs/refine_e1_20260907/venv
-uv pip install --python experiments/_logs/refine_e1_20260907/venv/bin/python numpy==2.4.6 onnxruntime==1.29.0 tokenizers==0.22.2 huggingface-hub==0.36.2
+uv venv --python .venv/bin/python experiments/traceaad_refine_e1/raw/refine_e1_20260907/venv
+uv pip install --python experiments/traceaad_refine_e1/raw/refine_e1_20260907/venv/bin/python numpy==2.4.6 onnxruntime==1.29.0 tokenizers==0.22.2 huggingface-hub==0.36.2
 ```
 
 主流程：
@@ -35,7 +35,7 @@ uv pip install --python experiments/_logs/refine_e1_20260907/venv/bin/python num
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 .venv/bin/python -m experiments.traceaad_refine_e1.profile validate
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 .venv/bin/python -m experiments.traceaad_refine_e1.seed_check
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 .venv/bin/python -m experiments.traceaad_refine_e1.profile profile --workers 12
-experiments/_logs/refine_e1_20260907/venv/bin/python -m experiments.traceaad_refine_e1.embed
+experiments/traceaad_refine_e1/raw/refine_e1_20260907/venv/bin/python -m experiments.traceaad_refine_e1.embed
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python -m experiments.traceaad_refine_e1.replay
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python -m experiments.traceaad_refine_e1.auxiliary
 .venv/bin/python -m experiments.traceaad_refine_e1.report

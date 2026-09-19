@@ -1,6 +1,6 @@
 {
   "protocol_id": "traceaad-e2-b-prime-v1",
-  "source_snapshot": "experiments/_logs/traceaad_e2_a_20260907",
+  "source_snapshot": "experiments/traceaad_e2_a/raw/traceaad_e2_a_20260907",
   "tasks": ["tsp_construct", "online_bin_packing", "vrptw_construct"],
   "states": ["experienced", "fresh"],
   "anchors_per_task_state": 3,

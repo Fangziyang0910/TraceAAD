@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT = ROOT / 'experiments/_logs/refine_e1_20260907'
+DEFAULT = ROOT / 'experiments/traceaad_refine_e1/raw/refine_e1_20260907'
 
 
 def dump(path, value):

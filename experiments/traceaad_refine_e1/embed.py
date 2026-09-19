@@ -10,7 +10,7 @@ import onnxruntime as ort
 from huggingface_hub import hf_hub_download
 from tokenizers import Tokenizer
 
-OUT=Path(__file__).resolve().parents[1]/'_logs/refine_e1_20260907'
+OUT=Path(__file__).resolve().parent/'raw/refine_e1_20260907'
 MODEL='sentence-transformers/all-MiniLM-L6-v2'
 REVISION='1110a243fdf4706b3f48f1d95db1a4f5529b4d41'
 

@@ -7,9 +7,9 @@ from pathlib import Path
 
 from experiments.traceaad_refine_e1.prepare import ROOT, dump, records
 
-DEFAULT = ROOT / 'experiments/_logs/traceaad_e2_a_20260907'
+DEFAULT = ROOT / 'experiments/traceaad_e2_a/raw/traceaad_e2_a_20260907'
 SOURCE = ROOT / 'experiments/traceaad_v10_6/results/batch_20260906_215231_revised.json'
-E1 = ROOT / 'experiments/_logs/refine_e1_20260907/snapshot.json'
+E1 = ROOT / 'experiments/traceaad_refine_e1/raw/refine_e1_20260907/snapshot.json'
 
 
 def freeze(out=DEFAULT):

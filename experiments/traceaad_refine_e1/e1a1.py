@@ -219,7 +219,7 @@ def write_report(out, summary, subsets, q_audit):
         'E1-A已经显示ACO任务的局部邻居对probe和随机流较敏感；本实验复用这些距离，不能消除该测量限制。另一方面，TSP测量较稳定而原响应共享仍失败，因此也不能把所有负结果归因于ACO噪声。', '',
         '本轮联合核沿用E1-A的k=10、自适应高斯带宽和收缩强度，只检验这一固定形式。未通过意味着当前BehaveSim条件核没有可用增量，不构成对所有行为表示、核带宽或控制目标的普遍否定。后续不再为Refine响应共享事后调这一批数据；行为信息转去停滞/重访、Pivot切换和Fuse互补性，Q_kernel则需用独立时间段验证其校准与排序价值。', '',
         '## 5. 复现与产物', '',
-        '[固定设计](E1-A.1-实验设计.md)；[运行入口](../../../../experiments/traceaad_refine_e1/README.md)。机器可读结果位于 `experiments/_logs/refine_e1_20260907/e1a1_summary.json`、`e1a1_predictions.jsonl` 和 `e1a1_permutation_macro_brier.npy`。', ''
+        '[固定设计](E1-A.1-实验设计.md)；[运行入口](../../../../experiments/traceaad_refine_e1/README.md)。机器可读结果位于 `experiments/traceaad_refine_e1/raw/refine_e1_20260907/e1a1_summary.json`、`e1a1_predictions.jsonl` 和 `e1a1_permutation_macro_brier.npy`。', ''
     ]
     (DOC / 'E1-A.1-结果.md').write_text('\n'.join(lines))
 

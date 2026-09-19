@@ -9,5 +9,5 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 .venv/bin/python -m
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python -m experiments.behavesim_population_calibration.run analyze
 ```
 
-Raw profiles stay under `experiments/_logs`. The reviewed protocol and result
+Raw profiles stay under `experiments/behavesim_population_calibration/raw/`. The reviewed protocol and result
 summary live under `docs/03-机制验证/03-算法行为几何/2026-09-07-BehaveSim群体几何校准/`.

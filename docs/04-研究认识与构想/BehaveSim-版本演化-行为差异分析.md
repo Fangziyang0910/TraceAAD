@@ -55,4 +55,4 @@ BehaveSim v3 可以比较不同版本访问到的执行行为分布，但不能�
 
 ## 工件
 
-汇总文件为 `experiments/_logs/behavesim_v3/aggregate.json`，版本入口为`run_traceaad_versions_behavesim.py`，协议见 BehaveSim 行为度量校正。
+汇总文件为历史 v3 本地工件（当前仓库未保留），版本入口为 `run_traceaad_versions_behavesim.py`，协议见 BehaveSim 行为度量校正。

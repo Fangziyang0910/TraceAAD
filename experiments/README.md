@@ -7,8 +7,6 @@
 ## 近期开发
 
 
-- **Codex 直接设计参照**：[五任务首次实测](codex_designed_20260909/README.md)：每任务一个人工直接编写程序，各一次训练与独立面板评价，保留源码和完整分数。
-
 - **V10.8**：[机制设计](../docs/01-主线版本/TraceAAD-V10.8-机制设计.md)、[运行入口](traceaad_v10_8/README.md)。近期连续代码转移、同代码组机会计量；已实现并启动 15 路正式搜索；[启动记录](traceaad_v10_8/launch_20260909.md)，终局收益待验证。
 - **V10.7**：[机制设计](../docs/01-主线版本/TraceAAD-V10.7-机制设计.md)、[运行入口](traceaad_v10_7/README.md)、[修复与启动记录](traceaad_v10_7/launch_20260907.md)。单次 Idea→Code；48 次真实 smoke 通过，分层采样版 15 路正式实验已启动；祖先历史与均匀采样对照尚未启动。
 - **E2-B'随机干预**：[实验设计与结果](../docs/03-机制验证/04-算子动力学与两步价值/2026-09-07-E2B-Pivot两步选择价值/README.md)、[复现入口](traceaad_e2_b/README.md)。在development-experienced与fitness-matched fresh固定锚点上比较Refine→Refine和Pivot→Refine；预注册正向门槛未通过。

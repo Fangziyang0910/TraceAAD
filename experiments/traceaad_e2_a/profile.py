@@ -11,10 +11,10 @@ import numpy as np
 from experiments.traceaad_refine_e1.profile import candidate, worker
 from experiments.traceaad_refine_e1 import profile_core
 from experiments.traceaad_refine_e1.prepare import dump
-from .prepare import DEFAULT
+from .prepare import DEFAULT, ROOT
 
 PRIMARY_TASKS = {'tsp_construct', 'online_bin_packing', 'vrptw_construct'}
-E1_PROFILES = DEFAULT.parents[0] / 'refine_e1_20260907' / 'profiles'
+E1_PROFILES = ROOT / 'experiments/traceaad_refine_e1/raw/refine_e1_20260907/profiles'
 
 
 def inputs(out=DEFAULT):

@@ -94,7 +94,7 @@ def main(out=DEFAULT):
         'embedding采用固定版本all-MiniLM-L6-v2，完整代码/摘要分块池化。它是便宜的通用表示对照，并非最强代码embedding，因此不能把M2结果外推为所有表示方法的上限。主预测器未作超参搜索；弱信号可能来自小样本、时变响应、行为测量噪声或模型欠拟合，不能把一次不通过门槛解释为所有形式的locality均不存在。','',
         '本轮没有单独验证多步停滞窗口或切换动作收益，不能将预测未改善直接称为饱和检测成功。本实验只评估旧策略实际访问状态上的预测能力；top组lift不是离策略预算收益。未建立“相近状态的反馈可无偏迁移”，也未测量新选父策略的终局效果。是否进入E1-B应同时参考跨任务方向、画像稳定性、首次开发子集和基线比较，而非只看单一总体相关系数。','',
         '## 7. 复现与产物','',
-        '[运行入口与实际协议](../../../../experiments/traceaad_refine_e1/README.md)。本地原始工件位于 `experiments/_logs/refine_e1_20260907/`：`snapshot.json`、`experiment_config.json`、`validation.json`、`profiles/`、`stability.json`、`embedding_metadata.json`、`replay_predictions.jsonl`、`summary*.json`、`costs.json`。','']
+        '[运行入口与实际协议](../../../../experiments/traceaad_refine_e1/README.md)。本地原始工件位于 `experiments/traceaad_refine_e1/raw/refine_e1_20260907/`：`snapshot.json`、`experiment_config.json`、`validation.json`、`profiles/`、`stability.json`、`embedding_metadata.json`、`replay_predictions.jsonl`、`summary*.json`、`costs.json`。','']
     DOC.mkdir(parents=True,exist_ok=True)
     (DOC/'E1-A-结果.md').write_text('\n'.join(lines))
     dump(DOC/'e1a_summary.json',dict(config=json.loads((out/'experiment_config.json').read_text()),environment=json.loads((out/'environment.json').read_text()),auxiliary=json.loads((out/'auxiliary_summary.json').read_text()),snapshot=snap,stability=stability,summary=s,new_parents=new,complete_profiles=complete,embedding=emb,costs=dict(costs),seed_sensitivity=[{k:v for k,v in r.items() if k not in ["original","alternate"]} for r in seeds],screening_gate=gate))

@@ -1,8 +1,8 @@
 {
   "stage": "BehaveSim population geometry calibration",
-  "source_snapshot": "experiments/_logs/traceaad_e2_a_20260907",
-  "legacy_profiles": "experiments/_logs/refine_e1_20260907/profiles",
-  "output": "experiments/_logs/behavesim_population_calibration_20260907",
+  "source_snapshot": "experiments/traceaad_e2_a/raw/traceaad_e2_a_20260907",
+  "legacy_profiles": "experiments/traceaad_refine_e1/raw/refine_e1_20260907/profiles",
+  "output": "experiments/behavesim_population_calibration/raw/behavesim_population_calibration_20260907",
   "sample_size_per_run": {
     "tsp_construct": 48,
     "online_bin_packing": 64,
