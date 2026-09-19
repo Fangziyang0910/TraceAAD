@@ -55,3 +55,28 @@ def test_v1011_monitor_resolves_version_meta_and_manifest_per_batch(tmp_path):
     vid, _, prefix, _ = engine._resolve_version_meta(None)
     assert (vid, prefix) == (history["batch"], "p_20260914_v1011_q38_history_code")
     assert engine.get_available_versions()[0]["id"] == history["batch"]
+
+
+def test_v1011_monitor_scans_persisted_runs_without_run_config(tmp_path):
+    batch = "20260918_bc_B"
+    _write(tmp_path, batch, {
+        "batch": batch,
+        "created_at": "2026-09-18T23:00:00",
+        "method": "bc_b",
+        "session_prefix": "bcB",
+        "plan": [{"task": "tsp_construct", "repeat": 1,
+                   "run_name": f"{batch}_tsp_bcb_rep1"}],
+    })
+    run_dir = tmp_path / "tsp_construct" / f"{batch}_tsp_bcb_rep1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "tree_state.json").write_text(json.dumps({
+        "started_at": "2026-09-18T23:01:00",
+        "budget_used": 17,
+    }))
+    (run_dir / "events.jsonl").write_text("")
+
+    overview = monitor.MonitorDataEngine(results_root=tmp_path).get_overview(batch)
+
+    assert overview["global_summary"]["total_runs"] == 1
+    assert overview["global_summary"]["total_evals"] == 17
+    assert overview["tasks"][0]["runs"][0]["status"] == "stalled"

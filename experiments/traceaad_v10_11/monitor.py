@@ -486,7 +486,10 @@ class MonitorDataEngine:
             # 1. Scan existing directories on disk
             if task_dir.is_dir():
                 for run_dir in sorted(task_dir.iterdir()):
-                    if not run_dir.is_dir() or not (run_dir / "run_config.json").exists():
+                    if not run_dir.is_dir() or not any(
+                        (run_dir / artifact).exists()
+                        for artifact in ("run_config.json", "tree_state.json", "events.jsonl", "nodes.jsonl")
+                    ):
                         continue
                     if manifest and run_dir.name not in planned_names:
                         continue
