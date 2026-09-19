@@ -9,16 +9,16 @@
 
 - **Codex 直接设计参照**：[五任务首次实测](codex_designed_20260909/README.md)：每任务一个人工直接编写程序，各一次训练与独立面板评价，保留源码和完整分数。
 
-- **V10.8**：[机制设计](../docs/01-主线版本/V10.8/机制设计.md)、[运行入口](traceaad_v10_8/README.md)。近期连续代码转移、同代码组机会计量；已实现并启动 15 路正式搜索；[启动记录](traceaad_v10_8/launch_20260909.md)，终局收益待验证。
-- **V10.7**：[机制设计](../docs/01-主线版本/V10.7/机制设计.md)、[运行入口](traceaad_v10_7/README.md)、[修复与启动记录](traceaad_v10_7/launch_20260907.md)。单次 Idea→Code；48 次真实 smoke 通过，分层采样版 15 路正式实验已启动；祖先历史与均匀采样对照尚未启动。
+- **V10.8**：[机制设计](../docs/01-主线版本/TraceAAD-V10.8-机制设计.md)、[运行入口](traceaad_v10_8/README.md)。近期连续代码转移、同代码组机会计量；已实现并启动 15 路正式搜索；[启动记录](traceaad_v10_8/launch_20260909.md)，终局收益待验证。
+- **V10.7**：[机制设计](../docs/01-主线版本/TraceAAD-V10.7-机制设计.md)、[运行入口](traceaad_v10_7/README.md)、[修复与启动记录](traceaad_v10_7/launch_20260907.md)。单次 Idea→Code；48 次真实 smoke 通过，分层采样版 15 路正式实验已启动；祖先历史与均匀采样对照尚未启动。
 - **E2-B'随机干预**：[实验设计与结果](../docs/03-机制验证/04-算子动力学与两步价值/2026-09-07-E2B-Pivot两步选择价值/README.md)、[复现入口](traceaad_e2_b/README.md)。在development-experienced与fitness-matched fresh固定锚点上比较Refine→Refine和Pivot→Refine；预注册正向门槛未通过。
 - **E2-A机制分析**：[实验设计与结果](../docs/03-机制验证/04-算子动力学与两步价值/2026-09-07-E2A-轨迹状态与算子响应/README.md)、[复现入口](traceaad_e2_a/README.md)。使用E1后的未见V10.6 suffix检验行为轨迹状态与Refine/Pivot响应；不修改在线机制。
-- **V10.6**：[机制设计](../docs/01-主线版本/V10.6/机制设计.md)、[运行与恢复](traceaad_v10_6/README.md)。先生成完整代码再生成实现摘要，父代先行分配；进度读取对应批次 manifest。
-- **V10.5**：[机制设计](../docs/01-主线版本/V10.5/机制设计.md)、[运行与恢复](traceaad_v10_5/README.md)、[启动记录](traceaad_v10_5/launch_20260905.md)。从批次 manifest 查看实际进度。
-- **V10.4**：[机制设计](../docs/01-主线版本/V10.4/机制设计.md)，运行入口 `traceaad_v10_4/run.py`、`launch.py`。
-- **V10.3**：[机制设计](../docs/01-主线版本/V10.3/机制设计.md)，运行入口 `traceaad_v10_3/run.py`、`launch.py`。
-- **V10.2**：[机制设计](../docs/01-主线版本/V10.2/机制设计.md)、[实验结果](../docs/01-主线版本/V10.2/主实验/结果.md)。
-- **V10.1**：[机制设计](../docs/01-主线版本/V10.1/机制设计.md)，运行入口 `traceaad_v10_1/run.py`、`launch.py`。
+- **V10.6**：[机制设计](../docs/01-主线版本/TraceAAD-V10.6-机制设计.md)、[运行与恢复](traceaad_v10_6/README.md)。先生成完整代码再生成实现摘要，父代先行分配；进度读取对应批次 manifest。
+- **V10.5**：[机制设计](../docs/01-主线版本/TraceAAD-V10.5-机制设计.md)、[运行与恢复](traceaad_v10_5/README.md)、[启动记录](traceaad_v10_5/launch_20260905.md)。从批次 manifest 查看实际进度。
+- **V10.4**：[机制设计](../docs/01-主线版本/TraceAAD-V10.4-机制设计.md)，运行入口 `traceaad_v10_4/run.py`、`launch.py`。
+- **V10.3**：[机制设计](../docs/01-主线版本/TraceAAD-V10.3-机制设计.md)，运行入口 `traceaad_v10_3/run.py`、`launch.py`。
+- **V10.2**：[机制设计](../docs/01-主线版本/TraceAAD-V10.2-机制设计.md)、[实验结果](../docs/02-实验结果/各版本实验记录/V10.2-实验结果.md)。
+- **V10.1**：[机制设计](../docs/01-主线版本/TraceAAD-V10.1-机制设计.md)，运行入口 `traceaad_v10_1/run.py`、`launch.py`。
 
 ## 实验默认设置
 
@@ -30,6 +30,6 @@
 
 ## 已有比较与历史探索
 
-[主实验结果](../docs/02-实验结果/主实验结果汇总.md)及[主实验配置](../docs/02-实验结果/主实验配置与冻结契约.md)保留 Qwen3.6 时期的比较口径。五个对比方法包括 EoH、ReEvo、MCTS-AHD、PathWise、CALM；其他实验包还包括 ShinkaEvo 等方法。
+[主实验结果](../docs/02-实验结果/00-主实验结果.md)及[主实验配置](../docs/02-实验结果/00-主实验配置与冻结契约.md)保留 Qwen3.6 时期的比较口径。五个对比方法包括 EoH、ReEvo、MCTS-AHD、PathWise、CALM；其他实验包还包括 ShinkaEvo 等方法。
 
-完整文档分类见[实验文档导航](../docs/02-实验结果/主实验结果汇总.md)。其他版本与批次见 [TraceAAD 历史版本结果](../docs/02-实验结果/各版本实验记录/TraceAAD-历史版本结果.md)、[机制验证](../docs/03-机制验证/机制验证总览.md)及 [工作日志](../docs/06-成果与报告/工作流水)。引用旧结果时沿用其原始模型、预算与任务设置。
+完整文档分类见[实验文档导航](../docs/02-实验结果/00-主实验结果.md)。其他版本与批次见 [TraceAAD 历史版本结果](../docs/02-实验结果/各版本实验记录/历史版本-实验结果.md)、[机制验证](../docs/03-机制验证/00-机制验证总览.md)及 [工作日志](../docs/06-成果与报告/工作流水)。引用旧结果时沿用其原始模型、预算与任务设置。

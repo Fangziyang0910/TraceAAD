@@ -2,7 +2,7 @@
 """Summarize V10.11 generic / no_traj held-out results and compute main-table ranks.
 
 Reads results.json from the two held-out output dirs and baseline rows from
-docs/02-实验结果/主实验结果汇总.md; prints per-task tables and the 15-column
+docs/02-实验结果/00-主实验结果.md; prints per-task tables and the 15-column
 average rank (VRPTW counted separately) for both batches.
 """
 from __future__ import annotations
@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path('/home/fang/code/LLM4AD/LLM4AD')
 GEN = ROOT / 'experiments/traceaad_v10_11/results_heldout_20260915_v1011_generic'
 NTJ = ROOT / 'experiments/traceaad_v10_11/results_heldout_20260915_v1011_no_traj_idea'
-SUMMARY = ROOT / 'docs/02-实验结果/主实验结果汇总.md'
+SUMMARY = ROOT / 'docs/02-实验结果/00-主实验结果.md'
 
 # column spec: (doc table anchor regex, held-out column keys, lower_is_better)
 TABLES = [
