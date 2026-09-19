@@ -1,5 +1,0 @@
-interface:
-  display_name: "Results Analysis"
-  short_description: "Analyze experimental results when explicitly requested."
-policy:
-  allow_implicit_invocation: false
