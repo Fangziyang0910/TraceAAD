@@ -81,6 +81,22 @@ class TrajectoryBuilder:
         self.check_capacity(text)
         return text
 
+    def _history_text(self, edges):
+        history = [
+            "# Design History of the Current Algorithm",
+            "Use the recorded design changes and their results to guide this design.",
+        ]
+        for index, (source, target) in enumerate(edges, 1):
+            history.append(
+                f"Step {index} | {target.operator} | "
+                f"Fitness: {source.fitness} -> {target.fitness}"
+            )
+            if target.idea:
+                history.append("Idea: " + " ".join(target.idea.split()))
+            if self.include_history_code:
+                history.append("Code:\n```python\n" + self.function_view(target) + "\n```")
+        return "\n".join(history)
+
     def build_initial(self):
         roots = sorted((node for node in self.all_nodes() if node.parent_id is None),
                        key=lambda node: node.id)
@@ -93,28 +109,26 @@ class TrajectoryBuilder:
         return self._complete(parts, instruction)
 
     def build(self, parent, operator, donor=None):
-        parts = [self.task_contract, "Fitness: higher is better."]
+        head = [self.task_contract, "Fitness: higher is better."]
         if parent is not None:
-            parts.append(self.program(parent, "Current Algorithm"))
-            edges = self.formation_edges(parent)
-            if edges:
-                history = [
-                    "# Design History of the Current Algorithm",
-                    "Use the recorded design changes and their results to guide this design.",
-                ]
-                for index, (source, target) in enumerate(edges, 1):
-                    history.append(
-                        f"Step {index} | {target.operator} | "
-                        f"Fitness: {source.fitness} -> {target.fitness}"
-                    )
-                    if target.idea:
-                        history.append("Idea: " + " ".join(target.idea.split()))
-                    if self.include_history_code:
-                        history.append("Code:\n```python\n" + self.function_view(target) + "\n```")
-                parts.append("\n\n".join(history))
+            head.append(self.program(parent, "Current Algorithm"))
+        tail = []
         if donor is not None:
-            parts.append(self.program(donor, "Reference Algorithm"))
-        return self._complete(parts, OPERATOR_INSTRUCTIONS[operator])
+            tail.append(self.program(donor, "Reference Algorithm"))
+        tail.extend(["# Design Task\n" + OPERATOR_INSTRUCTIONS[operator], "# Output\n" + OUTPUT])
+        edges = self.formation_edges(parent) if parent is not None else []
+        kept = len(edges)
+        while True:
+            middle = [self._history_text(edges[-kept:])] if kept else []
+            text = "\n\n\n".join(head + middle + tail)
+            if self.count(text) <= self.max_tokens:
+                if kept < len(edges):
+                    print(f"v1011: formation history truncated to {kept} of {len(edges)} steps "
+                          f"(prompt exceeded the {self.max_tokens}-token context budget)", flush=True)
+                return text
+            if kept == 0:
+                raise ValueError("complete prompt exceeds the model context budget")
+            kept -= 1
 
     def check_capacity(self, text):
         if self.count(text) > self.max_tokens:

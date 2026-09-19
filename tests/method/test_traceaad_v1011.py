@@ -251,6 +251,41 @@ def test_v1011_zero_history_omits_only_the_trajectory_context(tmp_path):
         assert prompt(ablation) == expected
 
 
+def test_v1011_history_truncates_earliest_steps_when_prompt_exceeds_budget(tmp_path, capsys):
+    m = method(tmp_path, budget=1, history_code=True)
+    root = add(m.tree, 1, code="def score(x):\n    return x")
+    middle = add(m.tree, 2, root.id, code="def score(x):\n    return x + 1")
+    child = add(m.tree, 3, middle.id, code="def score(x):\n    return x + 2")
+    assert m.mechanism["history_code"] is True
+
+    one_step = method(tmp_path / "one_step", budget=1, history_code=True, traj_gens=1)
+    one_step.tree = m.tree
+    one_step.builder.lookup = m.tree.nodes.get
+    expected_prompt = one_step.builder.build(child, "Refine")
+    assert expected_prompt.count("Step ") == 1
+
+    m.builder.max_tokens = m.builder.count(expected_prompt)
+    truncated = m.builder.build(child, "Refine")
+    assert truncated == expected_prompt
+    assert truncated.count("return x + 1") == 0
+    assert "formation history truncated to 1 of 2 steps" in capsys.readouterr().out
+
+
+def test_v1011_history_truncation_still_raises_when_no_history_fits(tmp_path):
+    m = method(tmp_path, budget=1, history_code=True)
+    root = add(m.tree, 1, code="def score(x):\n    return x")
+    child = add(m.tree, 2, root.id, code="def score(x):\n    return x + 1")
+
+    zero = method(tmp_path / "zero", budget=1, history_code=True, traj_gens=0)
+    zero.tree = m.tree
+    zero.builder.lookup = m.tree.nodes.get
+    bare = zero.builder.build(child, "Refine")
+
+    m.builder.max_tokens = m.builder.count(bare) - 1
+    with pytest.raises(ValueError, match="context budget"):
+        m.builder.build(child, "Refine")
+
+
 def test_v1011_generation_uses_fixed_output_budget(tmp_path):
     llm = FakeLLM(response())
     m = method(tmp_path, llm, budget=1)
