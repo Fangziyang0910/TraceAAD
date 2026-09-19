@@ -30,8 +30,15 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from experiments.infra.base import BACKEND_DISPLAY_NAMES
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parent / "results"
+DEFAULT_RESULTS_ROOTS = (
+    DEFAULT_RESULTS_ROOT,
+    REPO_ROOT / "experiments/traceaad_v11_0/results",
+    REPO_ROOT / "experiments/traceaad_bc/results",
+)
 HTML_FILE = Path(__file__).with_name("monitor.html")
 
 TASKS_METADATA = [
@@ -169,10 +176,17 @@ class MonitorDataEngine:
     def __init__(
         self,
         results_root: Path | None = None,
+        results_roots: tuple[Path, ...] | None = None,
         default_version: str | None = None,
         default_session_prefix: str | None = None,
     ):
-        self.default_results_root = results_root or DEFAULT_RESULTS_ROOT
+        if results_roots:
+            self.results_roots = tuple(results_roots)
+        elif results_root:
+            self.results_roots = (results_root,)
+        else:
+            self.results_roots = DEFAULT_RESULTS_ROOTS
+        self.default_results_root = self.results_roots[0]
         self.default_version = default_version
         self.default_session_prefix = default_session_prefix
 
@@ -186,13 +200,30 @@ class MonitorDataEngine:
     def get_available_versions(self) -> list[dict[str, Any]]:
         """One monitor version per live batch manifest, newest first."""
         versions: list[dict[str, Any]] = []
-        for manifest in _load_batch_manifests(self.default_results_root):
+        manifests: list[tuple[Path, dict[str, Any]]] = []
+        for root_dir in self.results_roots:
+            manifests.extend((root_dir, item) for item in _load_batch_manifests(root_dir))
+        manifests.sort(key=lambda item: item[1].get("created_at") or "", reverse=True)
+        for root_dir, manifest in manifests:
             batch = manifest.get("batch") or "batch"
+            method = manifest.get("method")
+            if not method:
+                label = str(batch)
+            elif method.startswith("v1011"):
+                label = "TraceAAD V10.11"
+            elif method.startswith("v110"):
+                label = "TraceAAD V11.0"
+            elif method.startswith("bc_b"):
+                label = "B：V11 预算 + V10 上下文"
+            elif method.startswith("bc_c"):
+                label = "C：V10 预算 + V11 上下文"
+            else:
+                label = str(method)
             versions.append(
                 {
                     "id": batch,
-                    "name": f"TraceAAD V10.11 · {batch}",
-                    "badge": batch,
+                    "name": f"{label} · {batch}",
+                    "badge": f"{label} · {batch}",
                     "is_latest": not versions,
                 }
             )
@@ -210,14 +241,31 @@ class MonitorDataEngine:
 
     def _resolve_version_meta(self, version: str | None = None) -> tuple[str, Path, str, str]:
         """Map a version id (= batch name) to (vid, root, session_prefix, badge)."""
-        manifests = _load_batch_manifests(self.default_results_root)
         want = version or self.default_version
-        chosen = next((m for m in manifests if want and m.get("batch") == want), None)
+        manifests: list[tuple[Path, dict[str, Any]]] = []
+        for root_dir in self.results_roots:
+            manifests.extend((root_dir, item) for item in _load_batch_manifests(root_dir))
+        manifests.sort(key=lambda item: item[1].get("created_at") or "", reverse=True)
+        chosen = next((item for item in manifests if want and item[1].get("batch") == want), None)
         if chosen is None:
             chosen = manifests[0] if manifests else None
         if chosen is not None:
-            batch = chosen["batch"]
-            return batch, self.default_results_root, chosen.get("session_prefix") or "v1011", batch
+            root_dir, manifest = chosen
+            batch = manifest["batch"]
+            method = manifest.get("method")
+            if not method:
+                return batch, root_dir, manifest.get("session_prefix") or "v1011", batch
+            elif method.startswith("v1011"):
+                label = "V10.11"
+            elif method.startswith("v110"):
+                label = "V11.0"
+            elif method.startswith("bc_b"):
+                label = "B · V11预算/V10上下文"
+            elif method.startswith("bc_c"):
+                label = "C · V10预算/V11上下文"
+            else:
+                label = str(method)
+            return batch, root_dir, manifest.get("session_prefix") or "v1011", f"{label} · {batch}"
         fallback = want or "v1011"
         return fallback, self.default_results_root, self.default_session_prefix or "v1011", fallback.upper()
 
@@ -374,7 +422,7 @@ class MonitorDataEngine:
             "name": item.get("run_name") or f"queued_{task_info['short']}_rep{rep}",
             "task": task_info["key"],
             "rep": rep,
-            "backend": item.get("backend") or "排队分配中",
+            "backend": BACKEND_DISPLAY_NAMES.get(item.get("backend"), item.get("backend")) or "排队分配中",
             "method": default_prefix,
             "expected_session": session,
             "actual_session": None,
@@ -593,7 +641,8 @@ class MonitorDataEngine:
         cfg_p = run_dir / "run_config.json"
         cfg = json.loads(cfg_p.read_text(encoding="utf-8")) if cfg_p.exists() else {}
         budget = cfg.get("method_params", {}).get("budget", 1000)
-        backend = cfg.get("backend", "unknown")
+        backend_internal = cfg.get("backend", "unknown")
+        backend = BACKEND_DISPLAY_NAMES.get(backend_internal, backend_internal)
         method = cfg.get("method") or default_prefix
 
         tree_data, nodes = _load_tree_nodes(run_dir)
@@ -773,6 +822,7 @@ class MonitorDataEngine:
             "task": task_info["key"],
             "rep": rep,
             "backend": backend,
+            "backend_internal": backend_internal,
             "method": method,
             "expected_session": expected_session,
             "actual_session": actual_session,
@@ -1026,14 +1076,21 @@ def make_request_handler(engine: MonitorDataEngine) -> type[BaseHTTPRequestHandl
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="TraceAAD V10.11 Live Monitor")
+    parser = argparse.ArgumentParser(description="TraceAAD unified live monitor")
     parser.add_argument("--host", default="0.0.0.0", help="Binding host")
     parser.add_argument("--port", type=int, default=8765, help="HTTP server port (default: 8765)")
     parser.add_argument(
         "--results-dir",
         type=Path,
         default=None,
-        help="Path to results directory (defaults to the selected version)",
+        help="Single results directory override (defaults to all active TraceAAD roots)",
+    )
+    parser.add_argument(
+        "--results-dirs",
+        type=Path,
+        nargs="+",
+        default=None,
+        help="Multiple results directories to merge into one monitor",
     )
     parser.add_argument(
         "--version",
@@ -1044,6 +1101,7 @@ def main() -> None:
 
     engine = MonitorDataEngine(
         results_root=args.results_dir,
+        results_roots=tuple(args.results_dirs) if args.results_dirs else None,
         default_version=args.version,
     )
 

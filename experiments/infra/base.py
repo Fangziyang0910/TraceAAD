@@ -102,12 +102,21 @@ BACKENDS: dict[BackendName, BackendProfile] = {
 
 BACKEND_CAPACITY: dict[BackendName, int] = {
     "zhong": 0,  # 暂时不用
-    "server1": 6,
-    "server3": 8,   # 2026-09-17 起 gpu1 单卡 :8000（tp2 已拆回两卡各一实例）
-    "server3b": 8,  # gpu0 单卡 :8001
-    "local": 3,  # llama.cpp 32k × 3 slots; 正式调度仍只用 PRIMARY_BACKENDS
+    "server1": 7,
+    "server3": 10,   # server3 第一路（:8000）
+    "server3b": 10,  # server3 第二路（:8001）；内部路由键保留兼容性
+    "local": 3,  # llama.cpp 32k × 3 slots
 }
-PRIMARY_BACKENDS: tuple[BackendName, ...] = ("server3", "server3b", "server1")
+PRIMARY_BACKENDS: tuple[BackendName, ...] = ("server3", "server3b", "server1", "local")
+# Public labels deliberately avoid the historical ``server3b`` name.  The
+# internal key remains only because old run configs and endpoint routing use it.
+BACKEND_DISPLAY_NAMES: dict[BackendName, str] = {
+    "zhong": "zhong",
+    "server1": "server1",
+    "server3": "server3-1",
+    "server3b": "server3-2",
+    "local": "local",
+}
 # Host:port markers only — `--backend` matching uses detect_backend().
 BACKEND_MARKERS: dict[BackendName, tuple[str, ...]] = {
     "zhong": ("183.36.243.124",),

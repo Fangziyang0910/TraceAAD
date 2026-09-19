@@ -7,10 +7,17 @@ from experiments.infra import base as _common
 
 
 def test_server1_capacity_matches_current_service_limit() -> None:
-    # 2026-09-17 起 server3 恢复 gpu0/gpu1 各一单卡实例，各 8 路
-    assert _common.BACKEND_CAPACITY["server1"] == 6
-    assert _common.BACKEND_CAPACITY["server3"] == 8
-    assert _common.BACKEND_CAPACITY["server3b"] == 8
+    # B/C 30 路正式批次：server1 7、server3 两路各 10、本地 3。
+    assert _common.BACKEND_CAPACITY["server1"] == 7
+    assert _common.BACKEND_CAPACITY["server3"] == 10
+    assert _common.BACKEND_CAPACITY["server3b"] == 10
+    assert _common.BACKEND_CAPACITY["local"] == 3
+    assert _common.PRIMARY_BACKENDS == ("server3", "server3b", "server1", "local")
+
+
+def test_server3_public_labels_do_not_use_legacy_server3b_name() -> None:
+    assert _common.BACKEND_DISPLAY_NAMES["server3"] == "server3-1"
+    assert _common.BACKEND_DISPLAY_NAMES["server3b"] == "server3-2"
 
 
 def test_select_backend_balances_to_the_side_with_more_free_slots() -> None:
@@ -20,9 +27,9 @@ def test_select_backend_balances_to_the_side_with_more_free_slots() -> None:
     remaining["server3b"] -= 1
     assert _common.select_backend(remaining) == "server3b"
     remaining["server3b"] -= 1
+    assert _common.select_backend(remaining) == "local"
+    remaining["local"] -= 1
     assert _common.select_backend(remaining) == "server3"
-    remaining["server3"] -= 1
-    assert _common.select_backend(remaining) == "server3b"
 
 
 def test_select_backend_breaks_ties_in_primary_order() -> None:
@@ -89,4 +96,3 @@ def test_aco_tasks_default_to_four_local_eval_workers() -> None:
     assert op.n_workers == 4
     assert cvrp_kwargs["n_workers"] == 4
     assert op_kwargs["n_workers"] == 4
-

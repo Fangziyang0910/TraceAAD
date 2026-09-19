@@ -1,4 +1,4 @@
-"""TraceAAD V11.0 training experiment monitor.
+"""Compatibility entry point for the unified TraceAAD training monitor.
 
 Full live observer for TraceAAD V11.0 runs.
 Features:
@@ -12,8 +12,9 @@ Features:
 - Individual run inspector (code, implementation summaries, lineages, recent event stream)
 - Two-batch V11.0 comparison view
 
-Usage:
-    python -m experiments.traceaad_v11_0.monitor [--port 8766] [--host 0.0.0.0]
+The canonical monitor is ``experiments.traceaad_v10_11.monitor``.  Keeping this
+entry point as a delegating wrapper prevents an accidental second dashboard on
+another port when an older V11 command is reused.
 """
 
 from __future__ import annotations
@@ -1026,42 +1027,9 @@ def make_request_handler(engine: MonitorDataEngine) -> type[BaseHTTPRequestHandl
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="TraceAAD V11.0 Live Monitor")
-    parser.add_argument("--host", default="0.0.0.0", help="Binding host")
-    parser.add_argument("--port", type=int, default=8766, help="HTTP server port (default: 8766)")
-    parser.add_argument(
-        "--results-dir",
-        type=Path,
-        default=None,
-        help="Path to results directory (defaults to the selected version)",
-    )
-    parser.add_argument(
-        "--version",
-        default=None,
-        help="Batch to select by default (defaults to the newest batch manifest)",
-    )
-    args = parser.parse_args()
+    from experiments.traceaad_v10_11.monitor import main as unified_main
 
-    engine = MonitorDataEngine(
-        results_root=args.results_dir,
-        default_version=args.version,
-    )
-
-    server_address = (args.host, args.port)
-    handler_class = make_request_handler(engine)
-    server = ThreadingHTTPServer(server_address, handler_class)
-
-    print("===========================================================", flush=True)
-    print(f"🚀 TraceAAD {engine._resolve_version_meta(None)[3]} 训练实验可视化监控已启动", flush=True)
-    print(f"📡 本地访问地址: http://127.0.0.1:{args.port}", flush=True)
-    print(f"🌐 远程访问地址: http://{args.host}:{args.port}", flush=True)
-    print("===========================================================", flush=True)
-
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\n[monitor] Shutting down gracefully...", flush=True)
-        server.server_close()
+    unified_main()
 
 
 if __name__ == "__main__":
