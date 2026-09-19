@@ -1,7 +1,7 @@
 # SMCEvolve：用序贯蒙特卡洛统一程序进化
 
 - 论文：Jiachen Jiang、Huminhao Zhu、Zhihui Zhu，*SMCEvolve: Principled Scientific Discovery via Sequential Monte Carlo Evolution*，arXiv:2605.15308v1，2026-05-14，预印本。
-- 本地来源：[paper.pdf](../../../../papers/SMCEvolve_Principled_Scientific_Discovery_via_Sequential_Monte_Carlo_Evolution/paper.pdf)。
+- 本地来源：paper.pdf。
 - 原始实现：[kongwanbianjinyu/SMCEvolve](https://github.com/kongwanbianjinyu/SMCEvolve)。
 - 设计对象：带外部 evaluator 的 LLM 程序进化，覆盖数学构造、数值程序加速、符号回归和端到端 ML 研究程序。
 

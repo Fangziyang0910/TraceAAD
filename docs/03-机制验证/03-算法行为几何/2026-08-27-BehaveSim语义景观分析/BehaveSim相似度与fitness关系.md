@@ -1,6 +1,6 @@
 # BehaveSim 相似度与 fitness 的关系
 
-数据来自[BehaveSim 语义景观实验](README.md)：TraceAAD V9.16，5 任务 × 3 重复，每 run 在全部两两候选对上同时有 BehaveSim 行为距离（combined 面板均值）与 run 内标准化的 fitness（z 分数，越大越好）。全部为已有工件的离线观察。
+数据来自BehaveSim 语义景观实验：TraceAAD V9.16，5 任务 × 3 重复，每 run 在全部两两候选对上同时有 BehaveSim 行为距离（combined 面板均值）与 run 内标准化的 fitness（z 分数，越大越好）。全部为已有工件的离线观察。
 
 ## 核心判断
 

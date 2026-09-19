@@ -1,6 +1,6 @@
 # Planning of Heuristics（PoH）
 
-- 论文：Planning of Heuristics: Strategic Planning on Large Language Models with Monte Carlo Tree Search；本地来源：[example_paper.tex](../../../../papers/Planning_of_Heuristics_Strategic_Planning_on_Large_Language_Models_with_Monte_Carlo_Tree/example_paper.tex)；设计对象为组合优化启发式规划式搜索。
+- 论文：Planning of Heuristics: Strategic Planning on Large Language Models with Monte Carlo Tree Search；本地来源：example_paper.tex；设计对象为组合优化启发式规划式搜索。
 
 ## 1. 核心问题与方法
 

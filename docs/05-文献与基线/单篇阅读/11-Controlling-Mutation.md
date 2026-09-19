@@ -1,6 +1,6 @@
 # Controlling the Mutation in LLMs
 
-- 论文：*Controlling the Mutation in LLMs for Efficient Evolution of Algorithms*；本地来源：[`samplepaper.tex`](../../../../papers/Controlling_the_Mutation_in_LLMs_for_Efficient_Evolution_of_Algorithms/samplepaper.tex)；设计对象：LLM 生成的算法代码变异。
+- 论文：*Controlling the Mutation in LLMs for Efficient Evolution of Algorithms*；本地来源：`samplepaper.tex`；设计对象：LLM 生成的算法代码变异。
 
 ## 1. 核心问题与方法
 

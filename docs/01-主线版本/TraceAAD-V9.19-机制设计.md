@@ -1,6 +1,4 @@
-# TraceAAD V9.19 完整机制设计
-
-> **历史状态说明（2026-09-07）**：本文记录 V9.19 后期的 `behavesim_v4_train_trajectory` 在线机制。它已经在正式训练评价内同步采集五任务轨迹，并缓存轨迹、只增量计算新旧节点距离；不能与此前额外运行 `behavesim_v3_combined_panel` 的旧实现混用。后续复审确认，这些优化仍不能消除 OBP 长前缀成对比较和随机 ACO 稳定化成本。完整 BehaveSim 现定位为条件性离线工具，参见[在线可行性复审](../03-机制验证/03-算法行为几何/2026-09-07-BehaveSim在线可行性复审/结论.md)。本文只作为历史机制设计，不代表当前在线方案。
+# TraceAAD V9.19 完整机制设计（历史版本）
 
 V9.19 将自动算法设计建模为**行为落地形成轨迹引导的搜索**。候选的求解轨迹提供执行行为坐标；候选的形成轨迹保存算法改进的来时路。每一条有效形成边再由实际求解行为落地，记录这次改写是否提高质量，以及它相对既有档案到达了多新的行为位置。
 
@@ -421,7 +419,7 @@ Duplicate、invalid 与 timeout 不创建节点。本轮 primary slot 已消耗�
 
 每个 primary candidate 最多执行 2 次有界修复。修复只提供当前运行错误，保持原 parent 与 action。初始候选消耗一个 primary slot；repair LLM calls 和 repair evaluator calls 单独记录。一个 primary attempt 在 opportunity coverage 中只计一次。
 
-每次原子决策另存一条训练接口记录 $D_t$：task、parent id、current code、behavior-grounded formation path、action、LLM output、$q_p$、$q_c$、result、$\nu$、behavior tag、$P/U/T$，以及 `exact_prompt`、`exact_response`、`model_id`、`sampling_temperature` 和 `seed`。该记录供后续轨迹条件 RL 复原决策状态，见[轨迹条件 RL](../04-研究认识与构想/轨迹条件生成学习设想.md)。
+每次原子决策另存一条训练接口记录 $D_t$：task、parent id、current code、behavior-grounded formation path、action、LLM output、$q_p$、$q_c$、result、$\nu$、behavior tag、$P/U/T$，以及 `exact_prompt`、`exact_response`、`model_id`、`sampling_temperature` 和 `seed`。该记录供后续轨迹条件 RL 复原决策状态，见轨迹条件 RL。
 
 ## 9. 完整伪代码
 
@@ -490,4 +488,4 @@ $$
 
 ## 11. 主实验
 
-按[主实验配置](../02-实验结果/主实验配置与冻结契约.md)执行：任务为 `tsp_construct`、`cvrp_aco`、`op_aco`、`online_bin_packing`、`vrptw_construct`；每任务 3 次独立搜索；每次 1000 个 primary evaluator slots；训练集优化，held-out 评估不同规模新实例。正式结果同时报告 BehaveSim 额外计算成本。全部重复与测试完成后更新结果页。
+按主实验配置执行：任务为 `tsp_construct`、`cvrp_aco`、`op_aco`、`online_bin_packing`、`vrptw_construct`；每任务 3 次独立搜索；每次 1000 个 primary evaluator slots；训练集优化，held-out 评估不同规模新实例。正式结果同时报告 BehaveSim 额外计算成本。全部重复与测试完成后更新结果页。

@@ -1,6 +1,6 @@
 # Code Evolution Graphs
 
-- 论文：*Code Evolution Graphs: Understanding Large Language Model Driven Design of Algorithms*；本地来源：LaTeX 源码目录 [`Code_Evolution_Graphs_Understanding_Large_Language_Model_Driven_Design_of_Algorithms/`](../../../../papers/Code_Evolution_Graphs_Understanding_Large_Language_Model_Driven_Design_of_Algorithms/)；研究对象：LLM 进化框架中代码结构与复杂度的演化轨迹，诊断工具而非新方法。
+- 论文：*Code Evolution Graphs: Understanding Large Language Model Driven Design of Algorithms*；本地来源：LaTeX 源码目录 `Code_Evolution_Graphs_Understanding_Large_Language_Model_Driven_Design_of_Algorithms/`；研究对象：LLM 进化框架中代码结构与复杂度的演化轨迹，诊断工具而非新方法。
 
 ## 1. 核心问题与方法
 

@@ -16,9 +16,9 @@
 | 超时/运行失败类别 | 是，失败事件 | 不进入有效节点的形成路径 | 该次无有效节点，耗掉评价预算 |
 | 代码渐近复杂度、规模增长曲线 | 未测量 | 无明确数值 | 否 |
 
-依据：[V10.5 prompt](../../../llm4ad/method/traceaad_v10_5/prompts.py)、[选择与评价循环](../../../llm4ad/method/traceaad_v10_5/traceaad.py)、[节点结构](../../../llm4ad/method/traceaad_v10_3/schema.py)。准确说法是：**记录了耗时，但决策闭环基本仍只看到 fitness。** 父节点计数惩罚与 Pivot 均匀分支属于分配机制，不是对候选运行成本的利用。
+依据：V10.5 prompt、选择与评价循环、节点结构。准确说法是：**记录了耗时，但决策闭环基本仍只看到 fitness。** 父节点计数惩罚与 Pivot 均匀分支属于分配机制，不是对候选运行成本的利用。
 
-另一个遗漏是 CVRP Task Contract 只笼统要求 efficient NumPy，没有明确给出当前 120 秒评价上限、启发式矩阵每实例只预计算一次、固定 ACO 30 ants × 100 iterations 的实际调用关系。“within runtime limits”本身不能替代这些必要任务信息。[任务描述](../../../llm4ad/task/optimization/cvrp_aco/template.py)、[评价实现](../../../llm4ad/task/optimization/cvrp_aco/evaluation.py)。
+另一个遗漏是 CVRP Task Contract 只笼统要求 efficient NumPy，没有明确给出当前 120 秒评价上限、启发式矩阵每实例只预计算一次、固定 ACO 30 ants × 100 iterations 的实际调用关系。“within runtime limits”本身不能替代这些必要任务信息。任务描述、评价实现。
 
 ## 2. CVRP rep3 为什么慢
 
@@ -73,7 +73,7 @@ rep3 输出比 rep2 长，服务端点和并发负载也不同。当前日志不
 
 ## 3. MEoH 到底支持什么
 
-详细原文与作者实现核查另见 [MEoH 阅读笔记](../专题调研/MEoH多目标机制与单目标收益核查.md)。依据为 [论文 v2](https://arxiv.org/html/2409.16867v2) 主文、附录、作者代码，而非方法名称的推断。
+详细原文与作者实现核查另见 MEoH 阅读笔记。依据为 [论文 v2](https://arxiv.org/html/2409.16867v2) 主文、附录、作者代码，而非方法名称的推断。
 
 MEoH 把质量和求解时间组成双目标，在选父和种群截断时使用 Pareto 支配与 AST 相似性；非支配节点的 dominance-dissimilarity 分数相同。当前作者代码测 BPP 完整装箱、TSP 完整 GLS 的耗时，不能等同本项目的外层 evaluator wall time 或一次 prior 调用时间。[作者 BPP 评价器](https://raw.githubusercontent.com/Optima-CityU/LLM4AD/main/llm4ad/task/optimization/online_bin_packing_2O/evaluation.py)、[作者 TSP GLS](https://raw.githubusercontent.com/Optima-CityU/LLM4AD/main/llm4ad/task/optimization/tsp_gls_2O/gls.py)。作者当前代码与论文实验快照也存在设置差异。
 

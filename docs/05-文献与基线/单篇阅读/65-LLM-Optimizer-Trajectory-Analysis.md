@@ -1,6 +1,6 @@
 # What Makes an LLM a Good Optimizer（轨迹分析）
 
-- 论文：*What Makes an LLM a Good Optimizer? A Trajectory Analysis*；本地来源：LaTeX 源码目录 [`What_Makes_an_LLM_a_Good_Optimizer_Trajectory_Analysis/`](../../../../papers/What_Makes_an_LLM_a_Good_Optimizer_Trajectory_Analysis/)；研究对象：15 个 LLM × 8 任务的进化轨迹，什么变量预测优化成功。
+- 论文：*What Makes an LLM a Good Optimizer? A Trajectory Analysis*；本地来源：LaTeX 源码目录 `What_Makes_an_LLM_a_Good_Optimizer_Trajectory_Analysis/`；研究对象：15 个 LLM × 8 任务的进化轨迹，什么变量预测优化成功。
 
 ## 1. 核心问题与方法
 

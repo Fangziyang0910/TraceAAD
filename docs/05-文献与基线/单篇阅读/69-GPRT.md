@@ -1,6 +1,6 @@
 # GP with RL-Trained Transformer（GPRT）
 
-- 论文：*Genetic Programming with a Reinforcement Learning Trained Transformer for Dynamic Scheduling in Real-World Environments*；本地来源：LaTeX 源码目录 [`GP_with_RL_Trained_Transformer_for_Dynamic_Scheduling/`](../../../../papers/GP_with_RL_Trained_Transformer_for_Dynamic_Scheduling/)；设计对象：集装箱码头动态卡车调度的 GP 启发式（LGP 波兰式 token 序列）与生成它们的序列模型。
+- 论文：*Genetic Programming with a Reinforcement Learning Trained Transformer for Dynamic Scheduling in Real-World Environments*；本地来源：LaTeX 源码目录 `GP_with_RL_Trained_Transformer_for_Dynamic_Scheduling/`；设计对象：集装箱码头动态卡车调度的 GP 启发式（LGP 波兰式 token 序列）与生成它们的序列模型。
 
 ## 1. 核心问题与方法
 

@@ -1,6 +1,6 @@
 # Evolving Code with a Large Language Model
 
-- 论文：*Evolving Code with a Large Language Model*（Hemberg, Moskal, O'Reilly，MIT CSAIL，期刊版）；本地来源：[`papers/Evolving_Code_with_A_Large_Language_Model/ELM_GP_jrnl_2023.tex`](../../../../papers/Evolving_Code_with_A_Large_Language_Model/ELM_GP_jrnl_2023.tex)；设计对象：符号回归 Python 表达式（框架化论文，非新机制论文）。
+- 论文：*Evolving Code with a Large Language Model*（Hemberg, Moskal, O'Reilly，MIT CSAIL，期刊版）；本地来源：`papers/Evolving_Code_with_A_Large_Language_Model/ELM_GP_jrnl_2023.tex`；设计对象：符号回归 Python 表达式（框架化论文，非新机制论文）。
 
 ## 1. 核心问题与方法
 

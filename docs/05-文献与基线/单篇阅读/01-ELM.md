@@ -1,6 +1,6 @@
 # ELM（Evolution through Large Models）
 
-- 论文：*Evolution through Large Models*；本地来源：[`papers/Evolution_through_Large_Models/main.tex`](../../../../papers/Evolution_through_Large_Models/main.tex)；设计对象：可执行 Python 程序（Sodaracer 的生成程序）。
+- 论文：*Evolution through Large Models*；本地来源：`papers/Evolution_through_Large_Models/main.tex`；设计对象：可执行 Python 程序（Sodaracer 的生成程序）。
 
 ## 1. 核心问题与方法
 

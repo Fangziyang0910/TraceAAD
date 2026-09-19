@@ -1,6 +1,6 @@
 # Memento 2
 
-- 论文：*Memento 2: Learning by Stateful Reflective Memory*；本地来源：LaTeX 源码目录 [`Memento_2_Learning_by_Stateful_Reflective_Memory/`](../../../../papers/Memento_2_Learning_by_Stateful_Reflective_Memory/)；研究对象：冻结参数、靠情景记忆 + 反思持续学习的 LLM 智能体的 RL 理论（纯理论，无新实验）。
+- 论文：*Memento 2: Learning by Stateful Reflective Memory*；本地来源：LaTeX 源码目录 `Memento_2_Learning_by_Stateful_Reflective_Memory/`；研究对象：冻结参数、靠情景记忆 + 反思持续学习的 LLM 智能体的 RL 理论（纯理论，无新实验）。
 
 ## 1. 核心问题与方法
 

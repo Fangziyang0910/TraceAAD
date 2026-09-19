@@ -1,6 +1,6 @@
 # HiFo-Prompt
 
-- 论文：HiFo-Prompt: Prompting with Hindsight and Foresight for LLM-based AHD；本地来源：[templateArxiv.tex](../../../../papers/HiFo_Prompt_Prompting_with_Hindsight_and_Foresight_for_LLM_based_Automatic_Heuristic_Des/templateArxiv.tex)；设计对象为组合优化与 BO 的启发式/策略提示生成。
+- 论文：HiFo-Prompt: Prompting with Hindsight and Foresight for LLM-based AHD；本地来源：templateArxiv.tex；设计对象为组合优化与 BO 的启发式/策略提示生成。
 
 ## 1. 核心问题与方法
 

@@ -1,6 +1,6 @@
 # MeLA
 
-- 论文：MeLA: Metacognitive LLM-Driven Architecture for Automatic Heuristic Design；本地来源：[main.tex](../../../../papers/MeLA_Metacognitive_LLM-Driven_Architecture_for_Automatic_Heuristic_Design/main.tex)；设计对象为 LLM 自动生成组合优化启发式。
+- 论文：MeLA: Metacognitive LLM-Driven Architecture for Automatic Heuristic Design；本地来源：main.tex；设计对象为 LLM 自动生成组合优化启发式。
 
 ## 1. 核心问题与方法
 

@@ -1,6 +1,6 @@
 # ShinkaEvolve
 
-- 论文：ShinkaEvolve；本地来源：[`main.tex`](../../../../papers/ShinkaEvolve/main.tex) 与 `sections/`；设计对象：可执行优化程序、MoE load-balancing loss、竞赛启发式等。
+- 论文：ShinkaEvolve；本地来源：`main.tex` 与 `sections/`；设计对象：可执行优化程序、MoE load-balancing loss、竞赛启发式等。
 
 ## 1. 核心问题与方法
 

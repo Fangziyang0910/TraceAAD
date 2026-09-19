@@ -1,6 +1,6 @@
 # BaSE：Compute Allocation in Evolutionary Search
 
-- 论文：Compute Allocation in Evolutionary Search: From Depth–Breadth to Multi-Armed Bandits（arXiv:2605.29268）。本地来源：[main.tex](../../../../papers/Compute_Allocation_in_Evolutionary_Search_From_Depth_Breadth_to_Multi_Armed_Bandits/main.tex)、[bandit.tex](../../../../papers/Compute_Allocation_in_Evolutionary_Search_From_Depth_Breadth_to_Multi_Armed_Bandits/bandit.tex)、[bandit_appendix.tex](../../../../papers/Compute_Allocation_in_Evolutionary_Search_From_Depth_Breadth_to_Multi_Armed_Bandits/bandit_appendix.tex)。
+- 论文：Compute Allocation in Evolutionary Search: From Depth–Breadth to Multi-Armed Bandits（arXiv:2605.29268）。本地来源：main.tex、bandit.tex、bandit_appendix.tex。
 - 设计对象：固定 LLM 调用预算下的计算分配，包含单条 run 内部的深度与广度划分，以及多条并行 run 之间的调用路由。模型、提示与 evaluator 在全部实验中保持不变。
 
 ## 1. 问题与设计对象
@@ -155,6 +155,6 @@ BaSE 的臂对应 TraceAAD 的路线层，规模亦相近（BaSE 常用 $K=10$�
 
 两条与本仓库现有判断直接对话的线索：
 
-- **路线层乐观项近似未激活**（研究认识 1.3）。BaSE 的证据表明跨轨迹路由可带来较大收益，但该收益出现在 run 间方差极大、且臂间差距来自锚定到不同算法簇的格子上。TraceAAD 的 8 条根仅要求代码互异，路线间未必存在簇级差异。顶路线集中因此至少有三种读法：异质且正确集中、同质因而分配无意义、有差异但当前分数看不见。先测量路线是否为有意义的投资单位，比继续调整乐观尺度更有信息量。当前判断见[研究认识 2.1–2.5](../../04-研究认识与构想/研究认识.md)。
+- **路线层乐观项近似未激活**（研究认识 1.3）。BaSE 的证据表明跨轨迹路由可带来较大收益，但该收益出现在 run 间方差极大、且臂间差距来自锚定到不同算法簇的格子上。TraceAAD 的 8 条根仅要求代码互异，路线间未必存在簇级差异。顶路线集中因此至少有三种读法：异质且正确集中、同质因而分配无意义、有差异但当前分数看不见。先测量路线是否为有意义的投资单位，比继续调整乐观尺度更有信息量。当前判断见研究认识 2.1–2.5。
 - **BaSE 不证明应当上 bandit。** 它迫使我们把深度—广度权衡读成“找正确的族 vs 在已找到的族内开发”，并把分配写成有限预算下兑现 transition kernel 的问题。生成与分配实验上拆开、理论上耦合；好的分配建立在提议异质性上。下一步是读出四任务的簇结构，不是把 UCB 搬进路线层。
 - **延续价值的候选估计量**（研究认识 2.5 与开放问题 4）。被注释掉的 predictive mean 给出趋势型延续价值的最小形式，可在现有日志上离线检验。论文最终未在正文保留该估计器，这一取舍本身也是信息。只有在确认路线具有可利用异质性之后，才值得把这类量写入在线规则。

@@ -1,6 +1,6 @@
 # Experience Memory Graph
 
-- 论文：*Experience Memory Graph: One-Shot Error Correction for Agents*；本地来源：LaTeX 源码目录 [`Experience_Memory_Graph_One-Shot_Error_Correction_for_Agents/`](../../../../papers/Experience_Memory_Graph_One-Shot_Error_Correction_for_Agents/)；研究对象：把 agent 失败恢复从在线反思-重放循环改为离线确定性图计算的记忆结构。
+- 论文：*Experience Memory Graph: One-Shot Error Correction for Agents*；本地来源：LaTeX 源码目录 `Experience_Memory_Graph_One-Shot_Error_Correction_for_Agents/`；研究对象：把 agent 失败恢复从在线反思-重放循环改为离线确定性图计算的记忆结构。
 
 ## 1. 核心问题与方法
 

@@ -1,6 +1,6 @@
 # HSEvo
 
-- 论文：HSEvo；本地来源：[`papers/HSEvo/aaai25.tex`](../../../../papers/HSEvo/aaai25.tex) 与 [`appendix.tex`](../../../../papers/HSEvo/appendix.tex)；设计对象：组合优化启发式代码（BPO、TSP-GLS、OP-ACO）。
+- 论文：HSEvo；本地来源：`papers/HSEvo/aaai25.tex` 与 `appendix.tex`；设计对象：组合优化启发式代码（BPO、TSP-GLS、OP-ACO）。
 
 ## 1. 核心问题与方法
 

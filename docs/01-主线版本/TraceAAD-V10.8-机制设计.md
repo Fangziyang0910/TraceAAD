@@ -1,6 +1,4 @@
-# TraceAAD V10.8 方法报告：从一次设计实验理解完整搜索机制
-
-> 本文按“问题定义 → 总体框架 → 模块机制 → 完整示例 → 实验验证”的顺序说明 V10.8。阅读重点是系统如何运行；贡献定位见[研究认识](../04-研究认识与构想/研究认识.md)。机制与当前实现核对于 2026-09-09；正式批次、验收历史与运行入口见附录，实时进度由实验目录维护。
+# TraceAAD V10.8 方法报告（历史版本）
 
 ## 摘要
 
@@ -414,7 +412,7 @@ def priority(item: float, bins: np.ndarray) -> np.ndarray:
 | donor 容量尝试 | 最多 32 个不同节点 | 有界、按权重无放回尝试 |
 | 模型输出 | 短 Idea＋完整 Code | 一次调用、一个候选 |
 
-模型端点、任务规模、实例种子、评价限时等由[公共运行入口](../../experiments/traceaad_v10_8/run.py)与各路 `run_config.json` 记录。正式 CLI 固定首发历史机制；历史深度与表示对照通过独立实验构造器执行。
+模型端点、任务规模、实例种子、评价限时等由公共运行入口与各路 `run_config.json` 记录。正式 CLI 固定首发历史机制；历史深度与表示对照通过独立实验构造器执行。
 
 ## 9. 实验验证：每组比较对应哪个机制问题
 
@@ -505,19 +503,19 @@ $$
 
 | 编号 | 路径 | 用途 |
 |---|---|---|
-| S1 | [docs/01-主线版本/TraceAAD-V9.0-机制设计.md](TraceAAD-V9.0-机制设计.md) | 原始问题与真实形成历史 |
-| S2 | [docs/04-研究认识与构想/生成上下文经验.md](../04-研究认识与构想/生成上下文经验.md) | 单步与完整搜索边界、失败子代经验 |
-| S3 | [docs/04-研究认识与构想/预算分配经验.md](../04-研究认识与构想/预算分配经验.md) | 代理、回传和重决策频率教训 |
-| S4 | [docs/04-研究认识与构想/TraceAAD机制尝试.md](../04-研究认识与构想/TraceAAD机制尝试.md) | 历代失败性质及混杂边界 |
-| S5 | [docs/03-机制验证/01-提示与上下文/2026-08-21-父代来时路搜索/README.md](../03-机制验证/01-提示与上下文/2026-08-21-父代来时路搜索/README.md) | 逐 seed 数值和汇总纠错 |
-| S6 | [docs/03-机制验证/04-算子动力学与两步价值/2026-09-07-E2B-Pivot两步选择价值/README.md](../03-机制验证/04-算子动力学与两步价值/2026-09-07-E2B-Pivot两步选择价值/README.md) | 两步价值与恢复收益区别 |
-| S7 | [docs/01-主线版本/V10.6/二次Idea配对核查/结论.md](../02-实验结果/版本运行诊断与复盘/2026-09-07-V10.6二次Idea配对核查.md) | 二次摘要的局部收益与错误 |
-| S8 | [docs/01-主线版本/TraceAAD-V10.7R-机制设计.md](TraceAAD-V10.7R-机制设计.md) | V10.7R 前置基线及验证状态 |
-| S9 | [llm4ad/method/traceaad_v10_7/traceaad.py](../../llm4ad/method/traceaad_v10_7/traceaad.py) | V10.7R 的单候选执行流程 |
-| S10 | [llm4ad/method/traceaad_v10_7/sampling.py](../../llm4ad/method/traceaad_v10_7/sampling.py) | 直接边优先级与 donor 抽样 |
-| S11 | [llm4ad/method/traceaad_v10_7/prompts.py](../../llm4ad/method/traceaad_v10_7/prompts.py) | 角色、输出协议、提示视图清理 |
-| S12 | [llm4ad/method/traceaad_v10_5/traceaad.py](../../llm4ad/method/traceaad_v10_5/traceaad.py) | 被继承的 node-ID 质量/次数分布 |
-| S13 | [docs/01-主线版本/V10.6/机制运行核查/README.md](../02-实验结果/版本运行诊断与复盘/2026-09-08-V10.6与V10.7机制运行核查.md) | 旧 V10.7 归因与冻结状态 |
+| S1 | docs/01-主线版本/TraceAAD-V9.0-机制设计.md | 原始问题与真实形成历史 |
+| S2 | docs/04-研究认识与构想/2026-09-18-生成上下文与历史证据.md | 单步与完整搜索边界、失败子代经验 |
+| S3 | docs/04-研究认识与构想/2026-09-18-预算分配与评价资源.md | 代理、回传和重决策频率教训 |
+| S4 | docs/04-研究认识与构想/2026-09-18-核心研究认识.md | 历代机制的证据边界与收益形成结构 |
+| S5 | docs/03-机制验证/01-提示与上下文/2026-08-21-父代来时路搜索/README.md | 逐 seed 数值和汇总纠错 |
+| S6 | docs/03-机制验证/04-算子动力学与两步价值/2026-09-07-E2B-Pivot两步选择价值/README.md | 两步价值与恢复收益区别 |
+| S7 | docs/01-主线版本/V10.6/二次Idea配对核查/结论.md | 二次摘要的局部收益与错误 |
+| S8 | docs/01-主线版本/TraceAAD-V10.7R-机制设计.md | V10.7R 前置基线及验证状态 |
+| S9 | llm4ad/method/traceaad_v10_7/traceaad.py | V10.7R 的单候选执行流程 |
+| S10 | llm4ad/method/traceaad_v10_7/sampling.py | 直接边优先级与 donor 抽样 |
+| S11 | llm4ad/method/traceaad_v10_7/prompts.py | 角色、输出协议、提示视图清理 |
+| S12 | llm4ad/method/traceaad_v10_5/traceaad.py | 被继承的 node-ID 质量/次数分布 |
+| S13 | docs/01-主线版本/V10.6/机制运行核查/README.md | 旧 V10.7 归因与冻结状态 |
 
 来源稿列出的相关研究线索包括 ReEvo（arXiv:2402.01145，反思指导进化）、PathWise（arXiv:2601.20539，有状态轨迹记忆与规划）和 AHD Agent（arXiv:2605.08756，多轮工具使用与 RL）。这些条目保留为待独立核验的文献线索。
 
@@ -539,8 +537,7 @@ $$
 
 2026-09-09 本地验收：V10.8 的 21 项测试与 V10.5/V10.6/V10.7R 相关回归合计 **129 passed**；入口 `--help` 正常。差分由标准 `patch` 工具正向及逆向重建，覆盖多个修改块和末尾无换行。生成使用测试替身，微型评价器执行真实 Python 候选。
 
-以下为历史启动记录。初次交付为设计与实现；2026-09-09 后续按用户授权启动 15 路正式搜索，见[启动记录](../../experiments/traceaad_v10_8/launch_20260909.md)。该批运行对应机制调整前的版本，记录了当时的调度和生成过程。表示与历史深度对照另行验证。
-
+以下为历史启动记录。初次交付为设计与实现；2026-09-09 后续按用户授权启动 15 路正式搜索，见启动记录。该批运行对应机制调整前的版本，记录了当时的调度和生成过程。表示与历史深度对照另行验证。
 
 ### E.2 正式运行前审查修正（2026-09-09）
 
@@ -556,12 +553,12 @@ $$
 
 | 报告模块 | 实现入口 |
 | --- | --- |
-| 节点选择、重复拒绝、donor 与本轮调度 | [traceaad.py](../../llm4ad/method/traceaad_v10_8/traceaad.py)：`node_distribution`、`_duplicate_inputs`、`select_donor`、`_schedule` |
-| 转移表示、连续后缀与完整提示 | [trajectory.py](../../llm4ad/method/traceaad_v10_8/trajectory.py)：`transition`、`build`、`assemble` |
-| 单候选生成、解析、评价与归档 | [复用的执行循环](../../llm4ad/method/traceaad_v10_7/traceaad.py)：`_advance` |
-| 历史深度与表示对照 | [ablations.py](../../experiments/traceaad_v10_8/ablations.py) |
-| 参数与运行说明 | [run.py](../../experiments/traceaad_v10_8/run.py)、[运行说明](../../experiments/traceaad_v10_8/README.md) |
-| 原始启动事实与服务分配 | [2026-09-09 启动记录](../../experiments/traceaad_v10_8/launch_20260909.md) |
+| 节点选择、重复拒绝、donor 与本轮调度 | traceaad.py：`node_distribution`、`_duplicate_inputs`、`select_donor`、`_schedule` |
+| 转移表示、连续后缀与完整提示 | trajectory.py：`transition`、`build`、`assemble` |
+| 单候选生成、解析、评价与归档 | 复用的执行循环：`_advance` |
+| 历史深度与表示对照 | ablations.py |
+| 参数与运行说明 | run.py、运行说明 |
+| 原始启动事实与服务分配 | 2026-09-09 启动记录 |
 
 本次同步调整机制说明、搜索实现、运行入口与测试。重复拒绝的评价预算增量为零，生成与父代扩展次数各增加一次。旧启动批次和上面的验收数字保留其历史时点。
 

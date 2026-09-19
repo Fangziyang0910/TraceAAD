@@ -1,6 +1,6 @@
 # Code Repair EET（REx）
 
-- 论文：*Code Repair with LLMs Gives an Exploration-Exploitation Tradeoff*；本地来源：[`main.tex`](../../../../papers/Code_Repair_with_LLMs_gives_an_Exploration_Exploitation_Tradeoff/main.tex)；研究对象：LLM 迭代修复代码的策略选择理论（arm-acquiring bandit），而非一套 AAD 系统。
+- 论文：*Code Repair with LLMs Gives an Exploration-Exploitation Tradeoff*；本地来源：`main.tex`；研究对象：LLM 迭代修复代码的策略选择理论（arm-acquiring bandit），而非一套 AAD 系统。
 
 ## 1. 核心问题与方法
 

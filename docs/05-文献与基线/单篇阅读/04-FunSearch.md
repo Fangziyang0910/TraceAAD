@@ -1,6 +1,6 @@
 # FunSearch
 
-- 论文：*Mathematical discoveries from program search with large language models*；本地来源：[`s41586-023-06924-6.pdf`](../../../../papers/Mathematical_discoveries_from_program_search_with_large_language_models/s41586-023-06924-6.pdf)；设计对象：数学构造或算法骨架中一个可执行的关键函数。
+- 论文：*Mathematical discoveries from program search with large language models*；本地来源：`s41586-023-06924-6.pdf`；设计对象：数学构造或算法骨架中一个可执行的关键函数。
 
 ## 1. 核心问题与方法
 

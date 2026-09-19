@@ -331,7 +331,7 @@ hypothesis 和 public-card child。它不能进入 parent 机会、全局 card �
 提示。这样 OBP 等任务的 evaluator 成本仍与历史标准方法同口径。
 
 后续对 V9.19 两套实现、旧画像墙钟、OBP 长前缀距离规模和 ACO 多随机流稳定性
-的完整追溯见[BehaveSim 在线可行性复审](../03-机制验证/03-算法行为几何/2026-09-07-BehaveSim在线可行性复审/结论.md)。该复审支持本节的退出决定，并进一步明确“群体几何有信息”与“在线维护几何划算”是两个独立命题。
+的完整追溯见BehaveSim 在线可行性复审。该复审支持本节的退出决定，并进一步明确“群体几何有信息”与“在线维护几何划算”是两个独立命题。
 
 per-instance performance vector 是有价值的后续候选：标准 evaluator 当前接口
 只返回聚合 fitness，首跑不修改任务评价语义。若后续加入，必须在同一次 evaluator

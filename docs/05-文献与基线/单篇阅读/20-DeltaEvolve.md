@@ -1,6 +1,6 @@
 # DeltaEvolve
 
-- 论文：DeltaEvolve: Accelerating Scientific Discovery through Momentum-Driven Evolution；本地来源：[main.tex](../../../../papers/DeltaEvolve_Accelerating_Scientific_Discovery_through_Momentum_Driven_Evolution/main.tex)，分文件 `3_framework.tex`、`4_methods.tex`、`5_experiments.tex`、`appendix.tex`；设计对象为科学代码/候选的迭代进化。
+- 论文：DeltaEvolve: Accelerating Scientific Discovery through Momentum-Driven Evolution；本地来源：main.tex，分文件 `3_framework.tex`、`4_methods.tex`、`5_experiments.tex`、`appendix.tex`；设计对象为科学代码/候选的迭代进化。
 
 ## 1. 核心问题与方法
 

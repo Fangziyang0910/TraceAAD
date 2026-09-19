@@ -1,6 +1,6 @@
 # Evolutionary Discovery of RL Algorithms via LLMs
 
-- 论文：*Evolutionary Discovery of RL Algorithms via LLMs*；本地来源：[`main.tex`](../../../../papers/Evolutionary_Discovery_of_RL_Algorithms_via_LLMs/main.tex)；设计对象：固定网络与优化器下的 RL 更新规则/损失代码。
+- 论文：*Evolutionary Discovery of RL Algorithms via LLMs*；本地来源：`main.tex`；设计对象：固定网络与优化器下的 RL 更新规则/损失代码。
 
 ## 1. 核心问题与方法
 

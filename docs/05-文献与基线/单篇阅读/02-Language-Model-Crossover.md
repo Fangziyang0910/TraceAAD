@@ -1,6 +1,6 @@
 # Language Model Crossover（LMX）
 
-- 论文：*Language Model Crossover: Variation through Few-Shot Prompting*；本地来源：[`papers/Language_Model_Crossover_Variation_through_Few_Shot_Prompting/main.tex`](../../../../papers/Language_Model_Crossover_Variation_through_Few_Shot_Prompting/main.tex)；设计对象：字符串、表达式、图像提示与 Python 程序。
+- 论文：*Language Model Crossover: Variation through Few-Shot Prompting*；本地来源：`papers/Language_Model_Crossover_Variation_through_Few_Shot_Prompting/main.tex`；设计对象：字符串、表达式、图像提示与 Python 程序。
 
 ## 1. 核心问题与方法
 

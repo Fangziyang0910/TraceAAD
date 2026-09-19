@@ -18,75 +18,75 @@
 
 | 方法 | 无效处置 | 错误信息的去向 | 证据强度 |
 |---|---|---|---|
-| [ELM](../单篇阅读/01-ELM.md) | 隐式丢弃（diff 不可应用/程序不可运行即无个体） | valid/runnable 比例被测量并作为微调变异模型的收益指标 | 无效率是结果变量，处置是实现默认 |
-| [LMX](../单篇阅读/02-Language-Model-Crossover.md) | 丢弃（"parsed 或 raised exception 即 discarded"） | validation rate 是三个主报告指标之一 | 消融充分（签名强制/父代数/模型规模） |
-| [Evolving Code/ALFAECLLM](../单篇阅读/03-Evolving-Code.md) | 算子级默认回退：解析失败回退父代、选择失败退随机 | 错误率按算子×方法做图分析并归因 | 正式分析对象，但无策略比较 |
+| ELM | 隐式丢弃（diff 不可应用/程序不可运行即无个体） | valid/runnable 比例被测量并作为微调变异模型的收益指标 | 无效率是结果变量，处置是实现默认 |
+| LMX | 丢弃（"parsed 或 raised exception 即 discarded"） | validation rate 是三个主报告指标之一 | 消融充分（签名强制/父代数/模型规模） |
+| Evolving Code/ALFAECLLM | 算子级默认回退：解析失败回退父代、选择失败退随机 | 错误率按算子×方法做图分析并归因 | 正式分析对象，但无策略比较 |
 | FunSearch | 丢弃（超时/超内存/非法输出不进 programs database） | 无；防错靠骨架+空函数头补全收窄失误面 | 主文一句话规则（本地无补充材料） |
-| [EoH](../单篇阅读/05-EoH.md) | 丢弃（"added to population if feasible"） | 无；prompt 固定签名+禁随机+禁多余解释 | 一个条件从句 |
-| [MEoH](../单篇阅读/06-MEoH.md) | 继承 EoH | 附录图注承认 illegal code 导致种群空白 | 图注级 |
-| [HSEvo](../单篇阅读/07-HSEvo.md) | 丢弃 | 评估时限 50/100s 显式化（源码注释：应对 infinite loops） | 参数表一行 |
-| [QUBE](../单篇阅读/08-QUBE.md) | FunSearch 式丢弃（exceptions or timeouts 不保留） | UIQ 不受污染（质量项只由保留样本构成），但无效 offspring 对质量证据的稀释未讨论 | 继承性实现细节 |
-| [EoH-S](../单篇阅读/10-EoH-S.md) | 未知（未提及） | 未提及 | **未知**（正文完全未提及） |
-| [CDEoH](../单篇阅读/09-CDEoH.md) | **反思修复**：$h' \sim R_{LLM}(h, e)$，报错+thought+code 回喂，预算 B 内重试 | 错误信息是修复 prompt 的输入 | **原文明确**（有专门消融） |
-| [MoH](../单篇阅读/31-MoH.md) | 容错下放给生成的优化器代码（try/except 跳过+全批无效回退现有最优） | 经 seed optimizer 与 prompt 隐式传递给后代 | **代码/附录明确**（附录示例代码） |
-| [ReEvo](../单篇阅读/15-ReEvo.md) | 丢弃（父代从 successfully executed 中选） | 无；反思只消费成功个体的优劣对比，7 个 prompt 模板无报错字段 | **原文明确**（两处一句话规则） |
+| EoH | 丢弃（"added to population if feasible"） | 无；prompt 固定签名+禁随机+禁多余解释 | 一个条件从句 |
+| MEoH | 继承 EoH | 附录图注承认 illegal code 导致种群空白 | 图注级 |
+| HSEvo | 丢弃 | 评估时限 50/100s 显式化（源码注释：应对 infinite loops） | 参数表一行 |
+| QUBE | FunSearch 式丢弃（exceptions or timeouts 不保留） | UIQ 不受污染（质量项只由保留样本构成），但无效 offspring 对质量证据的稀释未讨论 | 继承性实现细节 |
+| EoH-S | 未知（未提及） | 未提及 | **未知**（正文完全未提及） |
+| CDEoH | **反思修复**：$h' \sim R_{LLM}(h, e)$，报错+thought+code 回喂，预算 B 内重试 | 错误信息是修复 prompt 的输入 | **原文明确**（有专门消融） |
+| MoH | 容错下放给生成的优化器代码（try/except 跳过+全批无效回退现有最优） | 经 seed optimizer 与 prompt 隐式传递给后代 | **代码/附录明确**（附录示例代码） |
+| ReEvo | 丢弃（父代从 successfully executed 中选） | 无；反思只消费成功个体的优劣对比，7 个 prompt 模板无报错字段 | **原文明确**（两处一句话规则） |
 | Hercules（Efficient Heuristics Generation） | 未知（未提及代码错误处置） | 火力在评估端：代理预测置信度分层+不可信回退真实评估 | **未知**（代码有效性未提及） |
 
 ### 树搜索与分配线
 
 | 方法 | 无效处置 | 错误信息的去向 | 证据强度 |
 |---|---|---|---|
-| [MCTS-AHD](../单篇阅读/22-MCTS-AHD.md) | 从流程推测（节点定义为 executable 实现，失败 reward 未定义） | 无 | **从流程推测**（未披露具体处置细节） |
-| [PoH](../单篇阅读/23-Planning-of-Heuristics.md) | 从流程推测（early stopping 剪低分路径，无效处置未定义） | 无 | **从流程推测**（写明提取机制，处置未提及） |
-| [CogMCTS](../单篇阅读/26-CogMCTS.md) | 从流程推测（继承 MCTS-AHD） | 负知识库 $K^-$：无改进经验入库为 avoidance cues（性能失败，非运行错误） | **从流程推测**（负知识有消融，运行错误处置未知） |
-| [Clade-AHD](../单篇阅读/25-Clade-AHD.md) | 未知（失败 outcome 未定义，α/β 由归一化分数驱动） | Beta 信念形式上为失败计数预留 β 通道，未启用；失败若映射 0 分与"极差但可运行"混同 | **未知**（结构预留但未实现） |
-| [PathWise](../单篇阅读/24-PathWise.md) | 从流程推测（argmax rollout 入图，其余含无效者只作备位；全部消耗预算） | worst-vs-best critic 把当步最差 rollout 转为语言反馈 | **从流程推测**（critic 有消融，无效处理未提及） |
-| [Compute Allocation/BaSE](../单篇阅读/28-Compute-Allocation-BaSE.md) | invalid 显式映射 fitness 0.0 | 0 分 pull 改变 bandit 臂估计，预算转离停滞轨迹；无效段长度进案例研究 | **原文明确**（唯一把无效当统计对象并进分配决策） |
+| MCTS-AHD | 从流程推测（节点定义为 executable 实现，失败 reward 未定义） | 无 | **从流程推测**（未披露具体处置细节） |
+| PoH | 从流程推测（early stopping 剪低分路径，无效处置未定义） | 无 | **从流程推测**（写明提取机制，处置未提及） |
+| CogMCTS | 从流程推测（继承 MCTS-AHD） | 负知识库 $K^-$：无改进经验入库为 avoidance cues（性能失败，非运行错误） | **从流程推测**（负知识有消融，运行错误处置未知） |
+| Clade-AHD | 未知（失败 outcome 未定义，α/β 由归一化分数驱动） | Beta 信念形式上为失败计数预留 β 通道，未启用；失败若映射 0 分与"极差但可运行"混同 | **未知**（结构预留但未实现） |
+| PathWise | 从流程推测（argmax rollout 入图，其余含无效者只作备位；全部消耗预算） | worst-vs-best critic 把当步最差 rollout 转为语言反馈 | **从流程推测**（critic 有消融，无效处理未提及） |
+| Compute Allocation/BaSE | invalid 显式映射 fitness 0.0 | 0 分 pull 改变 bandit 臂估计，预算转离停滞轨迹；无效段长度进案例研究 | **原文明确**（唯一把无效当统计对象并进分配决策） |
 
 ### 反思与记忆线
 
 | 方法 | 无效处置 | 错误信息的去向 | 证据强度 |
 |---|---|---|---|
-| [HiFo-Prompt](../单篇阅读/16-HiFo-Prompt.md) | 未知（正文未提及，注释稿暴露 EoH 式 null 过滤） | 记忆只存成功精英的规律 | **未知**（正文完全未提及） |
-| [MeLA](../单篇阅读/18-MeLA.md) | **报错回喂修复**：错误 prompt 回喂，至多 M 次重试，最优有效候选替换 | 错误历史进元认知 prompt（"avoid the errors"）；附 12 条典型错误清单 | SR 表佐证（EoH 53–89%、ReEvo 41–96%、MeLA 93–99%），无关停对照 |
-| [EvoPH](../单篇阅读/17-Experience-Guided-CoEvolution.md) | 失败赋大负值，隐性淘汰出精英 | 失败→分析报告入经验库；演化后的 prompt 自建 `error_reason`/traceback 字段与"先纠错后优化"分层指令 | 有可执行率图（70–80% vs 20–45%）+消融 |
-| [MeEvo](../单篇阅读/19-MeEvo.md) | 执行失败 $f(h)=\infty$，排除出父代池（可行父代<2 则跳过该代）；COR=2 次修复，无错且更优才替换 | ERR 是跨代共享历史四元组之一，驱动收敛诊断与"勿重复致错策略"约束 | 有伪代码，修复未单独消融（作者自认） |
-| [RefineEvo](../单篇阅读/27-RefineEvo.md) | 未定义 | validity rate 作为算子统计触发算子精化；负经验=性能退化，无报错字段 | 负经验库有消融，错误处理是触发器之一 |
+| HiFo-Prompt | 未知（正文未提及，注释稿暴露 EoH 式 null 过滤） | 记忆只存成功精英的规律 | **未知**（正文完全未提及） |
+| MeLA | **报错回喂修复**：错误 prompt 回喂，至多 M 次重试，最优有效候选替换 | 错误历史进元认知 prompt（"avoid the errors"）；附 12 条典型错误清单 | SR 表佐证（EoH 53–89%、ReEvo 41–96%、MeLA 93–99%），无关停对照 |
+| EvoPH | 失败赋大负值，隐性淘汰出精英 | 失败→分析报告入经验库；演化后的 prompt 自建 `error_reason`/traceback 字段与"先纠错后优化"分层指令 | 有可执行率图（70–80% vs 20–45%）+消融 |
+| MeEvo | 执行失败 $f(h)=\infty$，排除出父代池（可行父代<2 则跳过该代）；COR=2 次修复，无错且更优才替换 | ERR 是跨代共享历史四元组之一，驱动收敛诊断与"勿重复致错策略"约束 | 有伪代码，修复未单独消融（作者自认） |
+| RefineEvo | 未定义 | validity rate 作为算子统计触发算子精化；负经验=性能退化，无报错字段 | 负经验库有消融，错误处理是触发器之一 |
 
 ### 现代系统线
 
 | 方法 | 无效处置 | 错误信息的去向 | 证据强度 |
 |---|---|---|---|
-| [AlphaEvolve](../单篇阅读/12-AlphaEvolve.md) | 评估级联：小规模预测试过滤 faulty program；LLM 反馈可整解丢弃 | 提示渲染执行结果（隐式反馈）；无修复循环 | 实现细节（传闻的 build/repair 级联在白皮书中不存在） |
-| [ShinkaEvolve](../单篇阅读/13-ShinkaEvolve.md) | **评估前限次 patch 重采样**：解析反馈（Reflexion）回喂，上限 3（MoE 任务 10） | archive 每程序存文本反馈（可含错误信息）；知识提炼只用成功样本 | 方法节一句+超参表，无消融 |
-| [DeltaEvolve](../单篇阅读/20-DeltaEvolve.md) | 评估器层映射：违约 0 分、NaN/超时惩罚分、两阶段协议 Stage 1 作 validity filter | 失败改动编码为 "Degraded" delta 进入历史上下文 | 评估器附录规则 |
-| [PhyloEvolve](../单篇阅读/21-PhyloEvolve.md) | **最完整修复级联**：语法/类型检查→沙箱执行→根因诊断→最小修复→3 次重试→回滚或上报 Designer 重构 | 失败路径在树中显式标记+错误摘要作负例；selective failure retention 保留信息量最大的失败 | 具名方法小节，无消融 |
-| [TurboEvolve](../单篇阅读/58-TurboEvolve.md) | OpenEvolve 可行性检查（编译/运行/超时/硬约束）→丢弃 | validity rate 按生成排名报告（头名更高）；失败执行全额计入 N_eval | 唯一报 validity 曲线+预算口径显式 |
-| [SMCEvolve](../单篇阅读/48-SMCEvolve.md) | invalid=最差奖励（0 分），MH 接受概率随退火温度连续压缩，拒绝时保留父代 | 被拒（含无效）提案留在全量历史作灵感来源 | 形式化核心，invalid 映射只在任务附录 |
+| AlphaEvolve | 评估级联：小规模预测试过滤 faulty program；LLM 反馈可整解丢弃 | 提示渲染执行结果（隐式反馈）；无修复循环 | 实现细节（传闻的 build/repair 级联在白皮书中不存在） |
+| ShinkaEvolve | **评估前限次 patch 重采样**：解析反馈（Reflexion）回喂，上限 3（MoE 任务 10） | archive 每程序存文本反馈（可含错误信息）；知识提炼只用成功样本 | 方法节一句+超参表，无消融 |
+| DeltaEvolve | 评估器层映射：违约 0 分、NaN/超时惩罚分、两阶段协议 Stage 1 作 validity filter | 失败改动编码为 "Degraded" delta 进入历史上下文 | 评估器附录规则 |
+| PhyloEvolve | **最完整修复级联**：语法/类型检查→沙箱执行→根因诊断→最小修复→3 次重试→回滚或上报 Designer 重构 | 失败路径在树中显式标记+错误摘要作负例；selective failure retention 保留信息量最大的失败 | 具名方法小节，无消融 |
+| TurboEvolve | OpenEvolve 可行性检查（编译/运行/超时/硬约束）→丢弃 | validity rate 按生成排名报告（头名更高）；失败执行全额计入 N_eval | 唯一报 validity 曲线+预算口径显式 |
+| SMCEvolve | invalid=最差奖励（0 分），MH 接受概率随退火温度连续压缩，拒绝时保留父代 | 被拒（含无效）提案留在全量历史作灵感来源 | 形式化核心，invalid 映射只在任务附录 |
 
 ### 系统级合成线
 
 | 方法 | 无效处置 | 错误信息的去向 | 证据强度 |
 |---|---|---|---|
-| [RedAHD](../单篇阅读/29-RedAHD.md) | 逐问题解检查清单验证+丢弃；LR 有效性由下游解是否合法定义 | 删最易错算子 E1；规约与代码拆两次调用防幻觉 | 附录实现细节 |
-| [BEAM](../单篇阅读/34-BEAM.md) | **组件级修复**：MCTS 逐函数填充循环内嵌 Fix（traceback 回喂，max_fix_try=3，低温 0.7） | 修复下沉到单函数粒度；生成物自带 MAX_TIME 超时协议 | 算法伪代码内，无消融 |
-| [A2DEPT](../单篇阅读/33-A2DEPT.md) | **依赖闭合修复循环**（静态可判定、保证终止，预算耗尽记 0 分）+死代码裁剪；评估失败 $-\infty$ 但仍插入搜索树 | 失败个体进树保留谱系；non-executable rate 随复杂度上升的曲线+失败案例解剖 | 核心贡献之一，无 w/o-maintenance 消融 |
-| [EvoStage](../单篇阅读/55-EvoStage.md) | 阶段级检查点：中间指标反馈纠正设计方向；失败 run 计为失败自然淘汰 | 中间反馈只消费性能指标（wirelength/overflow），不消费报错；组件分工+coder 低温 0.2 防语法错 | Pass Rate 进主表（78%/89% vs EoH 23%、AlphaEvolve 25%） |
-| [DyACE](../单篇阅读/56-DyACE.md) | 失败代 retry（次数与预算未展开） | 解耦诊断 agent 消费轨迹特征压幻觉 | 附录一句话 |
-| [Evolutionary RL Algorithms](../单篇阅读/14-Evolutionary-RL-Algorithms.md) | 训练崩溃经 max-return+clip 评价口径软性吸收进 0 分下限 | **Runtime Errors 槽位进变异 prompt**（"justified by the failure patterns"）；NaN/Inf 禁令+稳定性指标（gradient norm）回喂 | prompt 附录级设计 |
-| [AlgoPilot](../单篇阅读/43-AlgoPilot.md) | 奖励塑形防错：TLM 对无算法模式的轨迹给负奖励 | 轨迹 LM 用随机（多数无功能）程序轨迹做算法样态先验 | 防错前移到生成过程内部 |
+| RedAHD | 逐问题解检查清单验证+丢弃；LR 有效性由下游解是否合法定义 | 删最易错算子 E1；规约与代码拆两次调用防幻觉 | 附录实现细节 |
+| BEAM | **组件级修复**：MCTS 逐函数填充循环内嵌 Fix（traceback 回喂，max_fix_try=3，低温 0.7） | 修复下沉到单函数粒度；生成物自带 MAX_TIME 超时协议 | 算法伪代码内，无消融 |
+| A2DEPT | **依赖闭合修复循环**（静态可判定、保证终止，预算耗尽记 0 分）+死代码裁剪；评估失败 $-\infty$ 但仍插入搜索树 | 失败个体进树保留谱系；non-executable rate 随复杂度上升的曲线+失败案例解剖 | 核心贡献之一，无 w/o-maintenance 消融 |
+| EvoStage | 阶段级检查点：中间指标反馈纠正设计方向；失败 run 计为失败自然淘汰 | 中间反馈只消费性能指标（wirelength/overflow），不消费报错；组件分工+coder 低温 0.2 防语法错 | Pass Rate 进主表（78%/89% vs EoH 23%、AlphaEvolve 25%） |
+| DyACE | 失败代 retry（次数与预算未展开） | 解耦诊断 agent 消费轨迹特征压幻觉 | 附录一句话 |
+| Evolutionary RL Algorithms | 训练崩溃经 max-return+clip 评价口径软性吸收进 0 分下限 | **Runtime Errors 槽位进变异 prompt**（"justified by the failure patterns"）；NaN/Inf 禁令+稳定性指标（gradient norm）回喂 | prompt 附录级设计 |
+| AlgoPilot | 奖励塑形防错：TLM 对无算法模式的轨迹给负奖励 | 轨迹 LM 用随机（多数无功能）程序轨迹做算法样态先验 | 防错前移到生成过程内部 |
 
 ### 智能体与错误专题
 
 | 方法 | 无效处置 | 错误信息的去向 | 证据强度 |
 |---|---|---|---|
-| [AHD Agent](../单篇阅读/38-AHD-Agent.md) | **分档惩罚进 RL reward**：提取失败 -2.0、执行失败/不可行 -1.5、可行得改进量 | 错误作为环境 observation，修复是策略在多轮 revise 中的涌现行为 | reward 设计核心，档位无消融 |
-| [CORAL](../单篇阅读/40-CORAL.md) | 五状态判定（improved/baseline/regressed/crashed/timeout），后两者 null score | 文件级操作消解解析层；失败 attempt 全量入共享记忆；本地测试在消耗评估预算前拦截编译失败；"what NEVER worked" 防重访 | 失败入记忆有消融，状态机是实现细节 |
-| [RoCo](../单篇阅读/39-RoCo.md) | 未知（未提及代码级无效处置） | critic 只反思性能回退（"avoid..."反馈进角色记忆），代码级无效不在职责内 | **未知**（正文完全未提及） |
+| AHD Agent | **分档惩罚进 RL reward**：提取失败 -2.0、执行失败/不可行 -1.5、可行得改进量 | 错误作为环境 observation，修复是策略在多轮 revise 中的涌现行为 | reward 设计核心，档位无消融 |
+| CORAL | 五状态判定（improved/baseline/regressed/crashed/timeout），后两者 null score | 文件级操作消解解析层；失败 attempt 全量入共享记忆；本地测试在消耗评估预算前拦截编译失败；"what NEVER worked" 防重访 | 失败入记忆有消融，状态机是实现细节 |
+| RoCo | 未知（未提及代码级无效处置） | critic 只反思性能回退（"avoid..."反馈进角色记忆），代码级无效不在职责内 | **未知**（正文完全未提及） |
 | Experience Memory Graph | 离线编译：失败轨迹与专家轨迹图匹配→最短编辑路径→条件纠正规则，单次执行零试错 | 错误知识结构化存储、检索复用、跨任务迁移 | 核心机制（小模型上 53.6% vs 迭代反思 27–39%）；前提是失败+专家成对轨迹 |
 | Where LLM Agents Fail | AET 五模块错误分类+关键错误检测（最早可翻转成败的步骤）+限次迭代调试 | 级联失败是可靠性主瓶颈；action/system 模块与 AAD 的签名/运行错误同构 | 核心机制，但实验全部在通用 agent 任务，未用于 AAD |
-| [AutoSND](../单篇阅读/52-AutoSND.md) | 失败候选排除出 parent；三状态执行证据全量保留 | 负例按劣质/慢/无效三分，与 Pareto 正例做结构频率对比，编译成 avoid/bound 约束在前端压无效率 | 核心机制（去结构引导 validity 98%→76.5%）；validity 99% vs 对照 23.6% |
-| [DGA2D](../单篇阅读/51-DGA2D.md) | 四层验证门（AST/签名/隔离运行/组合冒烟）入池；失败拿最低 fitness | 失败沿有向 walk 回传为算子/实现/边的负信用，最低信用点触发带 `{diagnostic}` 的定向修复 | 信用分配有消融，验证门是实现细节 |
+| AutoSND | 失败候选排除出 parent；三状态执行证据全量保留 | 负例按劣质/慢/无效三分，与 Pareto 正例做结构频率对比，编译成 avoid/bound 约束在前端压无效率 | 核心机制（去结构引导 validity 98%→76.5%）；validity 99% vs 对照 23.6% |
+| DGA2D | 四层验证门（AST/签名/隔离运行/组合冒烟）入池；失败拿最低 fitness | 失败沿有向 walk 回传为算子/实现/边的负信用，最低信用点触发带 `{diagnostic}` 的定向修复 | 信用分配有消融，验证门是实现细节 |
 
 ### 分析与证伪补充
 

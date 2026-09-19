@@ -7,7 +7,7 @@
 - **时间均匀代表性抽样**：
   - 基于 V10.6 的 15 个冻结 run，所有有效 archive nodes 按 `evaluation_id` 排序，进行等间隔均匀采样，覆盖整个搜索全周期。
   - 样本规模：TSP、OBP、VRPTW 各 64 个节点/run（主结论依据）；OP 32 个节点/run；CVRP 12 个节点/run（诊断性单列）。共 708 个样本点，实际成功画像 707 个（覆盖率 99.86%）。
-- **度量规范**：采用上一轮校准通过的协议（OBP scale-matched 1000/5000-item 探针，OP 4 随机流）。详细数值汇总见 [summary.json](summary.json)。
+- **度量规范**：采用上一轮校准通过的协议（OBP scale-matched 1000/5000-item 探针，OP 4 随机流）。详细数值汇总见 summary.json。
 
 ## 2. 核心实验数据
 

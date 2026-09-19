@@ -1,6 +1,6 @@
 # ReEvo
 
-- 论文：ReEvo；本地来源：[main.tex](../../../../papers/ReEvo/main.tex)，含 `sections/` 与 `appendix/`；设计对象是以 LLM 生成可执行启发式代码的语言超启发式。
+- 论文：ReEvo；本地来源：main.tex，含 `sections/` 与 `appendix/`；设计对象是以 LLM 生成可执行启发式代码的语言超启发式。
 
 ## 1. 核心问题与方法
 

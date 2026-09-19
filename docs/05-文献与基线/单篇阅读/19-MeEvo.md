@@ -1,6 +1,6 @@
 # MeEvo
 
-- 论文：MeEvo: Metacognitive Evolution for Automatic Heuristic Design；本地来源：[main.tex](../../../../papers/MeEvo_Metacognitive_Evolution_for_Automatic_Heuristic_Design/main.tex)；设计对象为可执行启发式程序的进化。
+- 论文：MeEvo: Metacognitive Evolution for Automatic Heuristic Design；本地来源：main.tex；设计对象为可执行启发式程序的进化。
 
 ## 1. 核心问题与方法
 

@@ -1,6 +1,6 @@
 # AlphaEvolve
 
-- 论文：AlphaEvolve；本地来源：[`main.tex`](../../../../papers/AlphaEvolve/main.tex) 及 `methods.tex`、`results.tex`、`ablations.tex`、`appendix.tex`；设计对象：可执行程序中的可演化函数。
+- 论文：AlphaEvolve；本地来源：`main.tex` 及 `methods.tex`、`results.tex`、`ablations.tex`、`appendix.tex`；设计对象：可执行程序中的可演化函数。
 
 ## 1. 核心问题与方法
 

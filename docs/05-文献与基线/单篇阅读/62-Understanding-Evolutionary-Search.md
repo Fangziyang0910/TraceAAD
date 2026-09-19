@@ -1,6 +1,6 @@
 # Understanding the Importance of Evolutionary Search
 
-- 论文：*Understanding the Importance of Evolutionary Search in Automated Heuristic Design with LLMs*；本地来源：[`main.tex`](../../../../papers/Understanding_the_Importance_of_Evolutionary_Search_in_Automated_Heuristic_Design_with_L/)；研究对象：LLM-EPS 方法相对零样本采样与极简基线的真实贡献，批判性重评估而非新方法。
+- 论文：*Understanding the Importance of Evolutionary Search in Automated Heuristic Design with LLMs*；本地来源：`main.tex`；研究对象：LLM-EPS 方法相对零样本采样与极简基线的真实贡献，批判性重评估而非新方法。
 
 ## 1. 核心问题与方法
 

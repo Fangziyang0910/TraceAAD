@@ -1,6 +1,6 @@
 # TraceAAD V10 完整机制设计
 
-V10 实现 Trajectory-aware Joint Design Opportunity Allocation。当前科学认识见[研究认识](../04-研究认识与构想/研究认识.md)。本文给出可复现的机制定义。树结构、形成路径、有界执行修复与评价口径沿用既有 TraceAAD 平台。
+V10 实现 Trajectory-aware Joint Design Opportunity Allocation。当前科学认识见研究认识。本文给出可复现的机制定义。树结构、形成路径、有界执行修复与评价口径沿用既有 TraceAAD 平台。
 
 V10 是逐 evaluator-slot 重规划的 controller。不变量为
 
@@ -95,7 +95,6 @@ $$
 $$
 
 Develop 与 SemanticRepair 保持对当前核心假设的接受；Pivot、Transfer 与 Restart 改变这一关系，并在得到有效子代时新建线程。
-
 
 | 动作           | 转移语义                                                                 |
 | ---------------- | -------------------------------------------------------------------------- |

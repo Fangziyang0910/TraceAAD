@@ -1,6 +1,6 @@
 # Behaviour Space Analysis of LLM-driven Meta-heuristic Discovery
 
-- 论文：*Behaviour Space Analysis of LLM-driven Meta-heuristic Discovery*；本地来源：LaTeX 源码目录 [`Behaviour_Space_Analysis_of_LLM_driven_Meta_heuristic_Discovery/`](../../../../papers/Behaviour_Space_Analysis_of_LLM_driven_Meta_heuristic_Discovery/)；研究对象：被 LLM 生成的元启发式（而非 LLM 本身）在求解时的行为画像，及其与配置/性能的关系。
+- 论文：*Behaviour Space Analysis of LLM-driven Meta-heuristic Discovery*；本地来源：LaTeX 源码目录 `Behaviour_Space_Analysis_of_LLM_driven_Meta_heuristic_Discovery/`；研究对象：被 LLM 生成的元启发式（而非 LLM 本身）在求解时的行为画像，及其与配置/性能的关系。
 
 ## 1. 核心问题与方法
 

@@ -1,6 +1,6 @@
 # CogMCTS
 
-- 论文：CogMCTS: Cognitive-Guided MCTS for Iterative Heuristic Evolution；本地来源：[ijcai26.tex](../../../../papers/CogMCTS_Cognitive-Guided_MCTS_for_Iterative_Heuristic_Evolution/ijcai26.tex)；设计对象是 ACO、GLS 和构造式组合优化启发式。
+- 论文：CogMCTS: Cognitive-Guided MCTS for Iterative Heuristic Evolution；本地来源：ijcai26.tex；设计对象是 ACO、GLS 和构造式组合优化启发式。
 
 ## 1. 核心问题与方法
 

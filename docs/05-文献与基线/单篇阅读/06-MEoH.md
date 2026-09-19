@@ -1,6 +1,6 @@
 # MEoH
 
-- 论文：MEoH；本地来源：[`papers/MEoH/MEoH.tex`](../../../../papers/MEoH/MEoH.tex)；设计对象：面向组合优化的启发式代码。
+- 论文：MEoH；本地来源：`papers/MEoH/MEoH.tex`；设计对象：面向组合优化的启发式代码。
 
 ## 1. 核心问题与方法
 

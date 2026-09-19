@@ -1,6 +1,6 @@
 # EoH（Evolution of Heuristics）
 
-- 论文：*Evolution of Heuristics Towards Efficient Automatic Algorithm Design Using Large Language Models*；本地来源：[`main.tex`](../../../../papers/Evolution_of_Heuristics_Towards_Efficient_Automatic_Algorithm_Design_Using_Large_Languag/main.tex)；设计对象：组合优化问题的启发式函数/代码。
+- 论文：*Evolution of Heuristics Towards Efficient Automatic Algorithm Design Using Large Language Models*；本地来源：`main.tex`；设计对象：组合优化问题的启发式函数/代码。
 
 ## 1. 核心问题与方法
 

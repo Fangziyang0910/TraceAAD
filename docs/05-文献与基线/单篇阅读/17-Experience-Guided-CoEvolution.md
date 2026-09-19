@@ -1,6 +1,6 @@
 # Experience-Guided Reflective Co-Evolution
 
-- 论文：Experience-Guided Reflective Co-Evolution of Prompts and Heuristics；本地来源：[iclr2026_conference.tex](../../../../papers/Experience-Guided_Reflective_Co-Evolution_of_Prompts_and_Heuristics/iclr2026_conference.tex)；设计对象是 AHD 中 prompt 与启发式代码的协同演化。
+- 论文：Experience-Guided Reflective Co-Evolution of Prompts and Heuristics；本地来源：iclr2026_conference.tex；设计对象是 AHD 中 prompt 与启发式代码的协同演化。
 
 ## 1. 核心问题与方法
 

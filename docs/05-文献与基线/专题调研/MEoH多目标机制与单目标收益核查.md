@@ -7,12 +7,12 @@
 ## 1. 证据版本与边界
 
 - 论文：Yao 等，*Multi-objective Evolution of Heuristic Using Large Language Model*，arXiv:2409.16867。在线记录当前为 2025-02-04 更新的 v2；作者原文链接代码为 Optima-CityU/LLM4AD。[arXiv 记录](https://arxiv.org/abs/2409.16867)、[官方全文](https://arxiv.org/html/2409.16867v2)。
-- 本地原始文本：[MEoH.tex](../../../../papers/MEoH/MEoH.tex)。文中数值和算法来自该原文，与在线 v2 对照。
+- 本地原始文本：MEoH.tex。文中数值和算法来自该原文，与在线 v2 对照。
 - 作者**当前**代码能确认计时边界，但不能倒推其完全等同论文实验快照。当前 TSP evaluator 默认 16 个实例、外层超时 20 秒，论文训练为 64 个实例，说明已有设置差异。当前代码的目标是负平均路径长度与负平均时间，也不是论文表格中的 gap。[作者 TSP evaluator](https://raw.githubusercontent.com/Optima-CityU/LLM4AD/main/llm4ad/task/optimization/tsp_gls_2O/evaluation.py)。本地同名目录另有改动，不能把本地实现直接标注为作者实验实现。
 
 ## 2. 它究竟优化什么，运行时间测什么
 
-论文两个目标均为最小化：相对基准的解质量 gap，以及启发式运行时间。BPP 用箱数相对松弛下界的 gap；TSP 测试用相对最好已知解的 gap，随机实例的基准由 Concorde 给出。训练时 BPP 是 5 个 Weibull 5k/C100 实例；TSP 是 64 个随机 100 节点实例、在固定 GLS 框架内生成扰动阶段的距离矩阵更新函数。[主文 §5.1、§5.2](../../../../papers/MEoH/MEoH.tex:309)。
+论文两个目标均为最小化：相对基准的解质量 gap，以及启发式运行时间。BPP 用箱数相对松弛下界的 gap；TSP 测试用相对最好已知解的 gap，随机实例的基准由 Concorde 给出。训练时 BPP 是 5 个 Weibull 5k/C100 实例；TSP 是 64 个随机 100 节点实例、在固定 GLS 框架内生成扰动阶段的距离矩阵更新函数。主文 §5.1、§5.2。
 
 **运行时间不是代码长度、AST 大小、渐近复杂度，也不是 LLM 生成耗时。** 原文只称其为启发式运行时间，没有完整描述预热、重复计时、进程调度噪声控制等协议。作者当前实现给出了更明确的边界：
 
@@ -34,7 +34,7 @@ v_j=-\sum_{i\ne j}\mathbf 1[i\prec j]\operatorname{Sim}_{AST}(i,j),\qquad
 p_j=\frac{\exp(v_j)}{\sum_k\exp(v_k)}.
 $$
 
-`Sim_AST` 是代码 AST 匹配子树比例。论文所谓 dissimilarity 在这里用的是**负相似度**，不是 `1-Sim`；不能混淆符号。种群按 `v` 降序截断，选父用 softmax；主文“概率正比于 score”的简述应以附录明确算法为准。[§4.2、附录 A](../../../../papers/MEoH/MEoH.tex:263)、[选父与生存伪代码](../../../../papers/MEoH/MEoH.tex:501)。
+`Sim_AST` 是代码 AST 匹配子树比例。论文所谓 dissimilarity 在这里用的是**负相似度**，不是 `1-Sim`；不能混淆符号。种群按 `v` 降序截断，选父用 softmax；主文“概率正比于 score”的简述应以附录明确算法为准。§4.2、附录 A、选父与生存伪代码。
 
 由公式直接得到：
 
@@ -46,7 +46,7 @@ $$
 
 作者当前 `population.py` 在负目标的“越大越好”约定下实现列求和、softmax和降序截断，但支配判断只检查逐维 `>=`，没有严格改善条件，等值情况下可能出现顺序依赖；不能照抄这一细节当作论文的严格 Pareto 定义。[作者种群代码](https://raw.githubusercontent.com/Optima-CityU/LLM4AD/main/llm4ad/method/meoh/population.py)。
 
-**上下文方面：没有证据证明论文把父代的每项目标数值直接展示给 LLM。** 附录 B、G 的提示模板给出任务、算法描述和代码，以及 E1/E2/M1/M2/M3 指令，没有父代 gap、runtime 或目标向量槽位。作者当前 prompt.py 同样拼接算法描述与代码，不读取 `indi.score` 或 `evaluate_time`。这意味着“多指标影响选择”和“把多指标反馈写入上下文”必须分开验证。[附录 G](../../../../papers/MEoH/MEoH.tex:788)、[作者提示代码](https://raw.githubusercontent.com/Optima-CityU/LLM4AD/main/llm4ad/method/meoh/prompt.py)。
+**上下文方面：没有证据证明论文把父代的每项目标数值直接展示给 LLM。** 附录 B、G 的提示模板给出任务、算法描述和代码，以及 E1/E2/M1/M2/M3 指令，没有父代 gap、runtime 或目标向量槽位。作者当前 prompt.py 同样拼接算法描述与代码，不读取 `indi.score` 或 `evaluate_time`。这意味着“多指标影响选择”和“把多指标反馈写入上下文”必须分开验证。附录 G、[作者提示代码](https://raw.githubusercontent.com/Optima-CityU/LLM4AD/main/llm4ad/method/meoh/prompt.py)。
 
 ## 4. 单目标 fitness 是否真的更好
 
@@ -64,19 +64,19 @@ $$
 | TSPLIB ≤200 | 0.093% / 25.917 | 0.018% / 2.354 | MEoH 两项都更好 |
 | TSPLIB 201–1002 | 1.376% / 1515.992 | 1.50% / 355.754 | MEoH 更快但质量略差 |
 
-直接出处：[表 1：BPP](../../../../papers/MEoH/MEoH.tex:363)、[表 2：随机 TSP](../../../../papers/MEoH/MEoH.tex:396)、[表 3：TSPLIB](../../../../papers/MEoH/MEoH.tex:425)。主文表 4 的 TSPLIB 汇总是小规模组的数值，不宜当作全部 TSPLIB 的平均。
+直接出处：表 1：BPP、表 2：随机 TSP、表 3：TSPLIB。主文表 4 的 TSPLIB 汇总是小规模组的数值，不宜当作全部 TSPLIB 的平均。
 
-论文 §5.4 进一步将 MEoH 的候选与最优 EoH 启发式的不同 GLS 迭代数比较。结果支持“可以找到优于单纯调整同一启发式迭代数的时间—质量曲线”，不是“更快只是把同一算法少跑几步”。但是比较仍是整套 MEoH 与 EoH 产物，不能从中单独识别加时间目标的因果贡献。[§5.4](../../../../papers/MEoH/MEoH.tex:482)。
+论文 §5.4 进一步将 MEoH 的候选与最优 EoH 启发式的不同 GLS 迭代数比较。结果支持“可以找到优于单纯调整同一启发式迭代数的时间—质量曲线”，不是“更快只是把同一算法少跑几步”。但是比较仍是整套 MEoH 与 EoH 产物，不能从中单独识别加时间目标的因果贡献。§5.4。
 
 ## 5. 消融、预算公平性与未解决问题
 
-**消融范围。** §5.3 比较的是 MEoH 与 NSGA-II、MOEA/D 的多目标种群机制，报告 HV/IGD。它支持 dominance-dissimilarity 在这些多目标实验上更好，不等价于下列消融：同一算法、同一提示与预算，只开关 runtime 目标，再比较最终 best fitness。HV 变好也可能完全来自更快的候选，不能据此推出最小 gap 下降。[§5.3](../../../../papers/MEoH/MEoH.tex:460)。
+**消融范围。** §5.3 比较的是 MEoH 与 NSGA-II、MOEA/D 的多目标种群机制，报告 HV/IGD。它支持 dominance-dissimilarity 在这些多目标实验上更好，不等价于下列消融：同一算法、同一提示与预算，只开关 runtime 目标，再比较最终 best fitness。HV 变好也可能完全来自更快的候选，不能据此推出最小 gap 下降。§5.3。
 
-**公平性口径。** 附录 C 明确 MEoH 与 EoH 同为 20 代、TSP 种群 10、BPP 种群 20，称分别生成 1000/2000 个启发式；FunSearch 则是两个任务各 10000。由此能说 MEoH/EoH 对齐了作者报告的候选生成数量，不能说三个方法对齐了 LLM 请求数、token、真实评价调用数或墙钟时间。解析失败/非法代码如何计入额度也没有在该段给出完整会计协议。不同提示包含多个父代，等候选数尤其不代表等 token。[附录 C](../../../../papers/MEoH/MEoH.tex:674)。
+**公平性口径。** 附录 C 明确 MEoH 与 EoH 同为 20 代、TSP 种群 10、BPP 种群 20，称分别生成 1000/2000 个启发式；FunSearch 则是两个任务各 10000。由此能说 MEoH/EoH 对齐了作者报告的候选生成数量，不能说三个方法对齐了 LLM 请求数、token、真实评价调用数或墙钟时间。解析失败/非法代码如何计入额度也没有在该段给出完整会计协议。不同提示包含多个父代，等候选数尤其不代表等 token。附录 C。
 
-**三目标不意味着“指标越多越好”。** 附录 I 增加 Halstead difficulty 作为可读性代理，报告 HV/IGD 趋势；没有证明这个静态代理等于运行时复杂度或能提升单目标最优质量。[附录 I](../../../../papers/MEoH/MEoH.tex:1248)。
+**三目标不意味着“指标越多越好”。** 附录 I 增加 Halstead difficulty 作为可读性代理，报告 HV/IGD 趋势；没有证明这个静态代理等于运行时复杂度或能提升单目标最优质量。附录 I。
 
-**快可能来自弱化算法。** 原文附录 H 主动指出最快 BPP 候选恒定输出 1、最快 TSP 候选不改变边距离，且描述与代码不一致。于是“极快”的非支配角落可能是接近空操作的启发式，未必适合持续投入大量预算；这是迁移到质量优先搜索时需要处理的实际张力。[BPP 说明](../../../../papers/MEoH/MEoH.tex:1137)、[TSP 说明](../../../../papers/MEoH/MEoH.tex:1244)。
+**快可能来自弱化算法。** 原文附录 H 主动指出最快 BPP 候选恒定输出 1、最快 TSP 候选不改变边距离，且描述与代码不一致。于是“极快”的非支配角落可能是接近空操作的启发式，未必适合持续投入大量预算；这是迁移到质量优先搜索时需要处理的实际张力。BPP 说明、TSP 说明。
 
 ## 6. 对 TraceAAD 可以迁移的思想与必要检验
 

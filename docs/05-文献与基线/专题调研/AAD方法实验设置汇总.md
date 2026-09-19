@@ -462,5 +462,5 @@
    - **严禁在结果叙述中简化成“击败了完整 CALM”**：消融实验已证实去掉 GRPO 会导致性能显著下滑，未微调版本仅代表其启发式变异算子逻辑，不能代表完整 CALM 联合系统的能力边界。
 
 6. **本仓库正式比较基准与口径**：
-   - 本仓库正式比较已固定：**评估预算 = 1000 eval**；主表对比方法为 **EoH、ReEvo、MCTS-AHD、PathWise、CALM w/o GRPO**；主实验 task 为 **Online BPP、TSP-构造、CVRP-ACO、OP-ACO、VRPTW-构造**（见 [实验配置](../../02-实验结果/主实验配置与冻结契约.md)）。
+   - 本仓库正式比较已固定：**评估预算 = 1000 eval**；主表对比方法为 **EoH、ReEvo、MCTS-AHD、PathWise、CALM w/o GRPO**；主实验 task 为 **Online BPP、TSP-构造、CVRP-ACO、OP-ACO、VRPTW-构造**（见 实验配置）。
    - 其中 CALM 当前阶段跑 **CALM w/o GRPO（搜索框架版本）**，微调阶段再补 **完整 CALM（w/ GRPO）**。任务协议取舍：OBP 保持多容量现状；TSP-构造维持降采样（同标准重跑）；CVRP-ACO 测试含 **CVRP200×64**；OP-ACO 保持现状。统一比较时再固定嵌入框架 × LLM，并独立报告 LLM 调用与 token（生成器成本）以及算法运行时间（求解成本）。

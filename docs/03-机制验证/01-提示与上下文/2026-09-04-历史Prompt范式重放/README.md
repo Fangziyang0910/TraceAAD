@@ -71,4 +71,3 @@ P1、P2、P4、P5、P7 对三个算子都能形成独立处理臂。P3/P6 是 Fu
 - `generations/`：逐条原始模型响应记录；
 - `results/results.jsonl`：解析结果、评价得分与主指标；
 - `analysis/summary.json`：按任务、算子和范式的配对统计汇总。
-

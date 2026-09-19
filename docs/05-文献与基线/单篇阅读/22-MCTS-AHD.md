@@ -1,6 +1,6 @@
 # MCTS-AHD
 
-- 论文：MCTS-AHD；本地来源：[icml2025.tex](../../../../papers/MCTS-AHD/icml2025.tex)；设计对象是 ACO、GLS、构造式框架中的启发式函数。
+- 论文：MCTS-AHD；本地来源：icml2025.tex；设计对象是 ACO、GLS、构造式框架中的启发式函数。
 
 ## 1. 核心问题与方法
 

@@ -1,6 +1,6 @@
 # REvolve
 
-- 论文：*REvolve: Reward Evolution with LLMs using Human Feedback*；本地来源：LaTeX 源码目录 [`REvolve_Reward_Evolution_with_LLMs_using_Human_Feedback/`](../../../../papers/REvolve_Reward_Evolution_with_LLMs_using_Human_Feedback/)；设计对象：RL 的奖励函数（Python 代码种群），评价为人类 pairwise 偏好 + Elo 与自然语言反馈的组合 $F:\Omega\to\mathbb R\times\mathcal L$。
+- 论文：*REvolve: Reward Evolution with LLMs using Human Feedback*；本地来源：LaTeX 源码目录 `REvolve_Reward_Evolution_with_LLMs_using_Human_Feedback/`；设计对象：RL 的奖励函数（Python 代码种群），评价为人类 pairwise 偏好 + Elo 与自然语言反馈的组合 $F:\Omega\to\mathbb R\times\mathcal L$。
 
 ## 1. 核心问题与方法
 
@@ -23,7 +23,7 @@
 
 ## 4. 机制的底层逻辑（阅读分析，不是作者已证明结论）
 
-"按子种群平均而非最大接受" + 岛屿结构是维持路线异质性的具体机制：平均门槛允许个体低于历史最好而仍入库（worse-before-better 在种群层的表达），与按最高的硬淘汰形成对照。算子作用于奖励分量而非完整算法，杂交=分量级重组。该骨架被 Evolutionary Discovery of RL Algorithms 继承并扩展到更新规则（见[笔记 14](14-Evolutionary-RL-Algorithms.md)）。
+"按子种群平均而非最大接受" + 岛屿结构是维持路线异质性的具体机制：平均门槛允许个体低于历史最好而仍入库（worse-before-better 在种群层的表达），与按最高的硬淘汰形成对照。算子作用于奖励分量而非完整算法，杂交=分量级重组。该骨架被 Evolutionary Discovery of RL Algorithms 继承并扩展到更新规则（见笔记 14）。
 
 ## 5. 对 LLM4AD / TraceAAD 可学习之处
 

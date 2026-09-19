@@ -1,6 +1,6 @@
 # EoH-S
 
-- 论文：*EoH-S: Evolution of Heuristic Set using LLMs for Automated Heuristic Design*；本地来源：[`eohs.tex`](../../../../papers/EoH_S_Evolution_of_Heuristic_Set_using_LLMs_for_Automated_Heuristic_Design/eohs.tex)；设计对象：一组协作/组合使用的启发式，而非单一启发式。
+- 论文：*EoH-S: Evolution of Heuristic Set using LLMs for Automated Heuristic Design*；本地来源：`eohs.tex`；设计对象：一组协作/组合使用的启发式，而非单一启发式。
 
 ## 1. 核心问题与方法
 

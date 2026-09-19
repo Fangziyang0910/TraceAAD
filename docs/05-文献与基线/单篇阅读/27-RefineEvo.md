@@ -1,6 +1,6 @@
 # RefineEvo
 
-- 论文：RefineEvo: Planning-Guided Heuristic Evolution with Bidirectional Experience；本地来源：[main.tex](../../../../papers/RefineEvo_Planning-Guided_Heuristic_Evolution_with_Bidirectional_Experience/main.tex)，分文件 `03_method.tex`、`04_experiment.tex`、`06_appendix.tex`；设计对象为组合优化的启发式进化。
+- 论文：RefineEvo: Planning-Guided Heuristic Evolution with Bidirectional Experience；本地来源：main.tex，分文件 `03_method.tex`、`04_experiment.tex`、`06_appendix.tex`；设计对象为组合优化的启发式进化。
 
 ## 1. 核心问题与方法
 

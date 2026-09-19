@@ -134,7 +134,7 @@ Return the best valid program by the true objective.
 
 ## 7. 实验识别顺序
 
-详细执行表见[TraceAAD V9.18-R0 实验协议](../03-机制验证/02-搜索调度与预算分配/2026-08-25-V9.18机会评分消融/README.md)。
+详细执行表见TraceAAD V9.18-R0 实验协议。
 
 1. **实现与固定锚点探针**：验证 History-on/off 和 Global-Facts-Lite 的
    prompt 差异、有效率、单步 `Delta q`、修改幅度、prompt hash 和 token

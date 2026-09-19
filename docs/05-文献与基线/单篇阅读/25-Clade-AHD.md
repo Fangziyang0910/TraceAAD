@@ -1,6 +1,6 @@
 # Clade-AHD
 
-- 论文：Clade-AHD: Clade-level Selection for MCTS in Automatic Heuristic Design；本地来源：[main.tex](../../../../papers/Clade-AHD_Clade-level_Selection_for_MCTS_in_Automatic_Heuristic_Design/main.tex) 与 [appendix.tex](../../../../papers/Clade-AHD_Clade-level_Selection_for_MCTS_in_Automatic_Heuristic_Design/appendix.tex)；设计对象为 MCTS-AHD 的谱系（clade）级选择。
+- 论文：Clade-AHD: Clade-level Selection for MCTS in Automatic Heuristic Design；本地来源：main.tex 与 appendix.tex；设计对象为 MCTS-AHD 的谱系（clade）级选择。
 
 ## 1. 核心问题与方法
 

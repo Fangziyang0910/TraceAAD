@@ -1,6 +1,6 @@
 # Fitness Landscape of LLM-Assisted Algorithm Search
 
-- 论文：*Fitness Landscape of LLM-Assisted Automated Algorithm Search*；本地来源：[`manucript.tex`](../../../../papers/Fitness-Landscape-LLM-Assisted-Automated-Algorithm-Search/manucript.tex)；研究对象：LLM 辅助算法搜索的经验适应度景观，分析而非新方法。
+- 论文：*Fitness Landscape of LLM-Assisted Automated Algorithm Search*；本地来源：`manucript.tex`；研究对象：LLM 辅助算法搜索的经验适应度景观，分析而非新方法。
 
 ## 1. 核心问题与方法
 

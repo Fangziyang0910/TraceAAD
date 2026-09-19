@@ -17,7 +17,7 @@ $$Q_2(Pivot \rightarrow Refine) \quad\text{是否系统性高于}\quad Q_2(Refin
   - 两臂在同一锚点上使用相同生成后端与对应阶段采样种子。第一步只要评价有效，无条件获得恰好一次第二步 Refine（第一步生成的代码与摘要进入第二步上下文）。
 - **两步净收益定义**：
   $$Q_2 = \max\{f^*, f(c_1), f(c_2)\} - f^*, \qquad \widetilde{Q}_2 = Q_2 / |f^*|$$
-- 数据汇总详见 [summary.json](summary.json)。
+- 数据汇总详见 summary.json。
 
 ## 2. 核心实验数据
 

@@ -1,6 +1,6 @@
 # CDEoH
 
-- 论文：*CDEoH: Category-Driven Automatic Algorithm Design With Large Language Models*；本地来源：[`main.tex`](../../../../papers/CDEoH_Category_Driven_Automatic_Algorithm_Design_With_Large_Language_Models/main.tex)；设计对象：启发式/算法代码（Online Bin Packing、TSP）。
+- 论文：*CDEoH: Category-Driven Automatic Algorithm Design With Large Language Models*；本地来源：`main.tex`；设计对象：启发式/算法代码（Online Bin Packing、TSP）。
 
 ## 1. 核心问题与方法
 

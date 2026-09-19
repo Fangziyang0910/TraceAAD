@@ -8,7 +8,7 @@
 - **两项核心校准**：
   1. **OBP 探针规模匹配**：对比廉价 compact 探针（256-item）与 scale-matched 探针（1000/5000-item）在相同候选集上的距离与 kNN 重合率；
   2. **ACO 随机流去噪**：为 OP 与 CVRP 引入 4 个固定随机流（每候选 16 条 PSTraj），检验面板相关性与随机流子集一致性。
-- **样本与数据**：基于 V10.6 的 15 个冻结 run，共 600 个有效节点样本（TSP 每 run 48 点，OBP/VRPTW 每 run 64 点，OP/CVRP 每 run 12 点）。详细数值汇总见 [summary.json](summary.json)。
+- **样本与数据**：基于 V10.6 的 15 个冻结 run，共 600 个有效节点样本（TSP 每 run 48 点，OBP/VRPTW 每 run 64 点，OP/CVRP 每 run 12 点）。详细数值汇总见 summary.json。
 
 ## 2. 核心实验数据
 

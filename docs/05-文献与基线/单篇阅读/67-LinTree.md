@@ -1,6 +1,6 @@
 # LinTree
 
-- 论文：*LinTree: Improving LLM Reasoning with Explicitly Structured Search Histories*；本地来源：LaTeX 源码目录 [`LinTree_Improving_LLM_Reasoning_with_Explicitly_Structured_Search_Histories/`](../../../../papers/LinTree_Improving_LLM_Reasoning_with_Explicitly_Structured_Search_Histories/)；研究对象：把 LLM 推理轨迹视为线性化搜索树、以显式树拓扑作为上下文的搜索策略学习（Qwen3-0.6B，SFT+GRPO）。
+- 论文：*LinTree: Improving LLM Reasoning with Explicitly Structured Search Histories*；本地来源：LaTeX 源码目录 `LinTree_Improving_LLM_Reasoning_with_Explicitly_Structured_Search_Histories/`；研究对象：把 LLM 推理轨迹视为线性化搜索树、以显式树拓扑作为上下文的搜索策略学习（Qwen3-0.6B，SFT+GRPO）。
 
 ## 1. 核心问题与方法
 

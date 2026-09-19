@@ -1,6 +1,6 @@
 # QUBE
 
-- 论文：*QUBE: Enhancing Automatic Heuristic Design via Quality-Uncertainty Balanced Evolution*；本地来源：[`main.tex`](../../../../papers/QUBE_Enhancing_Automatic_Heuristic_Design_via_Quality_Uncertainty_Balanced_Evolution/main.tex)；设计对象：启发式算法代码。
+- 论文：*QUBE: Enhancing Automatic Heuristic Design via Quality-Uncertainty Balanced Evolution*；本地来源：`main.tex`；设计对象：启发式算法代码。
 
 ## 1. 核心问题与方法
 

@@ -1,6 +1,6 @@
 # PhyloEvolve
 
-- 论文：PhyloEvolve: LLM-Powered Evolutionary Code Optimization on a Phylogenetic Tree；本地来源：[main.tex](../../../../papers/PhyloEvolve_LLM-Powered_Evolutionary_Code_Optimization_on_a_Phylogenetic_Tree/main.tex)，含 `4_method.tex`、`5_experiments.tex`；设计对象是代码优化的谱系树搜索。
+- 论文：PhyloEvolve: LLM-Powered Evolutionary Code Optimization on a Phylogenetic Tree；本地来源：main.tex，含 `4_method.tex`、`5_experiments.tex`；设计对象是代码优化的谱系树搜索。
 
 ## 1. 核心问题与方法
 
