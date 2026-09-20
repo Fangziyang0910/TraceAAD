@@ -1,19 +1,7 @@
-"""TraceAAD V10.11 training experiment monitor.
-
-Full live observer for TraceAAD V10.11 runs.
-Features:
-- Full overview and run inspection for V10.11 experiments
-- Seamless queued runs detection from scheduler batch manifests
-- LLM vs Eval latency breakdown and parent/frontier improvement rates
-- File modification & size guards (zero redundant disk I/O / JSON deserialization)
-- Sparse step curve compression
-- Real-time progress across all 15 runs (5 tasks x 3 repeats)
-- Dynamic tmux session detection with windowed velocity blending
-- Individual run inspector (code, implementation summaries, lineages, recent event stream)
-- Two-batch V10.11 comparison view
+"""Live V11.1 training monitor using batch manifests, results and tmux sessions.
 
 Usage:
-    python -m experiments.traceaad_v10_11.monitor [--port 8765] [--host 0.0.0.0]
+    python -m experiments.traceaad_v11_1.monitor [--port 8765] [--host 0.0.0.0]
 """
 
 from __future__ import annotations
@@ -33,11 +21,11 @@ from urllib.parse import parse_qs, urlparse
 from experiments.infra.base import BACKEND_DISPLAY_NAMES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parent / "results"
+DEFAULT_RESULTS_ROOT = REPO_ROOT / "experiments/traceaad_v11_1/results"
+# The live dashboard is intentionally scoped to the current formal batch.
+# Historical roots remain on disk for reproducibility and are not loaded here.
 DEFAULT_RESULTS_ROOTS = (
-    DEFAULT_RESULTS_ROOT,
-    REPO_ROOT / "experiments/traceaad_v11_0/results",
-    REPO_ROOT / "experiments/traceaad_bc/results",
+    REPO_ROOT / "experiments/traceaad_v11_1/results",
 )
 HTML_FILE = Path(__file__).with_name("monitor.html")
 
@@ -213,6 +201,8 @@ class MonitorDataEngine:
                 label = "TraceAAD V10.11"
             elif method.startswith("v110"):
                 label = "TraceAAD V11.0"
+            elif method.startswith("v111"):
+                label = "TraceAAD V11.1"
             elif method.startswith("bc_b"):
                 label = "B：V11 预算 + V10 上下文"
             elif method.startswith("bc_c"):
@@ -259,6 +249,8 @@ class MonitorDataEngine:
                 label = "V10.11"
             elif method.startswith("v110"):
                 label = "V11.0"
+            elif method.startswith("v111"):
+                label = "V11.1"
             elif method.startswith("bc_b"):
                 label = "B · V11预算/V10上下文"
             elif method.startswith("bc_c"):
@@ -498,12 +490,12 @@ class MonitorDataEngine:
                         continue
                     rep = int(rep_match.group(1))
                     run_summary = self._parse_run_summary_cached(
-                        run_dir, task_info, rep, active_tmux, now, version_id, session_prefix
+                        run_dir, task_info, rep, active_tmux, now, version_id, session_prefix,
                     )
                     runs_by_rep[rep] = run_summary
 
             # 2. Reconcile with batch manifest for planned repeats (e.g. rep 1, 2, 3)
-            for rep in (1, 2, 3):
+            for rep in range(1, int((manifest or {}).get("repeats", 5)) + 1):
                 if rep not in runs_by_rep:
                     plan_item = manifest_by_task_rep.get((task_key, rep))
                     if plan_item:
@@ -544,22 +536,10 @@ class MonitorDataEngine:
         max_eta = max(all_etas) if all_etas else 0.0
         avg_speed = (sum(all_speeds) / len(all_speeds)) if all_speeds else 0.0
 
-        sched_session = None
-        for candidate in (f"{session_prefix}_launcher", f"{session_prefix}_sched"):
-            if candidate in active_tmux:
-                sched_session = candidate
-                break
-        scheduler_active = sched_session is not None
-
         return {
             "version": badge,
             "version_id": version_id,
             "updated_at": now.isoformat(timespec="seconds"),
-            "scheduler": {
-                "active": scheduler_active,
-                "session": sched_session or f"{session_prefix}_launcher",
-                "batch": manifest.get("batch") if manifest else None,
-            },
             "global_summary": {
                 "total_runs": sum(len(t["runs"]) for t in tasks_data),
                 "running_runs": running_count,
@@ -1086,7 +1066,7 @@ def main() -> None:
         "--results-dir",
         type=Path,
         default=None,
-        help="Single results directory override (defaults to all active TraceAAD roots)",
+        help="Single results directory override (defaults to V11.1 results)",
     )
     parser.add_argument(
         "--results-dirs",

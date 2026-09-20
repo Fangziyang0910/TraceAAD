@@ -1,20 +1,22 @@
-"""TraceAAD V10.11: compact function-level search engine."""
+"""V11.1 search: choose a parent, build context, generate, evaluate, record."""
 
 import json
 import math
 import random
 import time
 import traceback
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
 from llm4ad.base import SecureEvaluator
 from . import parsing
-from .prompts import TrajectoryBuilder
-from .selection import (DONOR_UNIFORM_PROBABILITY, OPERATORS, OPERATOR_PROBABILITIES,
-                        PIVOT_UNIFORM_PROBABILITY, QUALITY_ESS_TARGET, calibrate_beta,
-                        code_key, ess, mix_uniform, softmax)
+from .prompts import PromptBuilder
+from .selection import (
+    DEFAULT_REFERENCE_COUNT, EXPLORATION_WEIGHT, OPERATORS, OPERATOR_PROBABILITIES,
+    PARENT_TEMPERATURE, REFERENCE_TEMPERATURE, reference_pool, sample_parent,
+    sample_references,
+)
 from .storage import RunStorage, atomic_json, digest, truncate_torn_tail
 from .tree import Node, SearchTree
 
@@ -32,7 +34,10 @@ def _restore_rng(rng, state):
 @dataclass
 class Candidate:
     """One scheduled design attempt (in-memory; checkpoints store settled
-    state only). Field names match the journal fields they are reported in."""
+    state only). Field names match the journal fields they are reported in.
+    ``donor_id`` is the first reference node Fuse expands to full code; the
+    donor name is kept for the shared experiment monitor.
+    """
 
     candidate_id: int
     prompt: str
@@ -44,28 +49,29 @@ class Candidate:
     donor_id: int | None
     parent_fitness: float | None
     donor_fitness: float | None
+    reference_ids: list
     selection: dict
+    parent_selected: bool
     best_before: float | None
-    reference_ids: list = field(default_factory=list)  # reported by the rand_ctx variant
     llm_attempts: int = 0
     repair_of: int | None = None
 
 
-class TraceAADV1011:
-    METHOD = "v1011"
-    PROMPT_POLICY = "generic_design_v1"
+class TraceAADV111:
+    METHOD = "v111"
+    PROMPT_POLICY = "operator_conditional_v11_1"
 
     def __init__(self, *, evaluation, llm, run_dir, budget=1000, n_roots=8,
-                 traj_gens=8, output_tokens=8192, max_input_tokens=24576,
-                 history_code=False, seed=0):
-        if budget < n_roots or n_roots < 1 or traj_gens < 0:
-            raise ValueError("invalid budget, root, or history settings")
+                 history_depth=8, output_tokens=8192, max_input_tokens=24576,
+                 n_references=DEFAULT_REFERENCE_COUNT, seed=0):
+        if budget < n_roots or n_roots < 1 or history_depth < 0 or n_references < 1:
+            raise ValueError("invalid budget, root, history, or reference settings")
         self.evaluation, self.llm = evaluation, llm
         self.run_dir = Path(run_dir)
-        self.budget, self.n_roots, self.traj_gens = budget, n_roots, traj_gens
+        self.budget, self.n_roots, self.history_depth = budget, n_roots, history_depth
         self.output_tokens, self.max_input_tokens = output_tokens, max_input_tokens
-        self.history_code = history_code
-        self.secure = SecureEvaluator(evaluation)
+        self.n_references = n_references
+        self.evaluator = SecureEvaluator(evaluation)
         self._template_program = evaluation.template_program
         self._parse_interface, target_stub = parsing.template_target(self._template_program)
         self.task_contract = (
@@ -76,114 +82,96 @@ class TraceAADV1011:
         )
         self.tree = SearchTree()
         self.rng = random.Random(seed)
-        self.parent_selection_counts = {}
-        self.step_counter = self.budget_used = self.completed_attempts = 0
         self.started_at = _timestamp()
+        self.completed_candidates = 0
+        self.evaluations_used = 0
         self._invalid_streak = 0
         self.storage = RunStorage(self.run_dir)
         self.mechanism = {
             "method": self.METHOD, "budget": budget, "n_roots": n_roots,
             "prompt_policy": self.PROMPT_POLICY,
             "parser_protocol": "target_function_anchored_module_v2",
-            "traj_gens": traj_gens,
-            "history_code": history_code,
+            "history_depth": history_depth,
             "output_tokens": output_tokens, "max_input_tokens": max_input_tokens,
             "operator_probabilities": OPERATOR_PROBABILITIES,
-            "quality_ess_target": QUALITY_ESS_TARGET,
-            "pivot_uniform_probability": PIVOT_UNIFORM_PROBABILITY,
-            "donor_uniform_probability": DONOR_UNIFORM_PROBABILITY,
+            "exploration_weight": EXPLORATION_WEIGHT,
+            "parent_temperature": PARENT_TEMPERATURE,
+            "n_references": n_references,
+            "reference_weighting": "rank_softmax",
+            "reference_temperature": REFERENCE_TEMPERATURE,
             "task_contract_hash": digest(self.task_contract),
             "llm": {name: getattr(llm, name, None) for name in
                     ("model", "base_url", "temperature", "top_p", "enable_thinking")},
         }
-        self.builder = TrajectoryBuilder(
-            llm, self.task_contract,
-            max_tokens=max_input_tokens,
-            max_events=traj_gens, lookup=self.tree.nodes.get,
-            all_nodes=self.tree.all_nodes, include_history_code=history_code,
+        self.prompts = PromptBuilder(
+            llm, self.task_contract, max_tokens=max_input_tokens,
+            history_depth=history_depth, lookup=self.tree.nodes.get,
+            all_nodes=self.tree.all_nodes,
         )
 
     # --- Scheduling: decide the next attempt ---------------------------------
 
     def _candidate(self, prompt, **fields):
         return Candidate(
-            candidate_id=self.completed_attempts + 1,
+            candidate_id=self.completed_candidates + 1,
             best_before=self.tree.best().fitness if self.tree.nodes else None,
-            prompt=prompt, prompt_tokens=self.builder.count(prompt),
+            prompt=prompt, prompt_tokens=self.prompts.count(prompt),
             prompt_hash=digest(prompt), **fields,
         )
 
-    def _quality_distribution(self, nodes):
-        scores = [node.fitness for node in nodes]
-        beta, target, quality_ess = calibrate_beta(scores, QUALITY_ESS_TARGET)
-        return softmax(scores, beta), {"quality_ess": quality_ess, "ess_target": target}
-
-    def node_distribution(self, nodes, operator):
-        quality, stats = self._quality_distribution(nodes)
-        if operator == "Pivot":
-            quality = mix_uniform(quality, PIVOT_UNIFORM_PROBABILITY)
-        stats["parent_ess"] = ess(quality)
-        return quality, stats
-
-    def eligible_nodes(self):
-        return self.tree.all_nodes()
-
-    def select_donor(self, parent):
-        parent_key = code_key(parent.code)
-        nodes = [node for node in self.tree.all_nodes()
-                 if node.id != parent.id and code_key(node.code) != parent_key]
-        if not nodes:
-            return None
-        quality, _ = self._quality_distribution(nodes)
-        return self.rng.choices(nodes, weights=mix_uniform(quality, DONOR_UNIFORM_PROBABILITY))[0]
-
     def _schedule_repair(self, previous):
-        prompt = parsing.repair_prompt(
+        prompt = parsing.build_repair_prompt(
             self.task_contract, self.storage.failed_response(previous["candidate_id"]), previous)
         return self._candidate(
             prompt, repair_of=previous["candidate_id"],
+            requested_operator=previous.get("operator", "Init"),
             operator=previous.get("operator", "Init"),
-            requested_operator=previous.get("requested_operator", "Init"),
-            parent_id=previous.get("parent_id"), donor_id=previous.get("donor_id"),
-            parent_fitness=previous.get("parent_fitness"),
-            donor_fitness=previous.get("donor_fitness"),
-            selection={},
+            parent_id=previous.get("parent_id"), donor_id=None,
+            parent_fitness=previous.get("parent_fitness"), donor_fitness=None,
+            reference_ids=[], selection={}, parent_selected=False,
         )
 
-    def _schedule(self):
+    def _schedule_candidate(self):
+        """Repair once when needed; otherwise initialize or develop a node."""
         previous = self.storage.last_event
-        if previous and previous["candidate_id"] != self.completed_attempts:
+        if previous and previous["candidate_id"] != self.completed_candidates:
             previous = None
         if previous and previous.get("status") == "eval_failed" and previous.get("reason") not in REPAIRABLE_FAILURES:
             raise RuntimeError(f"evaluation infrastructure failed: {previous.get('reason')}")
         if previous and (previous.get("status") == "invalid_output" or
                          previous.get("reason") in REPAIRABLE_FAILURES) and not previous.get("repair_of"):
             return self._schedule_repair(previous)
-        requested = operator = "Init"
-        parent = donor = None
-        selection = {}
-        if len(self.tree.roots) >= self.n_roots:
-            requested = self.rng.choices(OPERATORS, weights=OPERATOR_PROBABILITIES.values())[0]
-            operator = requested
-            nodes = self.eligible_nodes()
-            probabilities, selection = self.node_distribution(nodes, operator)
-            index = self.rng.choices(range(len(nodes)), weights=probabilities)[0]
-            parent = nodes[index]
-            count = self.parent_selection_counts.get(parent.id, 0)
-            self.parent_selection_counts[parent.id] = count + 1
-            selection.update(parent_probability=probabilities[index], parent_count_before=count)
-            if requested == "Fuse":
-                donor = self.select_donor(parent)
-                if donor is None:
-                    operator = "Refine"
-                    selection["fallback_reason"] = "no donor"
-        text = self.builder.build_initial() if operator == "Init" else self.builder.build(parent, operator, donor)
+
+        if len(self.tree.roots) < self.n_roots:
+            return self._candidate(
+                self.prompts.build_initial(), requested_operator="Init", operator="Init",
+                parent_id=None, donor_id=None, parent_fitness=None, donor_fitness=None,
+                reference_ids=[], selection={}, parent_selected=False,
+            )
+
+        requested_operator = self.rng.choices(
+            OPERATORS, weights=OPERATOR_PROBABILITIES.values(),
+        )[0]
+        parent, selection = sample_parent(self.tree.all_nodes(), self.rng)
+        # This counts an allocated opportunity even if generation/evaluation fails.
+        parent.attempts += 1
+        selection["attempts_after"] = parent.attempts
+        references = []
+        if requested_operator in ("Pivot", "Fuse"):
+            references = sample_references(
+                reference_pool(self.tree.all_nodes(), parent), self.n_references, self.rng,
+            )
+        context = self.prompts.build_development(parent, requested_operator, references)
+        if context.fallback_reason:
+            selection["fallback_reason"] = context.fallback_reason
+        reference_program = context.reference_program
         return self._candidate(
-            text, requested_operator=requested, operator=operator,
-            parent_id=parent.id if parent else None, donor_id=donor.id if donor else None,
-            parent_fitness=parent.fitness if parent else None,
-            donor_fitness=donor.fitness if donor else None,
-            selection=selection,
+            context.prompt, requested_operator=requested_operator, operator=context.operator,
+            parent_id=parent.id, parent_fitness=parent.fitness,
+            donor_id=reference_program.id if reference_program else None,
+            donor_fitness=reference_program.fitness if reference_program else None,
+            reference_ids=context.reference_ids, selection=selection,
+            parent_selected=True,
         )
 
     # --- Execution: generate, parse, evaluate --------------------------------
@@ -211,7 +199,7 @@ class TraceAADV1011:
         self.storage.record_call(record)
         return record
 
-    def _score_result(self, result):
+    def _read_fitness(self, result):
         reason, error_type, error, trace = (
             result.failure_kind, result.error_type, result.error, result.traceback)
         if result.result is None:
@@ -228,11 +216,11 @@ class TraceAADV1011:
         """Evaluate a parsed candidate and add its node; (None, None) if unparsable."""
         if parsed is None:
             return None, None
-        evaluation_id = self.budget_used + 1
+        evaluation_id = self.evaluations_used + 1
         started = time.time()
         try:
-            fitness, reason, error_type, error, trace = self._score_result(
-                self.secure.evaluate_program_with_details(parsed.program_code))
+            fitness, reason, error_type, error, trace = self._read_fitness(
+                self.evaluator.evaluate_program_with_details(parsed.program_code))
         except Exception as exc:
             fitness, reason, error_type, error, trace = (
                 None, "evaluation_error", type(exc).__name__, str(exc), traceback.format_exc())
@@ -240,7 +228,7 @@ class TraceAADV1011:
                    "fitness": fitness, "reason": reason, "error_type": error_type, "error": error,
                    "traceback": trace, "eval_seconds": time.time() - started,
                    "repair_of": candidate.repair_of}
-        self.budget_used = evaluation_id
+        self.evaluations_used = evaluation_id
         node = None
         if fitness is not None:
             node = self.tree.add(code=parsed.program_code, idea=parsed.idea, fitness=fitness,
@@ -259,8 +247,6 @@ class TraceAADV1011:
         else:
             self._invalid_streak = 0
             status, reason = ("ok", None) if outcome["fitness"] is not None else ("eval_failed", outcome["reason"])
-        if candidate.parent_id is not None:
-            self.step_counter += 1
         record = {
             "ts": _timestamp(),
             "candidate_id": candidate.candidate_id,
@@ -269,9 +255,10 @@ class TraceAADV1011:
             "parent_id": candidate.parent_id, "donor_id": candidate.donor_id,
             "parent_fitness": candidate.parent_fitness, "donor_fitness": candidate.donor_fitness,
             "reference_ids": candidate.reference_ids, "selection": candidate.selection,
+            "parent_selected": candidate.parent_selected,
             "prompt_tokens": candidate.prompt_tokens, "prompt_hash": candidate.prompt_hash,
             "status": status, "reason": reason,
-            "budget_used": self.budget_used,
+            "budget_used": self.evaluations_used,
             "evaluation_id": outcome["evaluation_id"] if outcome else None,
             "eval_seconds": outcome.get("eval_seconds") if outcome else None,
             "llm_seconds": completion["seconds"],
@@ -287,13 +274,13 @@ class TraceAADV1011:
             record.update(parent_improved=node.fitness > candidate.parent_fitness,
                           frontier_improved=node.fitness > candidate.best_before)
         self.storage.record_event(record)
-        self.completed_attempts = candidate.candidate_id
+        self.completed_candidates = candidate.candidate_id
         self._save_checkpoint()
         if self._invalid_streak >= 50:
             raise RuntimeError("50 consecutive generations produced no valid output")
 
     def _run_candidate(self):
-        candidate = self._schedule()
+        candidate = self._schedule_candidate()
         completion = self._generate(candidate)
         parsed, parse_error = parsing.parse_candidate(
             completion["response"], completion["finish_reason"],
@@ -308,14 +295,11 @@ class TraceAADV1011:
         """Persist the fully settled state; recovery resumes from here, so an
         interrupted in-flight candidate is simply redone."""
         atomic_json(self.storage.state_path, {
-            "mechanism": self.mechanism,
-            "started_at": self.started_at,
+            "mechanism": self.mechanism, "started_at": self.started_at,
             "rng_state": list(self.rng.getstate()),
             "nodes": [asdict(node) for node in self.tree.all_nodes()],
-            "parent_selection_counts": self.parent_selection_counts,
-            "step_counter": self.step_counter,
-            "budget_used": self.budget_used,
-            "completed_attempts": self.completed_attempts,
+            "budget_used": self.evaluations_used,
+            "completed_candidates": self.completed_candidates,
             "invalid_streak": self._invalid_streak,
             "last_event": self.storage.last_event,
         })
@@ -323,16 +307,13 @@ class TraceAADV1011:
     def _resume_checkpoint(self):
         state = json.loads(self.storage.state_path.read_text())
         if state.get("mechanism") != self.mechanism:
-            raise ValueError("checkpoint configuration differs from V10.11")
+            raise ValueError("checkpoint configuration differs from V11.1")
         self.started_at = state["started_at"]
         _restore_rng(self.rng, state["rng_state"])
         for entry in state["nodes"]:
             self.tree.add_raw(Node(**entry))
-        self.parent_selection_counts = {int(key): value
-                                        for key, value in state["parent_selection_counts"].items()}
-        self.step_counter = state["step_counter"]
-        self.budget_used = state["budget_used"]
-        self.completed_attempts = state["completed_attempts"]
+        self.evaluations_used = state["budget_used"]
+        self.completed_candidates = state["completed_candidates"]
         self._invalid_streak = state["invalid_streak"]
         self.storage.last_event = state["last_event"]
 
@@ -340,8 +321,9 @@ class TraceAADV1011:
         best = self.tree.best() if self.tree.nodes else None
         payload = {"status": status, "method": self.METHOD, "started_at": self.started_at,
                    "finished_at": _timestamp(), "budget": self.budget,
-                   "budget_used": self.budget_used, "num_nodes": len(self.tree.nodes),
-                   "num_roots": len(self.tree.roots), "num_steps": self.step_counter,
+                   "budget_used": self.evaluations_used, "num_nodes": len(self.tree.nodes),
+                   "num_roots": len(self.tree.roots),
+                   "parent_attempts": self.tree.parent_selections,
                    "best": None if best is None else {"node_id": best.id, "fitness": best.fitness,
                    "idea": best.idea, "code": best.code, "evaluation_id": best.evaluation_id,
                    "operator": best.operator, "parent_id": best.parent_id, "donor_id": best.donor_id}}
@@ -359,10 +341,10 @@ class TraceAADV1011:
         else:
             self._save_checkpoint()
         try:
-            while self.budget_used < self.budget:
+            while self.evaluations_used < self.budget:
                 self._run_candidate()
-                print(f"{self.METHOD}: budget={self.budget_used}/{self.budget} "
-                      f"nodes={len(self.tree.nodes)}", flush=True)
+                print(f"{self.METHOD}: budget={self.evaluations_used}/{self.budget} "
+                      f"nodes={len(self.tree.nodes)} parent_attempts={self.tree.parent_selections}", flush=True)
             if len(self.tree.roots) < self.n_roots:
                 raise RuntimeError("budget exhausted before initialization completed")
             self._write_summary("finished")

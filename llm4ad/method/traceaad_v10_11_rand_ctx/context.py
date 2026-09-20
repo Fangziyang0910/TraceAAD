@@ -2,7 +2,8 @@
 
 import math
 
-from ..traceaad_v10_11.trajectory import OPERATOR_INSTRUCTIONS, TrajectoryBuilder
+from ..traceaad_v10_11.parsing import OUTPUT
+from ..traceaad_v10_11.prompts import OPERATOR_INSTRUCTIONS, TrajectoryBuilder
 
 REFERENCE_TAU = 8.0
 
@@ -60,4 +61,7 @@ class RandomReferenceBuilder(TrajectoryBuilder):
                 parts.append("\n\n".join(cards))
         if donor is not None:
             parts.append(self.program(donor, "Reference Algorithm"))
-        return self._complete(parts, OPERATOR_INSTRUCTIONS[operator])
+        parts.extend(["# Design Task\n" + OPERATOR_INSTRUCTIONS[operator], "# Output\n" + OUTPUT])
+        text = "\n\n\n".join(parts)
+        self.check_capacity(text)
+        return text

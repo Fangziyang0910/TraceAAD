@@ -2,8 +2,7 @@
 
 import ast
 
-from .core import digest
-from .errors import OUTPUT
+from .parsing import OUTPUT
 
 OPERATOR_INSTRUCTIONS = {
     "Init": (
@@ -55,13 +54,9 @@ class TrajectoryBuilder:
         self.max_events = max_events
         self.lookup = lookup
         self.all_nodes = all_nodes
-        self._counts = {}
 
     def count(self, text):
-        key = digest(text)
-        if key not in self._counts:
-            self._counts[key] = self.llm.count_prompt_tokens(text)
-        return self._counts[key]
+        return self.llm.count_prompt_tokens(text)
 
     def function_view(self, node):
         tree = ast.parse(node.code)
@@ -82,11 +77,28 @@ class TrajectoryBuilder:
     def program(self, node, title):
         return f"# {title}\nFitness: {node.fitness}\n```python\n{self.function_view(node)}\n```"
 
-    def _complete(self, parts, instruction):
-        parts.extend(["# Design Task\n" + instruction, "# Output\n" + OUTPUT])
-        text = "\n\n\n".join(parts)
-        self.check_capacity(text)
-        return text
+    def _fit_prompt(self, head, tail, middle, render, *, label, empty_ok=False):
+        """Join head + middle + tail, dropping items from the end of ``middle``
+        (the least important end) until the prompt fits the token budget.
+
+        Returns (text, retained middle items). When even the bare prompt
+        exceeds the budget, raises, or returns (None, []) if ``empty_ok``.
+        """
+        full = list(middle)
+        retained = list(middle)
+        while True:
+            middle_parts = [render(retained)] if retained else []
+            text = "\n\n\n".join(head + middle_parts + tail)
+            if self.count(text) <= self.max_tokens:
+                if len(retained) < len(full):
+                    print(f"v110: {label} trimmed to {len(retained)} of {len(full)} "
+                          f"(prompt exceeded the {self.max_tokens}-token context budget)", flush=True)
+                return text, retained
+            if not retained:
+                if empty_ok:
+                    return None, retained
+                raise ValueError("complete prompt exceeds the model context budget")
+            retained.pop()
 
     def _history_text(self, edges):
         history = [
@@ -111,25 +123,23 @@ class TrajectoryBuilder:
             parts.append("# Previous Initial Algorithms\nEarlier evaluated functions, in generation order.")
             parts.extend(self.program(node, "Previous Initial Algorithm") for node in roots)
             instruction += " " + INIT_REFERENCE_INSTRUCTION
-        return self._complete(parts, instruction)
+        parts.extend(["# Design Task\n" + instruction, "# Output\n" + OUTPUT])
+        text = "\n\n\n".join(parts)
+        self.check_capacity(text)
+        return text
 
     def build(self, parent, operator):
         head = [self.task_contract, "Fitness: higher is better.",
                 self.program(parent, "Current Algorithm")]
         tail = ["# Design Task\n" + OPERATOR_INSTRUCTIONS[operator], "# Output\n" + OUTPUT]
         edges = self.formation_edges(parent)
-        kept = len(edges)
-        while True:
-            middle = [self._history_text(edges[-kept:])] if kept else []
-            text = "\n\n\n".join(head + middle + tail)
-            if self.count(text) <= self.max_tokens:
-                if kept < len(edges):
-                    print(f"v110: formation history truncated to {kept} of {len(edges)} steps "
-                          f"(prompt exceeded the {self.max_tokens}-token context budget)", flush=True)
-                return text
-            if kept == 0:
-                raise ValueError("complete prompt exceeds the model context budget")
-            kept -= 1
+        newest_first = list(reversed(edges))
+        text, _ = self._fit_prompt(
+            head, tail, newest_first,
+            lambda kept: self._history_text(list(reversed(kept))),
+            label="formation history steps",
+        )
+        return text
 
     def check_capacity(self, text):
         if self.count(text) > self.max_tokens:
@@ -152,21 +162,8 @@ class ReferenceContextBuilder(TrajectoryBuilder):
         head = [self.task_contract, "Fitness: higher is better.",
                 self.program(parent, "Current Algorithm")]
         tail = ["# Design Task\n" + OPERATOR_INSTRUCTIONS[operator], "# Output\n" + OUTPUT]
-        retained = list(ordered)
-        while True:
-            middle = [self._references_text(retained)] if retained else []
-            text = "\n\n\n".join(head + middle + tail)
-            if self.count(text) <= self.max_tokens:
-                if len(retained) < len(ordered):
-                    print(f"v110: reference context trimmed to {len(retained)} of {len(ordered)} "
-                          f"entries (prompt exceeded the {self.max_tokens}-token context budget)",
-                          flush=True)
-                return text, retained
-            if not retained:
-                if require_minimal:
-                    raise ValueError("complete prompt exceeds the model context budget")
-                return None, retained
-            retained.pop()
+        return self._fit_prompt(head, tail, ordered, self._references_text,
+                                label="reference entries", empty_ok=not require_minimal)
 
     def _references_text(self, references):
         lines = ["# Reference Nodes", REFERENCE_INTRO]

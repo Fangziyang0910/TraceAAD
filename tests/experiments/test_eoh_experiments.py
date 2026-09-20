@@ -104,7 +104,7 @@ def test_eoh_free_slot_assignment_prefers_remote_backends(monkeypatch) -> None:
     monkeypatch.setattr(
         _common,
         "free_slots",
-        lambda: {"server3": 2, "server3b": 2, "zhong": 0, "local": 0},
+        lambda: {"server3": 2, "server3b": 2, "local": 0},
     )
     assigned = _common.assign_backends(pending)
     assert [item.backend for item in assigned] == ["server3", "server3b", "server3"]

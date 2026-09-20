@@ -1,11 +1,7 @@
 """TraceAAD V10.11 engine with random archive references instead of formation history."""
 
-from ..traceaad_v10_11.traceaad import (
-    OPERATORS,
-    OPERATOR_PROBABILITIES,
-    REPAIRABLE_FAILURES,
-    TraceAADV1011,
-)
+from ..traceaad_v10_11.selection import OPERATORS, OPERATOR_PROBABILITIES
+from ..traceaad_v10_11.traceaad import REPAIRABLE_FAILURES, TraceAADV1011
 from .context import RandomReferenceBuilder, rank_softmax_sample
 
 
@@ -33,7 +29,9 @@ class TraceAADV1011RandCtx(TraceAADV1011):
             all_nodes=self.tree.all_nodes)
 
     def _schedule(self):
-        previous = self._current_event()
+        previous = self.storage.last_event
+        if previous and previous["candidate_id"] != self.completed_attempts:
+            previous = None
         if previous and previous.get("status") == "eval_failed" and previous.get("reason") not in REPAIRABLE_FAILURES:
             raise RuntimeError(f"evaluation infrastructure failed: {previous.get('reason')}")
         if previous and (previous.get("status") == "invalid_output" or
@@ -62,7 +60,7 @@ class TraceAADV1011RandCtx(TraceAADV1011):
             self.n_references, self.rng)
         text = self.builder.build_initial() if operator == "Init" else self.builder.build(
             parent, operator, donor, references=references)
-        return self._pending(
+        return self._candidate(
             text, requested_operator=requested, operator=operator,
             parent_id=parent.id if parent else None, donor_id=donor.id if donor else None,
             parent_fitness=parent.fitness if parent else None,

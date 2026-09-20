@@ -3,7 +3,7 @@
 import ast
 import re
 
-from .core import normalize_code
+from dataclasses import dataclass
 
 THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 FENCE_RE = re.compile(r"^[ \t]*```(?:python|py)?[ \t]*\r?$", re.MULTILINE | re.IGNORECASE)
@@ -17,21 +17,17 @@ OUTPUT = (
     "Use the exact target function name and signature shown above. "
     "Include imports and helper definitions as needed."
 )
-MAX_IDEA_TOKENS = 500
+MAX_IDEA_CHARS = 2000
 
 
-def estimated_tokens(text):
-    """Conservative local estimate used when a model tokenizer is unavailable."""
-    return max(1, (len(text) + 3) // 4)
+@dataclass
+class ParsedCandidate:
+    idea: str
+    program_code: str
 
 
-def count_idea_tokens(text, token_counter=None):
-    if token_counter is not None:
-        try:
-            return int(token_counter(text))
-        except Exception:
-            pass
-    return estimated_tokens(text)
+def normalize_code(text: str) -> str:
+    return "\n".join(text.replace("\r\n", "\n").replace("\r", "\n").splitlines()).strip()
 
 
 def signature(args):
@@ -39,11 +35,6 @@ def signature(args):
             [arg.arg for arg in args.kwonlyargs],
             args.vararg.arg if args.vararg else None,
             args.kwarg.arg if args.kwarg else None)
-
-
-def expected_interface(name, args_text):
-    args = ast.parse(f"def target({args_text}):\n    pass").body[0].args
-    return name, args_text, signature(args)
 
 
 def template_target(template_program):
@@ -63,7 +54,7 @@ def template_target(template_program):
     if docstring:
         lines.append(f'    """{docstring}"""')
     lines.append("    pass")
-    return expected_interface(func.name, args_text), "\n".join(lines)
+    return (func.name, args_text, signature(func.args)), "\n".join(lines)
 
 
 def _target_functions(tree, name):
@@ -93,7 +84,7 @@ def _merge_candidate(template_program, generated_tree, target):
     return normalize_code(ast.unparse(module))
 
 
-def parse_candidate(response, finish_reason, interface, template_program, token_counter=None):
+def parse_candidate(response, finish_reason, interface, template_program):
     if finish_reason not in ("stop", "length", "unknown"):
         return None, "unsupported finish reason"
     text = THINK_BLOCK_RE.sub("", response)
@@ -108,9 +99,8 @@ def parse_candidate(response, finish_reason, interface, template_program, token_
     if idea_match is None or not idea_match.group(1).strip():
         return None, "Idea is required"
     idea = idea_match.group(1).strip()
-    idea_tokens = count_idea_tokens(idea, token_counter)
-    if idea_tokens > MAX_IDEA_TOKENS:
-        return None, f"idea_length_error: Idea exceeds 500 tokens ({idea_tokens} tokens)"
+    if len(idea) > MAX_IDEA_CHARS:
+        return None, f"idea_length_error: Idea exceeds {MAX_IDEA_CHARS} characters"
     code = text[fences[0].end():fences[1].start()]
     canonical = normalize_code(code)
     if not canonical:
@@ -125,15 +115,10 @@ def parse_candidate(response, finish_reason, interface, template_program, token_
         return None, f"target_function_error: expected exactly one top-level `{name}(...)` function"
     if signature(targets[0].args) != expected:
         return None, f"signature_error: `{name}` must declare the parameters ({args_text})"
-    target = targets[0]
-    rebuilt = _merge_candidate(template_program, tree, target)
+    rebuilt = _merge_candidate(template_program, tree, targets[0])
     if rebuilt is None:
         return None, "template_error: could not find one target function in the task template"
-    try:
-        compile(rebuilt, "<candidate-template>", "exec")
-    except (SyntaxError, ValueError) as exc:
-        return None, f"template_error: {type(exc).__name__}: {exc}"
-    return (idea, normalize_code(ast.unparse(target)), rebuilt, idea_tokens), None
+    return ParsedCandidate(idea, rebuilt), None
 
 
 def repair_prompt(task_contract, response, event):

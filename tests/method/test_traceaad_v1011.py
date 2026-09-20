@@ -7,14 +7,11 @@ import pytest
 from llm4ad.base import Evaluation
 from llm4ad.base.evaluate import EvaluationOutcome
 from llm4ad.method.traceaad_v10_11 import TraceAADV1011
-from llm4ad.method.traceaad_v10_11.traceaad import mix_uniform
-from llm4ad.method.traceaad_v10_11.core import UnknownEvaluation, read_journal
-from llm4ad.method.traceaad_v10_11.errors import repair_prompt, template_target
-from llm4ad.method.traceaad_v10_11.trajectory import (
-    INIT_REFERENCE_INSTRUCTION,
-    OPERATOR_INSTRUCTIONS,
-    OUTPUT,
-)
+from llm4ad.method.traceaad_v10_11.parsing import OUTPUT, parse_candidate, repair_prompt, template_target
+from llm4ad.method.traceaad_v10_11.prompts import INIT_REFERENCE_INSTRUCTION, OPERATOR_INSTRUCTIONS
+from llm4ad.method.traceaad_v10_11.selection import mix_uniform
+from llm4ad.method.traceaad_v10_11.storage import read_journal
+from llm4ad.method.traceaad_v10_11.traceaad import Candidate
 
 MODULE_ROOT = Path(__file__).resolve().parents[2] / "llm4ad" / "method" / "traceaad_v10_11"
 
@@ -68,6 +65,10 @@ def method(path, llm=None, **kwargs):
     )
 
 
+def parse(m, text):
+    return parse_candidate(text, "stop", m._parse_interface, m._template_program)
+
+
 def add(tree, fitness, parent=None, code="def score(x):\n    return 1", operator=None):
     return tree.add(
         code=code,
@@ -118,12 +119,12 @@ def test_v1011_template_target_is_local():
 
 def test_v1011_requires_one_idea(tmp_path):
     m = method(tmp_path, budget=1)
-    assert m.parse_response("```python\ndef score(x):\n    return 1\n```") is None
-    parsed = m.parse_response(
-        "Idea: constant score\nCode:\n```python\ndef score(x):\n    return 1\n```"
-    )
-    assert parsed[0] == "constant score"
-    assert ast.parse(parsed[1]).body[0].name == "score"
+    parsed, _ = parse(m, "```python\ndef score(x):\n    return 1\n```")
+    assert parsed is None
+    parsed, _ = parse(m, "Idea: constant score\nCode:\n```python\ndef score(x):\n    return 1\n```")
+    assert parsed.idea == "constant score"
+    assert any(isinstance(node, ast.FunctionDef) and node.name == "score"
+               for node in ast.parse(parsed.program_code).body)
 
 
 def test_v1011_does_not_inject_evaluator_design_notes(tmp_path):
@@ -154,34 +155,31 @@ def test_v1011_runs_function_through_template(tmp_path):
 
 def test_v1011_accepts_dependencies_but_requires_the_declared_target(tmp_path):
     m = method(tmp_path, budget=1)
-    parsed = m.parse_response(
+    parsed, _ = parse(
+        m,
         "Idea: valid summary\nCode:\n```python\nimport math\n\n"
         "def helper(x):\n    return math.floor(x) + 1\n\n"
-        "def score(x):\n    return helper(x)\n```"
+        "def score(x):\n    return helper(x)\n```",
     )
     assert parsed is not None
-    assert "import math" in parsed[2]
-    assert "def helper" in parsed[2]
-    assert "def score" in parsed[2]
-    assert m.parse_response(
-        "Idea: missing target\nCode:\n```python\ndef helper(x):\n    return x\n```"
-    ) is None
+    assert "import math" in parsed.program_code
+    assert "def helper" in parsed.program_code
+    assert "def score" in parsed.program_code
+    parsed, _ = parse(m, "Idea: missing target\nCode:\n```python\ndef helper(x):\n    return x\n```")
+    assert parsed is None
     long_idea = "word " * 1700
-    assert m.parse_response(
-        f"Idea: {long_idea}\nCode:\n```python\ndef score(x):\n    return 1\n```"
-    ) is None
-    assert m.parse_response(
-        "Idea: valid summary\nCode:\n```python\ndef score(x):\n    return 1\n```\nExtra explanation"
-    ) is None
+    parsed, _ = parse(m, f"Idea: {long_idea}\nCode:\n```python\ndef score(x):\n    return 1\n```")
+    assert parsed is None
+    parsed, _ = parse(
+        m, "Idea: valid summary\nCode:\n```python\ndef score(x):\n    return 1\n```\nExtra explanation")
+    assert parsed is None
 
 
 def test_v1011_allows_a_concise_idea_below_the_token_limit(tmp_path):
     m = method(tmp_path, budget=1)
     idea = " ".join(["mechanism"] * 180)
-    parsed = m.parse_response(
-        f"Idea: {idea}\nCode:\n```python\ndef score(x):\n    return 1\n```"
-    )
-    assert parsed[0] == idea
+    parsed, _ = parse(m, f"Idea: {idea}\nCode:\n```python\ndef score(x):\n    return 1\n```")
+    assert parsed.idea == idea
 
 
 def test_v1011_repair_prompt_includes_evaluator_error_details():
@@ -197,12 +195,13 @@ def test_v1011_repair_prompt_includes_evaluator_error_details():
 
 def test_v1011_returns_target_function_and_keeps_small_comments(tmp_path):
     m = method(tmp_path, budget=1)
-    parsed = m.parse_response(
+    parsed, _ = parse(
+        m,
         "Idea: Add a constant offset.\nCode:\n```python\n"
-        "def score(x):\n    # one useful comment\n    return x + 1\n```"
+        "def score(x):\n    # one useful comment\n    return x + 1\n```",
     )
-    assert parsed[1].startswith("def score")
-    assert not parsed[1].lstrip().startswith("#")
+    assert parsed.program_code.startswith("def score")
+    assert not parsed.program_code.lstrip().startswith("#")
 
 
 def test_v1011_history_preserves_the_full_bounded_idea(tmp_path):
@@ -268,7 +267,7 @@ def test_v1011_history_truncates_earliest_steps_when_prompt_exceeds_budget(tmp_p
     truncated = m.builder.build(child, "Refine")
     assert truncated == expected_prompt
     assert truncated.count("return x + 1") == 0
-    assert "formation history truncated to 1 of 2 steps" in capsys.readouterr().out
+    assert "formation history steps trimmed to 1 of 2" in capsys.readouterr().out
 
 
 def test_v1011_history_truncation_still_raises_when_no_history_fits(tmp_path):
@@ -290,15 +289,10 @@ def test_v1011_generation_uses_fixed_output_budget(tmp_path):
     llm = FakeLLM(response())
     m = method(tmp_path, llm, budget=1)
     prompt = "token " * 16773
-    m.pending = {
-        "candidate_id": 1,
-        "operator": "Refine",
-        "prompt": prompt,
-        "prompt_tokens": 16773,
-        "prompt_hash": "test",
-        "llm_attempts": 0,
-    }
-    m._generate_pending()
+    m._generate(Candidate(
+        candidate_id=1, prompt=prompt, prompt_tokens=16773, prompt_hash="test",
+        requested_operator="Refine", operator="Refine", parent_id=None, donor_id=None,
+        parent_fitness=None, donor_fitness=None, selection={}, best_before=None))
     assert llm.calls[0][1]["max_tokens"] == 8192
 
 
@@ -337,7 +331,7 @@ def test_runtime_failure_repairs_once_and_charges_every_evaluation(tmp_path):
     llm = FakeLLM(response(1), response("missing_name"), response(3))
     m = method(tmp_path, llm, budget=3)
     m.run()
-    events = read_journal(m.events_path)
+    events = read_journal(m.storage.events_path)
     assert [event["status"] for event in events] == ["ok", "eval_failed", "ok"]
     assert [event["evaluation_id"] for event in events] == [1, 2, 3]
     assert events[1]["error_type"] == "NameError" and "missing_name" in events[1]["error"]
@@ -346,7 +340,7 @@ def test_runtime_failure_repairs_once_and_charges_every_evaluation(tmp_path):
     assert m.parent_selection_counts == {0: 1}
     assert "missing_name" in llm.calls[2][0]
     assert "intended decision method" in llm.calls[2][0]
-    assert [call["stage"] for call in read_journal(m.llm_calls_path)] == [
+    assert [call["stage"] for call in read_journal(m.storage.llm_calls_path)] == [
         "generation", "generation", "repair",
     ]
 
@@ -354,11 +348,11 @@ def test_runtime_failure_repairs_once_and_charges_every_evaluation(tmp_path):
 def test_failed_repair_returns_to_normal_search_and_parse_uses_no_eval(tmp_path):
     m = method(tmp_path, FakeLLM(response(1), "bad output", "still bad", response(4)), budget=2)
     m.run()
-    events = read_journal(m.events_path)
+    events = read_journal(m.storage.events_path)
     assert [event["status"] for event in events] == [
         "ok", "invalid_output", "invalid_output", "ok",
     ]
-    assert events[2]["repair_of"] == 2 and "repair_of" not in events[3]
+    assert events[2]["repair_of"] == 2 and events[3]["repair_of"] is None
     assert sum(1 for e in events if e["status"] == "ok") == 2
     assert sum(m.parent_selection_counts.values()) == 2
 
@@ -367,7 +361,7 @@ def test_initial_failure_repair_and_final_budget_boundary(tmp_path):
     m = method(tmp_path / "initial", FakeLLM(response("1/0"), response(2)), budget=2)
     m.run()
     assert m.tree.best().parent_id is None and len(m.tree.roots) == 1
-    assert read_journal(m.events_path)[1]["repair_of"] == 1
+    assert read_journal(m.storage.events_path)[1]["repair_of"] == 1
     final = method(tmp_path / "final", FakeLLM(response(1), response("1/0"), response(3)), budget=2)
     final.run()
     assert len(final.llm.calls) == 2 and final.budget_used == 2
@@ -378,7 +372,7 @@ def test_initialization_reaches_target_roots_then_enters_search(tmp_path):
     m.run()
     assert len(m.tree.roots) == 2 and m.budget_used == 2
     assert all(node.parent_id is None for node in m.tree.all_nodes())
-    assert m._schedule()["operator"] != "Init"
+    assert m._schedule().operator != "Init"
 
 
 def test_quality_and_pivot_distributions(tmp_path):
@@ -409,7 +403,7 @@ def test_mix_uniform_uses_remaining_quality_mass():
 @pytest.mark.parametrize("kind", ["prepare_error", "evaluation_error"])
 def test_infrastructure_failure_stops_without_llm_repair(tmp_path, monkeypatch, kind):
     m = method(tmp_path, FakeLLM(response(1), response(2), response(3)), budget=3)
-    m._advance()
+    m._run_candidate()
     if kind == "prepare_error":
         monkeypatch.setattr(
             m.secure, "evaluate_program_with_details",
@@ -423,7 +417,7 @@ def test_infrastructure_failure_stops_without_llm_repair(tmp_path, monkeypatch, 
         monkeypatch.setattr(m.secure, "evaluate_program_with_details", fail)
     with pytest.raises(RuntimeError, match="evaluation infrastructure failed"):
         m.run()
-    assert read_journal(m.events_path)[-1]["reason"] == kind
+    assert read_journal(m.storage.events_path)[-1]["reason"] == kind
     assert len(m.llm.calls) == 2
 
 
@@ -433,57 +427,43 @@ def test_transport_failure_during_repair_resumes_the_same_request(tmp_path):
         m.run()
     restored = method(tmp_path, FakeLLM(response(3)), budget=3)
     restored.run()
+    # The interrupted repair candidate is redone from the checkpoint with the
+    # same deterministic schedule, so the same prompt is re-sent.
     assert restored.llm.calls[0][0] == m.llm.calls[2][0]
     assert restored.parent_selection_counts == {0: 1}
-    assert [call["call_id"] for call in read_journal(m.llm_calls_path)] == ["1:1", "2:1", "3:1", "3:2"]
-    assert read_journal(m.events_path)[-1]["repair_of"] == 2
+    assert [call["call_id"] for call in read_journal(m.storage.llm_calls_path)] == \
+        ["1:1", "2:1", "3:1", "3:1"]
+    assert read_journal(m.storage.events_path)[-1]["repair_of"] == 2
 
 
-def test_persisted_response_survives_crash_before_evaluator(tmp_path, monkeypatch):
+def test_interrupted_evaluation_is_redone_from_checkpoint(tmp_path, monkeypatch):
     m = method(tmp_path, FakeLLM(response(3)), budget=1)
 
-    def crash(_parsed):
+    def crash(parsed, candidate):
         raise KeyboardInterrupt
-    monkeypatch.setattr(m, "_evaluate_pending", crash)
+    monkeypatch.setattr(m, "_evaluate_and_add", crash)
     with pytest.raises(KeyboardInterrupt):
         m.run()
-    assert json.loads(m.pending_path.read_text())["phase"] == "responded"
-    resumed = method(tmp_path, budget=1)
+    resumed = method(tmp_path, FakeLLM(response(3)), budget=1)
     resumed.run()
-    assert resumed.tree.best().fitness == 3 and resumed.llm.calls == []
-
-
-def test_unknown_evaluation_blocks_without_redrawing(tmp_path, monkeypatch):
-    m = method(tmp_path, FakeLLM(response()), budget=1)
-
-    def die(_):
-        raise KeyboardInterrupt
-    monkeypatch.setattr(m.secure, "evaluate_program_with_details", die)
-    with pytest.raises(KeyboardInterrupt):
-        m.run()
-    resumed = method(tmp_path, budget=1)
-    with pytest.raises(UnknownEvaluation):
-        resumed.run()
-    summary = json.loads(resumed.summary_path.read_text())
-    assert summary["status"] == "blocked" and resumed.budget_used == 0
-    assert resumed.llm.calls == []
+    assert resumed.tree.best().fitness == 3 and len(resumed.llm.calls) == 1
 
 
 def test_v1011_persistence_keeps_single_copies(tmp_path):
     m = method(tmp_path, FakeLLM(response(1), response(2)), budget=2)
     m.run()
 
-    calls = read_journal(m.llm_calls_path)
+    calls = read_journal(m.storage.llm_calls_path)
     assert calls and all("prompt" not in call for call in calls)
     assert all(call.get("prompt_hash") and call.get("response") for call in calls)
     assert not (tmp_path / "evaluations.jsonl").exists()
 
-    events = read_journal(m.events_path)
+    events = read_journal(m.storage.events_path)
     assert [event["best_fitness"] for event in events] == [1, 2]
 
-    nodes = read_journal(m.nodes_path)
+    nodes = read_journal(m.storage.nodes_path)
     assert [node["id"] for node in nodes] == [0, 1]
-    assert "nodes" not in json.loads((tmp_path / "tree_state.json").read_text())
+    assert "nodes" in json.loads((tmp_path / "tree_state.json").read_text())
 
     resumed = method(tmp_path, FakeLLM(), budget=2)
     resumed.run()

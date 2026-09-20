@@ -706,7 +706,7 @@ table.feed-table td {
 
 <header>
   <div class="brand">
-    <span class="brand-badge" id="brand-badge">V10.11</span>
+    <span class="brand-badge" id="brand-badge">V11.1</span>
     <div class="brand-title">TraceAAD 训练监控与分析面板</div>
     <div class="version-picker-wrap">
       <select id="version-select" class="version-select" onchange="changeVersion(this.value)" title="切换监控实验版本">
@@ -755,9 +755,9 @@ table.feed-table td {
     </div>
 
     <div class="kpi-card">
-      <div class="kpi-label"><span>平均速率 & 调度器</span></div>
+      <div class="kpi-label"><span>平均速率</span></div>
       <div class="kpi-val" id="kpi-speed-val">–</div>
-      <div class="kpi-sub" id="kpi-sched-sub">基于 Qwen3.8-27B 采样与任务沙箱</div>
+      <div class="kpi-sub" id="kpi-batch-sub">基于 Qwen3.8-27B 采样与任务沙箱</div>
     </div>
   </section>
 
@@ -1018,7 +1018,7 @@ function startAutoRefresh() {
 
 function renderOverview() {
   if (!globalState) return;
-  const { global_summary, tasks, scheduler } = globalState;
+  const { global_summary, tasks, version_id } = globalState;
 
   document.getElementById("kpi-pct").textContent = `${global_summary.pct}%`;
   document.getElementById("kpi-bar-fill").style.width = `${Math.min(100, global_summary.pct)}%`;
@@ -1033,11 +1033,7 @@ function renderOverview() {
   document.getElementById("kpi-eta-sub").textContent = `预计全流程完成: ${global_summary.max_eta_finish_time}`;
   document.getElementById("kpi-speed-val").textContent = `${global_summary.avg_speed_sec} 秒/次`;
 
-  if (scheduler) {
-    const schedText = scheduler.active ? `调度器活跃 (${scheduler.session})` : `调度器离线`;
-    const batchText = scheduler.batch ? `批次: ${scheduler.batch}` : "无批次";
-    document.getElementById("kpi-sched-sub").textContent = `${schedText} · ${batchText}`;
-  }
+  document.getElementById("kpi-batch-sub").textContent = `批次: ${version_id}`;
 
   const container = document.getElementById("tasks-container");
   const runKey = tasks.map(t => t.meta.key + ":" + t.runs.map(r => r.name).join(",")).join("|");

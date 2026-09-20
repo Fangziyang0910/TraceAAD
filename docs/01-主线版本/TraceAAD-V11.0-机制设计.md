@@ -172,6 +172,6 @@ V10.11 现有恢复路径存在已知缺陷：`evaluated` 阶段恢复会重复�
 
 机制指纹变更（METHOD、prompt_policy、调度参数 `exploration_c=0.1`、`n_references=8`、`reference_weighting=reciprocal_rank`；移除 `quality_ess_target`、`pivot_uniform_probability`、`donor_uniform_probability`）意味着 V10.11 检查点不兼容：新版本使用独立目录与检查点，不能拼接既有批次进度。五任务问题说明、模板与种子/数据配置不动，由冻结契约测试保护；每路 1000 次真实评价的预算口径（含初始化、评价失败与修复后的评价）与 V10.11 完全一致。
 
-## 实现范围（待建）
+## 实现范围
 
-计划新增 `llm4ad/method/traceaad_v11_0/`：`core.py` 持久化原语与单亲树原样复制；`traceaad.py` 重写父代选择与结算（代码聚合表、中秩百分位、$S_t$ 打分、$n/T$ 结算、参考抽样）；`trajectory.py` 保留 `TrajectoryBuilder` 供 Refine/Tune 与初始化复用，新增参考上下文构建器；`errors.py` 解析与修复原样。测试 `tests/method/test_traceaad_v11_0.py` 覆盖：中秩百分位（含 $[1,2,2,4]\to[0,0.5,0.5,1]$ 与全同分 0.5）、并列均匀与代码内节点均匀、结算计数（解析失败/评价失败/修复各加一次）、重复代码不重置 $n$、参考抽样（$1/r$、无放回、AST 排除、同代码取最近、非空 Idea 过滤）、容量削减顺序、Fuse 参考为空回退 Refine（参考池空与容量裁剪殆尽两条路径，回退后使用 Refine 指令与祖先轨迹）、Pivot 参考为空不回退、修复候选 `reference_ids` 为空、检查点指纹不兼容。**断点恢复列为验收项**：以假评价器在各中断位置（生成前后、评价进行中、评价完成后、节点/事件写入后、节点/事件末行写半、检查点保存后、pending 清理前）截停运行，验证恢复后评价器调用次数、预算计数、节点唯一性与 $n/T$ 结算各恰好一次。运行入口与冻结批次清单在 `experiments/traceaad_v11_0/` 建立，沿用 freeze 闭包与监控派生约定；停止与恢复按本文断点恢复契约实现。
+V11.0 实现于 `llm4ad/method/traceaad_v11_0/`（与 V11.1 同构的六文件结构）：`selection.py` 代码聚合表（CodeBook）、中秩百分位、$1/r$ 参考抽样；`prompts.py` Refine/Tune 轨迹与 Pivot/Fuse 参考上下文构建（含容量裁剪与 Fuse 回退）；`traceaad.py` 搜索主循环（调度、生成、解析、评估、$n/T$ 结算）与检查点续跑（每结算一个候选保存全树快照，中断的在途候选从最近检查点重做）；`parsing.py` 解析与修复；`tree.py`/`storage.py` 树与 journal 持久化。测试 `tests/method/test_traceaad_v11_0.py` 覆盖：中秩百分位（含 $[1,2,2,4]\to[0,0.5,0.5,1]$ 与全同分 0.5）、并列均匀与代码内节点均匀、结算计数（解析失败/评价失败/修复各加一次）、重复代码不重置 $n$、参考抽样（$1/r$、无放回、AST 排除、同代码取最近、非空 Idea 过滤）、容量削减顺序、Fuse 参考为空回退 Refine（参考池空与容量裁剪殆尽两条路径）、Pivot 参考为空不回退、检查点指纹不兼容、中断候选从检查点重做且各候选恰结算一次。运行入口与冻结批次清单在 `experiments/traceaad_v11_0/`，沿用 freeze 闭包与监控派生约定。

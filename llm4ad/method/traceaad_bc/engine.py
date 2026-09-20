@@ -17,28 +17,35 @@ from __future__ import annotations
 import ast
 from functools import lru_cache
 
-from ..traceaad_v10_11 import errors as v1011_errors
-from ..traceaad_v10_11 import trajectory as v1011_trajectory
-from ..traceaad_v10_11.core import calibrate_beta as v1011_calibrate_beta
-from ..traceaad_v10_11.core import softmax as v1011_softmax
-from ..traceaad_v10_11.traceaad import (
+from ..traceaad_v10_11 import parsing as v1011_parsing
+from ..traceaad_v10_11.prompts import TrajectoryBuilder as V1011TrajectoryBuilder
+from ..traceaad_v10_11.selection import (
     DONOR_UNIFORM_PROBABILITY,
     OPERATORS as V1011_OPERATORS,
     OPERATOR_PROBABILITIES as V1011_OPERATOR_PROBABILITIES,
     QUALITY_ESS_TARGET,
+    calibrate_beta as v1011_calibrate_beta,
+    mix_uniform,
+    softmax as v1011_softmax,
+)
+from ..traceaad_v10_11.traceaad import (
     REPAIRABLE_FAILURES as V1011_REPAIRABLE_FAILURES,
     TraceAADV1011,
-    mix_uniform,
 )
-from ..traceaad_v11_0 import trajectory as v110_trajectory
-from ..traceaad_v11_0.traceaad import (
+from ..traceaad_v11_0.prompts import (
+    ReferenceContextBuilder as V110ReferenceContextBuilder,
+    TrajectoryBuilder as V110TrajectoryBuilder,
+)
+from ..traceaad_v11_0.selection import (
     N_REFERENCES,
     OPERATORS as V110_OPERATORS,
     OPERATOR_PROBABILITIES as V110_OPERATOR_PROBABILITIES,
-    REPAIRABLE_FAILURES as V110_REPAIRABLE_FAILURES,
-    TraceAADV110,
     code_key as v110_code_key,
     reciprocal_rank_sample,
+)
+from ..traceaad_v11_0.traceaad import (
+    REPAIRABLE_FAILURES as V110_REPAIRABLE_FAILURES,
+    TraceAADV110,
 )
 
 
@@ -75,7 +82,7 @@ class TraceAADV11BudgetV10Context(TraceAADV110):
             "context_reference_weighting": None,
             "context_n_references": 0,
         }
-        self.builder = v1011_trajectory.TrajectoryBuilder(
+        self.builder = V1011TrajectoryBuilder(
             self.llm,
             self.task_contract,
             max_tokens=self.max_input_tokens,
@@ -100,7 +107,9 @@ class TraceAADV11BudgetV10Context(TraceAADV110):
         )[0]
 
     def _schedule(self):
-        previous = self._current_event()
+        previous = self.storage.last_event
+        if previous and previous["candidate_id"] != self.completed_attempts:
+            previous = None
         if (previous and previous.get("status") == "eval_failed"
                 and previous.get("reason") not in V110_REPAIRABLE_FAILURES):
             raise RuntimeError(f"evaluation infrastructure failed: {previous.get('reason')}")
@@ -125,7 +134,7 @@ class TraceAADV11BudgetV10Context(TraceAADV110):
 
         text = (self.builder.build_initial() if operator == "Init"
                 else self.builder.build(parent, operator, donor))
-        return self._pending(
+        return self._candidate(
             text,
             requested_operator=requested,
             operator=operator,
@@ -160,7 +169,7 @@ class TraceAADV10BudgetV11Context(TraceAADV1011):
             "context_n_references": n_references,
             "history_code": False,
         }
-        self.builder = v110_trajectory.TrajectoryBuilder(
+        self.builder = V110TrajectoryBuilder(
             self.llm,
             self.task_contract,
             max_tokens=self.max_input_tokens,
@@ -168,7 +177,7 @@ class TraceAADV10BudgetV11Context(TraceAADV1011):
             lookup=self.tree.nodes.get,
             all_nodes=self.tree.all_nodes,
         )
-        self.reference_builder = v110_trajectory.ReferenceContextBuilder(
+        self.reference_builder = V110ReferenceContextBuilder(
             self.llm,
             self.task_contract,
             max_tokens=self.max_input_tokens,
@@ -189,8 +198,12 @@ class TraceAADV10BudgetV11Context(TraceAADV1011):
         return list(pool.values())
 
     def _schedule_repair(self, previous):
-        prompt = self._repair_prompt(previous)
-        return self._pending(
+        prompt = v1011_parsing.repair_prompt(
+            self.task_contract,
+            self.storage.failed_response(previous["candidate_id"]),
+            previous,
+        )
+        return self._candidate(
             prompt,
             repair_of=previous["candidate_id"],
             operator=previous.get("operator", "Init"),
@@ -203,15 +216,10 @@ class TraceAADV10BudgetV11Context(TraceAADV1011):
             selection=previous.get("selection", {}),
         )
 
-    def _repair_prompt(self, previous):
-        return v1011_errors.repair_prompt(
-            self.task_contract,
-            self._failed_response(previous["candidate_id"]),
-            previous,
-        )
-
     def _schedule(self):
-        previous = self._current_event()
+        previous = self.storage.last_event
+        if previous and previous["candidate_id"] != self.completed_attempts:
+            previous = None
         if (previous and previous.get("status") == "eval_failed"
                 and previous.get("reason") not in V1011_REPAIRABLE_FAILURES):
             raise RuntimeError(f"evaluation infrastructure failed: {previous.get('reason')}")
@@ -263,7 +271,7 @@ class TraceAADV10BudgetV11Context(TraceAADV1011):
         else:
             text = self.builder.build_initial()
 
-        return self._pending(
+        return self._candidate(
             text,
             requested_operator=requested,
             operator=operator,

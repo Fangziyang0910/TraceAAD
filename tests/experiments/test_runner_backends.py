@@ -7,10 +7,10 @@ from experiments.infra import base as _common
 
 
 def test_server1_capacity_matches_current_service_limit() -> None:
-    # B/C 30 路正式批次：server1 7、server3 两路各 10、本地 3。
-    assert _common.BACKEND_CAPACITY["server1"] == 7
-    assert _common.BACKEND_CAPACITY["server3"] == 10
-    assert _common.BACKEND_CAPACITY["server3b"] == 10
+    # Current scheduler record: server1 6, server3 two routes 9 each, local 3.
+    assert _common.BACKEND_CAPACITY["server1"] == 6
+    assert _common.BACKEND_CAPACITY["server3"] == 9
+    assert _common.BACKEND_CAPACITY["server3b"] == 9
     assert _common.BACKEND_CAPACITY["local"] == 3
     assert _common.PRIMARY_BACKENDS == ("server3", "server3b", "server1", "local")
 
@@ -21,7 +21,7 @@ def test_server3_public_labels_do_not_use_legacy_server3b_name() -> None:
 
 
 def test_select_backend_balances_to_the_side_with_more_free_slots() -> None:
-    remaining = {"server3": 1, "server3b": 3, "zhong": 9, "local": 2}
+    remaining = {"server3": 1, "server3b": 3, "local": 2}
 
     assert _common.select_backend(remaining) == "server3b"
     remaining["server3b"] -= 1
@@ -34,7 +34,7 @@ def test_select_backend_balances_to_the_side_with_more_free_slots() -> None:
 
 def test_select_backend_breaks_ties_in_primary_order() -> None:
     assert _common.select_backend({"server3": 9, "server3b": 9}) == "server3"
-    assert _common.select_backend({"server3": 0, "server3b": 0, "zhong": 9}) is None
+    assert _common.select_backend({"server3": 0, "server3b": 0, "local": 0}) is None
 
 
 def test_assign_backends_alternates_equal_primary_slots(monkeypatch) -> None:
@@ -54,7 +54,7 @@ def test_assign_backends_alternates_equal_primary_slots(monkeypatch) -> None:
     monkeypatch.setattr(
         _common,
         "free_slots",
-        lambda: {"server3": 2, "server3b": 2, "zhong": 9, "local": 0},
+        lambda: {"server3": 2, "server3b": 2, "local": 0},
     )
 
     assigned = _common.assign_backends(pending)

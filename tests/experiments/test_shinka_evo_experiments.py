@@ -36,7 +36,7 @@ def test_shinka_runner_uses_paper_parameters(tmp_path: Path, task: run.TaskName)
 def test_shinka_run_config_records_paper_settings(tmp_path: Path) -> None:
     spec = run.make_run_spec(
         task="cvrp_aco",
-        backend="zhong",
+        backend="server1",
         repeat=2,
         seed=1,
         run_name="batch_cvrp_shinka_rep2",
@@ -94,7 +94,7 @@ def test_shinka_free_slot_assignment_prefers_remote_backends(monkeypatch) -> Non
     monkeypatch.setattr(
         _common,
         "free_slots",
-        lambda: {"server3": 2, "server3b": 2, "zhong": 0, "local": 0},
+        lambda: {"server3": 2, "server3b": 2, "local": 0},
     )
     assigned = _common.assign_backends(pending)
     assert [item.backend for item in assigned] == ["server3", "server3b"]

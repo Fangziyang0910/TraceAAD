@@ -2,7 +2,7 @@ import random
 
 from llm4ad.base import Evaluation
 from llm4ad.method.traceaad_v10_11 import TraceAADV1011
-from llm4ad.method.traceaad_v10_11.core import read_journal
+from llm4ad.method.traceaad_v10_11.storage import read_journal
 from llm4ad.method.traceaad_v10_11_rand_ctx import TraceAADV1011RandCtx
 from llm4ad.method.traceaad_v10_11_rand_ctx.context import rank_softmax_sample
 
@@ -143,19 +143,19 @@ def test_rand_ctx_schedule_records_reference_ids_deterministically(tmp_path):
     second_engine = engine_with_populated_tree(tmp_path / "b")
     first = first_engine._schedule()
     second = second_engine._schedule()
-    assert first["reference_ids"] == second["reference_ids"]
-    assert len(first["reference_ids"]) == 8
-    assert first["parent_id"] not in first["reference_ids"]
-    assert all(node_id in first_engine.tree.nodes and node_id != first["parent_id"]
-               for node_id in first["reference_ids"])
-    assert "# Archive Algorithms" in first["prompt"]
+    assert first.reference_ids == second.reference_ids
+    assert len(first.reference_ids) == 8
+    assert first.parent_id not in first.reference_ids
+    assert all(node_id in first_engine.tree.nodes and node_id != first.parent_id
+               for node_id in first.reference_ids)
+    assert "# Archive Algorithms" in first.prompt
 
 
 def test_rand_ctx_run_persists_reference_ids_in_events(tmp_path):
     m = method(tmp_path, FakeLLM(response(1), response(2), response(3)),
                budget=3, n_roots=2)
     m.run()
-    events = read_journal(m.events_path)
+    events = read_journal(m.storage.events_path)
     assert [event["status"] for event in events] == ["ok", "ok", "ok"]
     search = events[2]
     assert search["parent_id"] is not None

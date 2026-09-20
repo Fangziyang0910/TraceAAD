@@ -43,7 +43,7 @@ TaskName = Literal[
     "online_bin_packing",
     "vrptw_construct",
 ]
-BackendName = Literal["local", "server1", "server3", "server3b", "zhong"]
+BackendName = Literal["local", "server1", "server3", "server3b"]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS_ROOT = REPO_ROOT / "experiments"
@@ -93,25 +93,18 @@ BACKENDS: dict[BackendName, BackendProfile] = {
         model="qwen3.8-27b-awq",
         no_proxy="222.201.145.6,localhost,127.0.0.1,::1",
     ),
-    "zhong": BackendProfile(
-        base_url="http://183.36.243.124:9000/v1",
-        model="/home/fzy/models/Qwen3.6-27B-AWQ-INT4",
-        no_proxy="183.36.243.124,localhost,127.0.0.1,::1",
-    ),
 }
 
 BACKEND_CAPACITY: dict[BackendName, int] = {
-    "zhong": 0,  # 暂时不用
-    "server1": 7,
-    "server3": 10,   # server3 第一路（:8000）
-    "server3b": 10,  # server3 第二路（:8001）；内部路由键保留兼容性
+    "server1": 6,
+    "server3": 9,   # server3 第一路（:8000）
+    "server3b": 9,  # server3 第二路（:8001）；内部路由键保留兼容性
     "local": 3,  # llama.cpp 32k × 3 slots
 }
 PRIMARY_BACKENDS: tuple[BackendName, ...] = ("server3", "server3b", "server1", "local")
 # Public labels deliberately avoid the historical ``server3b`` name.  The
 # internal key remains only because old run configs and endpoint routing use it.
 BACKEND_DISPLAY_NAMES: dict[BackendName, str] = {
-    "zhong": "zhong",
     "server1": "server1",
     "server3": "server3-1",
     "server3b": "server3-2",
@@ -119,7 +112,6 @@ BACKEND_DISPLAY_NAMES: dict[BackendName, str] = {
 }
 # Host:port markers only — `--backend` matching uses detect_backend().
 BACKEND_MARKERS: dict[BackendName, tuple[str, ...]] = {
-    "zhong": ("183.36.243.124",),
     "server1": ("222.201.145.8",),
     "server3": ("222.201.145.6:8000",),
     "server3b": ("222.201.145.6:8001",),

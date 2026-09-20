@@ -24,7 +24,7 @@ from experiments.infra.base import (
 )
 from experiments.infra.equivalent_backends import prepare_resume
 from experiments.infra.launcher import check_backends, get_summary_status
-from llm4ad.method.traceaad_v11_0.core import atomic_json
+from llm4ad.method.traceaad_v11_0.storage import atomic_json
 
 RESULTS_ROOT = Path(__file__).resolve().parent / "results"
 BACKEND_NAMES = tuple(PRIMARY_BACKENDS)
