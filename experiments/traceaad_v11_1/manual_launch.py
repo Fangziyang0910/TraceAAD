@@ -1,8 +1,6 @@
 """Start a V11.1 batch from an explicit per-run LLM assignment table.
 
-Edit the JSON assignment file before launching.  This script deliberately has
-no queue, capacity accounting, CPU policy, retries, or backend health checks.
-It only records the chosen backend and starts one tmux session per run.
+The launcher validates endpoint capacities before creating any tmux sessions.
 """
 
 from __future__ import annotations
@@ -15,7 +13,9 @@ import subprocess
 import sys
 import time
 
-from experiments.infra.base import BACKENDS, TASKS, TASK_SHORT
+from experiments.infra.base import (
+    BACKENDS, BACKEND_CAPACITY, TASKS, TASK_SHORT,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,8 +24,22 @@ DEFAULT_ASSIGNMENTS = Path(__file__).with_name("manual_assignments.json")
 
 
 def build_assignments(batch: str, repeats: int = 5) -> list[dict[str, object]]:
-    backends = ("server1", "server3", "server3b", "local")
+    # Fill a 25-run batch without exceeding any endpoint.  The two server3
+    # labels are independent pools and may each receive nine runs.
+    remaining = dict(BACKEND_CAPACITY)
+    order = tuple(BACKEND_CAPACITY)
+    backends: list[str] = []
     rows: list[dict[str, object]] = []
+    for _ in range(repeats * len(TASKS)):
+        available = [name for name in order if remaining[name] > 0]
+        if not available:
+            raise ValueError("assignment template exceeds endpoint capacity")
+        backend = max(
+            available,
+            key=lambda name: (remaining[name] / BACKEND_CAPACITY[name], -order.index(name)),
+        )
+        backends.append(backend)
+        remaining[backend] -= 1
     index = 0
     for repeat in range(1, repeats + 1):
         for task in TASKS:
@@ -57,6 +71,16 @@ def _validate(rows: list[dict[str, object]], batch: str) -> None:
         repeat = int(row["repeat"])
         row["seed"] = int(row.get("seed", repeat - 1))
         row["run_name"] = str(row.get("run_name") or f"{batch}_{TASK_SHORT[task]}_v111_rep{repeat}")
+    counts = {name: 0 for name in BACKEND_CAPACITY}
+    for row in rows:
+        counts[str(row["backend"])] += 1
+    over = {
+        name: (count, BACKEND_CAPACITY[name])
+        for name, count in counts.items()
+        if count > BACKEND_CAPACITY[name]
+    }
+    if over:
+        raise ValueError(f"assignment exceeds endpoint capacity: {over}")
 
 
 def launch(batch: str, assignments_path: Path, prefix: str, delay: float) -> dict[str, object]:

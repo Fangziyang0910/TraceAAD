@@ -52,7 +52,7 @@
     "task": "op_aco",
     "repeat": 2,
     "seed": 1,
-    "backend": "local",
+    "backend": "server3b",
     "run_name": "20260920_v111_manual_op_v111_rep2"
   },
   {
@@ -80,7 +80,7 @@
     "task": "cvrp_aco",
     "repeat": 3,
     "seed": 2,
-    "backend": "local",
+    "backend": "server3",
     "run_name": "20260920_v111_manual_cvrp_v111_rep3"
   },
   {
@@ -108,7 +108,7 @@
     "task": "tsp_construct",
     "repeat": 4,
     "seed": 3,
-    "backend": "local",
+    "backend": "server3",
     "run_name": "20260920_v111_manual_tsp_v111_rep4"
   },
   {

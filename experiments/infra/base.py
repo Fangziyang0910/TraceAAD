@@ -97,9 +97,22 @@ BACKENDS: dict[BackendName, BackendProfile] = {
 
 BACKEND_CAPACITY: dict[BackendName, int] = {
     "server1": 6,
-    "server3": 9,   # server3 第一路（:8000）
-    "server3b": 9,  # server3 第二路（:8001）；内部路由键保留兼容性
+    # Endpoint-specific limits.  server3 and server3b are separate pools.
+    "server3": 9,
+    "server3b": 9,
     "local": 3,  # llama.cpp 32k × 3 slots
+}
+BACKEND_GROUP: dict[BackendName, str] = {
+    "server1": "server1",
+    "server3": "server3",
+    "server3b": "server3b",
+    "local": "local",
+}
+BACKEND_GROUP_CAPACITY: dict[str, int] = {
+    "server1": 6,
+    "server3": 9,
+    "server3b": 9,
+    "local": 3,
 }
 PRIMARY_BACKENDS: tuple[BackendName, ...] = ("server3", "server3b", "server1", "local")
 # Public labels deliberately avoid the historical ``server3b`` name.  The
