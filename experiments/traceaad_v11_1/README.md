@@ -2,6 +2,8 @@
 
 使用 `manual_launch.py` 读取逐路 LLM 分配表，并按 GPU 端点容量创建 tmux 会话。每批五个任务、每个任务五个重复。容量表和请求方式见 [`experiments/infra/GPU_RESOURCES.md`](../infra/GPU_RESOURCES.md)。
 
+实验设置中所有端点均服务同一个 **Qwen3.8-27B** 模型：本地配置名 `Qwen3.8-27B` 与远程配置名 `qwen3.8-27b-awq` 视为同一模型。端点只表示服务地址和容量池，不是模型或方法对照；质量分析不得把 `local` 与远程端点当作不同模型。
+
 从仓库根目录执行，将 `my_new_batch` 替换为新的批次名。先生成独立分配表：
 
 ```bash
