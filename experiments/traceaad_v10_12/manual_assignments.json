@@ -1,0 +1,143 @@
+[
+  {
+    "task": "tsp_construct",
+    "repeat": 1,
+    "seed": 0,
+    "backend": "server1",
+    "run_name": "20260921_v1012_tsp_v1012_rep1"
+  },
+  {
+    "task": "cvrp_aco",
+    "repeat": 1,
+    "seed": 0,
+    "backend": "server1",
+    "run_name": "20260921_v1012_cvrp_v1012_rep1"
+  },
+  {
+    "task": "op_aco",
+    "repeat": 1,
+    "seed": 0,
+    "backend": "server1",
+    "run_name": "20260921_v1012_op_v1012_rep1"
+  },
+  {
+    "task": "online_bin_packing",
+    "repeat": 1,
+    "seed": 0,
+    "backend": "server1",
+    "run_name": "20260921_v1012_obp_v1012_rep1"
+  },
+  {
+    "task": "vrptw_construct",
+    "repeat": 1,
+    "seed": 0,
+    "backend": "server1",
+    "run_name": "20260921_v1012_vrptw_v1012_rep1"
+  },
+  {
+    "task": "tsp_construct",
+    "repeat": 2,
+    "seed": 1,
+    "backend": "local",
+    "run_name": "20260921_v1012_tsp_v1012_rep2"
+  },
+  {
+    "task": "online_bin_packing",
+    "repeat": 2,
+    "seed": 1,
+    "backend": "local",
+    "run_name": "20260921_v1012_obp_v1012_rep2"
+  },
+  {
+    "task": "vrptw_construct",
+    "repeat": 2,
+    "seed": 1,
+    "backend": "local",
+    "run_name": "20260921_v1012_vrptw_v1012_rep2"
+  },
+  {
+    "task": "cvrp_aco",
+    "repeat": 2,
+    "seed": 1,
+    "backend": "server3",
+    "run_name": "20260921_v1012_cvrp_v1012_rep2"
+  },
+  {
+    "task": "op_aco",
+    "repeat": 2,
+    "seed": 1,
+    "backend": "server3",
+    "run_name": "20260921_v1012_op_v1012_rep2"
+  },
+  {
+    "task": "tsp_construct",
+    "repeat": 3,
+    "seed": 2,
+    "backend": "server3",
+    "run_name": "20260921_v1012_tsp_v1012_rep3"
+  },
+  {
+    "task": "cvrp_aco",
+    "repeat": 3,
+    "seed": 2,
+    "backend": "server3",
+    "run_name": "20260921_v1012_cvrp_v1012_rep3"
+  },
+  {
+    "task": "online_bin_packing",
+    "repeat": 3,
+    "seed": 2,
+    "backend": "server3",
+    "run_name": "20260921_v1012_obp_v1012_rep3"
+  },
+  {
+    "task": "vrptw_construct",
+    "repeat": 3,
+    "seed": 2,
+    "backend": "server3",
+    "run_name": "20260921_v1012_vrptw_v1012_rep3"
+  },
+  {
+    "task": "op_aco",
+    "repeat": 3,
+    "seed": 2,
+    "backend": "server3b",
+    "run_name": "20260921_v1012_op_v1012_rep3"
+  },
+  {
+    "task": "tsp_construct",
+    "repeat": 4,
+    "seed": 3,
+    "backend": "server3b",
+    "run_name": "20260921_v1012_tsp_v1012_rep4"
+  },
+  {
+    "task": "cvrp_aco",
+    "repeat": 4,
+    "seed": 3,
+    "backend": "server3b",
+    "run_name": "20260921_v1012_cvrp_v1012_rep4"
+  },
+  {
+    "task": "op_aco",
+    "repeat": 4,
+    "seed": 3,
+    "backend": "server3b",
+    "run_name": "20260921_v1012_op_v1012_rep4"
+  },
+  {
+    "task": "online_bin_packing",
+    "repeat": 4,
+    "seed": 3,
+    "backend": "server3b",
+    "run_name": "20260921_v1012_obp_v1012_rep4"
+  },
+  {
+    "task": "vrptw_construct",
+    "repeat": 4,
+    "seed": 3,
+    "backend": "server3b",
+    "run_name": "20260921_v1012_vrptw_v1012_rep4"
+  }
+]
+

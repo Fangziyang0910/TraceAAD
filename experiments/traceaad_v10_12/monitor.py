@@ -26,6 +26,7 @@ DEFAULT_RESULTS_ROOT = REPO_ROOT / "experiments/traceaad_v10_12/results"
 # Historical roots remain on disk for reproducibility and are not loaded here.
 DEFAULT_RESULTS_ROOTS = (
     REPO_ROOT / "experiments/traceaad_v10_12/results",
+    REPO_ROOT / "experiments/traceaad_v11_1/results",
 )
 HTML_FILE = Path(__file__).with_name("monitor.html")
 

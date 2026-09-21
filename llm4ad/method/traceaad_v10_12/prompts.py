@@ -109,6 +109,23 @@ class TrajectoryBuilder:
                 history.append("Code:\n```python\n" + self.function_view(target) + "\n```")
         return "\n".join(history)
 
+    def _cards_text(self, references):
+        if not references:
+            return ""
+        ordered = sorted(references, key=lambda node: (-node.fitness, node.id))
+        cards = [
+            "# Archive Profile Cards\n"
+            f"{len(ordered)} independently evaluated algorithm(s) sampled from the search "
+            "archive, listed from best to worst measured fitness. They provide alternative "
+            "ideas outside the current design trajectory.",
+        ]
+        for index, node in enumerate(ordered, 1):
+            card = [f"Profile Card {index} | Fitness: {node.fitness}"]
+            if node.idea:
+                card.append("Idea: " + " ".join(node.idea.split()))
+            cards.append("\n".join(card))
+        return "\n\n".join(cards)
+
     def build_initial(self):
         roots = sorted((node for node in self.all_nodes() if node.parent_id is None),
                        key=lambda node: node.id)
@@ -123,13 +140,15 @@ class TrajectoryBuilder:
         self.check_capacity(text)
         return text
 
-    def build(self, parent, operator, donor=None):
+    def build(self, parent, operator, donor=None, references=()):
         head = [self.task_contract, "Fitness: higher is better."]
         if parent is not None:
             head.append(self.program(parent, "Current Algorithm"))
         tail = []
         if donor is not None:
             tail.append(self.program(donor, "Reference Algorithm"))
+        if references:
+            tail.append(self._cards_text(references))
         tail.extend(["# Design Task\n" + OPERATOR_INSTRUCTIONS[operator], "# Output\n" + OUTPUT])
         edges = self.formation_edges(parent) if parent is not None else []
         newest_first = list(reversed(edges))
@@ -143,3 +162,4 @@ class TrajectoryBuilder:
     def check_capacity(self, text):
         if self.count(text) > self.max_tokens:
             raise ValueError("complete prompt exceeds the model context budget")
+

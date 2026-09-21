@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-SESSION="v1012_monitor"
+SESSION="traceaad_monitor"
 PORT="${1:-8765}"
 
 if tmux has-session -t "${SESSION}" 2>/dev/null; then

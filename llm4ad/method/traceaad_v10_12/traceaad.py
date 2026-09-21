@@ -14,7 +14,8 @@ from . import parsing
 from .prompts import TrajectoryBuilder
 from .selection import (DONOR_UNIFORM_PROBABILITY, OPERATORS, OPERATOR_PROBABILITIES,
                         PIVOT_UNIFORM_PROBABILITY, QUALITY_ESS_TARGET, calibrate_beta,
-                        code_key, ess, mix_uniform, softmax)
+                        code_key, ess, mix_uniform, rank_softmax_sample, softmax)
+
 from .storage import RunStorage, atomic_json, digest, truncate_torn_tail
 from .tree import Node, SearchTree
 
@@ -56,13 +57,17 @@ class TraceAADV1012:
     PROMPT_POLICY = "generic_design_v1"
 
     def __init__(self, *, evaluation, llm, run_dir, budget=1000, n_roots=8,
-                 traj_gens=8, output_tokens=8192, max_input_tokens=24576,
+                 traj_gens=8, n_profile_cards=2, profile_card_tau=8.0,
+                 output_tokens=8192, max_input_tokens=24576,
                  history_code=False, seed=0):
-        if budget < n_roots or n_roots < 1 or traj_gens < 0:
-            raise ValueError("invalid budget, root, or history settings")
+        if budget < n_roots or n_roots < 1 or traj_gens < 0 or n_profile_cards < 0:
+            raise ValueError("invalid budget, root, history, or profile card settings")
+
         self.evaluation, self.llm = evaluation, llm
         self.run_dir = Path(run_dir)
         self.budget, self.n_roots, self.traj_gens = budget, n_roots, traj_gens
+        self.n_profile_cards = n_profile_cards
+        self.profile_card_tau = profile_card_tau
         self.output_tokens, self.max_input_tokens = output_tokens, max_input_tokens
         self.history_code = history_code
         self.secure = SecureEvaluator(evaluation)
@@ -86,6 +91,8 @@ class TraceAADV1012:
             "prompt_policy": self.PROMPT_POLICY,
             "parser_protocol": "target_function_anchored_module_v2",
             "traj_gens": traj_gens,
+            "n_profile_cards": n_profile_cards,
+            "profile_card_tau": profile_card_tau,
             "history_code": history_code,
             "output_tokens": output_tokens, "max_input_tokens": max_input_tokens,
             "operator_probabilities": OPERATOR_PROBABILITIES,
@@ -148,6 +155,7 @@ class TraceAADV1012:
             parent_fitness=previous.get("parent_fitness"),
             donor_fitness=previous.get("donor_fitness"),
             selection={},
+            reference_ids=previous.get("reference_ids", []),
         )
 
     def _schedule(self):
@@ -162,6 +170,7 @@ class TraceAADV1012:
         requested = operator = "Init"
         parent = donor = None
         selection = {}
+        references = []
         if len(self.tree.roots) >= self.n_roots:
             requested = self.rng.choices(OPERATORS, weights=OPERATOR_PROBABILITIES.values())[0]
             operator = requested
@@ -177,13 +186,22 @@ class TraceAADV1012:
                 if donor is None:
                     operator = "Refine"
                     selection["fallback_reason"] = "no donor"
-        text = self.builder.build_initial() if operator == "Init" else self.builder.build(parent, operator, donor)
+        if parent is not None and self.n_profile_cards > 0:
+            archive_nodes = [node for node in self.tree.all_nodes() if node.id != parent.id]
+            references = rank_softmax_sample(
+                archive_nodes, self.n_profile_cards, self.rng, tau=self.profile_card_tau
+            )
+        text = self.builder.build_initial() if operator == "Init" else self.builder.build(
+            parent, operator, donor, references=references
+        )
+
         return self._candidate(
             text, requested_operator=requested, operator=operator,
             parent_id=parent.id if parent else None, donor_id=donor.id if donor else None,
             parent_fitness=parent.fitness if parent else None,
             donor_fitness=donor.fitness if donor else None,
             selection=selection,
+            reference_ids=[node.id for node in references],
         )
 
     # --- Execution: generate, parse, evaluate --------------------------------

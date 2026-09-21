@@ -16,6 +16,10 @@ def build_parser():
     parser.add_argument('--max-input-tokens', type=int, default=24576)
     parser.add_argument('--history-code', action='store_true',
                         help='include each historical trajectory program in generation context')
+    parser.add_argument('--n-profile-cards', type=int, default=2,
+                        help='number of archive profile cards to include in generation context')
+    parser.add_argument('--profile-card-tau', type=float, default=8.0,
+                        help='temperature for rank-softmax archive card sampling')
     parser.add_argument('--rand-context', action='store_true',
                         help='replace formation history with rank-sampled archive references')
     parser.add_argument('--n-references', type=int, default=8,
@@ -28,6 +32,8 @@ def main():
     args = parser.parse_args()
     if args.n_references < 1:
         parser.error('n-references must be positive')
+    if args.n_profile_cards < 0:
+        parser.error('n-profile-cards must be non-negative')
     if args.rand_context:
         if args.history_code or args.traj_gens != 8:
             parser.error('--rand-context excludes --history-code and non-default --traj-gens')
@@ -38,9 +44,12 @@ def main():
         if args.n_references != 8:
             parser.error('--n-references requires --rand-context')
         params = {key: getattr(args, key) for key in (
-            'budget', 'n_roots', 'traj_gens', 'max_input_tokens',
-            'output_tokens', 'history_code')}
+            'budget', 'n_roots', 'traj_gens', 'n_profile_cards', 'profile_card_tau',
+            'max_input_tokens', 'output_tokens', 'history_code')}
         method_tag, method_cls = 'v1012', TraceAADV1012
+
+
+
     ctx = setup_experiment_run(
         args, method=method_tag, method_dir=Path(__file__).resolve().parent,
         resume_file='tree_state.json', method_params=params,

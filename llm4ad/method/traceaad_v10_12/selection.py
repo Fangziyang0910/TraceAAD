@@ -53,3 +53,26 @@ def calibrate_beta(scores, target):
         else:
             high = middle
     return high, target, _ess(high, scores)
+
+
+def rank_softmax_sample(nodes, k, rng, *, tau=8.0):
+    """Draw k nodes without replacement, favouring better fitness by rank softmax.
+
+    Probability is proportional to exp(-rank / tau) over the fitness ranking, so
+    every archived node has a chance while better programs are drawn more often.
+    """
+    ordered = sorted(nodes, key=lambda node: (-node.fitness, node.id))
+    weights = [math.exp(-rank / tau) for rank in range(len(ordered))]
+    chosen = []
+    while len(chosen) < k and ordered:
+        pick = rng.random() * sum(weights)
+        index, cumulative = 0, 0.0
+        while index < len(ordered) - 1:
+            cumulative += weights[index]
+            if pick < cumulative:
+                break
+            index += 1
+        chosen.append(ordered.pop(index))
+        weights.pop(index)
+    return chosen
+

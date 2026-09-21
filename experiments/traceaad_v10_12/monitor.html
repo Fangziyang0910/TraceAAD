@@ -21,6 +21,8 @@
   --rep1: #38bdf8;
   --rep2: #fbbf24;
   --rep3: #34d399;
+  --rep4: #f472b6;
+  --rep5: #a78bfa;
 
   --op-init: #94a3b8;
   --op-refine: #60a5fa;
@@ -899,7 +901,7 @@ table.feed-table td {
 </div>
 
 <script>
-const REP_COLORS = ["#38bdf8", "#fbbf24", "#34d399"];
+const REP_COLORS = ["#38bdf8", "#fbbf24", "#34d399", "#f472b6", "#a78bfa"];
 let globalState = null;
 let currentRunDetail = null;
 let activeView = "overview";
@@ -1080,7 +1082,7 @@ function renderOverview() {
       `;
 
       runs.forEach(r => {
-        const color = REP_COLORS[(r.rep - 1) % 3];
+        const color = REP_COLORS[(r.rep - 1) % REP_COLORS.length];
         const statusClass = r.status === "running" ? "running" : (r.status === "finished" ? "finished" : (r.status === "queued" ? "queued" : "stalled"));
         const statusText = r.status === "running" ? "● 运行中" : (r.status === "finished" ? "✓ 已完成" : (r.status === "queued" ? "⏳ 排队中" : "✕ 停滞"));
 
@@ -1168,7 +1170,7 @@ function renderOverview() {
     }
 
     runs.forEach(r => {
-      const color = REP_COLORS[(r.rep - 1) % 3];
+      const color = REP_COLORS[(r.rep - 1) % REP_COLORS.length];
       const statusEl = document.getElementById(`status-${r.name}`);
       if (statusEl) {
         statusEl.className = `status-pill ${r.status}`;
@@ -1249,6 +1251,8 @@ function drawTaskChart(meta, runs) {
       <linearGradient id="grad-rep1-${meta.key}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.25"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/></linearGradient>
       <linearGradient id="grad-rep2-${meta.key}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.25"/><stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0"/></linearGradient>
       <linearGradient id="grad-rep3-${meta.key}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#34d399" stop-opacity="0.25"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.0"/></linearGradient>
+      <linearGradient id="grad-rep4-${meta.key}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f472b6" stop-opacity="0.25"/><stop offset="100%" stop-color="#f472b6" stop-opacity="0.0"/></linearGradient>
+      <linearGradient id="grad-rep5-${meta.key}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a78bfa" stop-opacity="0.25"/><stop offset="100%" stop-color="#a78bfa" stop-opacity="0.0"/></linearGradient>
     </defs>
   `;
 
@@ -1268,7 +1272,7 @@ function drawTaskChart(meta, runs) {
   }
 
   runs.forEach((r) => {
-    const color = REP_COLORS[(r.rep - 1) % 3];
+    const color = REP_COLORS[(r.rep - 1) % REP_COLORS.length];
     const curve = r.curve || [];
     if (curve.length === 0) return;
 

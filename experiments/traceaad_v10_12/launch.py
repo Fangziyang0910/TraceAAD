@@ -54,7 +54,7 @@ def healthy_slots(available, backend_pool):
 
 
 def build_plan(batch, prefix, thinking=False, history_code=False, repeats=3, traj_gens=8,
-               cvrp_last=False, rand_context=False, n_references=8):
+               cvrp_last=False, rand_context=False, n_references=8, n_profile_cards=2):
     order = [(repeat, task) for repeat in range(1, repeats + 1) for task in TASKS]
     if cvrp_last:
         order.sort(key=lambda item: item[1] == 'cvrp_aco')
@@ -64,8 +64,10 @@ def build_plan(batch, prefix, thinking=False, history_code=False, repeats=3, tra
                  traj_gens=0 if rand_context else traj_gens,
                  **({'thinking': True} if thinking else {}),
                  **({'history_code': True} if history_code else {}),
-                 **({'rand_context': True, 'n_references': n_references} if rand_context else {}))
+                 **({'rand_context': True, 'n_references': n_references} if rand_context else {}),
+                 **({'n_profile_cards': n_profile_cards} if not rand_context and n_profile_cards != 2 else {}))
             for repeat, task in order]
+
 
 
 def cvrp_group_finished(batch):
@@ -87,11 +89,14 @@ def launch_item(row):
         flags += ['--rand-context', '--n-references', str(row.get('n_references', 8))]
     else:
         flags += ['--traj-gens', str(row.get('traj_gens', 8))]
+        if row.get('n_profile_cards') is not None:
+            flags += ['--n-profile-cards', str(row['n_profile_cards'])]
     return LaunchItem(task=row['task'], repeat=row['repeat'], seed=row['seed'],
                       backend=row['backend'], session=row['session'], run_name=row['run_name'],
                       run_dir=RESULTS_ROOT / row['task'] / row['run_name'],
                       module='experiments.traceaad_v10_12.run',
                       extra_args=tuple(flags))
+
 
 
 def refresh(plan, max_attempts):
@@ -143,6 +148,8 @@ def main(argv=None):
                         help='replace formation history with rank-sampled archive references')
     parser.add_argument('--n-references', type=int, default=8,
                         help='number of archive reference cards in random-context mode')
+    parser.add_argument('--n-profile-cards', type=int, default=2,
+                        help='number of archive profile cards to include in generation context')
     parser.add_argument('--cvrp-last', action='store_true',
                         help='queue all CVRP repeats after the other twelve runs')
     parser.add_argument('--cvrp-barrier-batches', default='',
@@ -154,6 +161,8 @@ def main(argv=None):
         parser.error('traj-gens must be nonnegative')
     if args.n_references < 1:
         parser.error('n-references must be positive')
+    if args.n_profile_cards < 0:
+        parser.error('n-profile-cards must be non-negative')
     if args.rand_context and (args.history_code or args.traj_gens != 8):
         parser.error('--rand-context excludes --history-code and non-default --traj-gens')
     if not args.rand_context and args.n_references != 8:
@@ -184,6 +193,8 @@ def main(argv=None):
             if (bool(payload.get('rand_context')), payload.get('n_references', 8)) != (
                     args.rand_context, args.n_references):
                 raise ValueError('batch random-context mismatch')
+            if payload.get('n_profile_cards', 2) != args.n_profile_cards:
+                raise ValueError('batch profile cards mismatch')
             if (bool(payload.get('cvrp_last')), tuple(payload.get('cvrp_barriers', ()))) != (args.cvrp_last, cvrp_barriers):
                 raise ValueError('batch CVRP scheduling mismatch')
             if not args.dry_run and payload['source_identity'] != identity:
@@ -193,12 +204,14 @@ def main(argv=None):
                            source_identity=identity, created_at=datetime.now().astimezone().isoformat(),
                            thinking=args.thinking, history_code=args.history_code,
                            repeats=args.repeats, traj_gens=args.traj_gens,
+                           n_profile_cards=args.n_profile_cards,
                            rand_context=args.rand_context, n_references=args.n_references,
                            cvrp_last=args.cvrp_last, cvrp_barriers=cvrp_barriers,
                            backends=backend_pool, direct=args.direct,
                            plan=build_plan(args.batch, args.session_prefix, args.thinking,
                                            args.history_code, args.repeats, args.traj_gens,
-                                           args.cvrp_last, args.rand_context, args.n_references))
+                                           args.cvrp_last, args.rand_context, args.n_references,
+                                           args.n_profile_cards))
             if any(item_is_running(launch_item(r)) or launch_item(r).run_dir.exists()
                    for r in payload['plan']):
                 raise ValueError('existing session or run directory without matching batch manifest')
