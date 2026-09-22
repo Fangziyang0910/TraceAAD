@@ -20,6 +20,7 @@ def freeze(batch, prefix='v1010'):
     runtime.mkdir(parents=True, exist_ok=False)
     sources = [root / 'llm4ad', root / 'experiments/infra',
                root / 'experiments/traceaad_v10_8', root / 'experiments/traceaad_v10_10']
+    sources = [root / 'llm4ad', root / 'experiments/infra', root / 'experiments/traceaad_v10_10']
     files = [root / 'experiments/__init__.py']
     for directory in sources:
         for folder, dirs, names in os.walk(directory):

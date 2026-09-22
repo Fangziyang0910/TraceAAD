@@ -55,6 +55,7 @@ def healthy_slots(available, backend_pool):
 
 def build_plan(batch, prefix, thinking=False, history_code=False, repeats=3, traj_gens=8,
                cvrp_last=False, rand_context=False, n_references=8, n_profile_cards=2):
+               cvrp_last=False, n_profile_cards=2):
     order = [(repeat, task) for repeat in range(1, repeats + 1) for task in TASKS]
     if cvrp_last:
         order.sort(key=lambda item: item[1] == 'cvrp_aco')
@@ -62,10 +63,12 @@ def build_plan(batch, prefix, thinking=False, history_code=False, repeats=3, tra
                  run_name=f'{batch}_{TASK_SHORT[task]}_v1012_rep{repeat}',
                  session=f'{prefix}_{TASK_SHORT[task]}_r{repeat}', attempts=0, status='queued',
                  traj_gens=0 if rand_context else traj_gens,
+                 traj_gens=traj_gens,
                  **({'thinking': True} if thinking else {}),
                  **({'history_code': True} if history_code else {}),
                  **({'rand_context': True, 'n_references': n_references} if rand_context else {}),
                  **({'n_profile_cards': n_profile_cards} if not rand_context and n_profile_cards != 2 else {}))
+                 **({'n_profile_cards': n_profile_cards} if n_profile_cards != 2 else {}))
             for repeat, task in order]
 
 
@@ -91,6 +94,9 @@ def launch_item(row):
         flags += ['--traj-gens', str(row.get('traj_gens', 8))]
         if row.get('n_profile_cards') is not None:
             flags += ['--n-profile-cards', str(row['n_profile_cards'])]
+    flags += ['--traj-gens', str(row.get('traj_gens', 8))]
+    if row.get('n_profile_cards') is not None:
+        flags += ['--n-profile-cards', str(row['n_profile_cards'])]
     return LaunchItem(task=row['task'], repeat=row['repeat'], seed=row['seed'],
                       backend=row['backend'], session=row['session'], run_name=row['run_name'],
                       run_dir=RESULTS_ROOT / row['task'] / row['run_name'],
@@ -212,6 +218,7 @@ def main(argv=None):
                                            args.history_code, args.repeats, args.traj_gens,
                                            args.cvrp_last, args.rand_context, args.n_references,
                                            args.n_profile_cards))
+                                           args.cvrp_last, args.n_profile_cards))
             if any(item_is_running(launch_item(r)) or launch_item(r).run_dir.exists()
                    for r in payload['plan']):
                 raise ValueError('existing session or run directory without matching batch manifest')

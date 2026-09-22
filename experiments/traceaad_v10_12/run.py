@@ -47,6 +47,10 @@ def main():
             'budget', 'n_roots', 'traj_gens', 'n_profile_cards', 'profile_card_tau',
             'max_input_tokens', 'output_tokens', 'history_code')}
         method_tag, method_cls = 'v1012', TraceAADV1012
+    params = {key: getattr(args, key) for key in (
+        'budget', 'n_roots', 'traj_gens', 'n_profile_cards', 'profile_card_tau',
+        'max_input_tokens', 'output_tokens', 'history_code')}
+    method_tag, method_cls = 'v1012', TraceAADV1012
 
 
 

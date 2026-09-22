@@ -15,6 +15,44 @@ from experiments.infra.base import BACKENDS, LaunchItem, TASKS, TASK_SHORT, free
 from experiments.infra.launcher import get_summary_status
 from experiments.traceaad_v10_8.launch import allocate, healthy_slots
 from llm4ad.method.traceaad_v10_5.traceaad import atomic_json
+from experiments.infra.launcher import check_backends, get_summary_status
+
+
+def atomic_json(path: Path, payload: dict) -> None:
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(payload, indent=2) + '\n')
+    tmp.replace(path)
+
+
+def healthy_slots(available: dict[str, int], backend_pool: tuple[str, ...]) -> dict[str, int]:
+    healthy = dict(available)
+    for backend in backend_pool:
+        if healthy.get(backend, 0) > 0:
+            try:
+                check_backends([backend])
+            except Exception:
+                healthy[backend] = 0
+    return healthy
+
+
+def allocate(plan: list[dict], available: dict[str, int], backend_pool: tuple[str, ...] = BACKENDS) -> list[tuple[dict, str]]:
+    remaining = dict(available)
+    assignments = []
+    used_by_task = {task: {r['backend'] for r in plan if r['task'] == task and r['backend']}
+                    for task in TASKS}
+    for row in plan:
+        if row['status'] != 'queued':
+            continue
+        preferred = [b for b in backend_pool if remaining.get(b, 0) > 0 and b not in used_by_task[row['task']]]
+        if not preferred:
+            preferred = [b for b in backend_pool if remaining.get(b, 0) > 0]
+        if preferred:
+            backend = preferred[0]
+            remaining[backend] -= 1
+            used_by_task[row['task']].add(backend)
+            assignments.append((row, backend))
+    return assignments
+
 
 RESULTS_ROOT = Path(__file__).resolve().parent / 'results'
 

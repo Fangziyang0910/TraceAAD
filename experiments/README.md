@@ -17,6 +17,11 @@
 - **V10.3**：[机制设计](../docs/01-主线版本/TraceAAD-V10.3-机制设计.md)，运行入口 `traceaad_v10_3/run.py`、`launch.py`。
 - **V10.2**：[机制设计](../docs/01-主线版本/TraceAAD-V10.2-机制设计.md)、[实验结果](../docs/02-实验结果/各版本实验记录/V10.2-实验结果.md)。
 - **V10.1**：[机制设计](../docs/01-主线版本/TraceAAD-V10.1-机制设计.md)，运行入口 `traceaad_v10_1/run.py`、`launch.py`。
+- **V10.12**（当前主线）：[机制设计](../docs/01-主线版本/TraceAAD-V10.12-机制设计.md)、[运行入口](traceaad_v10_12/README.md)。短形成轨迹加双档案 profile card。
+- **V10.11**：[机制设计](../docs/01-主线版本/TraceAAD-V10.11-机制设计.md)、[运行入口](traceaad_v10_11/README.md)。四方消融（generic / no_traj / idea_code / rand_ctx）。
+- **V10.10**：[机制设计](../docs/01-主线版本/TraceAAD-V10.10-机制设计.md)、[运行入口](traceaad_v10_10/README.md)。目标函数紧凑生成与统一短形成路径。
+- **V10.1 / V10.2**：早期奠基版本，保留作为历史演进对照。
+- **V10.3 ~ V10.9**：已淘汰的过渡与试错版本，实现代码已归档移除，实验数据与分析保留于 `docs/02-实验结果/各版本实验记录/`。
 
 ## 实验默认设置
 
