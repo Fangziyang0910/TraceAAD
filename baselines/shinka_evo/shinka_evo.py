@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional, Sequence
 
 from core import Evaluation, Function, LLM, Program, SecureEvaluator, TextFunctionProgramConverter
 from baselines.profiler import ProfilerBase
-from .observability import (
+from baselines.observability import (
     close_llm,
     finish_profiler,
     init_observability,

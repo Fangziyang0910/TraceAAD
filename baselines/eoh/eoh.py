@@ -36,7 +36,7 @@ from .population import Population
 from .profiler import EoHProfiler
 from .prompt import EoHPrompt
 from .sampler import EoHSampler
-from .observability import (
+from baselines.observability import (
     call_sampler_get_thought_and_function,
     close_sampler_llm,
     finish_profiler,

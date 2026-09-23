@@ -33,7 +33,7 @@ import numpy as np
 from .population import Population
 from .profiler import ReEvoProfiler
 from .prompt import ReEvoPrompt
-from .observability import (
+from baselines.observability import (
     close_sampler_llm,
     finish_profiler,
     init_observability,

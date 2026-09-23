@@ -13,7 +13,7 @@ except:
 
 from .population import Population
 from core import Function
-from baselines.profiler import TensorboardProfiler, ProfilerBase, WandBProfiler
+from baselines.profiler import ProfilerBase
 
 
 class MAProfiler(ProfilerBase):
@@ -197,78 +197,3 @@ class MAProfiler(ProfilerBase):
             json.dump(data, json_file, indent=4)
 
 
-class MATensorboardProfiler(TensorboardProfiler, MAProfiler):
-
-    def __init__(self,
-                 log_dir: str | None = None,
-                 *,
-                 initial_num_samples=0,
-                 log_style='complex',
-                 create_random_path=True,
-                 **kwargs):
-        """MCTS_AHD Profiler for Tensorboard.
-        Args:
-            log_dir            : the directory of current run
-            evaluation_name    : the name of the evaluation instance (the name of the problem to be solved).
-            create_random_path : create a random log_path according to evaluation_name, method_name, time, ...
-            **kwargs           : kwargs for wandb
-        """
-        MAProfiler.__init__(
-            self, log_dir=log_dir,
-            create_random_path=create_random_path,
-            **kwargs
-        )
-        TensorboardProfiler.__init__(
-            self,
-            log_dir=log_dir,
-            initial_num_samples=initial_num_samples,
-            log_style=log_style,
-            create_random_path=create_random_path,
-            **kwargs
-        )
-
-    def finish(self):
-        if self._log_dir:
-            self._writer.close()
-
-
-class MAWandbProfiler(WandBProfiler, MAProfiler):
-
-    def __init__(self,
-                 wandb_project_name: str,
-                 log_dir: str | None = None,
-                 *,
-                 initial_num_samples=0,
-                 log_style='complex',
-                 create_random_path=True,
-                 **kwargs):
-        """MCTS_AHD Profiler for Wandb.
-        Args:
-            wandb_project_name : the name of the wandb project
-            log_dir            : the directory of current run
-            initial_num_samples: the sample order start with `initial_num_samples`.
-            create_random_path : create a random log_path according to evaluation_name, method_name, time, ...
-            **kwargs           : kwargs for wandb
-        """
-        MAProfiler.__init__(
-            self,
-            log_dir=log_dir,
-            create_random_path=create_random_path,
-            **kwargs
-        )
-        WandBProfiler.__init__(
-            self,
-            wandb_project_name=wandb_project_name,
-            log_dir=log_dir,
-            initial_num_samples=initial_num_samples,
-            log_style=log_style,
-            create_random_path=create_random_path,
-            **kwargs
-        )
-        self._pop_lock = Lock()
-        if self._log_dir:
-            self._ckpt_dir = os.path.join(self._log_dir, 'population')
-            os.makedirs(self._ckpt_dir, exist_ok=True)
-
-    def finish(self):
-        wandb.finish()

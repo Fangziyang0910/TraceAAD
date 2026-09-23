@@ -1,5 +1,3 @@
 from .profile import ProfilerBase
-from .tensorboard_profiler import TensorboardProfiler
-from .wandb_profiler import WandBProfiler
 
-__all__ = ["ProfilerBase", "TensorboardProfiler", "WandBProfiler"]
+__all__ = ["ProfilerBase"]
