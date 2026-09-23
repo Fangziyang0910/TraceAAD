@@ -68,10 +68,6 @@ class Prompt:
         ) in self.prompt
 
     @property
-    def is_replacement(self) -> bool:
-        return 'For the following algorithm, identify' in self.prompt
-
-    @property
     def is_simplification(self) -> bool:
         # Fixed to match current prompt_simplification text (upstream matched obsolete wording).
         return 'Please create a locally refined version of the following algorithm' in self.prompt

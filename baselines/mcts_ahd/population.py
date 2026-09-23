@@ -64,25 +64,6 @@ class Population:
         self._next_gen_pop = []
         self._generation += 1
 
-    def survival_s1(self, pop_size: int=None):
-        if pop_size is None:
-            pop_size = self._pop_size
-
-        pop = self._population + self._next_gen_pop
-
-        # keep unique algorithms
-        unique_pop = []
-        unique_objectives = []
-        for individual in pop:
-            if individual.score not in unique_objectives:
-                unique_pop.append(individual)
-                unique_objectives.append(individual.score)
-
-        pop = sorted(unique_pop, key=lambda f: f.score, reverse=False)  # worst sort
-        self._population = pop[:pop_size]
-        self._next_gen_pop = []
-        self._generation += 1
-
     def register_function(self, func: Function):
         # in population initialization, we only accept valid functions
         if self._generation == 0 and func.score is None:
@@ -126,10 +107,3 @@ class Population:
         p = p / np.sum(p)
         return np.random.choice(func, p=p)
 
-    def selection_e1(self, pop:List[Function]=None) -> Function:
-        if pop is None:
-            pop = self._population
-        funcs = [f for f in pop if not math.isinf(f.score)]
-        func = sorted(funcs, key=lambda f: f.score, reverse=True)
-        probs = [1 for _ in range(len(pop))]
-        return np.random.choice(func, p=probs)

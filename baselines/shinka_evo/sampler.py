@@ -394,6 +394,3 @@ Make the program correct first; performance improvements are secondary.
 class ShinkaPrompt:
     """Compatibility wrapper for code that expects a prompt helper class."""
 
-    @staticmethod
-    def compose(system: str, user: str) -> str:
-        return f"{system.strip()}\n\n{user.strip()}"

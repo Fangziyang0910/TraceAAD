@@ -8,13 +8,6 @@ from core import *
 
 class EoHPrompt:
     @classmethod
-    def create_instruct_prompt(cls, prompt: str) -> List[Dict]:
-        content = [
-            {'role': 'system', 'message': cls.get_system_prompt()},
-            {'role': 'user', 'message': prompt}
-        ]
-        return content
-
     @classmethod
     def get_system_prompt(cls) -> str:
         return ''

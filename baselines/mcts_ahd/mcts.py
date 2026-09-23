@@ -87,7 +87,3 @@ class MCTS:
             math.log(node.parent.visits + 1) / node.visits
         )
 
-    def is_fully_expanded(self, node: MCTSNode):
-        return len(node.children) >= self.max_children or any(
-            child.Q > node.Q for child in node.children
-        ) or node.code == 'Root'

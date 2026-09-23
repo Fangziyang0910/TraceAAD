@@ -79,6 +79,3 @@ class Population:
             self._nodes = merged
             return [node for node in merged if node.node_id not in before]
 
-    @property
-    def elite_node(self) -> PathWiseNode:
-        return copy.deepcopy(max(self.valid_nodes(), key=lambda n: n.score))

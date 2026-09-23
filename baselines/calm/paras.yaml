@@ -1,7 +1,0 @@
-name: CALM
-label: CALM (w/o GRPO)
-max_sample_nums: 1000
-n_prompts: 1
-# Per-task population / operator weights come from task_config.TASK_HYPERPARAMS
-# (ported from reference_code/CALM/configs/*/local.yaml).
-enable_grpo: false
