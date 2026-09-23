@@ -7,7 +7,7 @@
 | 目录 | 内容 |
 | --- | --- |
 | `traceaad/` | 机制模块，每版本一个子包：祖先链 `v10_3`→`v10_8`、`v10_10`、六文件族 `v10_11`/`v10_12`/`v11_0`/`v11_1`、消融 `rand_ctx`、组合 `bc`、早期对照 `v10_1`/`v10_2` |
-| `baselines/` | 对比方法：`eoh` `reevo` `pathwise` `mcts_ahd` `calm` `shinka_evo`（冻结契约，只增不改）+ 共享设施 `sampling.py`（SampleTrimmer）、`profiler/` |
+| `baselines/` | 对比方法：`eoh` `reevo` `pathwise` `mcts_ahd` `calm` `shinka_evo`（冻结契约，只增不改）+ 共享设施 `observability.py`、`sampling.py`（SampleTrimmer）、`profiler/`（ProfilerBase） |
 | `benchmarks/` | 五任务（冻结契约）：`tsp_construct` `cvrp_aco` `op_aco` `vrptw_construct` `online_bin_packing` + `generated_data_config.py` |
 | `core/` | 共享核心（3 文件，保留 LLM4AD 署名）：`code.py` 代码表示、`evaluate.py` SecureEvaluator 安全评价、`llm.py` LLM 客户端 |
 | `experiments/` | 各版本/基线的运行入口、freeze 冻结副本机制、监控与共享 `infra/` |
