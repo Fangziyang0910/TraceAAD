@@ -203,6 +203,8 @@ class MonitorDataEngine:
                 label = "TraceAAD V11.0"
             elif method.startswith("v111"):
                 label = "TraceAAD V11.1"
+            elif method.startswith("v1013"):
+                label = "TraceAAD V10.13"
             elif method.startswith("bc_b"):
                 label = "B：V11 预算 + V10 上下文"
             elif method.startswith("bc_c"):
@@ -251,6 +253,8 @@ class MonitorDataEngine:
                 label = "V11.0"
             elif method.startswith("v111"):
                 label = "V11.1"
+            elif method.startswith("v1013"):
+                label = "V10.13"
             elif method.startswith("bc_b"):
                 label = "B · V11预算/V10上下文"
             elif method.startswith("bc_c"):
@@ -1066,7 +1070,7 @@ def main() -> None:
         "--results-dir",
         type=Path,
         default=None,
-        help="Single results directory override (defaults to V11.1 results)",
+        help="Single results directory override (defaults to the configured monitor root)",
     )
     parser.add_argument(
         "--results-dirs",
