@@ -102,7 +102,7 @@ def refresh(plan):
         if status == "finished":
             row["status"] = "finished"
             row["finished_at"] = row.get("finished_at") or _timestamp()
-        elif status in {"error", "interrupted", "aborted"}:
+        elif status in {"error", "interrupted", "aborted", "uncertain_evaluation"}:
             row["status"] = "blocked"
             row["last_error"] = status
         elif session_alive(row["session"]):

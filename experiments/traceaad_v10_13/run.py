@@ -40,10 +40,12 @@ def main(argv=None):
     }
     ctx = setup_experiment_run(
         args, method="v1013", method_dir=Path(__file__).resolve().parent,
-        resume_file="tree_state.json", method_params=params,
+        resume_file="tree_state.json", method_params={**params, "revision": TraceAADV1013.REVISION},
         budget_basis=(
             "Actual evaluator calls, including failures, repairs, and duplicate-code "
-            "generations; LLM-only failures consume no evaluator slot."
+            "generations; LLM-only failures and optional context reads consume no evaluator slot, "
+            "but all LLM calls and available token usage are recorded separately. "
+            "A reserved evaluation without a durable receipt blocks automatic recovery."
         ),
     )
     try:
@@ -55,7 +57,7 @@ def main(argv=None):
             **params,
         )
         ctx.run(method.run, header=[
-            "v1013: ESS evolutionary allocation with concise operator prompts"
+            "v10.13-r2: ESS allocation, optional evidence reads, code-first full/edit output"
         ])
     finally:
         ctx.llm.close()

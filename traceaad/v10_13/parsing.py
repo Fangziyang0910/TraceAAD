@@ -1,28 +1,83 @@
-"""Target-function parsing for the V10.13 Idea-and-Code response."""
+"""Code-first full/edit parsing with optional idea metadata."""
 
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 FENCE_RE = re.compile(r"^[ \t]*```(?:python|py)?[ \t]*\r?$", re.MULTILINE | re.IGNORECASE)
-OUTPUT_FORMAT = (
-    "Return one short Idea paragraph followed by one Python code block:\n"
-    "Idea: <brief description of the algorithm and its main improvement>\n"
-    "Code:\n```python\n"
-    "<the complete Python implementation, including the target function and helpers>\n```\n\n"
-    "Do not add analysis outside the Idea and code. Use the exact target function "
-    "name and signature shown above."
-)
-MAX_IDEA_CHARS = 2000
+FULL_OUTPUT_FORMAT = '''Return one JSON object. Focus on implementing a good algorithm.
+Full implementation: {"mode":"full","code":"complete Python source"}.
+You may add an optional top-level idea string or object:
+"idea": {"mechanism":"main decision principle", "change":"what changed",
+"transfer":"a potentially reusable computation"}. Keep each included field to one
+short sentence; omit fields that add no useful information.
+You may add donor_id: the offered reference actually used, or null. These descriptions
+are hypotheses, not proofs. Preserve the exact target function interface.'''
+OUTPUT_FORMAT = FULL_OUTPUT_FORMAT + '''
+Local edit: {"mode":"edit","base_hash":"shown parent hash",
+"edits":[{"search":"exact nonempty source block","replacement":"replacement block"}]}.
+Use either full or edit, not both. Supply 1 to 32 edits, applied sequentially to the
+shown parent; each search block must match exactly once, including whitespace.
+A full implementation is always allowed. Optional idea and donor_id also apply to edit mode.'''
+
+
+def code_hash(code):
+    return hashlib.sha256(code.encode()).hexdigest()
 
 
 @dataclass
 class ParsedCandidate:
     idea: str
     program_code: str
+    idea_fields: dict[str, str] = field(default_factory=dict)
+    mode: str = "full"
+    donor_id: int | None = None
+    base_hash: str | None = None
+
+
+def response_object(response):
+    text = THINK_BLOCK_RE.sub('', response).strip()
+    if text.startswith('```json') and text.endswith('```'):
+        text = text[7:-3].strip()
+    try:
+        value = json.loads(text)
+    except (ValueError, TypeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def idea_metadata(value):
+    # Metadata never gates evaluation; the unabridged response is journaled.
+    if isinstance(value, str):
+        return value.strip(), {}
+    if isinstance(value, dict):
+        fields = {key: value[key].strip() for key in ('mechanism', 'change', 'transfer')
+                  if isinstance(value.get(key), str) and value[key].strip()}
+        return fields.get('mechanism') or fields.get('change', ''), fields
+    return '', {}
+
+
+def apply_edits(base_code, expected_hash, edits):
+    if expected_hash != code_hash(base_code):
+        raise ValueError('base_hash does not match the supplied parent')
+    if not isinstance(edits, list) or not edits or len(edits) > 32:
+        raise ValueError('edits must contain 1 to 32 replacements')
+    code = base_code
+    for edit in edits:
+        if not isinstance(edit, dict) or set(edit) != {'search', 'replacement'}:
+            raise ValueError('each edit needs only search and replacement')
+        source, target = edit['search'], edit['replacement']
+        if not isinstance(source, str) or not source or not isinstance(target, str):
+            raise ValueError('search must be nonempty text and replacement must be text')
+        if code.count(source) != 1:
+            raise ValueError('search block must match exactly once; use more surrounding code')
+        code = code.replace(source, target, 1)
+    return code
 
 
 def normalize_code(text: str) -> str:
@@ -108,22 +163,46 @@ def _extract_idea(prefix: str) -> str | None:
     return re.sub(r"^[*_`#\s]+", "", " ".join(cleaned).strip()).strip() or None
 
 
-def parse_candidate(response, finish_reason, interface, template_program):
+def parse_candidate(response, finish_reason, interface, template_program, *,
+                    base_code=None, allowed_donor_ids=()):
     if finish_reason not in ("stop", "length", "unknown"):
         return None, "unsupported finish reason"
     text = THINK_BLOCK_RE.sub("", response)
-    fences = list(FENCE_RE.finditer(text))
-    if len(fences) != 2:
-        return None, "format_error: expected exactly one Python code block"
-    prefix = text[:fences[0].start()]
-    if text[fences[1].end():].strip():
-        return None, "format_error: no text is allowed after the code block"
-    idea = _extract_idea(prefix)
-    if not idea:
-        return None, "Idea is required"
-    if len(idea) > MAX_IDEA_CHARS:
-        return None, f"idea_length_error: Idea exceeds {MAX_IDEA_CHARS} characters"
-    canonical = normalize_code(text[fences[0].end():fences[1].start()])
+    payload = response_object(text)
+    fields, mode, donor_id, base_hash = {}, 'full', None, None
+    if payload is not None:
+        idea, fields = idea_metadata(payload.get('idea'))
+        mode = payload.get('mode', 'full')
+        declared = payload.get('donor_id')
+        if type(declared) is int and declared in allowed_donor_ids:
+            donor_id = declared
+        if mode == 'edit':
+            if base_code is None:
+                return None, 'edit_error: no parent is available for editing'
+            if 'code' in payload:
+                return None, 'edit_error: return edits or full code, not both'
+            base_hash = payload.get('base_hash')
+            try:
+                canonical = apply_edits(base_code, base_hash, payload.get('edits'))
+            except ValueError as exc:
+                return None, f'edit_error: {exc}'
+        elif mode == 'full':
+            if 'edits' in payload or not isinstance(payload.get('code'), str):
+                return None, 'format_error: full mode requires code and no edits'
+            canonical = payload['code']
+        else:
+            return None, 'format_error: expected full or edit mode'
+    else:
+        # Backwards-compatible code-first extraction, including code without Idea.
+        fences = list(FENCE_RE.finditer(text))
+        if len(fences) == 2:
+            idea = _extract_idea(text[:fences[0].start()]) or ''
+            canonical = text[fences[0].end():fences[1].start()]
+        elif not fences:
+            idea, canonical = '', text
+        else:
+            return None, 'format_error: ambiguous Python code blocks'
+    canonical = normalize_code(canonical)
     if not canonical:
         return None, "The code block is empty"
     try:
@@ -136,17 +215,34 @@ def parse_candidate(response, finish_reason, interface, template_program):
         return None, f"target_function_error: expected exactly one top-level `{name}(...)` function"
     if signature(targets[0].args) != expected:
         return None, f"signature_error: `{name}` must declare the parameters ({args_text})"
-    rebuilt = _merge_candidate(template_program, tree, targets[0])
+    if isinstance(targets[0], ast.AsyncFunctionDef):
+        return None, 'signature_error: target must be synchronous'
+    # An edit operates on the entire displayed program. Do not reinsert template
+    # statements or reorder its top-level code after applying the exact edits.
+    rebuilt = (normalize_code(ast.unparse(tree)) if mode == 'edit' else
+               _merge_candidate(template_program, tree, targets[0]))
     if rebuilt is None:
         return None, "template_error: could not find one target function in the task template"
-    return ParsedCandidate(idea, rebuilt), None
+    try:
+        compile(rebuilt, '<candidate>', 'exec')
+    except (SyntaxError, ValueError) as exc:
+        return None, f'syntax_error: {exc}'
+    return ParsedCandidate(idea, rebuilt, fields, mode, donor_id, base_hash), None
 
 
-def build_repair_prompt(task_contract, response, event):
+def build_repair_prompt(task_contract, response, event, *, base_code=None,
+                        failed_program=None):
     message = (event.get("error") or event.get("reason") or "Evaluation failed").strip()
     error_type = event.get("error_type") or "Error"
-    return (f"{task_contract}\n\n# Failed output\n{THINK_BLOCK_RE.sub('', response)}\n\n"
+    payload = response_object(response)
+    needs_base = payload is not None and payload.get('mode') == 'edit' and not failed_program
+    parent = f'\n\n# Edit base\n```python\n{base_code}\n```' if needs_base and base_code else ''
+    failed = (f'```python\n{failed_program}\n```' if failed_program else
+              json.dumps({k: v for k, v in payload.items() if k in
+                          ('mode', 'code', 'base_hash', 'edits')}, ensure_ascii=False)
+              if payload is not None else THINK_BLOCK_RE.sub('', response))
+    return (f"{task_contract}{parent}\n\n# Failed output\n{failed}\n\n"
             f"# Failure\n{error_type}: {message[:2000]}\n\n"
             "# Repair\nCorrect the reported failure while preserving the intended algorithmic "
-            "idea, then return the required Idea and code format.\n\n"
-            + OUTPUT_FORMAT)
+            "idea. Return a full implementation in JSON (mode=full); do not request context.\n\n"
+            + FULL_OUTPUT_FORMAT)

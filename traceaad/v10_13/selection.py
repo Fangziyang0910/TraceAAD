@@ -15,8 +15,8 @@ from functools import lru_cache
 OPERATORS = ("Refine", "Tune", "Pivot", "Fuse")
 OPERATOR_PROBABILITIES = {operator: 0.25 for operator in OPERATORS}
 QUALITY_ESS_TARGET = 8.0
-PIVOT_UNIFORM_PROBABILITY = 0.50
-DONOR_UNIFORM_PROBABILITY = 0.50
+PARENT_UNIFORM_PROBABILITY = 0.125
+REFERENCE_COUNT = 3
 
 
 def ess(probabilities):
@@ -77,10 +77,9 @@ def quality_distribution(nodes):
 
 
 def sample_parent(nodes, operator, rng):
-    """Select a parent with V10.10 quality allocation."""
+    """Keep the previous aggregate exploration mass, independent of operator."""
     probabilities, stats = quality_distribution(nodes)
-    if operator == "Pivot":
-        probabilities = mix_uniform(probabilities, PIVOT_UNIFORM_PROBABILITY)
+    probabilities = mix_uniform(probabilities, PARENT_UNIFORM_PROBABILITY)
     index = rng.choices(range(len(nodes)), weights=probabilities)[0]
     parent = nodes[index]
     selection = {
@@ -89,6 +88,7 @@ def sample_parent(nodes, operator, rng):
         "parent_ess_target": stats["ess_target"],
         "parent_count_before": parent.attempts,
         "population_size": len(nodes),
+        "uniform_mass": PARENT_UNIFORM_PROBABILITY,
     }
     return parent, selection
 
@@ -98,25 +98,34 @@ def code_key(code):
     return ast.dump(ast.parse(code), include_attributes=False)
 
 
-def select_donor(nodes, parent, rng):
-    """Select one executable archive reference for Pivot or Fuse.
+def reference_shortlist(nodes, parent, rng, count=REFERENCE_COUNT):
+    """Expose distinct implementations, not purported semantic categories.
 
-    Exact code copies are excluded. The 50% uniform component keeps the LLM's
-    reference material broad without pretending that archive position is a
-    semantic category.
+    One quality draw, one uniform draw, and one inverse-exposure draw supply
+    different opportunities. The generating model judges complementarity and
+    can request one full program or ignore every card. Exposure is not quality.
     """
     parent_key = code_key(parent.code)
-    candidates = [node for node in nodes
-                  if node.id != parent.id and code_key(node.code) != parent_key]
-    if not candidates:
-        return None, {"donor_pool_size": 0}
-    probabilities, stats = quality_distribution(candidates)
-    probabilities = mix_uniform(probabilities, DONOR_UNIFORM_PROBABILITY)
-    index = rng.choices(range(len(candidates)), weights=probabilities)[0]
-    donor = candidates[index]
-    return donor, {
-        "donor_probability": probabilities[index],
-        "donor_ess": ess(probabilities),
-        "donor_ess_target": stats["ess_target"],
-        "donor_pool_size": len(candidates),
-    }
+    by_code, exposures = {}, {}
+    for node in sorted(nodes, key=lambda item: item.id):
+        key = code_key(node.code)
+        if key != parent_key:
+            by_code[key] = node  # latest measured representative, not best replicate
+            exposures[key] = exposures.get(key, 0) + node.reference_uses
+    pool = list(by_code.values())
+    selected, sources = [], {}
+    for source in ("quality", "uniform", "underexposed")[:count]:
+        if not pool:
+            break
+        if source == "quality":
+            weights, _ = quality_distribution(pool)
+        elif source == "uniform":
+            weights = [1.0] * len(pool)
+        else:
+            weights = [1.0 / (1 + exposures[code_key(node.code)]) for node in pool]
+        index = rng.choices(range(len(pool)), weights=weights)[0]
+        node = pool.pop(index)
+        selected.append(node)
+        sources[str(node.id)] = source
+    rng.shuffle(selected)  # Do not present rank order as a preferred answer.
+    return selected, {"reference_sources": sources, "distinct_reference_pool": len(by_code)}

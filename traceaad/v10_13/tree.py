@@ -1,6 +1,6 @@
 """Evaluated algorithms and their formation links."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -16,6 +16,8 @@ class Node:
     operator: str = "Init"
     donor_id: int | None = None
     attempts: int = 0
+    idea_fields: dict[str, str] = field(default_factory=dict)
+    reference_uses: int = 0
 
 
 class SearchTree:
@@ -32,9 +34,9 @@ class SearchTree:
             self.roots.append(node.id)
 
     def add(self, *, code, idea, fitness, evaluation_id, parent_id, operator,
-            donor_id=None, attempts=0):
+            donor_id=None, attempts=0, idea_fields=None):
         node = Node(self.next_id, code, idea, fitness, evaluation_id, parent_id,
-                    operator, donor_id, attempts)
+                    operator, donor_id, attempts, idea_fields or {})
         self.next_id += 1
         self._attach(node)
         return node

@@ -17,8 +17,8 @@ from .prompts import PromptBuilder
 from .selection import (
     OPERATORS,
     OPERATOR_PROBABILITIES,
-    QUALITY_ESS_TARGET, PIVOT_UNIFORM_PROBABILITY, DONOR_UNIFORM_PROBABILITY,
-    select_donor,
+    QUALITY_ESS_TARGET, PARENT_UNIFORM_PROBABILITY, REFERENCE_COUNT,
+    reference_shortlist,
     sample_parent,
 )
 from .storage import RunStorage, atomic_json, digest, truncate_torn_tail
@@ -27,6 +27,10 @@ from .tree import Node, SearchTree
 REPAIRABLE_FAILURES = {
     "exec_error", "runtime_error", "timeout", "invalid_result", "nonfinite_fitness",
 }
+
+
+class UncertainEvaluationError(RuntimeError):
+    """A durable reservation exists but its evaluation receipt is missing."""
 
 
 def _timestamp():
@@ -56,13 +60,17 @@ class Candidate:
     parent_selected: bool
     best_before: float | None
     history_ids: list[int] = field(default_factory=list)
+    trial_ids: list[int] = field(default_factory=list)
+    loaded_reference_id: int | None = None
+    context_reads: int = 0
     llm_attempts: int = 0
     repair_of: int | None = None
 
 
 class TraceAADV1013:
     METHOD = "v1013"
-    PROMPT_POLICY = "evolutionary_operator_context_v10_13_final"
+    REVISION = "v10.13-r2"
+    PROMPT_POLICY = "idea_context_optional_read_full_edit_v10_13_r2"
 
     def __init__(self, *, evaluation, llm, run_dir, budget=1000, n_roots=8,
                  history_depth=3, output_tokens=8192, max_input_tokens=24320,
@@ -90,25 +98,31 @@ class TraceAADV1013:
         self.completed_candidates = 0
         self.evaluations_used = 0
         self._invalid_streak = 0
+        self.pending = None
         self.storage = RunStorage(self.run_dir)
         self.mechanism = {
             "method": self.METHOD,
             "budget": budget,
             "n_roots": n_roots,
             "prompt_policy": self.PROMPT_POLICY,
-            "parser_protocol": "target_function_anchored_idea_code_v10_13",
+            "revision": self.REVISION,
+            "parser_protocol": "code_first_json_full_edit_optional_idea_v2",
+            "persistence_protocol": "staged_candidate_receipt_v2",
             "history_depth": history_depth,
             "output_tokens": output_tokens,
             "max_input_tokens": max_input_tokens,
             "operator_probabilities": OPERATOR_PROBABILITIES,
             "quality_ess_target": QUALITY_ESS_TARGET,
-            "pivot_uniform_probability": PIVOT_UNIFORM_PROBABILITY,
-            "donor_uniform_probability": DONOR_UNIFORM_PROBABILITY,
+            "parent_uniform_probability": PARENT_UNIFORM_PROBABILITY,
+            "reference_count": REFERENCE_COUNT,
+            "reference_policy": "quality_uniform_underexposed_then_model_read",
             "task_contract_hash": digest(self.task_contract),
             "template_hash": digest(self._template_program),
             "seed": seed,
-            "context_mapping": {"Refine": "formation", "Tune": "formation",
-                                "Pivot": "single_reference", "Fuse": "single_donor"},
+            "context_mapping": {"Refine": "idea_formation_optional_trials",
+                                "Tune": "idea_formation_optional_trials",
+                                "Pivot": "idea_shortlist_optional_code",
+                                "Fuse": "idea_shortlist_optional_code"},
             "llm": {name: getattr(llm, name, None) for name in
                     ("model", "base_url", "temperature", "top_p", "enable_thinking")},
         }
@@ -134,10 +148,19 @@ class TraceAADV1013:
         )
 
     def _schedule_repair(self, previous):
+        response = self.storage.failed_response(previous['candidate_id'])
+        parent = self.tree.nodes.get(previous.get('parent_id'))
+        parsed, _ = parsing.parse_candidate(
+            response, 'unknown', self._parse_interface, self._template_program,
+            base_code=parent.code if parent else None,
+            allowed_donor_ids=previous.get('reference_ids', []),
+        )
         prompt = parsing.build_repair_prompt(
             self.task_contract,
-            self.storage.failed_response(previous["candidate_id"]),
+            response,
             previous,
+            base_code=parent.code if parent else None,
+            failed_program=parsed.program_code if parsed else None,
         )
         return self._candidate(
             prompt,
@@ -150,6 +173,9 @@ class TraceAADV1013:
             donor_fitness=previous.get("donor_fitness"),
             reference_ids=previous.get("reference_ids", []),
             history_ids=previous.get("history_ids", []),
+            trial_ids=previous.get('trial_ids', []),
+            loaded_reference_id=previous.get('loaded_reference_id'),
+            context_reads=0,  # This repair makes no new context read; repair_of disables reads.
             selection={},
             parent_selected=False,
         )
@@ -188,27 +214,24 @@ class TraceAADV1013:
         selection["parent_count_after"] = parent.attempts + 1
         parent.attempts += 1
 
-        operator = requested_operator
-        donor = None
+        references = []
         if requested_operator in ("Pivot", "Fuse"):
-            donor, donor_selection = select_donor(self.tree.all_nodes(), parent, self.rng)
-            selection.update(donor_selection)
-            if donor is None and requested_operator == "Fuse":
-                operator = "Refine"
-                selection["fallback_reason"] = "donor_unavailable"
+            references, stats = reference_shortlist(self.tree.all_nodes(), parent, self.rng)
+            selection.update(stats)
 
-        context = self.prompts.build_development(parent, operator, donor)
+        context = self.prompts.build_development(parent, requested_operator, references=references)
         if context.fallback_reason:
             selection["fallback_reason"] = context.fallback_reason
-        reference = context.reference_program
+        for identity in context.reference_ids:
+            self.tree.nodes[identity].reference_uses += 1
         return self._candidate(
             context.prompt,
             requested_operator=requested_operator,
             operator=context.operator,
             parent_id=parent.id,
-            donor_id=reference.id if reference else None,
+            donor_id=None,
             parent_fitness=parent.fitness,
-            donor_fitness=reference.fitness if reference else None,
+            donor_fitness=None,
             reference_ids=context.reference_ids,
             history_ids=context.history_ids,
             selection=selection,
@@ -217,12 +240,16 @@ class TraceAADV1013:
 
     def _generate(self, candidate):
         candidate.llm_attempts += 1
+        self.pending['candidate'] = asdict(candidate)
+        self.pending['call_id'] = f'{candidate.candidate_id}:{candidate.llm_attempts}'
+        self._save_checkpoint()  # Reserve the call ID before dispatch.
         started = time.time()
         record = {
             "ts": _timestamp(),
             "call_id": f"{candidate.candidate_id}:{candidate.llm_attempts}",
             "candidate_id": candidate.candidate_id,
             "operator": candidate.operator,
+            "context_round": candidate.context_reads,
             "prompt_tokens": candidate.prompt_tokens,
             "prompt_hash": candidate.prompt_hash,
             "prompt": candidate.prompt,
@@ -265,6 +292,9 @@ class TraceAADV1013:
         if parsed is None:
             return None, None
         evaluation_id = self.evaluations_used + 1
+        self.evaluations_used = evaluation_id
+        self.pending.update(stage='evaluating', evaluation_id=evaluation_id)
+        self._save_checkpoint()  # A missing receipt must never trigger automatic reevaluation.
         started = time.time()
         try:
             fitness, reason, error_type, error, trace = self._read_fitness(
@@ -285,21 +315,26 @@ class TraceAADV1013:
             "eval_seconds": time.time() - started,
             "repair_of": candidate.repair_of,
         }
-        self.evaluations_used = evaluation_id
-        if fitness is None:
-            return outcome, None
+        self.storage.record_evaluation(outcome)
+        self.pending.update(stage='evaluated', outcome=outcome)
+        self._save_checkpoint()
+        return outcome, self._node_for_outcome(parsed, candidate, outcome)
+
+    def _node_for_outcome(self, parsed, candidate, outcome):
+        if outcome is None or outcome['fitness'] is None:
+            return None
 
         node = self.tree.add(
             code=parsed.program_code,
             idea=parsed.idea,
-            fitness=fitness,
-            evaluation_id=evaluation_id,
+            fitness=outcome['fitness'],
+            evaluation_id=outcome['evaluation_id'],
             parent_id=candidate.parent_id,
             operator=candidate.operator,
             donor_id=candidate.donor_id,
+            idea_fields=parsed.idea_fields,
         )
-        self.storage.record_node(node)
-        return outcome, node
+        return node
 
     def _settle(self, candidate, completion, parse_error, outcome, node):
         if parse_error is not None:
@@ -319,6 +354,8 @@ class TraceAADV1013:
             node is not None and candidate.best_before is not None and
             node.fitness > candidate.best_before
         )
+        calls = [self.storage.index(self.storage.llm_calls_path, 'call_id').get(
+                 f'{candidate.candidate_id}:{i}') for i in range(1, candidate.llm_attempts + 1)]
         record = {
             "ts": _timestamp(),
             "candidate_id": candidate.candidate_id,
@@ -331,6 +368,11 @@ class TraceAADV1013:
             "donor_fitness": candidate.donor_fitness,
             "reference_ids": candidate.reference_ids,
             "history_ids": candidate.history_ids,
+            "trial_ids": candidate.trial_ids,
+            "loaded_reference_id": candidate.loaded_reference_id,
+            "context_reads": candidate.context_reads,
+            "output_mode": self.pending.get('parsed', {}).get('mode') if self.pending.get('parsed') else None,
+            "llm_calls": candidate.llm_attempts,
             "selection": candidate.selection,
             "parent_selected": candidate.parent_selected,
             "prompt_tokens": candidate.prompt_tokens,
@@ -340,7 +382,8 @@ class TraceAADV1013:
             "budget_used": self.evaluations_used,
             "evaluation_id": outcome["evaluation_id"] if outcome else None,
             "eval_seconds": outcome.get("eval_seconds") if outcome else None,
-            "llm_seconds": completion["seconds"],
+            "llm_seconds": sum(call['seconds'] for call in calls if call),
+            "recorded_llm_calls": sum(call is not None for call in calls),
             "node_id": node.id if node else None,
             "fitness": node.fitness if node else None,
             "parent_improved": parent_improved if node else None,
@@ -353,21 +396,112 @@ class TraceAADV1013:
                 traceback=outcome.get("traceback"),
                 best_fitness=self.tree.best().fitness if self.tree.nodes else None,
             )
-        self.storage.record_event(record)
         self.completed_candidates = candidate.candidate_id
-        self._save_checkpoint()
+        self.storage.last_event = record
+        self.pending.update(stage='committing', event=record,
+                            node=asdict(node) if node else None)
+        self._save_checkpoint()  # State is authoritative; journals are idempotent projections.
+        self._flush_commit()
         if self._invalid_streak >= 50:
             raise RuntimeError("50 consecutive generations produced no valid output")
 
+    def _flush_commit(self):
+        if self.pending.get('node') is not None:
+            self.storage.record_node(Node(**self.pending['node']))
+        self.storage.record_event(self.pending['event'])
+        self.pending = None
+        self._save_checkpoint()
+
     def _run_candidate(self):
-        candidate = self._schedule_candidate()
-        completion = self._generate(candidate)
+        if self.pending is None:
+            candidate = self._schedule_candidate()
+            self.pending = {'stage': 'scheduled', 'candidate': asdict(candidate)}
+            self._save_checkpoint()
+        if self.pending['stage'] == 'committing':
+            self._flush_commit()
+            return
+        candidate = Candidate(**self.pending['candidate'])
+        stage = self.pending['stage']
+        if stage == 'evaluating':
+            receipt = self.storage.index(self.storage.evaluations_path, 'evaluation_id').get(
+                self.pending['evaluation_id'])
+            if receipt is None:
+                raise UncertainEvaluationError(
+                    f"evaluation {self.pending['evaluation_id']} was reserved, but has no durable result; "
+                    "automatic reevaluation is blocked; retain the checkpoint and journals")
+            if receipt['candidate_id'] != candidate.candidate_id:
+                raise ValueError('evaluation receipt belongs to a different candidate')
+            self.pending.update(stage='evaluated', outcome=receipt)
+            self._save_checkpoint()
+            stage = 'evaluated'
+        if stage in ('parsed', 'evaluated'):
+            parsed = parsing.ParsedCandidate(**self.pending['parsed']) if self.pending['parsed'] else None
+            outcome = self.pending.get('outcome')
+            if stage == 'parsed':
+                outcome, node = self._evaluate_and_add(parsed, candidate)
+            else:
+                node = self._node_for_outcome(parsed, candidate, outcome)
+            self._settle(candidate, self.pending['completion'], self.pending.get('parse_error'), outcome, node)
+            return
+        if stage == 'scheduled':
+            # Reuse a completed call that landed in the journal before the checkpoint.
+            call = self.storage.index(self.storage.llm_calls_path, 'call_id').get(
+                self.pending.get('call_id'))
+            completion = call if call and 'response' in call else self._generate(candidate)
+            self.pending.update(stage='generated', candidate=asdict(candidate), completion=completion)
+            self._save_checkpoint()
+        completion = self.pending['completion']
+        payload = parsing.response_object(completion['response'])
+        if payload is not None and payload.get('mode') == 'context':
+            if candidate.parent_id is not None and not candidate.context_reads and not candidate.repair_of:
+                requested_id = payload.get('reference_id')
+                reference = (self.tree.nodes[requested_id] if type(requested_id) is int and
+                             requested_id in candidate.reference_ids else None)
+                include_trials = payload.get('trials') is True and candidate.operator in ('Refine', 'Tune')
+                context = self.prompts.build_development(
+                    self.tree.nodes[candidate.parent_id], candidate.operator,
+                    references=[self.tree.nodes[i] for i in candidate.reference_ids],
+                    read_reference=reference, include_trials=include_trials,
+                    allow_context=False,
+                )
+                candidate.prompt, candidate.prompt_hash = context.prompt, digest(context.prompt)
+                candidate.prompt_tokens = self.prompts.count(context.prompt)
+                candidate.history_ids, candidate.trial_ids = context.history_ids, context.trial_ids
+                candidate.context_reads = 1
+                candidate.loaded_reference_id = context.reference_program.id if context.reference_program else None
+                if context.fallback_reason:
+                    candidate.selection['read_fallback_reason'] = context.fallback_reason
+                candidate.selection['context_request'] = {
+                    'reference_id': requested_id if type(requested_id) is int else None,
+                    'trials': payload.get('trials') is True,
+                }
+                candidate.selection['read_reference_ids'] = context.reference_ids
+                candidate.selection['local_trials_requested_and_allowed'] = include_trials
+                self.pending = {'stage': 'scheduled', 'candidate': asdict(candidate)}
+                self._save_checkpoint()
+                return self._run_candidate()
+            parsed, parse_error = None, 'context_error: context reads are limited to one development round'
+        else:
+            parsed, parse_error = self._parse_completion(completion, candidate)
+        if parsed is not None:
+            candidate.donor_id = parsed.donor_id
+            candidate.donor_fitness = (self.tree.nodes[parsed.donor_id].fitness
+                                       if parsed.donor_id is not None else None)
+        self.pending.update(stage='parsed', candidate=asdict(candidate),
+                            parsed=asdict(parsed) if parsed else None, parse_error=parse_error)
+        self._save_checkpoint()
+        outcome, node = self._evaluate_and_add(parsed, candidate)
+        self._settle(candidate, completion, parse_error, outcome, node)
+
+    def _parse_completion(self, completion, candidate):
+        parent = self.tree.nodes.get(candidate.parent_id)
         parsed, parse_error = parsing.parse_candidate(
             completion["response"], completion["finish_reason"],
             self._parse_interface, self._template_program,
+            base_code=parent.code if parent else None,
+            allowed_donor_ids=candidate.reference_ids,
         )
-        outcome, node = self._evaluate_and_add(parsed, candidate)
-        self._settle(candidate, completion, parse_error, outcome, node)
+        return parsed, parse_error
 
     def _save_checkpoint(self):
         atomic_json(self.storage.state_path, {
@@ -383,6 +517,7 @@ class TraceAADV1013:
             "completed_candidates": self.completed_candidates,
             "invalid_streak": self._invalid_streak,
             "last_event": self.storage.last_event,
+            "pending": self.pending,
         })
 
     def _resume_checkpoint(self):
@@ -397,12 +532,41 @@ class TraceAADV1013:
         self.completed_candidates = state["completed_candidates"]
         self._invalid_streak = state["invalid_streak"]
         self.storage.last_event = state.get("last_event")
+        self.pending = state.get('pending')
+        # Fail closed on legacy/unexplained journal tails; never silently reuse IDs.
+        events = self.storage.index(self.storage.events_path, 'candidate_id')
+        nodes = self.storage.index(self.storage.nodes_path, 'id')
+        receipts = self.storage.index(self.storage.evaluations_path, 'evaluation_id')
+        committing = self.pending and self.pending['stage'] == 'committing'
+        missing_events = {self.completed_candidates} if committing else set()
+        missing_nodes = ({self.pending['node']['id']} if committing and self.pending.get('node') else set())
+        expected_events = set(range(1, self.completed_candidates + 1))
+        if set(events) - expected_events or expected_events - set(events) - missing_events:
+            raise ValueError('event journal is inconsistent with the durable checkpoint')
+        if set(nodes) - set(self.tree.nodes) or set(self.tree.nodes) - set(nodes) - missing_nodes:
+            raise ValueError('node journal is inconsistent with the durable checkpoint')
+        expected_receipts = set(range(1, self.evaluations_used + 1))
+        uncertain = ({self.pending['evaluation_id']} if self.pending and
+                     self.pending['stage'] == 'evaluating' else set())
+        if set(receipts) - expected_receipts or expected_receipts - set(receipts) - uncertain:
+            raise ValueError('evaluation journal is inconsistent with the durable checkpoint')
+        for event in events.values():
+            identity = event.get('evaluation_id')
+            if identity is not None and (identity not in receipts or
+                    receipts[identity]['candidate_id'] != event['candidate_id']):
+                raise ValueError('event and evaluation receipt disagree')
+        for identity, record in nodes.items():
+            current = asdict(self.tree.nodes[identity])
+            if any(record[key] != current[key] for key in record
+                   if key not in ('attempts', 'reference_uses')):
+                raise ValueError('node journal and checkpoint disagree')
 
     def _write_summary(self, status, error=None):
         best = self.tree.best() if self.tree.nodes else None
         payload = {
             "status": status,
             "method": self.METHOD,
+            "revision": self.REVISION,
             "started_at": self.started_at,
             "finished_at": _timestamp(),
             "budget": self.budget,
@@ -414,6 +578,7 @@ class TraceAADV1013:
                 "node_id": best.id,
                 "fitness": best.fitness,
                 "idea": best.idea,
+                "idea_fields": best.idea_fields,
                 "code": best.code,
                 "evaluation_id": best.evaluation_id,
                 "operator": best.operator,
@@ -427,16 +592,32 @@ class TraceAADV1013:
 
     def run(self):
         self.run_dir.mkdir(parents=True, exist_ok=True)
+        with self.storage.writer_lock():
+            return self._run_locked()
+
+    def _run_locked(self):
+        # Reject old revision checkpoints before touching their journals.
+        if self.storage.state_path.exists():
+            state = json.loads(self.storage.state_path.read_text())
+            if state.get('mechanism') != self.mechanism:
+                raise ValueError('checkpoint belongs to a different revision; use its frozen runtime')
+        elif any(path.exists() and path.stat().st_size for path in (
+                self.storage.nodes_path, self.storage.events_path, self.storage.llm_calls_path,
+                self.storage.evaluations_path)):
+            raise ValueError('journals exist without a checkpoint; refusing to start over')
         for journal in (self.storage.nodes_path, self.storage.events_path,
-                        self.storage.llm_calls_path):
+                        self.storage.llm_calls_path, self.storage.evaluations_path):
             truncate_torn_tail(journal)
         if self.storage.state_path.exists():
             self._resume_checkpoint()
         else:
             self._save_checkpoint()
         try:
-            while self.evaluations_used < self.budget:
+            while self.pending is not None or self.evaluations_used < self.budget:
                 self._run_candidate()
+                event = self.storage.last_event
+                if event and event.get('status') == 'eval_failed' and event.get('reason') not in REPAIRABLE_FAILURES:
+                    raise RuntimeError(f"evaluation infrastructure failed: {event.get('reason')}")
                 print(
                     f"{self.METHOD}: budget={self.evaluations_used}/{self.budget} "
                     f"nodes={len(self.tree.nodes)} parent_attempts={self.tree.parent_selections}",
@@ -447,6 +628,9 @@ class TraceAADV1013:
             self._write_summary("finished")
         except KeyboardInterrupt:
             self._write_summary("interrupted")
+            raise
+        except UncertainEvaluationError:
+            self._write_summary('uncertain_evaluation', traceback.format_exc())
             raise
         except Exception:
             self._write_summary("error", traceback.format_exc())
