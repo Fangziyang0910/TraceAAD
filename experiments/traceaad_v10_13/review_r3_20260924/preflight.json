@@ -1,0 +1,9 @@
+{
+  "observed_at": "2026-09-24T01:43:09+08:00",
+  "source_identity": "3dbf7069340b30a5a9f7b84262583dec27225b90d6cf3b65e0f38d9e385571b0",
+  "git_base": "036b055afb8c6ae67ba98ed69fa490f5c73b5e6e",
+  "frozen_files": 60,
+  "spawn_and_entrypoints": "passed",
+  "same_20_lane_configuration": true,
+  "full_suite": "350 passed / 22.08s"
+}
