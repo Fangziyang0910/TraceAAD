@@ -6,11 +6,11 @@ import unittest
 from pathlib import Path
 
 from llm4ad.base import Function, TextFunctionProgramConverter
-from llm4ad.method.mcts_ahd.mcts import MCTS, MCTSNode
-from llm4ad.method.mcts_ahd.mcts_ahd import MCTS_AHD
-from llm4ad.method.mcts_ahd.population import Population
-from llm4ad.method.mcts_ahd.prompt import MAPrompt
-from llm4ad.method.mcts_ahd.profiler import MAProfiler
+from baselines.mcts_ahd.mcts import MCTS, MCTSNode
+from baselines.mcts_ahd.mcts_ahd import MCTS_AHD
+from baselines.mcts_ahd.population import Population
+from baselines.mcts_ahd.prompt import MAPrompt
+from baselines.mcts_ahd.profiler import MAProfiler
 
 
 def make_function(label: int, score=None) -> Function:

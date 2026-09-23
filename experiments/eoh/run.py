@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from llm4ad.method.eoh import EoH, EoHProfiler
+from baselines.eoh import EoH, EoHProfiler
 
 from experiments.infra.base import (
     ALL_TASKS,

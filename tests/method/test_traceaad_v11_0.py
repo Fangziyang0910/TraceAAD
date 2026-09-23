@@ -8,20 +8,20 @@ import pytest
 
 from llm4ad.base import Evaluation
 from llm4ad.base.evaluate import EvaluationOutcome
-from llm4ad.method.traceaad_v11_0 import TraceAADV110
-from llm4ad.method.traceaad_v11_0.parsing import OUTPUT, parse_candidate, repair_prompt
-from llm4ad.method.traceaad_v11_0.prompts import OPERATOR_INSTRUCTIONS, REFERENCE_INTRO
-from llm4ad.method.traceaad_v11_0.selection import (
+from traceaad.v11_0 import TraceAADV110
+from traceaad.v11_0.parsing import OUTPUT, parse_candidate, repair_prompt
+from traceaad.v11_0.prompts import OPERATOR_INSTRUCTIONS, REFERENCE_INTRO
+from traceaad.v11_0.selection import (
     EXPLORATION_C,
     code_key,
     quality_percentiles,
     reciprocal_rank_sample,
     reference_ranks,
 )
-from llm4ad.method.traceaad_v11_0.storage import read_journal, truncate_torn_tail
-from llm4ad.method.traceaad_v11_0.tree import Node
+from traceaad.v11_0.storage import read_journal, truncate_torn_tail
+from traceaad.v11_0.tree import Node
 
-MODULE_ROOT = Path(__file__).resolve().parents[2] / "llm4ad" / "method" / "traceaad_v11_0"
+MODULE_ROOT = Path(__file__).resolve().parents[2] / "traceaad" / "v11_0"
 
 
 class TinyEvaluation(Evaluation):
@@ -104,8 +104,8 @@ def test_v110_does_not_import_historical_methods():
             elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module]
             for name in names:
-                if name.startswith("llm4ad.method.") and not name.startswith(
-                        "llm4ad.method.traceaad_v11_0"):
+                if name.startswith("traceaad.") and not name.startswith(
+                        "traceaad.v11_0"):
                     forbidden.append(f"{path.name}: {name}")
                 if "traceaad_v" in name and "traceaad_v11_0" not in name:
                     forbidden.append(f"{path.name}: {name}")
@@ -334,8 +334,8 @@ def test_new_operator_instructions_match_the_design():
 
 
 def test_frozen_prompt_parts_match_v1011():
-    from llm4ad.method.traceaad_v10_11.parsing import OUTPUT as V1011_OUTPUT
-    from llm4ad.method.traceaad_v10_11.prompts import OPERATOR_INSTRUCTIONS as V1011_INSTRUCTIONS
+    from traceaad.v10_11.parsing import OUTPUT as V1011_OUTPUT
+    from traceaad.v10_11.prompts import OPERATOR_INSTRUCTIONS as V1011_INSTRUCTIONS
     assert OUTPUT == V1011_OUTPUT
     for operator in ("Init", "Refine", "Tune"):
         assert OPERATOR_INSTRUCTIONS[operator] == V1011_INSTRUCTIONS[operator]
@@ -344,7 +344,7 @@ def test_frozen_prompt_parts_match_v1011():
 
 
 def test_refine_and_tune_prompts_are_unchanged_from_v1011(tmp_path):
-    from llm4ad.method.traceaad_v10_11.prompts import TrajectoryBuilder as V1011Builder
+    from traceaad.v10_11.prompts import TrajectoryBuilder as V1011Builder
     m = method(tmp_path, budget=1)
     root = add(m, 1)
     child = add(m, 2, root.id, code="def score(x):\n    return 2")

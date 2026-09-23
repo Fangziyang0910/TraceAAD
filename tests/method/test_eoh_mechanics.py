@@ -5,8 +5,8 @@ from unittest.mock import patch
 import numpy as np
 
 from llm4ad.base import Evaluation, Function, LLM, TextFunctionProgramConverter
-from llm4ad.method.eoh.eoh import EoH
-from llm4ad.method.eoh.population import Population
+from baselines.eoh.eoh import EoH
+from baselines.eoh.population import Population
 
 
 def make_function(label: int, score=None) -> Function:
@@ -148,7 +148,7 @@ class EoHMechanicsTest(unittest.TestCase):
         method._operators = ["e1", "m3"]
         method._operator_weights = [0.25, 0.75]
 
-        with patch("llm4ad.method.eoh.eoh.random.choices", return_value=["m3"]) as choices:
+        with patch("baselines.eoh.eoh.random.choices", return_value=["m3"]) as choices:
             operator = method._select_operator()
 
         self.assertEqual(operator, "m3")
@@ -159,7 +159,7 @@ class EoHMechanicsTest(unittest.TestCase):
         for score in [3.0, 2.0, 1.0]:
             pop.register_function(make_function(int(score), score), increment_generation=False)
 
-        with patch("llm4ad.method.eoh.population.np.random.choice") as choice:
+        with patch("baselines.eoh.population.np.random.choice") as choice:
             choice.return_value = pop.population[0]
             selected = pop.selection()
 

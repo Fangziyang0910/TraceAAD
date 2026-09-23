@@ -3,15 +3,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from llm4ad.task.optimization.op_aco import (
+from benchmarks.op_aco import (
     OPACOEvaluation,
     get_max_len,
     get_split_spec,
     load_split_instances,
 )
-from llm4ad.task.optimization.op_aco.dataset import gen_distance_matrix, gen_prizes
-from llm4ad.task.optimization.op_aco.evaluation import ACO
-from llm4ad.task.optimization.op_aco.template import design_notes
+from benchmarks.op_aco.dataset import gen_distance_matrix, gen_prizes
+from benchmarks.op_aco.evaluation import ACO
+from benchmarks.op_aco.template import design_notes
 
 
 def prize_over_distance(prize, distance, maxlen):

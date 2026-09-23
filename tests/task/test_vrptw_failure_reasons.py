@@ -2,7 +2,7 @@
 import numpy as np
 
 from llm4ad.base import SecureEvaluator
-from llm4ad.task.optimization.vrptw_construct import VRPTWEvaluation
+from benchmarks.vrptw_construct import VRPTWEvaluation
 
 
 def program(return_value):

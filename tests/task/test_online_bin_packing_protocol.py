@@ -4,12 +4,12 @@ import numpy as np
 
 from experiments.infra.artifacts import pick_best_sample
 from experiments.infra.evaluate import _obp_task_kwargs_for_scale
-from llm4ad.task.optimization.generated_data_config import (
+from benchmarks.generated_data_config import (
     get_generated_task_kwargs,
 )
-from llm4ad.task.optimization.online_bin_packing import OBPEvaluation
-from llm4ad.task.optimization.online_bin_packing.template import task_description
-from llm4ad.task.optimization.online_bin_packing.generate_weibull_instances import (
+from benchmarks.online_bin_packing import OBPEvaluation
+from benchmarks.online_bin_packing.template import task_description
+from benchmarks.online_bin_packing.generate_weibull_instances import (
     generate_weibull_multiscale_dataset,
 )
 

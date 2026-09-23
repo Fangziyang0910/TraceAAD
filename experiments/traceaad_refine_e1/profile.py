@@ -60,7 +60,7 @@ def validate(out):
                 data=core._GLOBAL_DATA
                 scores=[]
                 if task=='online_bin_packing':
-                    from llm4ad.task.optimization.online_bin_packing.evaluation import OBPEvaluation
+                    from benchmarks.online_bin_packing.evaluation import OBPEvaluation
                     evaluator=OBPEvaluation()
                 else: evaluator=data['evaluator']
                 original_seed=getattr(evaluator,'aco_seed',None)

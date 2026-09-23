@@ -25,14 +25,14 @@ from typing import Any, Literal
 
 import numpy as np
 
-from llm4ad.task.optimization.cvrp_aco import CVRPACOEvaluation
-from llm4ad.task.optimization.generated_data_config import (
+from benchmarks.cvrp_aco import CVRPACOEvaluation
+from benchmarks.generated_data_config import (
     get_generated_task_kwargs,
 )
-from llm4ad.task.optimization.online_bin_packing import OBPEvaluation
-from llm4ad.task.optimization.op_aco import OPACOEvaluation
-from llm4ad.task.optimization.tsp_construct import TSPEvaluation
-from llm4ad.task.optimization.vrptw_construct import VRPTWEvaluation
+from benchmarks.online_bin_packing import OBPEvaluation
+from benchmarks.op_aco import OPACOEvaluation
+from benchmarks.tsp_construct import TSPEvaluation
+from benchmarks.vrptw_construct import VRPTWEvaluation
 from llm4ad.tools.env import resolve_llm_api_key
 from llm4ad.tools.llm.llm_api_openai import OpenAIAPI
 

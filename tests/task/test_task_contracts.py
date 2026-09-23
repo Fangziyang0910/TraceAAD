@@ -18,13 +18,13 @@ from llm4ad.base.code import TextFunctionProgramConverter
 from llm4ad.base.evaluate import Evaluation
 
 ROOT = Path(__file__).resolve().parents[2]
-TASK_ROOT = ROOT / "llm4ad" / "task"
+TASK_ROOT = ROOT / "benchmarks"
 FROZEN_TASKS = (
-    "optimization/tsp_construct",
-    "optimization/cvrp_aco",
-    "optimization/op_aco",
-    "optimization/online_bin_packing",
-    "optimization/vrptw_construct",
+    "tsp_construct",
+    "cvrp_aco",
+    "op_aco",
+    "online_bin_packing",
+    "vrptw_construct",
 )
 
 

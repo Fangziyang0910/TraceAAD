@@ -4,8 +4,8 @@ import argparse
 from pathlib import Path
 
 from experiments.infra.runner import FORMAL_BUDGET, add_common_run_args, setup_experiment_run
-from llm4ad.method.traceaad_v10_11 import TraceAADV1011
-from llm4ad.method.traceaad_v10_11_rand_ctx import TraceAADV1011RandCtx
+from traceaad.v10_11 import TraceAADV1011
+from traceaad.rand_ctx import TraceAADV1011RandCtx
 
 
 def build_parser():

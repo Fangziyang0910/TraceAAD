@@ -17,9 +17,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT))
-from llm4ad.method.traceaad_v10_12.traceaad import TraceAADV1012
-from llm4ad.method.traceaad_v10_12.storage import RunStorage, atomic_json
-from llm4ad.method.traceaad_v10_12.tree import Node, SearchTree
+from traceaad.v10_12.traceaad import TraceAADV1012
+from traceaad.v10_12.storage import RunStorage, atomic_json
+from traceaad.v10_12.tree import Node, SearchTree
 
 
 def read(path):

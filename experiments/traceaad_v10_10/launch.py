@@ -14,7 +14,7 @@ from experiments.infra.equivalent_backends import prepare_resume
 from experiments.infra.base import BACKENDS, LaunchItem, TASKS, TASK_SHORT, free_slots, item_is_running, launch_items
 from experiments.infra.launcher import get_summary_status
 from experiments.traceaad_v10_8.launch import allocate, healthy_slots
-from llm4ad.method.traceaad_v10_5.traceaad import atomic_json
+from traceaad.v10_5.traceaad import atomic_json
 from experiments.infra.launcher import check_backends, get_summary_status
 
 

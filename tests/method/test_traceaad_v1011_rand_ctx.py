@@ -1,10 +1,10 @@
 import random
 
 from llm4ad.base import Evaluation
-from llm4ad.method.traceaad_v10_11 import TraceAADV1011
-from llm4ad.method.traceaad_v10_11.storage import read_journal
-from llm4ad.method.traceaad_v10_11_rand_ctx import TraceAADV1011RandCtx
-from llm4ad.method.traceaad_v10_11_rand_ctx.context import rank_softmax_sample
+from traceaad.v10_11 import TraceAADV1011
+from traceaad.v10_11.storage import read_journal
+from traceaad.rand_ctx import TraceAADV1011RandCtx
+from traceaad.rand_ctx.context import rank_softmax_sample
 
 
 class TinyEvaluation(Evaluation):

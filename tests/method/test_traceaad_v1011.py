@@ -6,14 +6,14 @@ import pytest
 
 from llm4ad.base import Evaluation
 from llm4ad.base.evaluate import EvaluationOutcome
-from llm4ad.method.traceaad_v10_11 import TraceAADV1011
-from llm4ad.method.traceaad_v10_11.parsing import OUTPUT, parse_candidate, repair_prompt, template_target
-from llm4ad.method.traceaad_v10_11.prompts import INIT_REFERENCE_INSTRUCTION, OPERATOR_INSTRUCTIONS
-from llm4ad.method.traceaad_v10_11.selection import mix_uniform
-from llm4ad.method.traceaad_v10_11.storage import read_journal
-from llm4ad.method.traceaad_v10_11.traceaad import Candidate
+from traceaad.v10_11 import TraceAADV1011
+from traceaad.v10_11.parsing import OUTPUT, parse_candidate, repair_prompt, template_target
+from traceaad.v10_11.prompts import INIT_REFERENCE_INSTRUCTION, OPERATOR_INSTRUCTIONS
+from traceaad.v10_11.selection import mix_uniform
+from traceaad.v10_11.storage import read_journal
+from traceaad.v10_11.traceaad import Candidate
 
-MODULE_ROOT = Path(__file__).resolve().parents[2] / "llm4ad" / "method" / "traceaad_v10_11"
+MODULE_ROOT = Path(__file__).resolve().parents[2] / "traceaad" / "v10_11"
 
 
 class TinyEvaluation(Evaluation):
@@ -91,8 +91,8 @@ def test_v1011_does_not_import_historical_methods():
             elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module]
             for name in names:
-                if name.startswith("llm4ad.method.") and not name.startswith(
-                        "llm4ad.method.traceaad_v10_11"):
+                if name.startswith("traceaad.") and not name.startswith(
+                        "traceaad.v10_11"):
                     forbidden.append(f"{path.name}: {name}")
                 if "traceaad_v" in name and "traceaad_v10_11" not in name:
                     forbidden.append(f"{path.name}: {name}")

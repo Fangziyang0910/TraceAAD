@@ -4,13 +4,13 @@ import argparse
 from pathlib import Path
 
 from experiments.infra.runner import FORMAL_BUDGET, add_common_run_args, setup_experiment_run
-from llm4ad.method.traceaad_v10_10 import TraceAADV1010
-from llm4ad.method.traceaad_v10_10.traceaad import (
+from traceaad.v10_10 import TraceAADV1010
+from traceaad.v10_10.traceaad import (
     DEDUP_POLICY,
     ERROR_HANDLING,
     SELECTION_POLICY,
 )
-from llm4ad.method.traceaad_v10_10.trajectory import CONTEXT_POLICY, GENERATION, INITIALIZATION_POLICY
+from traceaad.v10_10.trajectory import CONTEXT_POLICY, GENERATION, INITIALIZATION_POLICY
 
 
 def build_parser():

@@ -4,13 +4,13 @@ from pathlib import Path
 import pytest
 
 from llm4ad.base import Evaluation
-from llm4ad.method.traceaad_v11_1 import TraceAADV111
-from llm4ad.method.traceaad_v11_1.prompts import OPERATOR_INSTRUCTIONS
-from llm4ad.method.traceaad_v11_1.selection import (
+from traceaad.v11_1 import TraceAADV111
+from traceaad.v11_1.prompts import OPERATOR_INSTRUCTIONS
+from traceaad.v11_1.selection import (
     OPERATORS, PARENT_TEMPERATURE, reference_pool, sample_references, score_nodes,
 )
-from llm4ad.method.traceaad_v11_1.storage import read_journal
-from llm4ad.method.traceaad_v11_1.tree import Node
+from traceaad.v11_1.storage import read_journal
+from traceaad.v11_1.tree import Node
 
 
 class TinyEvaluation(Evaluation):

@@ -22,9 +22,9 @@ from experiments.traceaad_refine_e1.profile import candidate as profile_candidat
 from experiments.traceaad_refine_e1.profile import worker as profile_worker
 from experiments.traceaad_refine_e1.profile_core import profile_distance
 from llm4ad.base import SecureEvaluator, TextFunctionProgramConverter
-from llm4ad.method.traceaad_v10_3.schema import Node
-from llm4ad.method.traceaad_v10_6 import prompts
-from llm4ad.method.traceaad_v10_6.traceaad import CODE_RE, SUMMARY_RE, _strip_thinking
+from traceaad.v10_3.schema import Node
+from traceaad.v10_6 import prompts
+from traceaad.v10_6.traceaad import CODE_RE, SUMMARY_RE, _strip_thinking
 
 PROTOCOL = "traceaad-e2-b-prime-v1"
 SOURCE = REPO_ROOT / "experiments/traceaad_e2_a/raw/traceaad_e2_a_20260907"
@@ -322,7 +322,7 @@ class TrialRuntime:
         match = CODE_RE.fullmatch(_strip_thinking(response))
         if not match:
             return None
-        from llm4ad.method.traceaad_v10_6.traceaad import TraceAADV106
+        from traceaad.v10_6.traceaad import TraceAADV106
 
         parser = type("Parser", (), {"_template_func": self.template_func})()
         parsed = TraceAADV106.parse_response(parser, response, finish)

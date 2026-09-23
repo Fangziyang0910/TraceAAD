@@ -5,7 +5,7 @@ from pathlib import Path
 
 from experiments.infra.runner import FORMAL_BUDGET, add_common_run_args, setup_experiment_run
 from experiments.traceaad_v10_12.freeze import verify_runtime
-from llm4ad.method.traceaad_v10_12 import TraceAADV1012
+from traceaad.v10_12 import TraceAADV1012
 
 
 def build_parser():

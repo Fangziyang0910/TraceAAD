@@ -9,7 +9,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT))
 from experiments.traceaad_v10_12.freeze import runtime_environment, verify_runtime
-from llm4ad.method.traceaad_v10_12.storage import atomic_json
+from traceaad.v10_12.storage import atomic_json
 
 
 def main():

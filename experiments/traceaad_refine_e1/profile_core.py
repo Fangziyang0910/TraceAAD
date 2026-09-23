@@ -24,24 +24,24 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from llm4ad.task.optimization.cvrp_aco.evaluation import (  # noqa: E402
+from benchmarks.cvrp_aco.evaluation import (  # noqa: E402
     ACO as CVRPACO,
     CVRPACOEvaluation,
 )
-from llm4ad.task.optimization.generated_data_config import (  # noqa: E402
+from benchmarks.generated_data_config import (  # noqa: E402
     get_generated_task_kwargs,
 )
-from llm4ad.task.optimization.online_bin_packing.generate_weibull_instances import (  # noqa: E402
+from benchmarks.online_bin_packing.generate_weibull_instances import (  # noqa: E402
     generate_weibull_multiscale_dataset,
 )
-from llm4ad.task.optimization.op_aco.evaluation import (  # noqa: E402
+from benchmarks.op_aco.evaluation import (  # noqa: E402
     ACO as OPACO,
     OPACOEvaluation,
 )
-from llm4ad.task.optimization.tsp_construct.evaluation import (  # noqa: E402
+from benchmarks.tsp_construct.evaluation import (  # noqa: E402
     TSPEvaluation,
 )
-from llm4ad.task.optimization.vrptw_construct.evaluation import (  # noqa: E402
+from benchmarks.vrptw_construct.evaluation import (  # noqa: E402
     VRPTWEvaluation,
 )
 

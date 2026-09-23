@@ -7,8 +7,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from llm4ad.method.calm import CALM, CALMProfiler
-from llm4ad.method.calm.task_config import get_task_hyperparams, resolve_task_key
+from baselines.calm import CALM, CALMProfiler
+from baselines.calm.task_config import get_task_hyperparams, resolve_task_key
 
 from experiments.infra.base import (
     ALL_TASKS,

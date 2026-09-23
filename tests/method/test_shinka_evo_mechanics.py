@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from llm4ad.base import Evaluation, Function, LLM
-from llm4ad.method.shinka_evo import ShinkaArchive, ShinkaEvo, ShinkaEvoProfiler, ShinkaLLMBandit, ShinkaProgram
+from baselines.shinka_evo import ShinkaArchive, ShinkaEvo, ShinkaEvoProfiler, ShinkaLLMBandit, ShinkaProgram
 
 
 def code_block(value: int, *, name="heuristic_v2", args="y") -> str:

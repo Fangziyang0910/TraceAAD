@@ -32,11 +32,11 @@ from experiments.infra.base import (
     resolve_backend,
 )
 from llm4ad.base import SecureEvaluator, TextFunctionProgramConverter
-from llm4ad.method.traceaad_v10_1 import prompts as prompts_v101
-from llm4ad.method.traceaad_v10_1.schema import Node
-from llm4ad.method.traceaad_v10_1.traceaad import TraceAADV101
-from llm4ad.method.traceaad_v10_2 import prompts as prompts_v102
-from llm4ad.method.traceaad_v10_2.traceaad import TraceAADV102
+from traceaad.v10_1 import prompts as prompts_v101
+from traceaad.v10_1.schema import Node
+from traceaad.v10_1.traceaad import TraceAADV101
+from traceaad.v10_2 import prompts as prompts_v102
+from traceaad.v10_2.traceaad import TraceAADV102
 
 PROTOCOL_ID = "traceaad-v10-paired-prompt-kernel-probe-v1"
 DESIGN_SEED = 1010203

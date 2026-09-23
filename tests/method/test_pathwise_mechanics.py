@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 
 from llm4ad.base import Evaluation, LLM
-from llm4ad.method.pathwise import PathWise
-from llm4ad.method.pathwise.profiler import PathWiseProfiler
+from baselines.pathwise import PathWise
+from baselines.pathwise.profiler import PathWiseProfiler
 
 
 def make_init_code(label: int) -> str:

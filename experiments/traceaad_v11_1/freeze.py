@@ -55,19 +55,18 @@ def freeze(batch, prefix='v111'):
     sources = [
         root / 'llm4ad/base',
         root / 'llm4ad/tools',
-        root / 'llm4ad/method/traceaad_v11_1',
+        root / 'traceaad/v11_1',
         root / 'experiments/infra',
         root / 'experiments/traceaad_v11_1',
     ]
-    sources += [root / 'llm4ad/task/optimization' / task for task in (
+    sources += [root / 'benchmarks' / task for task in (
         'tsp_construct', 'cvrp_aco', 'op_aco', 'online_bin_packing', 'vrptw_construct')]
     files = [
         root / 'experiments/__init__.py',
         root / 'llm4ad/__init__.py',
-        root / 'llm4ad/method/__init__.py',
-        root / 'llm4ad/task/__init__.py',
-        root / 'llm4ad/task/optimization/__init__.py',
-        root / 'llm4ad/task/optimization/generated_data_config.py',
+        root / 'traceaad/__init__.py',
+        root / 'benchmarks/__init__.py',
+        root / 'benchmarks/generated_data_config.py',
     ]
     for directory in sources:
         for folder, dirs, names in os.walk(directory):

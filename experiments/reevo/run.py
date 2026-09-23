@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from llm4ad.method.reevo import ReEvo, ReEvoProfiler
+from baselines.reevo import ReEvo, ReEvoProfiler
 
 from experiments.infra.base import (
     ALL_TASKS,

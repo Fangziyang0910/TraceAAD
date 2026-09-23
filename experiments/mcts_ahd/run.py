@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from llm4ad.method.mcts_ahd import MAProfiler, MCTS_AHD
+from baselines.mcts_ahd import MAProfiler, MCTS_AHD
 
 from experiments.infra.base import (
     ALL_TASKS,

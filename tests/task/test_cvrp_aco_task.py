@@ -3,12 +3,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from llm4ad.task.optimization.cvrp_aco import (
+from benchmarks.cvrp_aco import (
     CVRPACOEvaluation,
     get_split_spec,
     load_split_instances,
 )
-from llm4ad.task.optimization.cvrp_aco.evaluation import ACO
+from benchmarks.cvrp_aco.evaluation import ACO
 
 
 def inverse_distance(distance_matrix, coordinates, demands, capacity):

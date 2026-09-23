@@ -11,16 +11,16 @@ from llm4ad.base import InvalidEvaluationResult
 
 
 FROZEN_TASKS = (
-    "optimization/tsp_construct",
-    "optimization/cvrp_aco",
-    "optimization/op_aco",
-    "optimization/online_bin_packing",
-    "optimization/vrptw_construct",
+    "tsp_construct",
+    "cvrp_aco",
+    "op_aco",
+    "online_bin_packing",
+    "vrptw_construct",
 )
 
 
 def test_no_frozen_template_body_uses_undefined_kwargs():
-    root = Path("llm4ad/task")
+    root = Path("benchmarks")
     offenders = []
     for relative in FROZEN_TASKS:
         template_path = root / relative / "template.py"
@@ -48,14 +48,14 @@ def test_no_frozen_template_body_uses_undefined_kwargs():
 
 
 def test_tsp_description_does_not_claim_coordinate_inputs():
-    from llm4ad.task.optimization.tsp_construct import template as tsp_t
+    from benchmarks.tsp_construct import template as tsp_t
 
     assert "does not receive coordinates" in tsp_t.task_description.lower()
     assert "distance matrix" in tsp_t.task_description.lower()
 
 
 def test_vrptw_problem_size_counts_customers_excluding_depot():
-    from llm4ad.task.optimization.vrptw_construct.evaluation import VRPTWEvaluation
+    from benchmarks.vrptw_construct.evaluation import VRPTWEvaluation
 
     evaluation = VRPTWEvaluation(problem_size=3, n_instance=1)
     coordinates, distances, demands, _, service, windows = evaluation._datasets[0]
@@ -66,7 +66,7 @@ def test_vrptw_problem_size_counts_customers_excluding_depot():
 
 
 def test_vrptw_only_offers_feasible_customers_to_heuristic():
-    from llm4ad.task.optimization.vrptw_construct.evaluation import VRPTWEvaluation
+    from benchmarks.vrptw_construct.evaluation import VRPTWEvaluation
 
     evaluation = VRPTWEvaluation.__new__(VRPTWEvaluation)
     evaluation.problem_size = 2
@@ -107,7 +107,7 @@ def test_vrptw_only_offers_feasible_customers_to_heuristic():
 
 
 def test_vrptw_cost_includes_final_return_to_depot():
-    from llm4ad.task.optimization.vrptw_construct.evaluation import VRPTWEvaluation
+    from benchmarks.vrptw_construct.evaluation import VRPTWEvaluation
 
     evaluation = VRPTWEvaluation.__new__(VRPTWEvaluation)
     evaluation.problem_size = 1

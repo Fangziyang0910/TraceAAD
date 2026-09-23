@@ -18,10 +18,10 @@ def freeze(batch, prefix='v1010'):
     results = root / 'experiments/traceaad_v10_10/results'
     runtime = results / f'runtime_{batch}'
     runtime.mkdir(parents=True, exist_ok=False)
-    sources = [root / 'llm4ad', root / 'experiments/infra',
-               root / 'experiments/traceaad_v10_8', root / 'experiments/traceaad_v10_10']
-    sources = [root / 'llm4ad', root / 'experiments/infra', root / 'experiments/traceaad_v10_10']
-    files = [root / 'experiments/__init__.py']
+    sources = [root / 'llm4ad', root / 'traceaad', root / 'benchmarks',
+               root / 'experiments/infra', root / 'experiments/traceaad_v10_10']
+    files = [root / 'experiments/__init__.py', root / 'traceaad/__init__.py',
+             root / 'benchmarks/__init__.py']
     for directory in sources:
         for folder, dirs, names in os.walk(directory):
             dirs[:] = sorted(d for d in dirs if d not in ('results', '__pycache__', 'data'))

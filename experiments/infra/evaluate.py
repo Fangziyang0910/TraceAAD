@@ -38,20 +38,20 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from llm4ad.base.evaluate import SecureEvaluator  # noqa: E402
-from llm4ad.task.optimization.cvrp_aco import (  # noqa: E402
+from benchmarks.cvrp_aco import (  # noqa: E402
     CVRPACOEvaluation,
     load_split_instances as load_cvrp_instances,
 )
-from llm4ad.task.optimization.generated_data_config import (  # noqa: E402
+from benchmarks.generated_data_config import (  # noqa: E402
     get_generated_task_kwargs,
 )
-from llm4ad.task.optimization.online_bin_packing import OBPEvaluation  # noqa: E402
-from llm4ad.task.optimization.op_aco import (  # noqa: E402
+from benchmarks.online_bin_packing import OBPEvaluation  # noqa: E402
+from benchmarks.op_aco import (  # noqa: E402
     OPACOEvaluation,
     load_split_instances as load_op_instances,
 )
-from llm4ad.task.optimization.tsp_construct import TSPEvaluation  # noqa: E402
-from llm4ad.task.optimization.vrptw_construct import VRPTWEvaluation  # noqa: E402
+from benchmarks.tsp_construct import TSPEvaluation  # noqa: E402
+from benchmarks.vrptw_construct import VRPTWEvaluation  # noqa: E402
 
 from experiments.infra.artifacts import (  # noqa: E402
     load_run_summary,

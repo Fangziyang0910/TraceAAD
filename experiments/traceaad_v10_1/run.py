@@ -10,7 +10,7 @@ from experiments.infra.runner import (
     add_common_run_args,
     setup_experiment_run,
 )
-from llm4ad.method.traceaad_v10_1 import TraceAADV101
+from traceaad.v10_1 import TraceAADV101
 
 METHOD = "v101"
 

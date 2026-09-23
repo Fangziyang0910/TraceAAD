@@ -3,8 +3,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from llm4ad.base import Evaluation, Function, LLM
-from llm4ad.method.reevo.prompt import ReEvoPrompt
-from llm4ad.method.reevo.reevo import ReEvo
+from baselines.reevo.prompt import ReEvoPrompt
+from baselines.reevo.reevo import ReEvo
 
 
 def make_function(label: int, score=None) -> Function:
@@ -134,7 +134,7 @@ class ReEvoMechanicsTest(unittest.TestCase):
         method._population.set_population([parent_a, parent_b, parent_c], increment_generation=False)
         method._elite_function = None
 
-        with patch("llm4ad.method.reevo.reevo.np.random.choice") as choice:
+        with patch("baselines.reevo.reevo.np.random.choice") as choice:
             choice.side_effect = [
                 [parent_a, parent_b],
                 [parent_a, parent_c],
@@ -155,7 +155,7 @@ class ReEvoMechanicsTest(unittest.TestCase):
         method._population.set_population([parent_a, parent_b, parent_c], increment_generation=False)
         method._elite_function = None
 
-        with patch("llm4ad.method.reevo.reevo.np.random.choice") as choice:
+        with patch("baselines.reevo.reevo.np.random.choice") as choice:
             choice.side_effect = [
                 [parent_a, parent_b],
                 [parent_b, parent_c],
@@ -190,7 +190,7 @@ class ReEvoMechanicsTest(unittest.TestCase):
         method._population.set_population([parent_a, parent_b], increment_generation=False)
         method._elite_function = parent_b
 
-        with patch("llm4ad.method.reevo.reevo.np.random.choice") as choice:
+        with patch("baselines.reevo.reevo.np.random.choice") as choice:
             choice.side_effect = [[parent_a, parent_b], [parent_b, parent_a]]
             method._run_evolution_generation()
 
@@ -239,7 +239,7 @@ class ReEvoMechanicsTest(unittest.TestCase):
         self.assertEqual(constructed._max_sample_nums, 100)
         self.assertEqual(constructed._mutation_rate, 0.5)
 
-        paras = Path("llm4ad/method/reevo/paras.yaml").read_text()
+        paras = Path("baselines/reevo/paras.yaml").read_text()
         self.assertIn("max_sample_nums: 100", paras)
         self.assertIn("pop_size: 10", paras)
         self.assertIn("init_pop_size: 30", paras)

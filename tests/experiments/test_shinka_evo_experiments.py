@@ -7,7 +7,7 @@ import pytest
 
 from experiments.infra import base as _common
 from experiments.shinka_evo import launch, run
-from llm4ad.method.shinka_evo import ShinkaEvo
+from baselines.shinka_evo import ShinkaEvo
 
 
 @pytest.mark.parametrize("task", run.TASKS)

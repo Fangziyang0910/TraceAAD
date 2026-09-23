@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from experiments.infra.runner import FORMAL_BUDGET, add_common_run_args, setup_experiment_run
-from llm4ad.method.traceaad_bc import (
+from traceaad.bc import (
     TraceAADV10BudgetV11Context,
     TraceAADV11BudgetV10Context,
 )

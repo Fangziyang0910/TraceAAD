@@ -25,14 +25,14 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from llm4ad.base.code import TextFunctionProgramConverter  # noqa: E402
-from llm4ad.method.traceaad_v10_10 import errors  # noqa: E402
+from traceaad.v10_10 import errors  # noqa: E402
 
 TASK_TEMPLATE_MODULES = {
-    'tsp_construct': 'llm4ad.task.optimization.tsp_construct.template',
-    'cvrp_aco': 'llm4ad.task.optimization.cvrp_aco.template',
-    'op_aco': 'llm4ad.task.optimization.op_aco.template',
-    'online_bin_packing': 'llm4ad.task.optimization.online_bin_packing.template',
-    'vrptw_construct': 'llm4ad.task.optimization.vrptw_construct.template',
+    'tsp_construct': 'benchmarks.tsp_construct.template',
+    'cvrp_aco': 'benchmarks.cvrp_aco.template',
+    'op_aco': 'benchmarks.op_aco.template',
+    'online_bin_packing': 'benchmarks.online_bin_packing.template',
+    'vrptw_construct': 'benchmarks.vrptw_construct.template',
 }
 
 

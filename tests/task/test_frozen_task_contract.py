@@ -20,18 +20,18 @@ import hashlib
 
 import pytest
 
-from llm4ad.task.optimization.cvrp_aco import dataset as cvrp_dataset
-from llm4ad.task.optimization.cvrp_aco import template as cvrp_template
-from llm4ad.task.optimization.generated_data_config import (
+from benchmarks.cvrp_aco import dataset as cvrp_dataset
+from benchmarks.cvrp_aco import template as cvrp_template
+from benchmarks.generated_data_config import (
     EVAL_SEED,
     TRAIN_SEED,
     get_generated_task_kwargs,
 )
-from llm4ad.task.optimization.online_bin_packing import template as obp_template
-from llm4ad.task.optimization.op_aco import dataset as op_dataset
-from llm4ad.task.optimization.op_aco import template as op_template
-from llm4ad.task.optimization.tsp_construct import template as tsp_template
-from llm4ad.task.optimization.vrptw_construct import template as vrptw_template
+from benchmarks.online_bin_packing import template as obp_template
+from benchmarks.op_aco import dataset as op_dataset
+from benchmarks.op_aco import template as op_template
+from benchmarks.tsp_construct import template as tsp_template
+from benchmarks.vrptw_construct import template as vrptw_template
 
 CONTRACT_DOC = "docs/02-实验结果/00-主实验配置与冻结契约.md"
 CONTRACT_MSG = (

@@ -1,7 +1,7 @@
 [project]
-name = "llm4ad"
-version = "1.0"
-description = "Large Language Model for Algorithm Design Platform"
+name = "traceaad"
+version = "2.0"
+description = "TraceAAD: traced automatic algorithm design research repo (core evaluation from LLM4AD)"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "numpy<2",

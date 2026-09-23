@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from llm4ad.method.shinka_evo import ShinkaEvo, ShinkaEvoProfiler
+from baselines.shinka_evo import ShinkaEvo, ShinkaEvoProfiler
 
 from experiments.infra.base import (
     ALL_TASKS,

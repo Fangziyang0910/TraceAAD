@@ -7,7 +7,7 @@ import pytest
 
 from experiments.infra import base as _common
 from experiments.eoh import launch, run
-from llm4ad.method.eoh import EoH
+from baselines.eoh import EoH
 
 
 @pytest.mark.parametrize("task", run.TASKS)

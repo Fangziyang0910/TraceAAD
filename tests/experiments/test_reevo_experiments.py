@@ -7,7 +7,7 @@ import pytest
 
 from experiments.infra import base as _common
 from experiments.reevo import launch, run
-from llm4ad.method.reevo import ReEvo
+from baselines.reevo import ReEvo
 
 
 @pytest.mark.parametrize("task", run.TASKS)
