@@ -4,8 +4,8 @@ import threading
 import unittest
 from pathlib import Path
 
-from llm4ad.base import Function
-from llm4ad.base.evaluate import Evaluation
+from core import Function
+from core.evaluate import Evaluation
 from baselines.eoh.observability import init_observability, record_sample_failure
 from baselines.eoh.sampling import sample_thought_and_function, trim_braced_thought
 from baselines.profiler import ProfilerBase

@@ -46,7 +46,7 @@ from .observability import (
     reset_sample_failures,
     shutdown_executor,
 )
-from llm4ad.base import (
+from core import (
     Evaluation, LLM, Function, Program, TextFunctionProgramConverter, SecureEvaluator
 )
 from baselines.sampling import SampleTrimmer

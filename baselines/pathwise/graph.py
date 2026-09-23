@@ -4,7 +4,7 @@ import copy
 import dataclasses
 from typing import Dict, List
 
-from llm4ad.base import Function
+from core import Function
 
 
 @dataclasses.dataclass

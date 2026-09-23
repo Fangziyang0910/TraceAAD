@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from llm4ad.base import Evaluation
+from core import Evaluation
 from traceaad.v11_1 import TraceAADV111
 from traceaad.v11_1.prompts import OPERATOR_INSTRUCTIONS
 from traceaad.v11_1.selection import (

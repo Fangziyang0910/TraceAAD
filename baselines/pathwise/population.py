@@ -6,7 +6,7 @@ from threading import Lock
 from typing import Iterable
 
 from .graph import PathWiseNode
-from llm4ad.base import Function
+from core import Function
 
 
 class Population:

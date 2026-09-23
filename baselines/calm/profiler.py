@@ -7,7 +7,7 @@ import os
 from threading import Lock
 from typing import Optional
 
-from llm4ad.base import Function
+from core import Function
 from baselines.profiler import ProfilerBase
 
 

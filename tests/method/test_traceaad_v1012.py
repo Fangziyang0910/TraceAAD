@@ -3,7 +3,7 @@
 import random
 from pathlib import Path
 
-from llm4ad.base import Evaluation
+from core import Evaluation
 from traceaad.v10_12 import TraceAADV1012
 from traceaad.v10_12.prompts import TrajectoryBuilder
 from traceaad.v10_12.selection import rank_softmax_sample

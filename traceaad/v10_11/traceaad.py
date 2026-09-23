@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from llm4ad.base import SecureEvaluator
+from core import SecureEvaluator
 from . import parsing
 from .prompts import TrajectoryBuilder
 from .selection import (DONOR_UNIFORM_PROBABILITY, OPERATORS, OPERATOR_PROBABILITIES,

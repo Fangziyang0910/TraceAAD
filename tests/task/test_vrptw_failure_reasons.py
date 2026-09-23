@@ -1,7 +1,7 @@
 """VRPTW invalid constructions report the violated condition, not a bare None."""
 import numpy as np
 
-from llm4ad.base import SecureEvaluator
+from core import SecureEvaluator
 from benchmarks.vrptw_construct import VRPTWEvaluation
 
 

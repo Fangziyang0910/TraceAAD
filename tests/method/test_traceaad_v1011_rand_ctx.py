@@ -1,6 +1,6 @@
 import random
 
-from llm4ad.base import Evaluation
+from core import Evaluation
 from traceaad.v10_11 import TraceAADV1011
 from traceaad.v10_11.storage import read_journal
 from traceaad.rand_ctx import TraceAADV1011RandCtx

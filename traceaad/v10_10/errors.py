@@ -4,7 +4,7 @@ import re
 
 from traceaad.v10_3.schema import normalize_code
 from traceaad.v10_3.traceaad import THINK_BLOCK_RE
-from llm4ad.base import TextFunctionProgramConverter
+from core import TextFunctionProgramConverter
 
 OUTPUT = (
     'Return two labeled parts in this order. First write `Idea:` followed by a concise final '

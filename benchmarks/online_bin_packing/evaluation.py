@@ -38,7 +38,7 @@ from typing import Any
 import numpy as np
 import matplotlib.pyplot as plt
 
-from llm4ad.base import Evaluation
+from core import Evaluation
 from benchmarks.online_bin_packing.template import template_program, task_description
 from benchmarks.online_bin_packing.generate_weibull_instances import (
     generate_weibull_dataset,

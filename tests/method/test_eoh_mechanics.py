@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from llm4ad.base import Evaluation, Function, LLM, TextFunctionProgramConverter
+from core import Evaluation, Function, LLM, TextFunctionProgramConverter
 from baselines.eoh.eoh import EoH
 from baselines.eoh.population import Population
 

@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from llm4ad.base.code import TextFunctionProgramConverter
-from llm4ad.base.evaluate import Evaluation
+from core.code import TextFunctionProgramConverter
+from core.evaluate import Evaluation
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK_ROOT = ROOT / "benchmarks"

@@ -23,7 +23,7 @@ import ast
 import copy
 from typing import Any, List
 
-from llm4ad.base import Function, LLM, Program, TextFunctionProgramConverter
+from core import Function, LLM, Program, TextFunctionProgramConverter
 
 
 class SampleTrimmer:

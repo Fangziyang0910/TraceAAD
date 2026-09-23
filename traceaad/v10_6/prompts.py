@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import hashlib
 import re
 
-from llm4ad.base import TextFunctionProgramConverter
+from core import TextFunctionProgramConverter
 from traceaad.v10_5.prompts import PromptBuilder as BaseBuilder, formation_events
 
 HISTORY_GUIDANCE = (

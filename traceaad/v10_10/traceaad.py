@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy
-from llm4ad.base import TextFunctionProgramConverter
+from core import TextFunctionProgramConverter
 
 from traceaad.v10_3.traceaad import calibrate_beta
 from traceaad.v10_8.traceaad import TraceAADV108

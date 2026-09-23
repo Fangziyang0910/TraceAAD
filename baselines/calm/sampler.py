@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional, Sequence
 
-from llm4ad.base import LLM
+from core import LLM
 
 
 class CALMSampler:

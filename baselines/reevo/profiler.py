@@ -11,7 +11,7 @@ except:
     pass
 
 from .population import Population
-from llm4ad.base import Function
+from core import Function
 from baselines.profiler import TensorboardProfiler, ProfilerBase, WandBProfiler
 
 

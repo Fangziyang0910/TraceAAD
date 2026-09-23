@@ -7,7 +7,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from llm4ad.base import LLM
+from core import LLM
 
 
 @dataclass

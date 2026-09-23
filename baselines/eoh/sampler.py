@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Tuple
 
 from .sampling import sample_thought_and_function, trim_braced_thought
-from llm4ad.base import LLM, Function, Program
+from core import LLM, Function, Program
 
 
 class EoHSampler:

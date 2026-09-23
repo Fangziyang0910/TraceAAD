@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from llm4ad.base import Evaluation, set_kill_with_parent
+from core import Evaluation, set_kill_with_parent
 from benchmarks.cvrp_aco.dataset import (
     CAPACITY,
     DEFAULT_SPLIT,

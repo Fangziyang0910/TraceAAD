@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from llm4ad.base import Function, TextFunctionProgramConverter
+from core import Function, TextFunctionProgramConverter
 from baselines.mcts_ahd.mcts import MCTS, MCTSNode
 from baselines.mcts_ahd.mcts_ahd import MCTS_AHD
 from baselines.mcts_ahd.population import Population

@@ -34,7 +34,7 @@ from benchmarks.op_aco import OPACOEvaluation
 from benchmarks.tsp_construct import TSPEvaluation
 from benchmarks.vrptw_construct import VRPTWEvaluation
 from .env import resolve_llm_api_key
-from llm4ad.base.llm import OpenAIAPI
+from core.llm import OpenAIAPI
 
 TaskName = Literal[
     "tsp_construct",

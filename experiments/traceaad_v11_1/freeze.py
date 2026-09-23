@@ -53,8 +53,7 @@ def freeze(batch, prefix='v111'):
     # Import closure of experiments.traceaad_v11_1.run only: retired method
     # packages and unrelated task families are deliberately not frozen.
     sources = [
-        root / 'llm4ad/base',
-        root / 'llm4ad/tools',
+        root / 'core',
         root / 'traceaad/v11_1',
         root / 'experiments/infra',
         root / 'experiments/traceaad_v11_1',
@@ -63,7 +62,7 @@ def freeze(batch, prefix='v111'):
         'tsp_construct', 'cvrp_aco', 'op_aco', 'online_bin_packing', 'vrptw_construct')]
     files = [
         root / 'experiments/__init__.py',
-        root / 'llm4ad/__init__.py',
+        root / 'core/__init__.py',
         root / 'traceaad/__init__.py',
         root / 'benchmarks/__init__.py',
         root / 'benchmarks/generated_data_config.py',

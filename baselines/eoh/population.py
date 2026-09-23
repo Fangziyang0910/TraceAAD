@@ -5,7 +5,7 @@ from threading import Lock
 from typing import List
 import numpy as np
 
-from llm4ad.base import *
+from core import *
 
 
 class Population:

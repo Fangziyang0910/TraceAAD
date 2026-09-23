@@ -10,7 +10,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from llm4ad.base import Function
+from core import Function
 
 
 @dataclass

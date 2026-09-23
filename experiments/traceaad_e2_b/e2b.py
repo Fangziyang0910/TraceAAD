@@ -21,7 +21,7 @@ from experiments.infra.base import BACKENDS, REPO_ROOT, build_llm_client, build_
 from experiments.traceaad_refine_e1.profile import candidate as profile_candidate
 from experiments.traceaad_refine_e1.profile import worker as profile_worker
 from experiments.traceaad_refine_e1.profile_core import profile_distance
-from llm4ad.base import SecureEvaluator, TextFunctionProgramConverter
+from core import SecureEvaluator, TextFunctionProgramConverter
 from traceaad.v10_3.schema import Node
 from traceaad.v10_6 import prompts
 from traceaad.v10_6.traceaad import CODE_RE, SUMMARY_RE, _strip_thinking

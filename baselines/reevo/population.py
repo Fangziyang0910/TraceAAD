@@ -7,7 +7,7 @@ from typing import List
 
 import numpy as np
 
-from llm4ad.base import Function
+from core import Function
 
 
 class Population:

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from llm4ad.base import InvalidEvaluationResult
+from core import InvalidEvaluationResult
 
 
 FROZEN_TASKS = (

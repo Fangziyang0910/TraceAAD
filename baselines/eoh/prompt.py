@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from typing import List, Dict
 
-from llm4ad.base import *
+from core import *
 
 
 class EoHPrompt:

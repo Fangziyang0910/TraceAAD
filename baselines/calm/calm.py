@@ -23,7 +23,7 @@ from .observability import (
     record_sample_failure,
     reset_sample_failures,
 )
-from llm4ad.base import (
+from core import (
     Evaluation,
     Function,
     LLM,

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from llm4ad.base import Evaluation
+from core import Evaluation
 from traceaad.bc import (
     TraceAADV10BudgetV11Context,
     TraceAADV11BudgetV10Context,

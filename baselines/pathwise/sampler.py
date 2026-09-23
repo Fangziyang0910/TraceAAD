@@ -5,7 +5,7 @@ import copy
 import re
 
 from .graph import PathWiseAction, PathWiseNode
-from llm4ad.base import Function, LLM, Program, TextFunctionProgramConverter
+from core import Function, LLM, Program, TextFunctionProgramConverter
 from baselines.sampling import SampleTrimmer
 
 

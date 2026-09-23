@@ -4,7 +4,7 @@ import os
 import time
 from pathlib import Path
 
-from llm4ad.base import Evaluation, SecureEvaluator
+from core import Evaluation, SecureEvaluator
 
 TEMPLATE = """def score():
     return 1.0

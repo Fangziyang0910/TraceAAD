@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from llm4ad.base import SecureEvaluator
+from core import SecureEvaluator
 from . import parsing
 from .prompts import ReferenceContextBuilder, TrajectoryBuilder
 from .selection import (CodeBook, EXPLORATION_C, N_REFERENCES, OPERATORS,

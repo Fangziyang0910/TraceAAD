@@ -36,7 +36,7 @@ from __future__ import annotations
 from typing import Any
 import copy
 import numpy as np
-from llm4ad.base import Evaluation, InvalidEvaluationResult
+from core import Evaluation, InvalidEvaluationResult
 from benchmarks.vrptw_construct.get_instance import GetData
 from benchmarks.vrptw_construct.template import template_program, task_description
 

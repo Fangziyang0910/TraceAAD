@@ -31,7 +31,7 @@ from experiments.infra.base import (
     build_task,
     resolve_backend,
 )
-from llm4ad.base import SecureEvaluator, TextFunctionProgramConverter
+from core import SecureEvaluator, TextFunctionProgramConverter
 from traceaad.v10_1 import prompts as prompts_v101
 from traceaad.v10_1.schema import Node
 from traceaad.v10_1.traceaad import TraceAADV101

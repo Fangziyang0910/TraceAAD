@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from typing import List
 
-from llm4ad.base import Function
+from core import Function
 
 
 class ReEvoPrompt:

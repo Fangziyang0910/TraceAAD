@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from llm4ad.base import Evaluation, LLM
+from core import Evaluation, LLM
 from baselines.pathwise import PathWise
 from baselines.pathwise.profiler import PathWiseProfiler
 

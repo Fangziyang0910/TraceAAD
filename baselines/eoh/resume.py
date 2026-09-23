@@ -10,7 +10,7 @@ from tqdm.auto import tqdm
 from .eoh import EoH
 from .profiler import EoHProfiler
 from .population import Population
-from llm4ad.base import TextFunctionProgramConverter as tfpc, Function
+from core import TextFunctionProgramConverter as tfpc, Function
 
 
 def _get_latest_pop_json(log_path: str):

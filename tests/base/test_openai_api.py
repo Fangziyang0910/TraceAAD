@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import llm4ad.base.llm as openai_api
-from llm4ad.base.llm import OpenAIAPI
+import core.llm as openai_api
+from core.llm import OpenAIAPI
 
 
 def make_response(

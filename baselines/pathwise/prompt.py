@@ -4,7 +4,7 @@ import copy
 import random
 
 from .graph import PathWiseAction, PathWiseNode
-from llm4ad.base import Function
+from core import Function
 
 
 class PathWisePrompt:

@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
-from llm4ad.base import Function, LLM, Program, TextFunctionProgramConverter
+from core import Function, LLM, Program, TextFunctionProgramConverter
 from .population import ShinkaProgram
 
 

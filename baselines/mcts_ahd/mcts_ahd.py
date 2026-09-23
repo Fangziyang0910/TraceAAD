@@ -38,7 +38,7 @@ from .profiler import MAProfiler
 from .prompt import MAPrompt
 from .sampler import MASampler
 from .observability import close_sampler_llm, finish_profiler, shutdown_executor
-from llm4ad.base import (
+from core import (
     Evaluation, LLM, Function, Program, TextFunctionProgramConverter, SecureEvaluator
 )
 from baselines.profiler import ProfilerBase

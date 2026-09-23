@@ -4,7 +4,7 @@ import re
 from typing import Tuple, List, Dict
 
 from .prompt import MAPrompt
-from llm4ad.base import LLM, Function, Program
+from core import LLM, Function, Program
 from baselines.sampling import SampleTrimmer
 
 

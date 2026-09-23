@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from llm4ad.base import Evaluation
-from llm4ad.base.evaluate import EvaluationOutcome
+from core import Evaluation
+from core.evaluate import EvaluationOutcome
 from traceaad.v11_0 import TraceAADV110
 from traceaad.v11_0.parsing import OUTPUT, parse_candidate, repair_prompt
 from traceaad.v11_0.prompts import OPERATOR_INSTRUCTIONS, REFERENCE_INTRO

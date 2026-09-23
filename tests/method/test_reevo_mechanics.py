@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from llm4ad.base import Evaluation, Function, LLM
+from core import Evaluation, Function, LLM
 from baselines.reevo.prompt import ReEvoPrompt
 from baselines.reevo.reevo import ReEvo
 

@@ -19,8 +19,8 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-from llm4ad.base import Evaluation, SecureEvaluator, TextFunctionProgramConverter
-from llm4ad.base.code import Program
+from core import Evaluation, SecureEvaluator, TextFunctionProgramConverter
+from core.code import Program
 
 from .prompts import build_prompt, build_task_contract
 from .schema import INIT, Node, SearchTree, normalize_code

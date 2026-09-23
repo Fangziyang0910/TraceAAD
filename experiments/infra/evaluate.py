@@ -37,7 +37,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from llm4ad.base.evaluate import SecureEvaluator  # noqa: E402
+from core.evaluate import SecureEvaluator  # noqa: E402
 from benchmarks.cvrp_aco import (  # noqa: E402
     CVRPACOEvaluation,
     load_split_instances as load_cvrp_instances,
