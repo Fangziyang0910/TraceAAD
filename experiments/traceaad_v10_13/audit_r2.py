@@ -1,4 +1,4 @@
-"""Read-only, checkpoint-bounded protocol audit of an r2 batch.
+"""Read-only, checkpoint-bounded protocol audit of an r2 or r3 batch.
 
 Writes only an explicitly requested report outside the experiment journals.
 No LLM requests, evaluator calls, resume, or mutations of live state occur.
@@ -73,7 +73,8 @@ def audit(manifest_path):
             if not condition:
                 local.append(message)
 
-        check(state['mechanism']['revision'] == 'v10.13-r2', 'revision mismatch')
+        revision = state['mechanism']['revision']
+        check(revision in ('v10.13-r2', 'v10.13-r3'), 'revision mismatch')
         check([e['candidate_id'] for e in events] == list(range(1, effective + 1)), 'candidate ID gap/duplicate')
         eval_ids = [e['evaluation_id'] for e in events if e.get('evaluation_id') is not None]
         check(eval_ids == list(range(1, len(eval_ids) + 1)), 'evaluation ID gap/duplicate')
@@ -131,6 +132,9 @@ def audit(manifest_path):
                 selection = event['selection']
                 check(selection['parent_probability'] >= .125 / selection['population_size'],
                       tag + 'parent below exploration floor')
+            if revision == 'v10.13-r3':
+                check(event.get('context_reads', 0) == 0, tag + 'r3 unexpectedly read context')
+                check(event['llm_calls'] == 1, tag + 'r3 unexpected multi-call proposal')
             eid = event.get('evaluation_id')
             if eid is not None:
                 receipt = by_receipt.get(eid, {})
@@ -143,6 +147,17 @@ def audit(manifest_path):
             check(sha(call['prompt'].encode()) == event['prompt_hash'], tag + 'prompt hash mismatch')
             check(event['prompt_tokens'] <= state['mechanism']['max_input_tokens'], tag + 'input too large')
             check('```diff' not in call['prompt'], tag + 'historical diff unexpectedly included')
+            if revision == 'v10.13-r3' and event['parent_selected']:
+                check('base_hash:' not in call['prompt'], tag + 'r3 asks model to copy hash')
+                check('"mode":"context"' not in call['prompt'], tag + 'r3 offers context tool')
+                if event['operator'] == 'Fuse':
+                    identity = event.get('loaded_reference_id')
+                    check(event['reference_ids'] == ([identity] if identity is not None else []),
+                          tag + 'r3 reference exposure inconsistent')
+                    if identity is not None:
+                        check(nodes[identity]['code'] in call['prompt'], tag + 'inline reference missing')
+                else:
+                    check(not event['reference_ids'], tag + 'r3 non-Fuse reference')
             if event.get('context_reads'):
                 first = by_call.get(f'{cid}:1')
                 request = response_object(first['response']) if first else None
@@ -155,7 +170,7 @@ def audit(manifest_path):
                     check(nodes[reference_id]['code'] in call['prompt'], tag + 'reference implementation missing from prompt')
             if event['parent_selected'] and event['operator'] in ('Pivot', 'Fuse'):
                 refs = [nodes[i] for i in event['reference_ids']]
-                check(len(refs) <= 3, tag + 'too many reference cards')
+                check(len(refs) <= state['mechanism']['reference_count'], tag + 'too many references')
                 check(len({code_key(n['code']) for n in refs}) == len(refs), tag + 'duplicate reference implementation')
                 check(all(code_key(n['code']) != code_key(nodes[event['parent_id']]['code']) for n in refs),
                       tag + 'reference duplicates parent')

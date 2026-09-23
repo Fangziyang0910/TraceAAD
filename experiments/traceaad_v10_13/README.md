@@ -1,6 +1,6 @@
 # V10.13 实验启动与监控
 
-当前工作区是 **v10.13-r2**，设计见 [r2 机制定义](../../docs/01-主线版本/TraceAAD-V10.13-r2-机制设计.md)。2026-09-24 已按用户要求停止旧批次 `20260923_v1013`，保留其原冻结运行时和全部结果；新批次 `20260924_v1013r2` 已启动 20 路。不要向旧批次注入新代码或用新入口恢复它。[启动与执行检查](../../docs/02-实验结果/2026-09-24-V10.13-r2启动与机制执行检查.md) 保存提交身份、配置和早期机制证据。下列命令记录本批次启动方式；再次创建实验需更换批次名和会话前缀。
+当前工作区是 **v10.13-r3**，设计见 [r3 机制定义](../../docs/01-主线版本/TraceAAD-V10.13-r3-机制设计.md)。用户已授权在测试通过后停止 r2，保留原冻结运行时及全部结果，以同配置启动 `20260924_v1013r3`。不要用 r3 恢复 r2 checkpoint。新批次创建前需确认没有同名结果和会话。
 
 V10.13 正式批次固定为五个任务 × 四个重复，共 20 路。启动器使用三条独立请求池：`server1` 5 路、`server3`（222.201.145.6:8000）8 路、`server3b`（222.201.145.6:8001）7 路。总数 20 路，均低于各端点容量 6、9、9。
 
@@ -8,15 +8,15 @@ V10.13 正式批次固定为五个任务 × 四个重复，共 20 路。启动�
 
 ```bash
 ./.venv/bin/python -m experiments.traceaad_v10_13.freeze \
-  --batch 20260924_v1013r2 --session-prefix v1013r2
+  --batch 20260924_v1013r3 --session-prefix v1013r3
 ```
 
 再启动并持续监控：
 
 ```bash
 ./.venv/bin/python -m experiments.traceaad_v10_13.launch \
-  --batch 20260924_v1013r2 --session-prefix v1013r2 \
-  --runtime experiments/traceaad_v10_13/results/runtime_20260924_v1013r2 \
+  --batch 20260924_v1013r3 --session-prefix v1013r3 \
+  --runtime experiments/traceaad_v10_13/results/runtime_20260924_v1013r3 \
   --watch --interval 30
 ```
 
@@ -26,11 +26,11 @@ V10.13 正式批次固定为五个任务 × 四个重复，共 20 路。启动�
 
 ```bash
 ./.venv/bin/python -m experiments.traceaad_v10_13.monitor \
-  --host 127.0.0.1 --port 8766 --version 20260924_v1013r2
+  --host 127.0.0.1 --port 8766 --version 20260924_v1013r3
 ```
 
 监控面板展示 20 路的评价预算、运行/排队/完成状态、Best 曲线、父代和前沿改善、算子计数、backend、提示 token 和错误计数。endpoint 标签只用于资源审计，不参与方法质量判断。
 
-r2 每路默认 E1000，计入初始化、失败、修复和重复代码的真实评价。可选上下文读取增加一轮 LLM 调用，不占 evaluator 预算，调用和已有 token usage 单独留存。同 E1000 比较不意味着 LLM 成本相同。
+r3 每路默认 E1000，计入初始化、失败、修复和重复代码的真实评价。每个正常候选单轮生成；已有 trial 摘要和 Fuse 的单一参考实现直接提供。修复和失败调用的 token usage 单独留存。同 E1000 比较不意味着 LLM 成本相同。
 
-r2 的 `evaluations.jsonl` 保存评价回执，`tree_state.json` 保存当前阶段。恢复时若已有评价预约却无完整回执，状态为 `uncertain_evaluation`，启动器标为 blocked，禁止自动重评；保留全部文件并核对是否实际发生评价。不同机制指纹的 checkpoint 会在修改 journal 前被拒绝。截断的 journal 尾部另存 `.torn-*`，不作为成功评价证据。
+r3 的 `evaluations.jsonl` 保存评价回执，`tree_state.json` 保存当前阶段。恢复时若已有评价预约却无完整回执，状态为 `uncertain_evaluation`，启动器标为 blocked，禁止自动重评；保留全部文件并核对是否实际发生评价。不同机制指纹的 checkpoint 会在修改 journal 前被拒绝。截断的 journal 尾部另存 `.torn-*`，不作为成功评价证据。

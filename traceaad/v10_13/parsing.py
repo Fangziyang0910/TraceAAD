@@ -1,4 +1,4 @@
-"""Code-first full/edit parsing with optional idea metadata."""
+"""Python-first output with optional exact edits and tolerant JSON envelopes."""
 
 from __future__ import annotations
 
@@ -10,20 +10,15 @@ from dataclasses import dataclass, field
 
 THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 FENCE_RE = re.compile(r"^[ \t]*```(?:python|py)?[ \t]*\r?$", re.MULTILINE | re.IGNORECASE)
-FULL_OUTPUT_FORMAT = '''Return one JSON object. Focus on implementing a good algorithm.
-Full implementation: {"mode":"full","code":"complete Python source"}.
-You may add an optional top-level idea string or object:
-"idea": {"mechanism":"main decision principle", "change":"what changed",
-"transfer":"a potentially reusable computation"}. Keep each included field to one
-short sentence; omit fields that add no useful information.
-You may add donor_id: the offered reference actually used, or null. These descriptions
-are hypotheses, not proofs. Preserve the exact target function interface.'''
+FULL_OUTPUT_FORMAT = '''Return the complete implementation in one Python code block,
+preserving the target function interface. You may precede it with one short
+Idea sentence describing the actual decision rule or change. Focus on the code.'''
 OUTPUT_FORMAT = FULL_OUTPUT_FORMAT + '''
-Local edit: {"mode":"edit","base_hash":"shown parent hash",
+For a small change, you may instead return one JSON edit object:
+{"mode":"edit",
 "edits":[{"search":"exact nonempty source block","replacement":"replacement block"}]}.
-Use either full or edit, not both. Supply 1 to 32 edits, applied sequentially to the
-shown parent; each search block must match exactly once, including whitespace.
-A full implementation is always allowed. Optional idea and donor_id also apply to edit mode.'''
+Edits apply sequentially to the shown current/host program. Each search block must
+match exactly once, including whitespace. An optional idea string is allowed.'''
 
 
 def code_hash(code):
@@ -40,15 +35,55 @@ class ParsedCandidate:
     base_hash: str | None = None
 
 
-def response_object(response):
+def response_objects(response):
+    """Find distinct protocol objects without rewriting their strings or code.
+
+    A single complete Python block keeps the code-first interpretation.
+    Otherwise use one explicit JSON proposal. Skip decoded objects as a whole so
+    nested metadata or JSON-looking code strings cannot become extra proposals.
+    """
     text = THINK_BLOCK_RE.sub('', response).strip()
-    if text.startswith('```json') and text.endswith('```'):
-        text = text[7:-3].strip()
+    # JSON literals inside a complete Python program are data, not proposals.
+    python_text = text
+    fenced = re.fullmatch(r'```(?:python|py)\s*\n(.*?)\n```', text, re.S | re.I)
+    if fenced:
+        python_text = fenced.group(1)
+    fences = list(FENCE_RE.finditer(text))
+    if len(fences) == 2:
+        python_text = text[fences[0].end():fences[1].start()]
+    try:
+        module = ast.parse(python_text)
+    except (SyntaxError, ValueError):
+        pass
+    else:
+        if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) for node in module.body):
+            return []
     try:
         value = json.loads(text)
     except (ValueError, TypeError):
-        return None
-    return value if isinstance(value, dict) else None
+        value = None
+    if isinstance(value, dict):
+        return [value]
+    decoder, found, cursor = json.JSONDecoder(), {}, 0
+    while cursor < len(text):
+        start = text.find('{', cursor)
+        if start < 0:
+            break
+        try:
+            value, end = decoder.raw_decode(text, start)
+        except ValueError:
+            cursor = start + 1
+            continue
+        cursor = end
+        if isinstance(value, dict) and (value.get('mode') in ('full', 'edit', 'context') or
+                                      isinstance(value.get('code'), str)):
+            found[json.dumps(value, sort_keys=True, ensure_ascii=False)] = value
+    return list(found.values())
+
+
+def response_object(response):
+    objects = response_objects(response)
+    return objects[0] if len(objects) == 1 else None
 
 
 def idea_metadata(value):
@@ -168,7 +203,10 @@ def parse_candidate(response, finish_reason, interface, template_program, *,
     if finish_reason not in ("stop", "length", "unknown"):
         return None, "unsupported finish reason"
     text = THINK_BLOCK_RE.sub("", response)
-    payload = response_object(text)
+    objects = response_objects(text)
+    if len(objects) > 1:
+        return None, 'format_error: conflicting JSON proposals'
+    payload = objects[0] if objects else None
     fields, mode, donor_id, base_hash = {}, 'full', None, None
     if payload is not None:
         idea, fields = idea_metadata(payload.get('idea'))
@@ -181,7 +219,9 @@ def parse_candidate(response, finish_reason, interface, template_program, *,
                 return None, 'edit_error: no parent is available for editing'
             if 'code' in payload:
                 return None, 'edit_error: return edits or full code, not both'
-            base_hash = payload.get('base_hash')
+            # The host binds the persisted candidate to its parent. The model
+            # need not transcribe a digest; a supplied legacy digest must match.
+            base_hash = payload.get('base_hash', code_hash(base_code))
             try:
                 canonical = apply_edits(base_code, base_hash, payload.get('edits'))
             except ValueError as exc:
@@ -190,6 +230,8 @@ def parse_candidate(response, finish_reason, interface, template_program, *,
             if 'edits' in payload or not isinstance(payload.get('code'), str):
                 return None, 'format_error: full mode requires code and no edits'
             canonical = payload['code']
+        elif mode == 'context':
+            return None, 'context_error: context is already supplied; return code or an edit'
         else:
             return None, 'format_error: expected full or edit mode'
     else:
@@ -198,6 +240,9 @@ def parse_candidate(response, finish_reason, interface, template_program, *,
         if len(fences) == 2:
             idea = _extract_idea(text[:fences[0].start()]) or ''
             canonical = text[fences[0].end():fences[1].start()]
+        elif len(fences) == 1 and re.search(r'```(?:python|py)\s*$', fences[0].group(), re.I):
+            idea = _extract_idea(text[:fences[0].start()]) or ''
+            canonical = text[fences[0].end():]
         elif not fences:
             idea, canonical = '', text
         else:
@@ -244,5 +289,5 @@ def build_repair_prompt(task_contract, response, event, *, base_code=None,
     return (f"{task_contract}{parent}\n\n# Failed output\n{failed}\n\n"
             f"# Failure\n{error_type}: {message[:2000]}\n\n"
             "# Repair\nCorrect the reported failure while preserving the intended algorithmic "
-            "idea. Return a full implementation in JSON (mode=full); do not request context.\n\n"
+            "idea. Return the complete corrected implementation in one Python code block.\n\n"
             + FULL_OUTPUT_FORMAT)

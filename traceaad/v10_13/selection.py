@@ -16,7 +16,7 @@ OPERATORS = ("Refine", "Tune", "Pivot", "Fuse")
 OPERATOR_PROBABILITIES = {operator: 0.25 for operator in OPERATORS}
 QUALITY_ESS_TARGET = 8.0
 PARENT_UNIFORM_PROBABILITY = 0.125
-REFERENCE_COUNT = 3
+REFERENCE_COUNT = 1
 
 
 def ess(probabilities):
@@ -99,33 +99,29 @@ def code_key(code):
 
 
 def reference_shortlist(nodes, parent, rng, count=REFERENCE_COUNT):
-    """Expose distinct implementations, not purported semantic categories.
+    """Offer one implementation, drawn equally from quality and uniform pools.
 
-    One quality draw, one uniform draw, and one inverse-exposure draw supply
-    different opportunities. The generating model judges complementarity and
-    can request one full program or ignore every card. Exposure is not quality.
+    Code uniqueness avoids exact copies; it makes no semantic diversity claim.
+    The model may borrow a useful component or ignore the reference.
     """
     parent_key = code_key(parent.code)
-    by_code, exposures = {}, {}
+    by_code = {}
     for node in sorted(nodes, key=lambda item: item.id):
         key = code_key(node.code)
         if key != parent_key:
             by_code[key] = node  # latest measured representative, not best replicate
-            exposures[key] = exposures.get(key, 0) + node.reference_uses
     pool = list(by_code.values())
     selected, sources = [], {}
-    for source in ("quality", "uniform", "underexposed")[:count]:
+    for _ in range(count):
         if not pool:
             break
+        source = 'quality' if rng.random() < 0.5 else 'uniform'
         if source == "quality":
             weights, _ = quality_distribution(pool)
-        elif source == "uniform":
-            weights = [1.0] * len(pool)
         else:
-            weights = [1.0 / (1 + exposures[code_key(node.code)]) for node in pool]
+            weights = [1.0] * len(pool)
         index = rng.choices(range(len(pool)), weights=weights)[0]
         node = pool.pop(index)
         selected.append(node)
         sources[str(node.id)] = source
-    rng.shuffle(selected)  # Do not present rank order as a preferred answer.
     return selected, {"reference_sources": sources, "distinct_reference_pool": len(by_code)}

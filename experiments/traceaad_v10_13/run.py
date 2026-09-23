@@ -43,7 +43,7 @@ def main(argv=None):
         resume_file="tree_state.json", method_params={**params, "revision": TraceAADV1013.REVISION},
         budget_basis=(
             "Actual evaluator calls, including failures, repairs, and duplicate-code "
-            "generations; LLM-only failures and optional context reads consume no evaluator slot, "
+            "generations; LLM-only failures consume no evaluator slot, "
             "but all LLM calls and available token usage are recorded separately. "
             "A reserved evaluation without a durable receipt blocks automatic recovery."
         ),
@@ -57,7 +57,7 @@ def main(argv=None):
             **params,
         )
         ctx.run(method.run, header=[
-            "v10.13-r2: ESS allocation, optional evidence reads, code-first full/edit output"
+            "v10.13-r3: ESS allocation, single-pass evidence, Python-first optional edits"
         ])
     finally:
         ctx.llm.close()

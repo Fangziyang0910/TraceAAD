@@ -1,0 +1,381 @@
+{
+  "status": "partial",
+  "boundary_source": "progress_0121_protocol.json",
+  "cases": [
+    {
+      "run": "20260924_v1013r2_obp_v1013_rep1",
+      "node_id": 0,
+      "event": {
+        "ts": "2026-09-24T00:16:55",
+        "candidate_id": 1,
+        "requested_operator": "Init",
+        "operator": "Init",
+        "repair_of": null,
+        "parent_id": null,
+        "donor_id": null,
+        "parent_fitness": null,
+        "donor_fitness": null,
+        "reference_ids": [],
+        "history_ids": [],
+        "trial_ids": [],
+        "loaded_reference_id": null,
+        "context_reads": 0,
+        "output_mode": "full",
+        "llm_calls": 1,
+        "selection": {},
+        "parent_selected": false,
+        "prompt_tokens": 465,
+        "prompt_hash": "4c81376bf3078b491c6f88d04e1934ed1b8af1cddbd92cd59a345f0721aac446",
+        "status": "ok",
+        "reason": null,
+        "budget_used": 1,
+        "evaluation_id": 1,
+        "eval_seconds": 0.42739343643188477,
+        "llm_seconds": 22.44772458076477,
+        "recorded_llm_calls": 1,
+        "node_id": 0,
+        "fitness": -744.5,
+        "parent_improved": false,
+        "frontier_improved": false,
+        "error_type": null,
+        "error": null,
+        "traceback": null,
+        "best_fitness": -744.5
+      },
+      "formation_path": [
+        {
+          "id": 0,
+          "parent_id": null,
+          "operator": "Init",
+          "evaluation_id": 1,
+          "fitness": -744.5,
+          "idea": "Best Fit: among feasible bins, prefer the one with the smallest remaining slack after placing the item to minimize fragmentation.",
+          "idea_fields": {
+            "mechanism": "Best Fit: among feasible bins, prefer the one with the smallest remaining slack after placing the item to minimize fragmentation.",
+            "change": "Use negative slack as priority for feasible bins and a lower bound for infeasible ones.",
+            "transfer": "Priority = -(remaining capacity - item size) for feasible bins."
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    bins = np.asarray(bins, dtype=np.float64)\n    feasible = bins >= item\n    n = len(bins)\n    if n == 0:\n        return np.array([], dtype=np.float64)\n    if not np.any(feasible):\n        return np.zeros(n, dtype=np.float64)\n    slack = bins - item\n    if np.any(feasible):\n        max_slack = np.max(bins[feasible] - item)\n        base_penalty = -max_slack - 1.0\n    else:\n        base_penalty = 0.0\n    result = np.full(n, base_penalty, dtype=np.float64)\n    result[feasible] = -(bins[feasible] - item)\n    return result"
+        }
+      ]
+    },
+    {
+      "run": "20260924_v1013r2_obp_v1013_rep2",
+      "node_id": 182,
+      "event": {
+        "ts": "2026-09-24T01:22:01",
+        "candidate_id": 232,
+        "requested_operator": "Fuse",
+        "operator": "Fuse",
+        "repair_of": null,
+        "parent_id": 91,
+        "donor_id": null,
+        "parent_fitness": -744.5,
+        "donor_fitness": null,
+        "reference_ids": [
+          46,
+          124,
+          168
+        ],
+        "history_ids": [],
+        "trial_ids": [],
+        "loaded_reference_id": null,
+        "context_reads": 0,
+        "output_mode": "full",
+        "llm_calls": 1,
+        "selection": {
+          "parent_probability": 0.0057446166550212795,
+          "parent_ess": 175.0285763919049,
+          "parent_ess_target": 173,
+          "parent_count_before": 0,
+          "population_size": 182,
+          "uniform_mass": 0.125,
+          "parent_count_after": 1,
+          "reference_sources": {
+            "46": "quality",
+            "168": "uniform",
+            "124": "underexposed"
+          },
+          "distinct_reference_pool": 171
+        },
+        "parent_selected": true,
+        "prompt_tokens": 1614,
+        "prompt_hash": "5be77152908c669024fbaf13ebb8969cea40dac24bb7d201f1ca7b6ab4e5b63a",
+        "status": "ok",
+        "reason": null,
+        "budget_used": 189,
+        "evaluation_id": 189,
+        "eval_seconds": 2.195258140563965,
+        "llm_seconds": 15.463102340698242,
+        "recorded_llm_calls": 1,
+        "node_id": 182,
+        "fitness": -744.5,
+        "parent_improved": false,
+        "frontier_improved": false,
+        "error_type": null,
+        "error": null,
+        "traceback": null,
+        "best_fitness": -744.5
+      },
+      "formation_path": [
+        {
+          "id": 0,
+          "parent_id": null,
+          "operator": "Init",
+          "evaluation_id": 1,
+          "fitness": -744.5,
+          "idea": "Best-fit-decreasing: maximize item size minus remaining capacity, with a small penalty on larger remaining capacities to favor compact bins.",
+          "idea_fields": {
+            "mechanism": "Best-fit-decreasing: maximize item size minus remaining capacity, with a small penalty on larger remaining capacities to favor compact bins.",
+            "change": "Implemented a priority that combines best-fit dominance with a tiny anti-fragmentation bonus.",
+            "transfer": "The (item - remaining) term is a reusable signal for best-fit packing in online one-dimensional bin packing."
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins.size == 0:\n        return np.array([], dtype=float)\n    b = np.asarray(bins, dtype=float)\n    s = float(item)\n    if s <= 0.0:\n        return np.full(b.shape, 0.0, dtype=float)\n    slack = b - s\n    base = s - b\n    rem = b\n    bonus = -0.001 * rem\n    result = base + bonus\n    return result"
+        },
+        {
+          "id": 56,
+          "parent_id": 0,
+          "operator": "Fuse",
+          "evaluation_id": 59,
+          "fitness": -744.5,
+          "idea": "",
+          "idea_fields": {},
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins.size == 0:\n        return np.array([], dtype=float)\n    b = np.asarray(bins, dtype=float)\n    s = float(item)\n    if s <= 0.0:\n        return np.full(b.shape, 0.0, dtype=float)\n    remaining_after = b - s\n    base = -remaining_after\n    penalty = -0.0001 * b\n    slack = b - s\n    bonus = 0.0001 * np.exp(-(slack - 0.5) ** 2 / 2.0)\n    result = base + penalty + bonus\n    return result"
+        },
+        {
+          "id": 69,
+          "parent_id": 56,
+          "operator": "Fuse",
+          "evaluation_id": 73,
+          "fitness": -744.5,
+          "idea": "Best-fit dominated by a fragment-avoidance penalty: prefer bins that fit the item with the least waste, and when the slack is tiny, slightly prefer the tighter (better) bin rather than forcing a poor fit.",
+          "idea_fields": {
+            "mechanism": "Best-fit dominated by a fragment-avoidance penalty: prefer bins that fit the item with the least waste, and when the slack is tiny, slightly prefer the tighter (better) bin rather than forcing a poor fit.",
+            "change": "Replaced the exponential slack bonus and large -remaining base with a slack-priority base, a scaled penalty that makes near-exact tiny-fragment fits slightly worse, and a small best-fit tie-breaker.",
+            "transfer": "The (slack) base plus a penalty that peaks at near-zero slack is a reusable anti-fragmentation signal that nudges away from creating unusable residues."
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins.size == 0:\n        return np.array([], dtype=float)\n    b = np.asarray(bins, dtype=float)\n    s = float(item)\n    if s <= 0.0:\n        return np.full(b.shape, 0.0, dtype=float)\n    remaining = b - s\n    base = -remaining\n    denom = max(s, 1.0)\n    frag = remaining / denom\n    penalty = 0.05 * np.exp(-frag ** 2)\n    tie = 0.0001 * -remaining / max(float(np.max(remaining)) if remaining.size else 1.0, 1.0)\n    result = base - penalty + tie\n    return result.astype(float)"
+        },
+        {
+          "id": 75,
+          "parent_id": 69,
+          "operator": "Fuse",
+          "evaluation_id": 79,
+          "fitness": -744.5,
+          "idea": "Best-fit (minimize post-placement slack) as the dominant signal, with a bounded concave bonus on medium-sized normalized residuals that discourages fragmentation without overturning the tight-fit ordering.",
+          "idea_fields": {
+            "mechanism": "Best-fit (minimize post-placement slack) as the dominant signal, with a bounded concave bonus on medium-sized normalized residuals that discourages fragmentation without overturning the tight-fit ordering.",
+            "change": "Replaced the exp-decay penalty (which only penalized near-exact fits) with a -scale*t*(1-t) concave term (scale=1.0) that penalizes medium-sized leftovers, and kept the small best-fit tie-breaker.",
+            "transfer": "A bounded concave -scale*t*(1-t) bonus (coefficient >= slack-gap) favors very small or very large leftovers without breaking best-fit ordering, a reusable anti-fragmentation signal."
+          },
+          "code": "import numpy as np\n'\\n\\nIdea fields (for reference):\\n- mechanism: Best-fit (minimize post-placement slack) as the dominant signal, with a bounded concave bonus on medium-sized normalized residuals that discourages fragmentation without overturning the tight-fit ordering.\\n- change: Replaced the exp-decay penalty (which only penalized near-exact fits) with a -scale*t*(1-t) concave term (scale=1.0) that penalizes medium-sized leftovers, and kept the small best-fit tie-breaker.\\n- transfer: A bounded concave -scale*t*(1-t) bonus (coefficient >= slack-gap) favors very small or very large leftovers without breaking best-fit ordering, a reusable anti-fragmentation signal.\\n'\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins.size == 0:\n        return np.array([], dtype=float)\n    b = np.asarray(bins, dtype=float)\n    s = float(item)\n    if s <= 0.0:\n        return np.full(b.shape, 0.0, dtype=float)\n    remaining = b - s\n    base = -remaining\n    denom = max(s, 1.0)\n    frag = remaining / denom\n    t = np.clip(frag, 0.0, 1.0)\n    frag_bonus = 1.0 * t * (1.0 - t)\n    tie = 0.0001 * -remaining / max(float(np.max(remaining)) if remaining.size else 1.0, 1.0)\n    result = base + frag_bonus + tie\n    return result.astype(float)"
+        },
+        {
+          "id": 91,
+          "parent_id": 75,
+          "operator": "Fuse",
+          "evaluation_id": 95,
+          "fitness": -744.5,
+          "idea": "Dominant best-fit by minimizing post-placement slack, with a tiny scale-invariant shaping term that lightly favors extreme (tiny or near-zero) remaining slack to reduce unusable fragments without overturning the tight-fit ordering.",
+          "idea_fields": {
+            "mechanism": "Dominant best-fit by minimizing post-placement slack, with a tiny scale-invariant shaping term that lightly favors extreme (tiny or near-zero) remaining slack to reduce unusable fragments without overturning the tight-fit ordering.",
+            "change": "Normalized the slack by max(item,1) for the concave shaping and reduced the shaping coefficient to 0.005 so it acts as a secondary tie-breaker rather than a competing signal, and simplified the tie-breaker to a pure -remaining scaled by a tiny constant.",
+            "transfer": "Scaling slack by the item size makes the fragment-shaping term scale-invariant so it behaves consistently across bins of different capacities."
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins.size == 0:\n        return np.array([], dtype=float)\n    b = np.asarray(bins, dtype=float)\n    s = float(item)\n    if s <= 0.0:\n        return np.full(b.shape, 0.0, dtype=float)\n    remaining = b - s\n    base = -remaining\n    denom = max(s, 1.0)\n    t = np.clip(remaining / denom, 0.0, 1.0)\n    frag_bonus = 0.005 * t * (1.0 - t)\n    tie = 0.0001 * (-remaining / max(float(np.max(remaining)) if remaining.size else 1.0, 1.0))\n    result = base + frag_bonus + tie\n    result = np.where(np.isfinite(result), result, 0.0)\n    return result.astype(float)"
+        },
+        {
+          "id": 182,
+          "parent_id": 91,
+          "operator": "Fuse",
+          "evaluation_id": 189,
+          "fitness": -744.5,
+          "idea": "Strong best-fit base (minimize post-placement slack) with a scale-invariant concave fragment-shaping bonus that actively avoids medium-sized unusable gaps.",
+          "idea_fields": {
+            "mechanism": "Strong best-fit base (minimize post-placement slack) with a scale-invariant concave fragment-shaping bonus that actively avoids medium-sized unusable gaps.",
+            "change": "Increased the fragment-shaping coefficient from 0.005 to 0.5 so the concave term meaningfully differentiates medium gaps from tiny or large ones, while the dominant -slack base still guarantees best-fit ordering; simplified the tie-breaker to a tiny linear -remaining term for determinism.",
+            "transfer": "A bounded concave t*(1-t) fragment penalty on normalized slack, scaled by a coefficient much larger than the slack-gap, preferentially eliminates medium-sized fragments that are hard to reuse, without overturning the primary tight-fit ordering."
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins.size == 0:\n        return np.array([], dtype=float)\n    b = np.asarray(bins, dtype=float)\n    s = float(item)\n    if s <= 0.0:\n        return np.full(b.shape, 0.0, dtype=float)\n    remaining = b - s\n    base = -remaining\n    denom = max(s, 1.0)\n    t = np.clip(remaining / denom, 0.0, 1.0)\n    frag_bonus = 0.5 * t * (1.0 - t)\n    max_rem = float(np.max(remaining)) if remaining.size else 1.0\n    tie = 0.0001 * (-remaining / max(max_rem, 1.0))\n    result = base + frag_bonus + tie\n    result = np.where(np.isfinite(result), result, 0.0)\n    return result.astype(float)"
+        }
+      ]
+    },
+    {
+      "run": "20260924_v1013r2_obp_v1013_rep3",
+      "node_id": 133,
+      "event": {
+        "ts": "2026-09-24T01:12:08",
+        "candidate_id": 172,
+        "requested_operator": "Refine",
+        "operator": "Refine",
+        "repair_of": null,
+        "parent_id": 84,
+        "donor_id": null,
+        "parent_fitness": -728.75,
+        "donor_fitness": null,
+        "reference_ids": [],
+        "history_ids": [
+          50,
+          75,
+          84
+        ],
+        "trial_ids": [],
+        "loaded_reference_id": null,
+        "context_reads": 0,
+        "output_mode": "edit",
+        "llm_calls": 1,
+        "selection": {
+          "parent_probability": 0.13086036505129764,
+          "parent_ess": 10.260057254783787,
+          "parent_ess_target": 8.0,
+          "parent_count_before": 8,
+          "population_size": 133,
+          "uniform_mass": 0.125,
+          "parent_count_after": 9
+        },
+        "parent_selected": true,
+        "prompt_tokens": 1592,
+        "prompt_hash": "99d1a54fb80fa888399e9f5fc31aa847446b987810b389ee4a667b564cd11857",
+        "status": "ok",
+        "reason": null,
+        "budget_used": 135,
+        "evaluation_id": 135,
+        "eval_seconds": 1.9676933288574219,
+        "llm_seconds": 12.913804054260254,
+        "recorded_llm_calls": 1,
+        "node_id": 133,
+        "fitness": -728.0,
+        "parent_improved": true,
+        "frontier_improved": true,
+        "error_type": null,
+        "error": null,
+        "traceback": null,
+        "best_fitness": -728.0
+      },
+      "formation_path": [
+        {
+          "id": 6,
+          "parent_id": null,
+          "operator": "Init",
+          "evaluation_id": 7,
+          "fitness": -744.5,
+          "idea": "Best-fit with a small most-full tie-breaker to minimize bins.",
+          "idea_fields": {
+            "mechanism": "Best-fit with a small most-full tie-breaker to minimize bins.",
+            "change": "Uses base 1/(1+gap) minus a tiny linear penalty on remaining capacity for deterministic tie-breaking toward fuller bins.",
+            "transfer": "gap = max(0, bins - item); priority = 1/(1+gap) - eps*bins"
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins is None:\n        return np.asarray([], dtype=np.float64)\n    original_shape = np.asarray(bins).shape\n    arr = np.asarray(bins, dtype=np.float64)\n    if arr.size == 0:\n        return arr.copy()\n    item_f = float(item)\n    if item_f <= 0.0:\n        scores = -arr\n        return scores.reshape(original_shape)\n    gap = arr - item_f\n    gap = np.where(gap < 0.0, 0.0, gap)\n    base = 1.0 / (1.0 + gap)\n    penalty = 1e-06 * arr\n    scores = base - penalty\n    return scores.reshape(original_shape)"
+        },
+        {
+          "id": 10,
+          "parent_id": 6,
+          "operator": "Refine",
+          "evaluation_id": 11,
+          "fitness": -744.5,
+          "idea": "Best-fit with a decisive exact-fit bonus and most-full tie-breaker to minimize bins.",
+          "idea_fields": {
+            "mechanism": "Best-fit with a decisive exact-fit bonus and most-full tie-breaker to minimize bins.",
+            "change": "Added a large bonus for bins that exactly fit the item so exact fits are always preferred over near fits.",
+            "transfer": "exact_fit_bonus = max(score[exact]) + 0.5 applied to bins where gap == 0"
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins is None:\n        return np.asarray([], dtype=np.float64)\n    original_shape = np.asarray(bins).shape\n    arr = np.asarray(bins, dtype=np.float64)\n    if arr.size == 0:\n        return arr.copy()\n    item_f = float(item)\n    if item_f <= 0.0:\n        scores = -arr\n        return scores.reshape(original_shape)\n    gap = arr - item_f\n    gap = np.where(gap < 0.0, 0.0, gap)\n    base = 1.0 / (1.0 + gap)\n    penalty = 1e-06 * arr\n    scores = base - penalty\n    exact = gap <= 1e-09\n    if np.any(exact):\n        scores = scores.copy()\n        scores[exact] = np.max(scores[exact]) + 0.5\n    return scores.reshape(original_shape)"
+        },
+        {
+          "id": 18,
+          "parent_id": 10,
+          "operator": "Fuse",
+          "evaluation_id": 19,
+          "fitness": -739.25,
+          "idea": "Combine smallest-gap best-fit with a modulo best-fit that prepares bins for future same-sized items, plus a fill-based tie-breaker and a decisive exact-fit override to minimize total bins.",
+          "idea_fields": {
+            "mechanism": "Combine smallest-gap best-fit with a modulo best-fit that prepares bins for future same-sized items, plus a fill-based tie-breaker and a decisive exact-fit override to minimize total bins.",
+            "change": "Added a modular reuse signal and a fill-based tie-breaker alongside the host's best-fit, keeping the exact-fit dominance.",
+            "transfer": "mod = gap % item; dist = min(mod, item - mod); a small dist means the leftover capacity is reusable by another same-sized item, so prefer such bins."
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins is None:\n        return np.asarray([], dtype=np.float64)\n    original_shape = np.asarray(bins).shape\n    arr = np.asarray(bins, dtype=np.float64)\n    if arr.size == 0:\n        return arr.copy()\n    item_f = float(item)\n    if item_f <= 0.0:\n        scores = -arr\n        return scores.reshape(original_shape)\n    gap = arr - item_f\n    gap = np.where(gap < 0.0, 0.0, gap)\n    best_fit = 1.0 / (1.0 + gap)\n    mod = gap % item_f\n    dist = np.minimum(mod, item_f - mod)\n    mod_score = -dist\n    fill = -1e-06 * arr\n    scores = best_fit + mod_score + fill\n    exact = gap <= 1e-09\n    if np.any(exact):\n        scores = scores.copy()\n        scores[exact] = np.max(scores[exact]) + 1000.0\n    return scores.reshape(original_shape)"
+        },
+        {
+          "id": 24,
+          "parent_id": 18,
+          "operator": "Refine",
+          "evaluation_id": 25,
+          "fitness": -739.25,
+          "idea": "Combine best-fit with a modulo best-fit that prepares bins for future same-sized items, plus a decisive exact-fit override and a fill-based tie-breaker to minimize total bins.",
+          "idea_fields": {
+            "mechanism": "Combine best-fit with a modulo best-fit that prepares bins for future same-sized items, plus a decisive exact-fit override and a fill-based tie-breaker to minimize total bins.",
+            "change": "Removed the near-zero fill penalty that distorted exact-fit ordering and restructured the exact-fit override to use a large deterministic offset so exact fits always dominate near fits while preserving the modular reuse signal.",
+            "transfer": "mod = gap % item; dist = min(mod, item - mod); a small dist means the leftover capacity is reusable by another same-sized item, so prefer such bins."
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins is None:\n        return np.asarray([], dtype=np.float64)\n    original_shape = np.asarray(bins).shape\n    arr = np.asarray(bins, dtype=np.float64)\n    if arr.size == 0:\n        return arr.copy()\n    item_f = float(item)\n    if item_f <= 0.0:\n        return (-arr).reshape(original_shape)\n    gap = arr - item_f\n    gap = np.where(gap < 0.0, 0.0, gap)\n    best_fit = 1.0 / (1.0 + gap)\n    mod = gap % item_f\n    dist = np.minimum(mod, item_f - mod)\n    mod_score = -dist\n    scores = best_fit + mod_score\n    exact = gap <= 1e-09\n    if np.any(exact):\n        scores = scores.copy()\n        scores[exact] = scores[exact] + 1000.0\n    return scores.reshape(original_shape)"
+        },
+        {
+          "id": 37,
+          "parent_id": 24,
+          "operator": "Fuse",
+          "evaluation_id": 38,
+          "fitness": -731.5,
+          "idea": "best-fit with modular reusability, an anti-small-remainder penalty that discourages fragments too small to host another same-sized item, and a strong exact-fit override.",
+          "idea_fields": {
+            "mechanism": "best-fit with modular reusability, an anti-small-remainder penalty that discourages fragments too small to host another same-sized item, and a strong exact-fit override.",
+            "change": "added the reference's small-remainder penalty and a tiny exact-fit bonus to complement the host's modular reuse signal and exact-fit dominance.",
+            "transfer": "penalize leftover capacity in (0, 0.25*item) since such fragments are less reusable for future same-sized items."
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins is None:\n        return np.asarray([], dtype=np.float64)\n    original_shape = np.asarray(bins).shape\n    arr = np.asarray(bins, dtype=np.float64)\n    if arr.size == 0:\n        return arr.copy()\n    item_f = float(item)\n    if item_f <= 0.0:\n        return (-arr).reshape(original_shape)\n    gap = arr - item_f\n    gap = np.where(gap < 0.0, 0.0, gap)\n    best_fit = 1.0 / (1.0 + gap)\n    mod = gap % item_f\n    dist = np.minimum(mod, item_f - mod)\n    mod_score = -dist\n    scale = item_f\n    penalty = np.zeros_like(gap)\n    small_rem = (gap > 0.0) & (gap < 0.25 * scale)\n    penalty[small_rem] = -0.5 * scale\n    scores = best_fit + mod_score + penalty\n    exact = gap <= 1e-09\n    if np.any(exact):\n        scores = scores.copy()\n        scores[exact] = scores[exact] + 1000.0 + 0.1 * scale\n    return scores.reshape(original_shape)"
+        },
+        {
+          "id": 50,
+          "parent_id": 37,
+          "operator": "Pivot",
+          "evaluation_id": 51,
+          "fitness": -734.25,
+          "idea": "",
+          "idea_fields": {},
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\n    Args:\n        item: Size of item to be added to the bin.\n        bins: Array of capacities for each bin.\n    Return:\n        Array of same size as bins with priority score of each bin.\"\"\"\n    if bins is None:\n        return np.asarray([], dtype=np.float64)\n    original_shape = np.asarray(bins).shape\n    arr = np.asarray(bins, dtype=np.float64)\n    if arr.size == 0:\n        return arr.copy()\n    item_f = float(item)\n    if item_f <= 0.0:\n        return (-arr).reshape(original_shape)\n    gap = arr - item_f\n    gap = np.where(gap < 0.0, 0.0, gap)\n    best_fit = 1.0 / (1.0 + 0.5 * gap / item_f)\n    if item_f > 0:\n        mod = gap % item_f\n        dist = np.minimum(mod, item_f - mod)\n        reuse_bonus = item_f * np.exp(-dist / (0.1 * item_f))\n    else:\n        reuse_bonus = np.zeros_like(gap)\n    penalty = np.zeros_like(gap)\n    dead = (gap > 0.0) & (gap < 0.5 * item_f)\n    penalty[dead] = -0.3 * item_f / (1.0 + 0.5 * gap[dead] / item_f)\n    scores = best_fit + 0.1 * reuse_bonus + penalty\n    exact = gap <= 1e-09\n    if np.any(exact):\n        scores = scores.copy()\n        scores[exact] = scores[exact] + 1000.0\n    return scores.reshape(original_shape)"
+        },
+        {
+          "id": 75,
+          "parent_id": 50,
+          "operator": "Tune",
+          "evaluation_id": 76,
+          "fitness": -729.0,
+          "idea": "best-fit with modular reusability bonus and dead-space penalty, with calibrated thresholds and weights",
+          "idea_fields": {
+            "mechanism": "best-fit with modular reusability bonus and dead-space penalty, with calibrated thresholds and weights",
+            "change": "tightened best-fit scale to 1.0*item_f, widened reuse tolerance to 0.3*item_f, raised dead-space threshold to 0.4*item_f, reduced penalty to 0.2*item_f and reuse weight to 0.05",
+            "transfer": "mod = gap % item; dist = min(mod, item - mod) measures how close the leftover is to a multiple of the item size for future reuse"
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\nArgs:\n    item: Size of item to be added to the bin.\n    bins: Array of capacities for each bin.\nReturn:\n    Array of same size as bins with priority score of each bin.\"\"\"\n    if bins is None:\n        return np.asarray([], dtype=np.float64)\n    original_shape = np.asarray(bins).shape\n    arr = np.asarray(bins, dtype=np.float64)\n    if arr.size == 0:\n        return arr.copy()\n    item_f = float(item)\n    if item_f <= 0.0:\n        return (-arr).reshape(original_shape)\n    gap = arr - item_f\n    gap = np.where(gap < 0.0, 0.0, gap)\n    best_fit = 1.0 / (1.0 + gap / item_f)\n    mod = gap % item_f\n    dist = np.minimum(mod, item_f - mod)\n    reuse_bonus = item_f * np.exp(-dist / (0.3 * item_f))\n    dead = (gap > 0.0) & (gap < 0.4 * item_f)\n    penalty = np.zeros_like(gap)\n    penalty[dead] = -0.2 * item_f\n    exact = gap <= 1e-09\n    scores = best_fit + 0.05 * reuse_bonus + penalty\n    if np.any(exact):\n        scores = scores.copy()\n        scores[exact] = scores[exact] + 1000.0\n    return scores.reshape(original_shape)"
+        },
+        {
+          "id": 84,
+          "parent_id": 75,
+          "operator": "Refine",
+          "evaluation_id": 85,
+          "fitness": -728.75,
+          "idea": "best-fit with modular reuse bonus and a dead-space penalty, with a stronger tight-reuse signal and a larger dead penalty to keep future capacity aligned to multiples of the item size",
+          "idea_fields": {
+            "mechanism": "best-fit with modular reuse bonus and a dead-space penalty, with a stronger tight-reuse signal and a larger dead penalty to keep future capacity aligned to multiples of the item size",
+            "change": "sharpened the reuse exponential to 0.25*item with weight 0.08 and deepened the dead-space penalty to 0.35*item, while keeping the best-fit term and exact override",
+            "transfer": "penalize leftovers that are too small to be useful and reward near-multiple gaps so future items of the same size fit cleanly"
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\nArgs:\n    item: Size of item to be added to the bin.\n    bins: Array of capacities for each bin.\nReturn:\n    Array of same size as bins with priority score of each bin.\"\"\"\n    if bins is None:\n        return np.asarray([], dtype=np.float64)\n    original_shape = np.asarray(bins).shape\n    arr = np.asarray(bins, dtype=np.float64)\n    if arr.size == 0:\n        return arr.copy()\n    item_f = float(item)\n    if item_f <= 0.0:\n        return (-arr).reshape(original_shape)\n    gap = arr - item_f\n    gap = np.where(gap < 0.0, 0.0, gap)\n    best_fit = 1.0 / (1.0 + gap / item_f)\n    mod = gap % item_f\n    dist = np.minimum(mod, item_f - mod)\n    reuse_bonus = item_f * np.exp(-dist / (0.25 * item_f))\n    dead = (gap > 0.0) & (gap < 0.4 * item_f)\n    penalty = np.zeros_like(gap)\n    penalty[dead] = -0.35 * item_f\n    exact = gap <= 1e-09\n    scores = best_fit + 0.08 * reuse_bonus + penalty\n    if np.any(exact):\n        scores = scores.copy()\n        scores[exact] = scores[exact] + 1000.0\n    return scores.reshape(original_shape)"
+        },
+        {
+          "id": 133,
+          "parent_id": 84,
+          "operator": "Refine",
+          "evaluation_id": 135,
+          "fitness": -728.0,
+          "idea": "best-fit with modular reuse bonus and dead-space penalty, with a broader tight-reuse band and a softer but deeper dead penalty to keep leftover capacity usable for near-multiple future items",
+          "idea_fields": {
+            "mechanism": "best-fit with modular reuse bonus and dead-space penalty, with a broader tight-reuse band and a softer but deeper dead penalty to keep leftover capacity usable for near-multiple future items",
+            "change": "widened the reuse exponential tolerance from 0.25*item to 0.3*item, lowered its weight from 0.08 to 0.06, and softened the dead-space penalty from 0.35*item to 0.25*item while keeping the threshold at 0.4*item and the exact override",
+            "transfer": "reward gaps whose leftover is close to a multiple of the item size (dist small) so future same-size items fit cleanly, but avoid over-punishing small dead gaps that may still be combined"
+          },
+          "code": "import numpy as np\n\ndef priority(item: float, bins: np.ndarray) -> np.ndarray:\n    \"\"\"Returns priority with which we want to add item to each bin.\nArgs:\n    item: Size of item to be added to the bin.\n    bins: Array of capacities for each bin.\nReturn:\n    Array of same size as bins with priority score of each bin.\"\"\"\n    if bins is None:\n        return np.asarray([], dtype=np.float64)\n    original_shape = np.asarray(bins).shape\n    arr = np.asarray(bins, dtype=np.float64)\n    if arr.size == 0:\n        return arr.copy()\n    item_f = float(item)\n    if item_f <= 0.0:\n        return (-arr).reshape(original_shape)\n    gap = arr - item_f\n    gap = np.where(gap < 0.0, 0.0, gap)\n    best_fit = 1.0 / (1.0 + gap / item_f)\n    mod = gap % item_f\n    dist = np.minimum(mod, item_f - mod)\n    reuse_bonus = item_f * np.exp(-dist / (0.3 * item_f))\n    dead = (gap > 0.0) & (gap < 0.4 * item_f)\n    penalty = np.zeros_like(gap)\n    penalty[dead] = -0.25 * item_f\n    exact = gap <= 1e-09\n    scores = best_fit + 0.06 * reuse_bonus + penalty\n    if np.any(exact):\n        scores = scores.copy()\n        scores[exact] = scores[exact] + 1000.0\n    return scores.reshape(original_shape)"
+        }
+      ]
+    }
+  ]
+}

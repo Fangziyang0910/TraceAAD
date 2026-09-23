@@ -100,7 +100,7 @@ def test_prompts_are_short_and_operator_specific_without_behavior_checklist(tmp_
         lookup=method.tree.nodes.get, all_nodes=method.tree.all_nodes,
     )
     text = builder.build(parent, "Fuse", donor)
-    assert "Host Algorithm" in text and "Optional reference ideas" in text
+    assert "Host Algorithm" in text and "Reference Algorithm" in text
     assert "Idea: idea" in text
     assert "Do not mechanically concatenate" in text
     assert "Change/Evidence/Behavior/Preserve" not in text
@@ -178,30 +178,32 @@ def test_edit_mode_exact_base_unique_blocks_and_interface():
     assert parse({**request, 'edits': [{'search': 'x', 'replacement': 'y'}]})[1].startswith('edit_error')
     assert parse({**request, 'edits': [{'search': 'def score(x)', 'replacement': 'def score(y)'}]})[1].startswith('signature_error')
     assert parse({**request, 'code': base})[1].startswith('edit_error')
+    without_hash = {k: v for k, v in request.items() if k != 'base_hash'}
+    parsed, error = parse(without_hash)
+    assert not error and parsed.base_hash == code_hash(base)
 
 
-def test_shortlist_covers_sources_without_assuming_semantic_categories():
+def test_one_reference_mixes_quality_and_uniform_without_semantic_categories():
     from traceaad.v10_13.selection import reference_shortlist
     nodes = [Node(i, f'def score(x):\n    return x + {i}', f'mechanism {i}', float(i)) for i in range(30)]
     selected, stats = reference_shortlist(nodes, nodes[0], random.Random(2))
-    assert len(selected) == len({n.id for n in selected}) == 3
-    assert set(stats['reference_sources'].values()) == {'quality', 'uniform', 'underexposed'}
+    assert len(selected) == 1
+    assert set(stats['reference_sources'].values()) <= {'quality', 'uniform'}
     assert all(n.id != 0 for n in selected)
     observed = {n.id for seed in range(100) for n in
                 reference_shortlist(nodes, nodes[0], random.Random(seed))[0]}
     assert min(observed) < 5 and max(observed) == 29
 
 
-def test_local_trials_are_optional_compact_and_exact_parent_specific(tmp_path):
+def test_local_trials_are_inline_compact_and_exact_parent_specific(tmp_path):
     method = make_method(tmp_path)
     parent = add_node(method, 3)
     good = add_node(method, 4, parent_id=parent.id, idea='raise offset')
     bad = add_node(method, 2, parent_id=parent.id, idea='lower offset')
     outsider = add_node(method, 9, idea='unrelated')
     add_node(method, 10, parent_id=outsider.id, idea='do not show')
-    normal = method.prompts.build_development(parent, 'Tune')
-    read = method.prompts.build_development(parent, 'Tune', include_trials=True, allow_context=False)
-    assert not normal.trial_ids
+    read = method.prompts.build_development(parent, 'Tune')
+    assert 'Optional context' not in read.prompt
     assert read.trial_ids == [good.id, bad.id]
     assert 'do not show' not in read.prompt and 'raise offset' in read.prompt
     assert '```diff' not in read.prompt
@@ -216,21 +218,19 @@ class ScriptedLLM(FakeLLM):
                 'finish_reason': 'stop', 'usage': {}}
 
 
-def test_context_read_and_edit_cost_one_parent_opportunity(tmp_path):
-    import re
+def test_inline_context_and_edit_cost_one_call_and_parent_opportunity(tmp_path):
     def edit(prompt):
-        assert 'Submit a full/edit proposal now' in prompt
-        base_hash = re.search(r'base_hash: ([a-f0-9]{64})', prompt).group(1)
-        return json.dumps({'mode': 'edit', 'base_hash': base_hash,
+        assert 'base_hash' not in prompt and 'mode":"context' not in prompt
+        return json.dumps({'mode': 'edit',
                           'edits': [{'search': 'return 1', 'replacement': 'return 2'}]})
-    llm = ScriptedLLM(response(1), json.dumps({'mode': 'context', 'trials': True}), edit)
+    llm = ScriptedLLM(response(1), edit)
     method = make_method(tmp_path, llm, budget=2)
     method.run()
     events = read_journal(method.storage.events_path)
-    assert len(events) == 2 and events[-1]['context_reads'] == 1
+    assert len(events) == 2 and events[-1]['context_reads'] == 0
     assert events[-1]['output_mode'] == 'edit'
     assert method.tree.parent_selections == 1 and method.evaluations_used == 2
-    assert len(llm.calls) == 3
+    assert len(llm.calls) == 2
     assert method.tree.best().fitness == 2
 
 
@@ -329,103 +329,142 @@ def test_edit_preserves_exact_program_order_and_can_remove_template_import():
     assert scope['example'] == 1
 
 
-def test_duplicate_implementation_does_not_reset_reference_exposure():
-    class InspectRandom:
-        def __init__(self):
-            self.weights = []
-        def choices(self, options, weights):
-            self.weights.append(list(weights))
-            return [0]
-        def shuffle(self, values):
-            pass
-    nodes = [Node(i, f'def score(x):\n    return {i}', 'idea', 1) for i in range(5)]
-    nodes[3].reference_uses = 20
-    nodes.append(Node(5, nodes[3].code, 'same program', 1))
-    rng = InspectRandom()
-    reference_shortlist(nodes, nodes[0], rng)
-    assert rng.weights[-1] == [1 / 21, 1]
+def test_reference_sampling_is_not_restricted_to_elites():
+    nodes = [Node(i, f'def score(x):\n    return {i}', 'idea', float(i)) for i in range(40)]
+    seen, sources = set(), set()
+    for seed in range(100):
+        chosen, stats = reference_shortlist(nodes, nodes[-1], random.Random(seed))
+        seen.add(chosen[0].id)
+        sources.update(stats['reference_sources'].values())
+    assert sources == {'quality', 'uniform'} and min(seen) < 5 and max(seen) == 38
 
 
 def test_initial_and_repair_prompts_only_offer_full_output(tmp_path):
     from traceaad.v10_13.parsing import build_repair_prompt
     method = make_method(tmp_path)
-    assert 'Local edit:' not in method.prompts.build_initial()
+    assert '"edits"' not in method.prompts.build_initial()
     repair = build_repair_prompt('task', json.dumps({
         'mode': 'full', 'idea': 'irrelevant ' * 10000,
         'code': 'def score(x):\n    return broken',
     }), {'error': 'undefined name'}, base_code='large unrelated parent')
-    assert 'Local edit:' not in repair and 'base_hash' not in repair
+    assert '"edits"' not in repair and 'base_hash' not in repair
     assert 'irrelevant' not in repair and 'large unrelated parent' not in repair
     assert 'return broken' in repair
 
 
-def test_context_material_matches_operator_and_reports_absent_trials(tmp_path):
+@pytest.mark.parametrize('wrapper', [
+    'Explanation.\n```json\n{}\n```',
+    '```json\n{}',
+    'Explanation.\n<tool_call>\n{}\n</tool_call>',
+    'Draft:\n```python\ndef score(x):\n    return x - 1\n```\n'
+    'Draft two:\n```python\ndef score(x):\n    return x - 2\n```\nFinal:\n{}',
+])
+def test_unique_wrapped_proposal_preserves_exact_code(wrapper):
+    template = 'def score(x):\n    pass'
+    interface, _ = template_target(template)
+    payload = json.dumps({'mode': 'full', 'code': 'def score(x):\n    return x + 7'})
+    parsed, error = parse_candidate(wrapper.format(payload), 'stop', interface, template)
+    assert not error and parsed.program_code == 'def score(x):\n    return x + 7'
+
+
+def test_conflicting_json_proposals_are_not_silently_selected():
+    template = 'def score(x):\n    pass'
+    interface, _ = template_target(template)
+    first = json.dumps({'mode': 'full', 'code': 'def score(x):\n    return x'})
+    second = json.dumps({'mode': 'full', 'code': 'def score(x):\n    return x + 1'})
+    parsed, error = parse_candidate(first + '\n' + second, 'stop', interface, template)
+    assert parsed is None and 'conflicting JSON' in error
+    # Repeating the identical object is not a conflicting implementation.
+    assert parse_candidate(first + '\n' + first, 'stop', interface, template)[1] is None
+
+
+def test_existing_single_python_block_keeps_code_first_interpretation():
+    template = 'def score(x):\n    pass'
+    interface, _ = template_target(template)
+    other = json.dumps({'mode': 'full', 'code': 'def score(x):\n    return x + 2'})
+    text = 'Idea: direct rule\n```python\ndef score(x):\n    return x + 1\n```\n' + other
+    parsed, error = parse_candidate(text, 'stop', interface, template)
+    assert not error and parsed.program_code == 'def score(x):\n    return x + 1'
+
+
+def test_code_string_json_is_not_a_second_proposal_and_bad_code_stays_invalid():
+    template = 'def score(x):\n    pass'
+    interface, _ = template_target(template)
+    code = 'def score(x):\n    text = \'{"mode":"edit","edits":[]}\'\n    return x'
+    payload = json.dumps({'mode': 'full', 'code': code})
+    assert parse_candidate('Final: ' + payload, 'stop', interface, template)[1] is None
+    assert parse_candidate(code, 'stop', interface, template)[1] is None
+    assert parse_candidate('```python\n' + code + '\n```', 'stop', interface, template)[1] is None
+    bad = json.dumps({'mode': 'full', 'code': 'def score(x):\n    return -1e6.0'})
+    assert parse_candidate('Final: ' + bad, 'stop', interface, template)[1].startswith('syntax_error')
+
+
+def test_missing_closing_python_fence_accepts_complete_code_only():
+    template = 'def score(x):\n    pass'
+    interface, _ = template_target(template)
+    assert parse_candidate('```python\ndef score(x):\n    return x', 'stop', interface, template)[1] is None
+    assert parse_candidate('```python\ndef score(x):\n    return (', 'length', interface, template)[1].startswith('syntax_error')
+
+
+def test_context_material_matches_operator_without_read_requests(tmp_path):
     method = make_method(tmp_path)
     parent = add_node(method, 1)
     local = method.prompts.build_development(parent, 'Refine')
-    assert '"trials":true' in local.prompt and '"reference_id":ID' not in local.prompt
-    empty = method.prompts.build_development(parent, 'Refine', include_trials=True, allow_context=False)
-    assert 'No evaluated child records' in empty.prompt
+    assert 'Local trials' not in local.prompt and '"mode":"context"' not in local.prompt
     donor = add_node(method, 2)
     cross = method.prompts.build_development(parent, 'Fuse', references=[donor])
-    assert '"reference_id":ID' in cross.prompt and '"trials":true' not in cross.prompt
+    assert donor.code in cross.prompt and cross.reference_program == donor
+    assert '"mode":"context"' not in cross.prompt
+    pivot = method.prompts.build_development(parent, 'Pivot', references=[donor])
+    assert donor.code not in pivot.prompt and not pivot.reference_ids
 
 
-@pytest.mark.parametrize('point', ['none', 'second_call_journal', 'second_call_scheduled'])
-def test_selected_donor_read_and_resume_preserve_one_parent_opportunity(tmp_path, point):
+@pytest.mark.parametrize('point', ['none', 'call_journal', 'call_scheduled'])
+def test_inline_reference_and_resume_preserve_one_parent_opportunity(tmp_path, point):
     import re
     evaluation = CountingEvaluation()
     selected = []
-    def request(prompt):
-        cards = prompt.split('# Optional reference ideas')[1]
-        donor_id = int(re.search(r'Node (\d+)', cards).group(1))
-        selected.append(donor_id)
-        return json.dumps({'mode': 'context', 'reference_id': donor_id})
     def propose(prompt):
-        assert '# Requested Reference Implementation' in prompt
-        assert f'Node {selected[0]} |' in prompt.split('# Requested Reference Implementation')[1]
-        assert 'Local trials' not in prompt
-        return json.dumps({'mode': 'full', 'donor_id': selected[0],
+        assert '# Reference Algorithm' in prompt and 'mode":"context' not in prompt
+        donor_id = int(re.search(r'Node (\d+)', prompt.split('# Reference Algorithm')[1]).group(1))
+        selected.append(donor_id)
+        return json.dumps({'mode': 'full', 'donor_id': donor_id,
                            'code': 'def score(x):\n    return 3'})
-    llm = ScriptedLLM(response(1), response(2), request, propose)
+    llm = ScriptedLLM(response(1), response(2), propose)
     def create():
-        # Seed 0 chooses Fuse on the first development call.
         return TraceAADV1013(evaluation=evaluation, llm=llm, run_dir=tmp_path,
                             budget=3, n_roots=2, seed=0)
     method = create()
-    if point == 'second_call_journal':
+    if point == 'call_journal':
         original = method.storage.record_call
         def crash(record):
             original(record)
-            if record['call_id'] == '3:2':
-                raise OSError('after second-round response')
+            if record['call_id'] == '3:1':
+                raise OSError('after response')
         method.storage.record_call = crash
-    elif point == 'second_call_scheduled':
+    elif point == 'call_scheduled':
         original = method._save_checkpoint
         def crash():
             original()
             pending = method.pending
-            if pending and pending['stage'] == 'scheduled' and pending['candidate']['context_reads'] == 1:
-                raise OSError('before second-round call')
+            if pending and pending['stage'] == 'scheduled' and pending['candidate']['candidate_id'] == 3:
+                raise OSError('before call')
         method._save_checkpoint = crash
     if point != 'none':
         with pytest.raises(OSError):
             method.run()
         method = create()
     method.run()
-    events = read_journal(method.storage.events_path)
-    event = events[-1]
+    event = read_journal(method.storage.events_path)[-1]
     assert event['operator'] == 'Fuse'
     assert event['donor_id'] == event['loaded_reference_id'] == selected[0]
-    assert event['context_reads'] == 1 and event['llm_calls'] == 2
-    assert method.tree.parent_selections == 1 and evaluation.calls == 3 and len(llm.calls) == 4
-    calls = read_journal(method.storage.llm_calls_path)[-2:]
-    assert event['llm_seconds'] == sum(call['seconds'] for call in calls)
+    assert event['context_reads'] == 0 and event['llm_calls'] == 1
+    assert method.tree.parent_selections == 1 and evaluation.calls == 3 and len(llm.calls) == 3
 
 
-def test_repeated_context_request_gets_one_repair_without_another_parent(tmp_path):
+def test_obsolete_context_request_gets_one_repair_without_another_parent(tmp_path):
     request = json.dumps({'mode': 'context', 'trials': True})
-    method = make_method(tmp_path, ScriptedLLM(response(1), request, request, response(2)), budget=2)
+    method = make_method(tmp_path, ScriptedLLM(response(1), request, response(2)), budget=2)
     method.run()
     events = read_journal(method.storage.events_path)
     assert [e['status'] for e in events] == ['ok', 'invalid_output', 'ok']
@@ -435,10 +474,8 @@ def test_repeated_context_request_gets_one_repair_without_another_parent(tmp_pat
 
 
 def test_failed_edit_execution_repairs_reconstructed_code_without_reattributing_parent(tmp_path):
-    import re
     def edit(prompt):
-        return json.dumps({'mode': 'edit', 'base_hash': re.search(
-            r'base_hash: ([a-f0-9]{64})', prompt).group(1),
+        return json.dumps({'mode': 'edit',
             'edits': [{'search': 'return 1', 'replacement': 'return 1 / 0'}]})
     def repair(prompt):
         assert 'return 1 / 0' in prompt and '# Edit base' not in prompt
@@ -456,12 +493,11 @@ def test_context_capacity_drops_whole_reference_not_code_fragment(tmp_path):
     method = make_method(tmp_path)
     parent = add_node(method, 1)
     donor = add_node(method, 2, code='def score(x):\n' + '    # long comment\n' * 1000 + '    return 2')
-    baseline = method.prompts.build_development(parent, 'Fuse', references=[donor], allow_context=False)
+    baseline = method.prompts.build_development(parent, 'Fuse')
     method.prompts.max_tokens = method.prompts.count(baseline.prompt) + 30
-    read = method.prompts.build_development(parent, 'Fuse', references=[donor],
-                                           read_reference=donor, allow_context=False)
+    read = method.prompts.build_development(parent, 'Fuse', references=[donor])
     assert read.reference_program is None
-    assert read.fallback_reason == 'requested_implementation_exceeds_context'
+    assert read.fallback_reason == 'reference_implementation_exceeds_context'
     assert 'long comment' not in read.prompt and parent.code in read.prompt
     assert method.prompts.count(read.prompt) <= method.prompts.max_tokens
 
@@ -503,7 +539,7 @@ def test_missing_committed_journal_record_is_detected(tmp_path, journal):
 def test_repair_does_not_claim_inherited_donor_without_new_declaration(tmp_path):
     import re
     def failure(prompt):
-        donor_id = int(re.search(r'Node (\d+)', prompt.split('# Optional reference ideas')[1]).group(1))
+        donor_id = int(re.search(r'Node (\d+)', prompt.split('# Reference Algorithm')[1]).group(1))
         return json.dumps({'mode': 'full', 'donor_id': donor_id,
                            'code': 'def score(x):\n    return 1 / 0'})
     method = make_method(tmp_path, ScriptedLLM(response(1), response(2), failure, response(3)),

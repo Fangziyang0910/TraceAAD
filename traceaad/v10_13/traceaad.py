@@ -69,8 +69,8 @@ class Candidate:
 
 class TraceAADV1013:
     METHOD = "v1013"
-    REVISION = "v10.13-r2"
-    PROMPT_POLICY = "idea_context_optional_read_full_edit_v10_13_r2"
+    REVISION = "v10.13-r3"
+    PROMPT_POLICY = "single_pass_python_optional_edit_v10_13_r3"
 
     def __init__(self, *, evaluation, llm, run_dir, budget=1000, n_roots=8,
                  history_depth=3, output_tokens=8192, max_input_tokens=24320,
@@ -106,7 +106,7 @@ class TraceAADV1013:
             "n_roots": n_roots,
             "prompt_policy": self.PROMPT_POLICY,
             "revision": self.REVISION,
-            "parser_protocol": "code_first_json_full_edit_optional_idea_v2",
+            "parser_protocol": "python_first_unique_json_optional_edit_v3",
             "persistence_protocol": "staged_candidate_receipt_v2",
             "history_depth": history_depth,
             "output_tokens": output_tokens,
@@ -115,14 +115,14 @@ class TraceAADV1013:
             "quality_ess_target": QUALITY_ESS_TARGET,
             "parent_uniform_probability": PARENT_UNIFORM_PROBABILITY,
             "reference_count": REFERENCE_COUNT,
-            "reference_policy": "quality_uniform_underexposed_then_model_read",
+            "reference_policy": "one_quality_or_uniform_full_code_for_fuse",
             "task_contract_hash": digest(self.task_contract),
             "template_hash": digest(self._template_program),
             "seed": seed,
-            "context_mapping": {"Refine": "idea_formation_optional_trials",
-                                "Tune": "idea_formation_optional_trials",
-                                "Pivot": "idea_shortlist_optional_code",
-                                "Fuse": "idea_shortlist_optional_code"},
+            "context_mapping": {"Refine": "idea_formation_and_available_trials",
+                                "Tune": "idea_formation_and_available_trials",
+                                "Pivot": "parent_only",
+                                "Fuse": "parent_and_one_reference_code"},
             "llm": {name: getattr(llm, name, None) for name in
                     ("model", "base_url", "temperature", "top_p", "enable_thinking")},
         }
@@ -215,7 +215,7 @@ class TraceAADV1013:
         parent.attempts += 1
 
         references = []
-        if requested_operator in ("Pivot", "Fuse"):
+        if requested_operator == "Fuse":
             references, stats = reference_shortlist(self.tree.all_nodes(), parent, self.rng)
             selection.update(stats)
 
@@ -234,6 +234,8 @@ class TraceAADV1013:
             donor_fitness=None,
             reference_ids=context.reference_ids,
             history_ids=context.history_ids,
+            trial_ids=context.trial_ids,
+            loaded_reference_id=context.reference_program.id if context.reference_program else None,
             selection=selection,
             parent_selected=True,
         )
@@ -451,38 +453,7 @@ class TraceAADV1013:
             self.pending.update(stage='generated', candidate=asdict(candidate), completion=completion)
             self._save_checkpoint()
         completion = self.pending['completion']
-        payload = parsing.response_object(completion['response'])
-        if payload is not None and payload.get('mode') == 'context':
-            if candidate.parent_id is not None and not candidate.context_reads and not candidate.repair_of:
-                requested_id = payload.get('reference_id')
-                reference = (self.tree.nodes[requested_id] if type(requested_id) is int and
-                             requested_id in candidate.reference_ids else None)
-                include_trials = payload.get('trials') is True and candidate.operator in ('Refine', 'Tune')
-                context = self.prompts.build_development(
-                    self.tree.nodes[candidate.parent_id], candidate.operator,
-                    references=[self.tree.nodes[i] for i in candidate.reference_ids],
-                    read_reference=reference, include_trials=include_trials,
-                    allow_context=False,
-                )
-                candidate.prompt, candidate.prompt_hash = context.prompt, digest(context.prompt)
-                candidate.prompt_tokens = self.prompts.count(context.prompt)
-                candidate.history_ids, candidate.trial_ids = context.history_ids, context.trial_ids
-                candidate.context_reads = 1
-                candidate.loaded_reference_id = context.reference_program.id if context.reference_program else None
-                if context.fallback_reason:
-                    candidate.selection['read_fallback_reason'] = context.fallback_reason
-                candidate.selection['context_request'] = {
-                    'reference_id': requested_id if type(requested_id) is int else None,
-                    'trials': payload.get('trials') is True,
-                }
-                candidate.selection['read_reference_ids'] = context.reference_ids
-                candidate.selection['local_trials_requested_and_allowed'] = include_trials
-                self.pending = {'stage': 'scheduled', 'candidate': asdict(candidate)}
-                self._save_checkpoint()
-                return self._run_candidate()
-            parsed, parse_error = None, 'context_error: context reads are limited to one development round'
-        else:
-            parsed, parse_error = self._parse_completion(completion, candidate)
+        parsed, parse_error = self._parse_completion(completion, candidate)
         if parsed is not None:
             candidate.donor_id = parsed.donor_id
             candidate.donor_fitness = (self.tree.nodes[parsed.donor_id].fitness
