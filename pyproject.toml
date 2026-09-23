@@ -5,9 +5,7 @@ description = "Large Language Model for Algorithm Design Platform"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "numpy<2",
-    "torch",
     "tensorboardX",
-    "tensorboard",
     "wandb",
     "scipy",
     "tqdm",
@@ -16,35 +14,16 @@ dependencies = [
     "openai",
     "pytz",
     "matplotlib",
-    "python-docx",
-    "ttkbootstrap",
-    "pandas",
-    "pymoo",
-    "codebleu",
-    "tree-sitter-python==0.23",
-    "gym",
-    "gymnasium",
-    "datasets",
     "huggingface_hub",
-    "networkx",
-    "llamea",
     "scikit-learn>=1.9.0",
-    "deap>=1.4.4",
-    "optuna>=4.9.0",
-    "nevergrad>=1.0.12",
-    "radon>=6.0.1",
-    "statsmodels>=0.14.6",
 ]
 
-[build-system]
-requires = ["setuptools>=61"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["."]
-
-[tool.uv.sources]
-llamea = { git = "https://github.com/XAI-liacs/LLaMEA.git", rev = "main" }
+[tool.uv]
+# Virtual project: dependencies only. The repo runs via `python -m` from the
+# repo root (and from frozen runtime copies), so never build/install the
+# project itself — a setuptools packages.find scan walks the huge results
+# trees under experiments/ and stalls.
+package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

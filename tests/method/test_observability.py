@@ -4,13 +4,10 @@ import threading
 import unittest
 from pathlib import Path
 
-from llamea import Solution
-
 from llm4ad.base import Function
 from llm4ad.base.evaluate import Evaluation
 from llm4ad.method.eoh.observability import init_observability, record_sample_failure
 from llm4ad.method.eoh.sampling import sample_thought_and_function, trim_braced_thought
-from llm4ad.method.llamea.evaluation import generate_evaluator
 from llm4ad.tools.profiler import ProfilerBase
 
 
@@ -207,34 +204,6 @@ class ProfilerObservabilityTest(unittest.TestCase):
             self.assertEqual(calls[0]["sample_order"], 3)
             self.assertTrue(calls[0]["thought_parse_success"])
             self.assertTrue(calls[0]["function_parse_success"])
-
-    def test_llamea_evaluator_adapter_records_solution_as_function(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            profiler = ProfilerBase(
-                log_dir=tmpdir, create_random_path=False, log_style="simple"
-            )
-            evaluator = generate_evaluator(FakeEvaluation(), profiler=profiler)
-            solution = Solution(
-                code="def heuristic(x):\n    return x + 4\n", name="heuristic"
-            )
-
-            result = evaluator(solution)
-            profiler.write_run_summary(status="finished")
-
-            self.assertEqual(result.fitness, 7)
-            samples = json.loads(
-                (Path(tmpdir) / "samples" / "samples_1~200.json").read_text()
-            )
-            self.assertEqual(samples[0]["score"], 7)
-            events = [
-                json.loads(line)
-                for line in (Path(tmpdir) / "method_events.jsonl")
-                .read_text()
-                .splitlines()
-            ]
-            self.assertEqual(events[-1]["event"], "solution_evaluated")
-            summary = json.loads((Path(tmpdir) / "run_summary.json").read_text())
-            self.assertEqual(summary["best_score"], 7)
 
 
 if __name__ == "__main__":
