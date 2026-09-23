@@ -32,7 +32,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .code import TextFunctionProgramConverter, Program
-from .modify_code import ModifyCode
 
 
 @dataclass(frozen=True)
@@ -60,27 +59,15 @@ class Evaluation(ABC):
             self,
             template_program: str | Program,
             task_description: str = '',
-            use_numba_accelerate: bool = False,
-            use_protected_div: bool = False,
-            protected_div_delta: float = 1e-5,
-            random_seed: int | None = None,
             timeout_seconds: int | float = None,
             *,
-            exec_code: bool = True,
             safe_evaluate: bool = True,
             daemon_eval_process: bool = False,
             fork_proc: Literal['auto'] | bool = 'auto'
     ):
         """Evaluation interface for executing generated code.
         Args:
-            use_numba_accelerate: Wrap the function with '@numba.jit(nopython=True)'.
-            use_protected_div   : Modify 'a / b' => 'a / (b + delta)'. Maybe useful for mathematical tasks.
-            protected_div_delta : Delta value in protected div.
-            random_seed         : If is not None, set random seed in the first line of the function body.
             timeout_seconds     : Terminate the evaluation after timeout seconds.
-            exec_code           : Using 'exec()' to compile the code and provide the callable function.
-                If is set to 'False', the 'callable_func' argument in 'self.evaluate_program' is always 'None'.
-                If is set to 'False', the user should provide the score of the program based on 'program_str' argument in 'self.evaluate_program'.
             safe_evaluate       : Evaluate in safe mode using a new process. If is set to False,
                 the evaluation will not be terminated after timeout seconds. The user should consider how to
                 terminate evaluating in time.
@@ -89,40 +76,10 @@ class Evaluation(ABC):
                 you can not create new processes.
             fork_proc           : This arg is valid when safe_evaluate=True, which determines to 'fork' process or 'spawn' a safe process.
                 If set to 'auto', the process creating method will depend on OS. Set to 'True' to use 'fork', 'False' to use 'spawn'.
-
-        -Assume that: use_numba_accelerate=True, self.use_protected_div=True, and self.random_seed=2024.
-        -The original function:
-        --------------------------------------------------------------------------------
-        import numpy as np
-
-        def f(a, b):
-            a = np.random.random()
-            return a / b
-        --------------------------------------------------------------------------------
-        -In the Evaluation phase, the modified function will be:
-        --------------------------------------------------------------------------------
-        import numpy as np
-        import numba
-
-        @numba.jit(nopython=True)
-        def f():
-            np.random.seed(2024)
-            a = np.random.random()
-            return _protected_div(a, b)
-
-        def _protected_div(a, b, delta=1e-5):
-            return a / (b + delta)
-        --------------------------------------------------------------------------------
-        As shown above, the 'import numba', 'numba.jit()' decorator, and '_protected_dev' will be added by this function.
         """
         self.template_program = template_program
         self.task_description = task_description
-        self.use_numba_accelerate = use_numba_accelerate
-        self.use_protected_div = use_protected_div
-        self.protected_div_delta = protected_div_delta
-        self.random_seed = random_seed
         self.timeout_seconds = timeout_seconds
-        self.exec_code = exec_code
         self.safe_evaluate = safe_evaluate
         self.daemon_eval_process = daemon_eval_process
         self.fork_proc = fork_proc
@@ -136,24 +93,6 @@ class Evaluation(ABC):
             callable_func: The callable heuristic function. You can call it using `callable_func(args, kwargs)`.
         Return:
             Returns the fitness value.
-
-        Assume that: self.use_numba_accelerate = True, self.use_protected_div = True,
-        and self.random_seed = 2024, the argument 'function_str' will be something like below:
-        --------------------------------------------------------------------------------
-        import numpy as np
-        import numba
-
-        @numba.jit(nopython=True)
-        def f(a, b):
-            np.random.seed(2024)
-            a = a + np.random.random()
-            return _protected_div(a, b)
-
-        def _protected_div(a, b, delta=1e-5):
-            return a / (b + delta)
-        --------------------------------------------------------------------------------
-        As shown above, the 'import numba', 'numba.jit()' decorator,
-        and '_protected_dev' will be added by this function.
         """
         raise NotImplementedError('Must provide a evaluator for a function.')
 
@@ -278,21 +217,6 @@ class SecureEvaluator:
             elif fork_proc is False:
                 multiprocessing.set_start_method('spawn', force=True)
 
-    def _modify_program_code(self, program_str: str, function_name: str) -> str:
-        if self._evaluator.use_numba_accelerate:
-            program_str = ModifyCode.add_numba_decorator(
-                program_str, function_name=function_name
-            )
-        if self._evaluator.use_protected_div:
-            program_str = ModifyCode.replace_div_with_protected_div(
-                program_str, self._evaluator.protected_div_delta, self._evaluator.use_numba_accelerate
-            )
-        if self._evaluator.random_seed is not None:
-            program_str = ModifyCode.add_numpy_random_seed_to_func(
-                program_str, function_name, self._evaluator.random_seed
-            )
-        return program_str
-
     def evaluate_program(self, program: str | Program, **kwargs):
         return self.evaluate_program_with_details(program, **kwargs).result
 
@@ -303,7 +227,6 @@ class SecureEvaluator:
             program_str = str(program)
             function_name = self._target_function_name()
 
-            program_str = self._modify_program_code(program_str, function_name)
             if self._debug_mode:
                 print(f'DEBUG: evaluated program:\n{program_str}\n')
 
@@ -385,12 +308,9 @@ class SecureEvaluator:
     ) -> None:
         _enter_eval_session()
         try:
-            if self._evaluator.exec_code:
-                all_globals_namespace = {}
-                exec(program_str, all_globals_namespace)
-                program_callable = all_globals_namespace[function_name]
-            else:
-                program_callable = None
+            all_globals_namespace = {}
+            exec(program_str, all_globals_namespace)
+            program_callable = all_globals_namespace[function_name]
         except Exception as exc:
             result_queue.put(self._failure('exec_error', exc))
             return
@@ -413,12 +333,9 @@ class SecureEvaluator:
 
     def _evaluate_with_details(self, program_str: str, function_name, **kwargs):
         try:
-            if self._evaluator.exec_code:
-                all_globals_namespace = {}
-                exec(program_str, all_globals_namespace)
-                program_callable = all_globals_namespace[function_name]
-            else:
-                program_callable = None
+            all_globals_namespace = {}
+            exec(program_str, all_globals_namespace)
+            program_callable = all_globals_namespace[function_name]
         except Exception as exc:
             return self._failure('exec_error', exc)
 

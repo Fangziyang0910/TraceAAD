@@ -32,7 +32,7 @@ import logging
 from threading import Lock, RLock
 from datetime import datetime
 
-from ...base import Function
+from llm4ad.base import Function
 
 # Fields that are safe to log from an LLM object (no secrets).
 _LLM_SAFE_FIELDS = frozenset(

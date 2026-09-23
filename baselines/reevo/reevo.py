@@ -47,9 +47,10 @@ from .observability import (
     shutdown_executor,
 )
 from llm4ad.base import (
-    Evaluation, LLM, Function, Program, TextFunctionProgramConverter, SecureEvaluator, SampleTrimmer
+    Evaluation, LLM, Function, Program, TextFunctionProgramConverter, SecureEvaluator
 )
-from llm4ad.tools.profiler import ProfilerBase
+from baselines.sampling import SampleTrimmer
+from baselines.profiler import ProfilerBase
 
 
 class ReEvo:

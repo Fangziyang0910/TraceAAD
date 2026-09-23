@@ -14,7 +14,7 @@ from .profiler import PathWiseProfiler
 from .prompt import PathWisePrompt
 from .sampler import PathWiseSampler
 from llm4ad.base import Evaluation, Function, LLM, Program, SecureEvaluator, TextFunctionProgramConverter
-from llm4ad.tools.profiler import ProfilerBase
+from baselines.profiler import ProfilerBase
 from .observability import (
     close_llm,
     finish_profiler,

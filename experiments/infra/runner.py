@@ -26,7 +26,7 @@ from experiments.infra.base import (
     set_random_seed,
     write_run_config,
 )
-from llm4ad.tools.llm.llm_api_openai import OpenAIAPI
+from llm4ad.base.llm import OpenAIAPI
 
 FORMAL_BUDGET = 1000
 

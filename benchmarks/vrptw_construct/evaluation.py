@@ -52,7 +52,6 @@ class VRPTWEvaluation(Evaluation):
         super().__init__(
             template_program=template_program,
             task_description=task_description,
-            use_numba_accelerate=False,
             timeout_seconds=timeout_seconds
         )
 

@@ -8,7 +8,7 @@ from llm4ad.base import Function
 from llm4ad.base.evaluate import Evaluation
 from baselines.eoh.observability import init_observability, record_sample_failure
 from baselines.eoh.sampling import sample_thought_and_function, trim_braced_thought
-from llm4ad.tools.profiler import ProfilerBase
+from baselines.profiler import ProfilerBase
 
 
 def make_function(label: int, score: float) -> Function:

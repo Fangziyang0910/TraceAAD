@@ -8,7 +8,7 @@ from threading import Lock
 from typing import Optional
 
 from llm4ad.base import Function
-from llm4ad.tools.profiler import ProfilerBase
+from baselines.profiler import ProfilerBase
 
 
 class CALMProfiler(ProfilerBase):

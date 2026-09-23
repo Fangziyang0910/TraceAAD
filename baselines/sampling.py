@@ -1,69 +1,29 @@
 # This file is part of the LLM4AD project (https://github.com/Optima-CityU/llm4ad).
-# Last Revision: 2025/2/16
 #
 # ------------------------------- Copyright --------------------------------
 # Copyright (c) 2025 Optima Group.
-# 
-# Permission is granted to use the LLM4AD platform for research purposes. 
-# All publications, software, or other works that utilize this platform 
-# or any part of its codebase must acknowledge the use of "LLM4AD" and 
+#
+# Permission is granted to use the LLM4AD platform for research purposes.
+# All publications, software, or other works that utilize this platform
+# or any part of its codebase must acknowledge the use of "LLM4AD" and
 # cite the following reference:
-# 
-# Fei Liu, Rui Zhang, Zhuoliang Xie, Rui Sun, Kai Li, Xi Lin, Zhenkun Wang, 
-# Zhichao Lu, and Qingfu Zhang, "LLM4AD: A Platform for Algorithm Design 
+#
+# Fei Liu, Rui Zhang, Zhuoliang Xie, Rui Sun, Kai Li, Xi Lin, Zhenkun Wang,
+# Zhichao Lu, and Qingfu Zhang, "LLM4AD: A Platform for Algorithm Design
 # with Large Language Model," arXiv preprint arXiv:2412.17287 (2024).
-# 
-# For inquiries regarding commercial use or licensing, please contact 
+#
+# For inquiries regarding commercial use or licensing, please contact
 # http://www.llm4ad.com/contact.html
 # --------------------------------------------------------------------------
+"""Response trimming and text-to-Function conversion shared by baseline samplers."""
 
 from __future__ import annotations
 
 import ast
 import copy
-from abc import abstractmethod
 from typing import Any, List
 
-from .code import Program, Function, TextFunctionProgramConverter
-
-
-class LLM:
-    def __init__(self, *, do_auto_trim=True, debug_mode=False):
-        """Language model interface.
-        This interface defines how to interact with LLM api / deployed LLM.
-        Args:
-            do_auto_trim: if set to True, then automatically trim the code from response content.
-        """
-        self.do_auto_trim = do_auto_trim
-        self.debug_mode = debug_mode
-
-    @abstractmethod
-    def draw_sample(self, prompt: str | Any, *args, **kwargs) -> str:
-        """Returns a predicted continuation of `prompt`.
-        -For example, the response content of the LLM is:
-        ------------------------------------------------------------------------------------------------------------------
-        Here is the function.
-        def priority_v2(..., ...) -> Any:
-            a = np.array([1, 2, 3])
-            if len(a) > 2:
-                return a / a.sum()
-            else:
-                return a / a.mean()
-        This function is going to ..., and returns ...[Descriptions by LLM]
-        ------------------------------------------------------------------------------------------------------------------
-        """
-        pass
-
-    def draw_samples(self, prompts: List[str | Any], *args, **kwargs) -> List[str]:
-        """Returns multiple predicted continuations of `prompt`.
-        """
-        return [self.draw_sample(p, *args, **kwargs) for p in prompts]
-
-    def close(self):
-        """Defines how to close the connection to API,
-        or release the GPU resources at the end of the program search.
-        """
-        pass
+from llm4ad.base import Function, LLM, Program, TextFunctionProgramConverter
 
 
 class SampleTrimmer:

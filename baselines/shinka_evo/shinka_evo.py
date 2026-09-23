@@ -6,7 +6,7 @@ import re
 from typing import Any, Callable, Optional, Sequence
 
 from llm4ad.base import Evaluation, Function, LLM, Program, SecureEvaluator, TextFunctionProgramConverter
-from llm4ad.tools.profiler import ProfilerBase
+from baselines.profiler import ProfilerBase
 from .observability import (
     close_llm,
     finish_profiler,

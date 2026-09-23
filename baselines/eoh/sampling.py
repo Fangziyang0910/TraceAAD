@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
-from llm4ad.base import SampleTrimmer
+from baselines.sampling import SampleTrimmer
 
 
 def log_sampler_llm_call(profiler: Any, **payload) -> None:

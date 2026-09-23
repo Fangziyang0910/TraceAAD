@@ -6,7 +6,7 @@ from threading import Lock
 from typing import Any, Optional
 
 from llm4ad.base import Function
-from llm4ad.tools.profiler import ProfilerBase
+from baselines.profiler import ProfilerBase
 
 
 class ShinkaEvoProfiler(ProfilerBase):

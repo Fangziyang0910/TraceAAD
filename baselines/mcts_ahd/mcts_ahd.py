@@ -41,7 +41,7 @@ from .observability import close_sampler_llm, finish_profiler, shutdown_executor
 from llm4ad.base import (
     Evaluation, LLM, Function, Program, TextFunctionProgramConverter, SecureEvaluator
 )
-from llm4ad.tools.profiler import ProfilerBase
+from baselines.profiler import ProfilerBase
 
 
 class MCTS_AHD:

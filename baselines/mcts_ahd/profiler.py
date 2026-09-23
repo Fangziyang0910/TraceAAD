@@ -13,7 +13,7 @@ except:
 
 from .population import Population
 from llm4ad.base import Function
-from llm4ad.tools.profiler import TensorboardProfiler, ProfilerBase, WandBProfiler
+from baselines.profiler import TensorboardProfiler, ProfilerBase, WandBProfiler
 
 
 class MAProfiler(ProfilerBase):

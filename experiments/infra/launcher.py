@@ -25,7 +25,7 @@ from experiments.infra.base import (
     LaunchItem,
     launch_items,
 )
-from llm4ad.tools.env import resolve_llm_api_key
+from .env import resolve_llm_api_key
 
 DEFAULT_MAX_ATTEMPTS = 5
 

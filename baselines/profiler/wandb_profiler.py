@@ -22,7 +22,7 @@ from __future__ import annotations
 import sys
 from typing import Optional, Literal
 
-from ...base import Function
+from llm4ad.base import Function
 from .profile import ProfilerBase
 
 try:

@@ -8,7 +8,7 @@ from typing import Optional
 from .graph import PathWiseAction, PathWiseEdge, PathWiseNode
 from .population import Population
 from llm4ad.base import Function
-from llm4ad.tools.profiler import ProfilerBase
+from baselines.profiler import ProfilerBase
 
 
 class PathWiseProfiler(ProfilerBase):

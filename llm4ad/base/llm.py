@@ -16,16 +16,55 @@
 # For inquiries regarding commercial use or licensing, please contact
 # http://www.llm4ad.com/contact.html
 # --------------------------------------------------------------------------
+"""LLM interface: the abstract client contract and the OpenAI-compatible one."""
+
 from __future__ import annotations
 
 import copy
+from abc import abstractmethod
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, List
 
 import openai
 import requests
 
-from llm4ad.base import LLM
+
+class LLM:
+    def __init__(self, *, do_auto_trim=True, debug_mode=False):
+        """Language model interface.
+        This interface defines how to interact with LLM api / deployed LLM.
+        Args:
+            do_auto_trim: if set to True, then automatically trim the code from response content.
+        """
+        self.do_auto_trim = do_auto_trim
+        self.debug_mode = debug_mode
+
+    @abstractmethod
+    def draw_sample(self, prompt: str | Any, *args, **kwargs) -> str:
+        """Returns a predicted continuation of `prompt`.
+        -For example, the response content of the LLM is:
+        ------------------------------------------------------------------------------------------------------------------
+        Here is the function.
+        def priority_v2(..., ...) -> Any:
+            a = np.array([1, 2, 3])
+            if len(a) > 2:
+                return a / a.sum()
+            else:
+                return a / a.mean()
+        This function is going to ..., and returns ...[Descriptions by LLM]
+        ------------------------------------------------------------------------------------------------------------------
+        """
+        pass
+
+    def draw_samples(self, prompts: List[str | Any], *args, **kwargs) -> List[str]:
+        """Returns multiple predicted continuations of `prompt`."""
+        return [self.draw_sample(p, *args, **kwargs) for p in prompts]
+
+    def close(self):
+        """Defines how to close the connection to API,
+        or release the GPU resources at the end of the program search.
+        """
+        pass
 
 
 TOKENIZE_RETRY_LIMIT = 3
