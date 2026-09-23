@@ -11,6 +11,38 @@ import subprocess
 import sys
 
 
+def runtime_environment(runtime):
+    environment = dict(os.environ)
+    environment['PYTHONPATH'] = str(Path(runtime).resolve())
+    return environment
+
+
+def verify_runtime(runtime, *, preflight=True):
+    runtime = Path(runtime).resolve()
+    payload = json.loads((runtime / 'runtime_manifest.json').read_text())
+    for relative, expected in payload['files'].items():
+        source = runtime / relative
+        if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != expected:
+            raise ValueError(f'frozen source changed or missing: {relative}')
+        if source.suffix == '.py':
+            compile(source.read_text(), str(source), 'exec')
+    if preflight:
+        probe = """
+import __main__, multiprocessing, os
+from pathlib import Path
+import experiments.traceaad_v11_1.run as entry
+assert Path(entry.__file__).resolve().is_relative_to(Path.cwd().resolve())
+__main__.__spec__ = entry.__spec__
+worker = multiprocessing.get_context('spawn').Process(target=os.getpid)
+worker.start(); worker.join(30)
+if worker.is_alive(): worker.terminate(); worker.join(); raise RuntimeError('spawn bootstrap timed out')
+assert worker.exitcode == 0, worker.exitcode
+"""
+        subprocess.run([sys.executable, '-c', probe], cwd=runtime,
+                       env=runtime_environment(runtime), check=True, timeout=45)
+    return hashlib.sha256((runtime / 'runtime_manifest.json').read_bytes()).hexdigest()
+
+
 def freeze(batch, prefix='v111'):
     if not all(re.fullmatch(r'[A-Za-z0-9_-]+', s) for s in (batch, prefix)):
         raise ValueError('invalid batch or prefix')
@@ -71,4 +103,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

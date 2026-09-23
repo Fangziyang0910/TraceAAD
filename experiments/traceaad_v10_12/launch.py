@@ -54,7 +54,6 @@ def healthy_slots(available, backend_pool):
 
 
 def build_plan(batch, prefix, thinking=False, history_code=False, repeats=3, traj_gens=8,
-               cvrp_last=False, rand_context=False, n_references=8, n_profile_cards=2):
                cvrp_last=False, n_profile_cards=2):
     order = [(repeat, task) for repeat in range(1, repeats + 1) for task in TASKS]
     if cvrp_last:
@@ -62,12 +61,9 @@ def build_plan(batch, prefix, thinking=False, history_code=False, repeats=3, tra
     return [dict(task=task, repeat=repeat, seed=repeat-1, backend=None,
                  run_name=f'{batch}_{TASK_SHORT[task]}_v1012_rep{repeat}',
                  session=f'{prefix}_{TASK_SHORT[task]}_r{repeat}', attempts=0, status='queued',
-                 traj_gens=0 if rand_context else traj_gens,
                  traj_gens=traj_gens,
                  **({'thinking': True} if thinking else {}),
                  **({'history_code': True} if history_code else {}),
-                 **({'rand_context': True, 'n_references': n_references} if rand_context else {}),
-                 **({'n_profile_cards': n_profile_cards} if not rand_context and n_profile_cards != 2 else {}))
                  **({'n_profile_cards': n_profile_cards} if n_profile_cards != 2 else {}))
             for repeat, task in order]
 
@@ -88,12 +84,6 @@ def launch_item(row):
         ('--thinking', row.get('thinking')),
         ('--history-code', row.get('history_code')),
     ) if enabled]
-    if row.get('rand_context'):
-        flags += ['--rand-context', '--n-references', str(row.get('n_references', 8))]
-    else:
-        flags += ['--traj-gens', str(row.get('traj_gens', 8))]
-        if row.get('n_profile_cards') is not None:
-            flags += ['--n-profile-cards', str(row['n_profile_cards'])]
     flags += ['--traj-gens', str(row.get('traj_gens', 8))]
     if row.get('n_profile_cards') is not None:
         flags += ['--n-profile-cards', str(row['n_profile_cards'])]
@@ -150,10 +140,6 @@ def main(argv=None):
                         help='stamp every run of this batch with model thinking mode')
     parser.add_argument('--history-code', action='store_true',
                         help='include historical programs in each formation path')
-    parser.add_argument('--rand-context', action='store_true',
-                        help='replace formation history with rank-sampled archive references')
-    parser.add_argument('--n-references', type=int, default=8,
-                        help='number of archive reference cards in random-context mode')
     parser.add_argument('--n-profile-cards', type=int, default=2,
                         help='number of archive profile cards to include in generation context')
     parser.add_argument('--cvrp-last', action='store_true',
@@ -165,14 +151,8 @@ def main(argv=None):
         parser.error('interval and max-attempts must be positive')
     if args.traj_gens < 0:
         parser.error('traj-gens must be nonnegative')
-    if args.n_references < 1:
-        parser.error('n-references must be positive')
     if args.n_profile_cards < 0:
         parser.error('n-profile-cards must be non-negative')
-    if args.rand_context and (args.history_code or args.traj_gens != 8):
-        parser.error('--rand-context excludes --history-code and non-default --traj-gens')
-    if not args.rand_context and args.n_references != 8:
-        parser.error('--n-references requires --rand-context')
     if not all(re.fullmatch(r'[A-Za-z0-9_-]+', s) for s in (args.batch, args.session_prefix)):
         parser.error('batch and prefix must contain only letters, numbers, underscore or hyphen')
     cvrp_barriers = tuple(filter(None, args.cvrp_barrier_batches.split(',')))
@@ -196,9 +176,6 @@ def main(argv=None):
                 raise ValueError('batch history-code mismatch')
             if (payload.get('repeats', 3), payload.get('traj_gens', 8)) != (args.repeats, args.traj_gens):
                 raise ValueError('batch repeats or history-length mismatch')
-            if (bool(payload.get('rand_context')), payload.get('n_references', 8)) != (
-                    args.rand_context, args.n_references):
-                raise ValueError('batch random-context mismatch')
             if payload.get('n_profile_cards', 2) != args.n_profile_cards:
                 raise ValueError('batch profile cards mismatch')
             if (bool(payload.get('cvrp_last')), tuple(payload.get('cvrp_barriers', ()))) != (args.cvrp_last, cvrp_barriers):
@@ -211,13 +188,10 @@ def main(argv=None):
                            thinking=args.thinking, history_code=args.history_code,
                            repeats=args.repeats, traj_gens=args.traj_gens,
                            n_profile_cards=args.n_profile_cards,
-                           rand_context=args.rand_context, n_references=args.n_references,
                            cvrp_last=args.cvrp_last, cvrp_barriers=cvrp_barriers,
                            backends=backend_pool, direct=args.direct,
                            plan=build_plan(args.batch, args.session_prefix, args.thinking,
                                            args.history_code, args.repeats, args.traj_gens,
-                                           args.cvrp_last, args.rand_context, args.n_references,
-                                           args.n_profile_cards))
                                            args.cvrp_last, args.n_profile_cards))
             if any(item_is_running(launch_item(r)) or launch_item(r).run_dir.exists()
                    for r in payload['plan']):

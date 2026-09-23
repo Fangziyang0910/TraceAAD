@@ -14,7 +14,6 @@ from llm4ad.base import TextFunctionProgramConverter
 from llm4ad.method.traceaad_v10_3.traceaad import calibrate_beta
 from llm4ad.method.traceaad_v10_8.traceaad import TraceAADV108
 from llm4ad.method.traceaad_v10_5.traceaad import ess, read_journal, UnknownEvaluation
-from llm4ad.method.traceaad_v10_11.traceaad import TraceAADV1011
 from . import trajectory
 from .trajectory import digest
 from . import errors
@@ -37,7 +36,6 @@ def code_key(code):
 
 
 class TraceAADV1010(TraceAADV108):
-class TraceAADV1010(TraceAADV1011):
     METHOD = 'v1010'
     DISPLAY_NAME = 'V10.10'
     STATE_VERSION = 10100
@@ -277,7 +275,3 @@ class TraceAADV1010(TraceAADV1011):
         super()._append_record(path, record)
         if path == self.events_path:
             self._last_event = record
-    def __init__(self, *args, task_name=None, context_margin=256, max_context_tokens=32768, **kwargs):
-        max_input = max_context_tokens - kwargs.get('output_tokens', 8192) - context_margin
-        kwargs.setdefault('max_input_tokens', max_input)
-        super().__init__(*args, **kwargs)

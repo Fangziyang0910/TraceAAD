@@ -16,7 +16,7 @@ import time
 from experiments.infra.base import (
     BACKENDS, BACKEND_CAPACITY, TASKS, TASK_SHORT,
 )
-from experiments.traceaad_v10_12.freeze import freeze
+from experiments.traceaad_v10_12.freeze import freeze, runtime_environment, verify_runtime
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -78,10 +78,10 @@ def launch(batch: str, assignments_path: Path, prefix: str, delay: float, do_fre
         if probe.returncode == 0:
             raise RuntimeError(f"tmux session already exists: {session}")
 
-    if do_freeze:
-        runtime_dir = RESULTS_ROOT / f"runtime_{batch}"
-        if not runtime_dir.exists():
-            freeze(batch, prefix)
+    runtime_dir = RESULTS_ROOT / f"runtime_{batch}"
+    if do_freeze and not runtime_dir.exists():
+        freeze(batch, prefix)
+    source_identity = verify_runtime(runtime_dir)
 
     plan = [
         {
@@ -100,6 +100,8 @@ def launch(batch: str, assignments_path: Path, prefix: str, delay: float, do_fre
         "repeats": 4,
         "n_profile_cards": 2,
         "profile_card_tau": 8.0,
+        "runtime": str(runtime_dir),
+        "source_identity": source_identity,
         "backends": list(BACKENDS),
         "assignment_file": str(assignments_path.resolve()),
         "plan": plan,
@@ -114,8 +116,9 @@ def launch(batch: str, assignments_path: Path, prefix: str, delay: float, do_fre
             "--run-name", str(item["run_name"]),
         ]
         subprocess.run(
-            ["tmux", "new-session", "-d", "-s", str(item["session"]), *command],
-            cwd=ROOT, check=True,
+            ["tmux", "new-session", "-d", "-s", str(item["session"]),
+             "-c", str(runtime_dir), "-e", f"PYTHONPATH={runtime_dir}", *command],
+            cwd=runtime_dir, env=runtime_environment(runtime_dir), check=True,
         )
         item["status"] = "running"
         item["started_at"] = datetime.now().astimezone().isoformat()
@@ -131,7 +134,8 @@ def main() -> None:
     parser.add_argument("--assignments", type=Path, default=DEFAULT_ASSIGNMENTS)
     parser.add_argument("--session-prefix", default="v1012")
     parser.add_argument("--delay", type=float, default=0.2, help="seconds between tmux launches")
-    parser.add_argument("--no-freeze", action="store_true", help="skip freezing runtime")
+    parser.add_argument("--no-freeze", action="store_true",
+                        help="reuse an existing verified frozen runtime")
     args = parser.parse_args()
     if args.delay < 0:
         parser.error("--delay must be nonnegative")
@@ -141,4 +145,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

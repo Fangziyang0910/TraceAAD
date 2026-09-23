@@ -4,15 +4,6 @@ import re
 
 from llm4ad.method.traceaad_v10_3.schema import normalize_code
 from llm4ad.method.traceaad_v10_3.traceaad import THINK_BLOCK_RE
-import re
-
-THINK_BLOCK_RE = re.compile(r'<think>.*?</think>', re.DOTALL)
-
-
-def normalize_code(text: str) -> str:
-    """Normalize newlines and surrounding whitespace for storage."""
-    return "\n".join(text.replace("\r\n", "\n").replace("\r", "\n").splitlines()).strip()
-
 from llm4ad.base import TextFunctionProgramConverter
 
 OUTPUT = (

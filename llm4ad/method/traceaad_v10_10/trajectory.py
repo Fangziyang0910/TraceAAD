@@ -1,27 +1,9 @@
 """Unified short formation path for normal search generation."""
 
 import ast
-import hashlib
 
 from llm4ad.method.traceaad_v10_8.trajectory import TrajectoryBuilder as BaseBuilder, digest
 from .errors import OUTPUT
-
-
-def digest(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
-class BaseBuilder:
-    def __init__(self, llm, task_contract, *, max_tokens, max_events, lookup):
-        self.llm = llm
-        self.task_contract = task_contract
-        self.max_tokens = max_tokens
-        self.max_events = max_events
-        self.lookup = lookup
-
-    def count(self, text, chat=False):
-        return self.llm.count_tokens(text) if not chat else self.llm.count_prompt_tokens(text)
-
 
 GENERATION = 'target_function_idea500_template_rebuild_one_repair_v3'
 

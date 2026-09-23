@@ -1,0 +1,173 @@
+{
+  "at": "2026-09-22T21:57:12.174179+08:00",
+  "load": [
+    2.205078125,
+    4.64013671875,
+    30.82666015625
+  ],
+  "runs": [
+    {
+      "task": "cvrp_aco",
+      "repeat": 1,
+      "restored_budget": 650,
+      "budget_used": 655,
+      "new_evaluations": 5,
+      "new_successes": 5,
+      "new_timeouts": 0,
+      "first_new_success": {
+        "ts": "2026-09-22T21:53:47",
+        "evaluation_id": 651,
+        "fitness": -8.79864823506577,
+        "eval_seconds": 5.4450531005859375
+      }
+    },
+    {
+      "task": "op_aco",
+      "repeat": 1,
+      "restored_budget": 744,
+      "budget_used": 747,
+      "new_evaluations": 3,
+      "new_successes": 3,
+      "new_timeouts": 0,
+      "first_new_success": {
+        "ts": "2026-09-22T21:54:21",
+        "evaluation_id": 745,
+        "fitness": 14.417999999999997,
+        "eval_seconds": 1.482231855392456
+      }
+    },
+    {
+      "task": "cvrp_aco",
+      "repeat": 2,
+      "restored_budget": 661,
+      "budget_used": 665,
+      "new_evaluations": 4,
+      "new_successes": 4,
+      "new_timeouts": 0,
+      "first_new_success": {
+        "ts": "2026-09-22T21:53:55",
+        "evaluation_id": 662,
+        "fitness": -9.377785637845129,
+        "eval_seconds": 7.8062660694122314
+      }
+    },
+    {
+      "task": "op_aco",
+      "repeat": 2,
+      "restored_budget": 866,
+      "budget_used": 870,
+      "new_evaluations": 4,
+      "new_successes": 3,
+      "new_timeouts": 0,
+      "first_new_success": {
+        "ts": "2026-09-22T21:54:02",
+        "evaluation_id": 867,
+        "fitness": 14.478,
+        "eval_seconds": 1.6019008159637451
+      }
+    },
+    {
+      "task": "cvrp_aco",
+      "repeat": 3,
+      "restored_budget": 607,
+      "budget_used": 611,
+      "new_evaluations": 4,
+      "new_successes": 3,
+      "new_timeouts": 0,
+      "first_new_success": {
+        "ts": "2026-09-22T21:54:11",
+        "evaluation_id": 608,
+        "fitness": -9.06129347397038,
+        "eval_seconds": 6.331049919128418
+      }
+    },
+    {
+      "task": "op_aco",
+      "repeat": 3,
+      "restored_budget": 974,
+      "budget_used": 978,
+      "new_evaluations": 4,
+      "new_successes": 3,
+      "new_timeouts": 0,
+      "first_new_success": {
+        "ts": "2026-09-22T21:54:57",
+        "evaluation_id": 976,
+        "fitness": 13.768,
+        "eval_seconds": 1.3590147495269775
+      }
+    },
+    {
+      "task": "cvrp_aco",
+      "repeat": 4,
+      "restored_budget": 657,
+      "budget_used": 661,
+      "new_evaluations": 4,
+      "new_successes": 4,
+      "new_timeouts": 0,
+      "first_new_success": {
+        "ts": "2026-09-22T21:53:42",
+        "evaluation_id": 658,
+        "fitness": -9.085463888610395,
+        "eval_seconds": 4.437719821929932
+      }
+    },
+    {
+      "task": "op_aco",
+      "repeat": 4,
+      "restored_budget": 917,
+      "budget_used": 921,
+      "new_evaluations": 4,
+      "new_successes": 3,
+      "new_timeouts": 0,
+      "first_new_success": {
+        "ts": "2026-09-22T21:53:52",
+        "evaluation_id": 918,
+        "fitness": 14.514000000000001,
+        "eval_seconds": 2.623654842376709
+      }
+    }
+  ],
+  "parents": [
+    {
+      "pid": 1034587,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery",
+      "pythonpath": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery"
+    },
+    {
+      "pid": 1034589,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery",
+      "pythonpath": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery"
+    },
+    {
+      "pid": 1034591,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery",
+      "pythonpath": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery"
+    },
+    {
+      "pid": 1034593,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery",
+      "pythonpath": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery"
+    },
+    {
+      "pid": 1034595,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery",
+      "pythonpath": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery"
+    },
+    {
+      "pid": 1034597,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery",
+      "pythonpath": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery"
+    },
+    {
+      "pid": 1034599,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery",
+      "pythonpath": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery"
+    },
+    {
+      "pid": 1034601,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery",
+      "pythonpath": "/home/fang/code/LLM4AD/TraceAAD/experiments/traceaad_v10_12/results/runtime_20260922_v1012_recovery"
+    }
+  ],
+  "all_eight_resumed_and_scoring": true
+}

@@ -1,0 +1,82 @@
+{
+  "captured_at": "2026-09-22T21:36:00.653889+08:00",
+  "git_commit": "4718b68a002a7549ab245389f6e012a7ccfa0bfc",
+  "sources": [
+    {
+      "path": "experiments/traceaad_v10_12/run.py",
+      "mtime": "2026-09-22T15:55:40.550011+08:00",
+      "sha256": "314a990c3cffe9488755d129892816066c15d6cb01156f8daa6387ed96655caa"
+    },
+    {
+      "path": "experiments/traceaad_v10_12/manual_launch.py",
+      "mtime": "2026-09-21T21:06:37.647767+08:00",
+      "sha256": "4f753b47a4650ca0c80818d5465ff37169b7f35dd6d8a2ccd8b5d967684719fe"
+    },
+    {
+      "path": "llm4ad/method/traceaad_v10_10/traceaad.py",
+      "mtime": "2026-09-22T16:13:58.259449+08:00",
+      "sha256": "261ca97c1701108207bddb6d36eeba15b44cc9a49822785cc5ca05769ef5fed5"
+    },
+    {
+      "path": "llm4ad/method/__init__.py",
+      "mtime": "2026-07-03T15:35:33.548603+08:00",
+      "sha256": "52216a26742bd317f827da5836f95ac62d0c0028d90b82429fb8185fe39ce6c8"
+    },
+    {
+      "path": "llm4ad/base/evaluate.py",
+      "mtime": "2026-09-11T15:26:27.050889+08:00",
+      "sha256": "fee14a07a7030fc94a266d5b2c96e50babdb0eef9813dc1f8ff6eab715e0906f"
+    },
+    {
+      "path": "llm4ad/task/optimization/cvrp_aco/evaluation.py",
+      "mtime": "2026-08-16T16:01:49.599437+08:00",
+      "sha256": "b089f003d3de26474ac0044e6eccfb3e38a426ecd336491c71379a24e331ed41"
+    },
+    {
+      "path": "llm4ad/task/optimization/op_aco/evaluation.py",
+      "mtime": "2026-09-10T12:16:14.526413+08:00",
+      "sha256": "676fe410869688c50ca53e23032d9361254a334edc08a569cc43480b7685521a"
+    }
+  ],
+  "search_parents": [
+    {
+      "pid": 3375785,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD",
+      "cmdline": "/home/fang/code/LLM4AD/TraceAAD/.venv/bin/python -m experiments.traceaad_v10_12.run --task cvrp_aco --backend server1 --repeat 1 --seed 0 --run-name 20260921_v1012_cvrp_v1012_rep1 ",
+      "has_runtime_pythonpath": false
+    },
+    {
+      "pid": 3375821,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD",
+      "cmdline": "/home/fang/code/LLM4AD/TraceAAD/.venv/bin/python -m experiments.traceaad_v10_12.run --task op_aco --backend server1 --repeat 1 --seed 0 --run-name 20260921_v1012_op_v1012_rep1 ",
+      "has_runtime_pythonpath": false
+    },
+    {
+      "pid": 3376503,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD",
+      "cmdline": "/home/fang/code/LLM4AD/TraceAAD/.venv/bin/python -m experiments.traceaad_v10_12.run --task cvrp_aco --backend server3 --repeat 2 --seed 1 --run-name 20260921_v1012_cvrp_v1012_rep2 ",
+      "has_runtime_pythonpath": false
+    },
+    {
+      "pid": 3376714,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD",
+      "cmdline": "/home/fang/code/LLM4AD/TraceAAD/.venv/bin/python -m experiments.traceaad_v10_12.run --task cvrp_aco --backend server3 --repeat 3 --seed 2 --run-name 20260921_v1012_cvrp_v1012_rep3 ",
+      "has_runtime_pythonpath": false
+    },
+    {
+      "pid": 3377090,
+      "cwd": "/home/fang/code/LLM4AD/TraceAAD",
+      "cmdline": "/home/fang/code/LLM4AD/TraceAAD/.venv/bin/python -m experiments.traceaad_v10_12.run --task cvrp_aco --backend server3b --repeat 4 --seed 3 --run-name 20260921_v1012_cvrp_v1012_rep4 ",
+      "has_runtime_pythonpath": false
+    }
+  ],
+  "tmux_sessions": [
+    "qwen3_8-27b",
+    "traceaad_monitor",
+    "v1012_cvrp_r1",
+    "v1012_cvrp_r2",
+    "v1012_cvrp_r3",
+    "v1012_cvrp_r4",
+    "v1012_op_r1"
+  ]
+}

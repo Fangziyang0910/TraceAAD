@@ -24,7 +24,6 @@ def freeze(batch, prefix='v1012'):
         root / 'llm4ad/base',
         root / 'llm4ad/tools',
         root / 'llm4ad/method/traceaad_v10_12',
-        root / 'llm4ad/method/traceaad_v10_12_rand_ctx',
         root / 'experiments/infra',
         root / 'experiments/traceaad_v10_12',
     ]
@@ -39,8 +38,11 @@ def freeze(batch, prefix='v1012'):
         root / 'llm4ad/task/optimization/generated_data_config.py',
     ]
     for directory in sources:
+        if not directory.is_dir():
+            raise FileNotFoundError(f'missing runtime source directory: {directory}')
         for folder, dirs, names in os.walk(directory):
-            dirs[:] = sorted(d for d in dirs if d not in ('results', '__pycache__', 'data'))
+            dirs[:] = sorted(d for d in dirs if d not in ('__pycache__', 'data')
+                             and not d.startswith(('results', 'backup_', 'analysis_')))
             files.extend(Path(folder) / name for name in sorted(names)
                          if Path(name).suffix in ('.py', '.yaml', '.model'))
     hashes = {}
@@ -61,6 +63,46 @@ def freeze(batch, prefix='v1012'):
                    files=hashes, launch_command=command)
     (runtime / 'runtime_manifest.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n')
     return payload
+
+
+def runtime_environment(runtime):
+    """Ensure the parent and spawned workers import the same frozen source."""
+    environment = dict(os.environ)
+    environment['PYTHONPATH'] = str(Path(runtime).resolve())
+    return environment
+
+
+def verify_runtime(runtime, *, preflight=True):
+    runtime = Path(runtime).resolve()
+    manifest = runtime / 'runtime_manifest.json'
+    payload = json.loads(manifest.read_text())
+    for relative, expected in payload['files'].items():
+        source = runtime / relative
+        if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != expected:
+            raise ValueError(f'frozen source changed or missing: {relative}')
+        if source.suffix == '.py':
+            compile(source.read_text(), str(source), 'exec')
+    if preflight:
+        # -m search workers re-import their entry point when ACO starts a spawn
+        # pool. Check that exact bootstrap before spending any evaluator slots.
+        probe = """
+import __main__, multiprocessing, os
+from pathlib import Path
+import experiments.traceaad_v10_12.run as entry
+assert Path(entry.__file__).resolve().is_relative_to(Path.cwd().resolve())
+__main__.__spec__ = entry.__spec__
+worker = multiprocessing.get_context('spawn').Process(target=os.getpid)
+worker.start()
+worker.join(30)
+if worker.is_alive():
+    worker.terminate()
+    worker.join()
+    raise RuntimeError('frozen worker bootstrap timed out')
+assert worker.exitcode == 0, worker.exitcode
+"""
+        subprocess.run([sys.executable, '-c', probe], cwd=runtime,
+                       env=runtime_environment(runtime), check=True, timeout=45)
+    return hashlib.sha256(manifest.read_bytes()).hexdigest()
 
 
 def main():
