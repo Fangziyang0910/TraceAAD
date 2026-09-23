@@ -1,5 +1,3 @@
-import pickle
-
 import numpy as np
 
 
@@ -12,19 +10,19 @@ class GetData:
 
     def generate_instances(self):
         """each instance -> (coordinates, distances, demands, capacity)"""
-        np.random.seed(self.seed)
+        rng = np.random.RandomState(self.seed)
         instance_data = []
         for _ in range(self.n_instance):
-            coordinates = np.random.rand(self.n_cities + 1, 2)
-            demands = np.append(np.array([0]), np.random.randint(1, 10, size=self.n_cities))
+            coordinates = rng.rand(self.n_cities + 1, 2)
+            demands = np.append(np.array([0]), rng.randint(1, 10, size=self.n_cities))
             capacity = 40
             distances = np.linalg.norm(coordinates[:, np.newaxis] - coordinates, axis=2)
-            node_serviceTime = np.random.rand(self.n_cities) * 0.05 + 0.15
+            node_serviceTime = rng.rand(self.n_cities) * 0.05 + 0.15
             serviceTime = np.append(np.array([0]), node_serviceTime)
             # shape: (batch, problem)
             # range: (0.15, 0.2) for T=4.6
 
-            node_lengthTW = np.random.rand(self.n_cities) * 0.05 + 0.15
+            node_lengthTW = rng.rand(self.n_cities) * 0.05 + 0.15
             # shape: (batch, problem)
             # range: (0.15, 0.2) for T=4.6
 
@@ -32,7 +30,7 @@ class GetData:
             # shape: (batch, problem)
 
             # ei = (np.random.rand(self.n_cities) * ((self.max_time - node_serviceTime - node_lengthTW) / d0i - 1) + 1)
-            ei = np.random.rand(self.n_cities) * (((4.6 * np.ones(self.n_cities) - node_serviceTime - node_lengthTW) / d0i - 1) - 1) + 1
+            ei = rng.rand(self.n_cities) * (((4.6 * np.ones(self.n_cities) - node_serviceTime - node_lengthTW) / d0i - 1) - 1) + 1
             # shape: (batch, problem)
             # default velocity = 1.0
 
@@ -54,6 +52,8 @@ class GetData:
 
 
 if __name__ == '__main__':
+    import pickle
+
     gd = GetData(10, 50)
     data = gd.generate_instances()
     with open('data_vrptw.pkl', 'wb') as f:

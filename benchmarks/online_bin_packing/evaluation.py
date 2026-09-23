@@ -36,7 +36,6 @@ from __future__ import annotations
 
 from typing import Any
 import numpy as np
-import matplotlib.pyplot as plt
 
 from core import Evaluation
 from benchmarks.online_bin_packing.template import template_program, task_description
@@ -117,6 +116,10 @@ class OBPEvaluation(Evaluation):
             capacity: The capacity of each bin.
             max_unused_bins: Maximum number of unused bins to include in the plot (for sampling).
         """
+        # Plotting is an opt-in debugging helper. Keep matplotlib out of the
+        # evaluator's import path used by every training worker.
+        import matplotlib.pyplot as plt
+
         # Calculate the number of bins used
         num_bins = (bins_packed != capacity).sum()
 

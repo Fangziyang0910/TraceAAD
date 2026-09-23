@@ -21,4 +21,4 @@
 
 启动器会在启动前校验每个端点的槽位上限；`server3` 和 `server3b` 分别有 9 个槽位。已有批次、结果目录或同名 tmux 会话会阻止重复启动。仓库内 `manual_assignments.json` 记录当前批次的分配，不要直接复用于新的批次。
 
-监控入口为 `python -m experiments.traceaad_v11_1.monitor --port 8765`，只读取 V11.1 的 manifest、结果与 tmux 状态。统一调度器及 V11.1 旧自动 launcher 已移除。
+监控入口为 `python -m core.training_monitor --port 8765`，默认只读取 V11.1 的 manifest、结果与 tmux 状态；旧的 `experiments.traceaad_v11_1.monitor` 仍保留为兼容入口。面板优先展示评价预算、Best 改进轨迹、父代/全局前沿改善和候选血统，耗时与 token 只作诊断。统一调度器及 V11.1 旧自动 launcher 已移除。

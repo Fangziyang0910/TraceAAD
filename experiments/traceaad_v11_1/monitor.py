@@ -1,7 +1,7 @@
-"""V11.1 live monitor entry point."""
+"""V11.1 compatibility entry point for the shared training monitor."""
 
-from experiments.traceaad_v10_11.monitor import main
-
+from core.training_monitor import *  # noqa: F401,F403
+from core.training_monitor import main
 
 if __name__ == "__main__":
     main()

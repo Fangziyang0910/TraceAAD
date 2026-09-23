@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TraceAAD · 实验进程可视化</title>
+<title>TraceAAD · 训练证据面板</title>
 <style>
 :root {
   --bg: #0b0f17;
@@ -706,8 +706,8 @@ table.feed-table td {
 
 <header>
   <div class="brand">
-    <span class="brand-badge" id="brand-badge">V11.0</span>
-    <div class="brand-title">TraceAAD 训练监控与分析面板</div>
+    <span class="brand-badge" id="brand-badge">V11.1</span>
+  <div class="brand-title">TraceAAD 训练证据面板</div>
     <div class="version-picker-wrap">
       <select id="version-select" class="version-select" onchange="changeVersion(this.value)" title="切换监控实验版本">
         <option value="" selected>正在加载批次…</option>
@@ -725,7 +725,7 @@ table.feed-table td {
       <span class="pulse-dot"></span>
       <span>实时监控中</span>
     </div>
-    <span id="countdown-text" style="color: var(--text-faint); font-size: 12px;">10s 后刷新</span>
+    <span id="countdown-text" style="color: var(--text-faint); font-size: 12px;">15s 后刷新</span>
     <button class="refresh-btn" onclick="fetchState(true)">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
       <span>立即刷新</span>
@@ -736,28 +736,28 @@ table.feed-table td {
 <main>
   <section class="kpi-banner" id="kpi-banner">
     <div class="kpi-card highlight">
-      <div class="kpi-label"><span>全任务总评价进度</span><span id="kpi-evals-ratio">– / –</span></div>
+      <div class="kpi-label"><span>评价预算进度</span><span id="kpi-evals-ratio">– / –</span></div>
       <div class="kpi-val" id="kpi-pct">0.0%</div>
       <div class="kpi-bar"><div class="kpi-bar-fill" id="kpi-bar-fill" style="width: 0%"></div></div>
-      <div class="kpi-sub" id="kpi-evals-sub">共 25 路并行任务</div>
+      <div class="kpi-sub" id="kpi-evals-sub">共 15 路并行任务</div>
     </div>
 
     <div class="kpi-card">
-      <div class="kpi-label"><span>实例运行状态</span></div>
+      <div class="kpi-label"><span>运行状态</span></div>
       <div class="kpi-val" id="kpi-status-val">0 运行中</div>
       <div class="kpi-sub" id="kpi-status-sub">0 排队中 · 0 已完成 · 0 停滞</div>
     </div>
 
     <div class="kpi-card highlight">
-      <div class="kpi-label"><span>预计全流程剩余时间 (ETA)</span></div>
+      <div class="kpi-label"><span>预计剩余时间 (ETA)</span></div>
       <div class="kpi-val" id="kpi-eta-val" style="color: #fbbf24;">–</div>
       <div class="kpi-sub" id="kpi-eta-sub">预计完成: –</div>
     </div>
 
     <div class="kpi-card">
-      <div class="kpi-label"><span>平均速率 & 调度器</span></div>
+      <div class="kpi-label"><span>评价速率</span></div>
       <div class="kpi-val" id="kpi-speed-val">–</div>
-      <div class="kpi-sub" id="kpi-sched-sub">基于 Qwen3.8-27B 采样与任务沙箱</div>
+      <div class="kpi-sub" id="kpi-batch-sub">基于 Qwen3.8-27B 采样与任务沙箱</div>
     </div>
   </section>
 
@@ -786,7 +786,7 @@ table.feed-table td {
       <div style="display: flex; flex-direction: column; gap: 20px;">
         <div class="panel">
           <div class="panel-header">
-            <span>🏆 Best 改进里程碑</span>
+          <span>🏆 Best 改进里程碑</span>
             <span id="milestone-count-badge" style="color: var(--text-faint); font-size: 12px;">0 次突破</span>
           </div>
           <div class="panel-body">
@@ -798,7 +798,7 @@ table.feed-table td {
 
         <div class="panel">
           <div class="panel-header">
-            <span>📈 单路全部尝试散点图</span>
+          <span>📈 尝试与 Best 轨迹</span>
           </div>
           <div class="panel-body" style="padding: 12px;">
             <div class="chart-svg-wrap" id="scatter-chart-wrap" style="height: 220px;">
@@ -834,7 +834,7 @@ table.feed-table td {
 
       <div class="panel" style="position: sticky; top: 72px;">
         <div class="panel-header">
-          <span>🧠 算法代码与机制指标</span>
+          <span>🧠 当前候选与证据</span>
           <span id="node-badge" style="font-size: 12px; color: var(--primary);">未选中节点</span>
         </div>
         <div class="panel-body">
@@ -904,7 +904,7 @@ let globalState = null;
 let currentRunDetail = null;
 let activeView = "overview";
 let refreshTimer = null;
-let countdown = 10;
+let countdown = 15;
 let isInitialRender = true;
 let renderedRunKey = "";
 let currentVersion = "";
@@ -1003,12 +1003,12 @@ async function fetchState(manual = false) {
 }
 
 function startAutoRefresh() {
-  countdown = 10;
+  countdown = 15;
   clearInterval(refreshTimer);
   refreshTimer = setInterval(() => {
     countdown--;
     if (countdown <= 0) {
-      countdown = 10;
+      countdown = 15;
       fetchState();
     }
     const cdEl = document.getElementById("countdown-text");
@@ -1018,7 +1018,7 @@ function startAutoRefresh() {
 
 function renderOverview() {
   if (!globalState) return;
-  const { global_summary, tasks, scheduler } = globalState;
+  const { global_summary, tasks, version_id } = globalState;
 
   document.getElementById("kpi-pct").textContent = `${global_summary.pct}%`;
   document.getElementById("kpi-bar-fill").style.width = `${Math.min(100, global_summary.pct)}%`;
@@ -1033,11 +1033,7 @@ function renderOverview() {
   document.getElementById("kpi-eta-sub").textContent = `预计全流程完成: ${global_summary.max_eta_finish_time}`;
   document.getElementById("kpi-speed-val").textContent = `${global_summary.avg_speed_sec} 秒/次`;
 
-  if (scheduler) {
-    const schedText = scheduler.active ? `调度器活跃 (${scheduler.session})` : `调度器离线`;
-    const batchText = scheduler.batch ? `批次: ${scheduler.batch}` : "无批次";
-    document.getElementById("kpi-sched-sub").textContent = `${schedText} · ${batchText}`;
-  }
+  document.getElementById("kpi-batch-sub").textContent = `批次: ${version_id}`;
 
   const container = document.getElementById("tasks-container");
   const runKey = tasks.map(t => t.meta.key + ":" + t.runs.map(r => r.name).join(",")).join("|");

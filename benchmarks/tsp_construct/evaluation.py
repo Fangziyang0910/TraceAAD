@@ -71,6 +71,10 @@ class TSPEvaluation(Evaluation):
         self.seed = seed
         getData = GetData(self.n_instance, self.problem_size, self.seed)
         self._datasets = getData.generate_instances()
+        self._neighborhood_cache = {
+            id(instance): self.generate_neighborhood_matrix(instance)
+            for instance, _ in self._datasets
+        }
         self.design_notes = (
             'The heuristic is called once per tour-construction step on each instance; '
             'the final remaining node is appended automatically without calling it. '
@@ -111,8 +115,14 @@ class TSPEvaluation(Evaluation):
 
         for instance, distance_matrix in self._datasets:
 
-            # get neighborhood matrix
-            neighbor_matrix = self.generate_neighborhood_matrix(instance)
+            # The instances are fixed for the evaluator lifetime. Reuse the
+            # ordering across candidate evaluations; custom test datasets fall
+            # back to the same computation on first use.
+            cache_key = id(instance)
+            neighbor_matrix = self._neighborhood_cache.get(cache_key)
+            if neighbor_matrix is None:
+                neighbor_matrix = self.generate_neighborhood_matrix(instance)
+                self._neighborhood_cache[cache_key] = neighbor_matrix
 
             destination_node = 0
 

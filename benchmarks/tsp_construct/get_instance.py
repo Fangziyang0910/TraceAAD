@@ -8,10 +8,10 @@ class GetData():
         self.seed = seed
 
     def generate_instances(self):
-        np.random.seed(self.seed)
+        rng = np.random.RandomState(self.seed)
         instance_data = []
         for _ in range(self.n_instance):
-            coordinates = np.random.rand(self.n_cities, 2)
+            coordinates = rng.rand(self.n_cities, 2)
             distances = np.linalg.norm(coordinates[:, np.newaxis] - coordinates, axis=2)
             instance_data.append((coordinates, distances))
         return instance_data
