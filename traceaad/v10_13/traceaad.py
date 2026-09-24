@@ -27,6 +27,7 @@ from .tree import Node, SearchTree
 REPAIRABLE_FAILURES = {
     "exec_error", "runtime_error", "timeout", "invalid_result", "nonfinite_fitness",
 }
+INFRASTRUCTURE_FAILURES = {"prepare_error", "infrastructure_error"}
 
 
 class UncertainEvaluationError(RuntimeError):
@@ -96,7 +97,7 @@ class TraceAADV1013:
         self.rng = random.Random(seed)
         self.started_at = _timestamp()
         self.completed_candidates = 0
-        self.evaluations_used = 0
+        self.evaluation_attempts = 0
         self._invalid_streak = 0
         self.pending = None
         self.storage = RunStorage(self.run_dir)
@@ -107,7 +108,8 @@ class TraceAADV1013:
             "prompt_policy": self.PROMPT_POLICY,
             "revision": self.REVISION,
             "parser_protocol": "python_first_unique_json_optional_edit_v3",
-            "persistence_protocol": "staged_candidate_receipt_v2",
+            "persistence_protocol": "staged_candidate_receipt_v3",
+            "budget_policy": "candidate_evaluations_exclude_confirmed_infrastructure_v1",
             "history_depth": history_depth,
             "output_tokens": output_tokens,
             "max_input_tokens": max_input_tokens,
@@ -133,6 +135,75 @@ class TraceAADV1013:
             lookup=self.tree.nodes.get,
             all_nodes=self.tree.all_nodes,
         )
+
+    def _evaluation_accounting(self):
+        """Derive settlement from durable evidence; reservations keep unique IDs.
+
+        Missing receipts and unclassified exceptions keep their reservation.
+        Replaying a receipt or a resolution cannot release the budget twice.
+        """
+        receipts = self.storage.index(self.storage.evaluations_path, 'evaluation_id')
+        resolutions = self.storage.index(self.storage.evaluation_resolutions_path, 'evaluation_id')
+        counted = infrastructure = 0
+        for identity, receipt in receipts.items():
+            if identity in resolutions or (
+                    receipt['fitness'] is None and receipt['reason'] in INFRASTRUCTURE_FAILURES):
+                infrastructure += 1
+            elif receipt['fitness'] is not None or receipt['reason'] in REPAIRABLE_FAILURES:
+                counted += 1
+        reserved = self.evaluation_attempts - counted - infrastructure
+        return {
+            'evaluation_attempts': self.evaluation_attempts,
+            'evaluation_calls_with_receipts': len(receipts),
+            'search_evaluations': counted,
+            'infrastructure_failures': infrastructure,
+            'budget_reserved': reserved,
+            'budget_used': counted + reserved,
+        }
+
+    @property
+    def evaluations_used(self):
+        """Consumed search budget plus unresolved reservations."""
+        return self._evaluation_accounting()['budget_used']
+
+    def confirm_infrastructure_failure(self, evaluation_id, *, evidence):
+        """Record a diagnosed fault without deleting evidence or resuming search.
+
+        Use only after inspecting the failure and repairing the infrastructure.
+        A missing receipt must be recovered before it can be adjudicated here.
+        """
+        if not isinstance(evidence, str) or not evidence.strip():
+            raise ValueError('infrastructure confirmation requires diagnostic evidence')
+        with self.storage.writer_lock():
+            self._resume_checkpoint()
+            truncate_torn_tail(self.storage.evaluation_resolutions_path)
+            if self.pending is not None:
+                raise ValueError('recover the pending candidate before confirming its failure')
+            receipt = self.storage.index(self.storage.evaluations_path, 'evaluation_id').get(evaluation_id)
+            if receipt is None or receipt['fitness'] is not None:
+                raise ValueError('only a failed evaluation with a durable receipt can be confirmed')
+            event = self.storage.last_event
+            if not event or event.get('evaluation_id') != evaluation_id or event.get('status') != 'eval_failed':
+                raise ValueError('only the latest failed candidate can be adjudicated')
+            record = {
+                'evaluation_id': evaluation_id,
+                'candidate_id': receipt['candidate_id'],
+                'classification': 'infrastructure_failure',
+                'evidence': evidence.strip(),
+            }
+            self.storage.append_once(self.storage.evaluation_resolutions_path, record, 'evaluation_id')
+            self._save_checkpoint()
+            self._write_summary('error', 'Infrastructure failure confirmed; search remains blocked.')
+
+    def _check_evaluation_block(self):
+        previous = self.storage.last_event
+        if not previous or previous['candidate_id'] != self.completed_candidates:
+            return
+        resolutions = self.storage.index(self.storage.evaluation_resolutions_path, 'evaluation_id')
+        if previous.get('status') == 'eval_failed' and (
+                previous.get('reason') not in REPAIRABLE_FAILURES or
+                previous.get('evaluation_id') in resolutions):
+            raise RuntimeError(f"evaluation infrastructure failed or requires diagnosis: {previous.get('reason')}")
 
     def _candidate(self, prompt, **fields):
         prompt_tokens = self.prompts.count(prompt)
@@ -181,11 +252,10 @@ class TraceAADV1013:
         )
 
     def _schedule_candidate(self):
+        self._check_evaluation_block()
         previous = self.storage.last_event
         if previous and previous["candidate_id"] != self.completed_candidates:
             previous = None
-        if previous and previous.get("status") == "eval_failed" and previous.get("reason") not in REPAIRABLE_FAILURES:
-            raise RuntimeError(f"evaluation infrastructure failed: {previous.get('reason')}")
         if previous and (previous.get("status") == "invalid_output" or
                          previous.get("reason") in REPAIRABLE_FAILURES) and not previous.get("repair_of"):
             return self._schedule_repair(previous)
@@ -293,8 +363,8 @@ class TraceAADV1013:
     def _evaluate_and_add(self, parsed, candidate):
         if parsed is None:
             return None, None
-        evaluation_id = self.evaluations_used + 1
-        self.evaluations_used = evaluation_id
+        self.evaluation_attempts += 1
+        evaluation_id = self.evaluation_attempts
         self.pending.update(stage='evaluating', evaluation_id=evaluation_id)
         self._save_checkpoint()  # A missing receipt must never trigger automatic reevaluation.
         started = time.time()
@@ -381,7 +451,7 @@ class TraceAADV1013:
             "prompt_hash": candidate.prompt_hash,
             "status": status,
             "reason": reason,
-            "budget_used": self.evaluations_used,
+            **self._evaluation_accounting(),
             "evaluation_id": outcome["evaluation_id"] if outcome else None,
             "eval_seconds": outcome.get("eval_seconds") if outcome else None,
             "llm_seconds": sum(call['seconds'] for call in calls if call),
@@ -484,7 +554,7 @@ class TraceAADV1013:
                 str(node.id): node.attempts for node in self.tree.all_nodes()
                 if node.attempts
             },
-            "budget_used": self.evaluations_used,
+            **self._evaluation_accounting(),
             "completed_candidates": self.completed_candidates,
             "invalid_streak": self._invalid_streak,
             "last_event": self.storage.last_event,
@@ -495,11 +565,12 @@ class TraceAADV1013:
         state = json.loads(self.storage.state_path.read_text())
         if state.get("mechanism") != self.mechanism:
             raise ValueError("checkpoint configuration differs from V10.13")
+        self.storage._indexes.clear()
         self.started_at = state["started_at"]
         _restore_rng(self.rng, state["rng_state"])
         for entry in state["nodes"]:
             self.tree.add_raw(Node(**entry))
-        self.evaluations_used = state["budget_used"]
+        self.evaluation_attempts = state["evaluation_attempts"]
         self.completed_candidates = state["completed_candidates"]
         self._invalid_streak = state["invalid_streak"]
         self.storage.last_event = state.get("last_event")
@@ -516,11 +587,20 @@ class TraceAADV1013:
             raise ValueError('event journal is inconsistent with the durable checkpoint')
         if set(nodes) - set(self.tree.nodes) or set(self.tree.nodes) - set(nodes) - missing_nodes:
             raise ValueError('node journal is inconsistent with the durable checkpoint')
-        expected_receipts = set(range(1, self.evaluations_used + 1))
+        expected_receipts = set(range(1, self.evaluation_attempts + 1))
         uncertain = ({self.pending['evaluation_id']} if self.pending and
                      self.pending['stage'] == 'evaluating' else set())
         if set(receipts) - expected_receipts or expected_receipts - set(receipts) - uncertain:
             raise ValueError('evaluation journal is inconsistent with the durable checkpoint')
+        resolutions = self.storage.index(self.storage.evaluation_resolutions_path, 'evaluation_id')
+        for identity, resolution in resolutions.items():
+            receipt = receipts.get(identity)
+            if (receipt is None or receipt['fitness'] is not None or
+                    resolution.get('candidate_id') != receipt['candidate_id'] or
+                    resolution.get('classification') != 'infrastructure_failure' or
+                    not isinstance(resolution.get('evidence'), str) or
+                    not resolution['evidence'].strip()):
+                raise ValueError('invalid infrastructure failure resolution')
         for event in events.values():
             identity = event.get('evaluation_id')
             if identity is not None and (identity not in receipts or
@@ -541,7 +621,7 @@ class TraceAADV1013:
             "started_at": self.started_at,
             "finished_at": _timestamp(),
             "budget": self.budget,
-            "budget_used": self.evaluations_used,
+            **self._evaluation_accounting(),
             "num_nodes": len(self.tree.nodes),
             "num_roots": len(self.tree.roots),
             "parent_attempts": self.tree.parent_selections,
@@ -574,21 +654,22 @@ class TraceAADV1013:
                 raise ValueError('checkpoint belongs to a different revision; use its frozen runtime')
         elif any(path.exists() and path.stat().st_size for path in (
                 self.storage.nodes_path, self.storage.events_path, self.storage.llm_calls_path,
-                self.storage.evaluations_path)):
+                self.storage.evaluations_path, self.storage.evaluation_resolutions_path)):
             raise ValueError('journals exist without a checkpoint; refusing to start over')
         for journal in (self.storage.nodes_path, self.storage.events_path,
-                        self.storage.llm_calls_path, self.storage.evaluations_path):
+                        self.storage.llm_calls_path, self.storage.evaluations_path,
+                        self.storage.evaluation_resolutions_path):
             truncate_torn_tail(journal)
         if self.storage.state_path.exists():
             self._resume_checkpoint()
         else:
             self._save_checkpoint()
         try:
+            if self.pending is None:
+                self._check_evaluation_block()
             while self.pending is not None or self.evaluations_used < self.budget:
                 self._run_candidate()
-                event = self.storage.last_event
-                if event and event.get('status') == 'eval_failed' and event.get('reason') not in REPAIRABLE_FAILURES:
-                    raise RuntimeError(f"evaluation infrastructure failed: {event.get('reason')}")
+                self._check_evaluation_block()
                 print(
                     f"{self.METHOD}: budget={self.evaluations_used}/{self.budget} "
                     f"nodes={len(self.tree.nodes)} parent_attempts={self.tree.parent_selections}",

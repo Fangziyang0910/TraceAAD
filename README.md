@@ -16,7 +16,7 @@
 ## 运行约定
 
 - 一律从仓库根以 `.venv/bin/python -m experiments.<version>.run …` 运行（项目不安装自身，`uv` 仅管理依赖；`pyproject.toml` 中 `package = false`）。
-- 正式搜索必须先冻结运行时（`freeze.py`），并使用返回的 runtime 以隔离 cwd/PYTHONPATH 启动；`verify_runtime` 做哈希与 spawn 预检。背景见 [2026-09-22 worker 导入事故诊断](docs/02-实验结果/2026-09-22-ACO-worker导入失败诊断.md)。
+- 正式搜索必须先冻结运行时（`freeze.py`），并使用返回的 runtime 以隔离 cwd/PYTHONPATH 启动；`verify_runtime` 做哈希与 spawn 预检。背景见 2026-09-22 worker 导入事故诊断（独立诊断已清理）。
 - 测试：`.venv/bin/python -m pytest -q`。
 
 ## 相关工作（本地代码与论文）

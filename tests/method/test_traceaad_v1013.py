@@ -298,7 +298,10 @@ def test_missing_evaluation_receipt_blocks_automatic_retry(tmp_path):
         resumed.run()
     assert evaluation.calls == 1 and len(llm.calls) == 1
     assert resumed.evaluations_used == 1
-    assert json.loads(resumed.storage.summary_path.read_text())['status'] == 'uncertain_evaluation'
+    summary = json.loads(resumed.storage.summary_path.read_text())
+    assert summary['status'] == 'uncertain_evaluation'
+    assert summary['budget_reserved'] == 1 and summary['search_evaluations'] == 0
+    assert summary['evaluation_calls_with_receipts'] == 0
 
 
 def test_old_checkpoint_rejected_before_journal_mutation(tmp_path):
@@ -561,3 +564,162 @@ def test_infrastructure_failure_at_budget_limit_cannot_be_marked_finished(tmp_pa
         method.run()
     assert method.evaluations_used == 1
     assert json.loads(method.storage.summary_path.read_text())['status'] == 'error'
+
+
+@pytest.mark.parametrize('kind', ['prepare_error', 'infrastructure_error'])
+@pytest.mark.parametrize('crash_point', [None, 'receipt', 'evaluated', 'committing', 'clear'])
+def test_confirmed_infrastructure_failure_releases_budget_once_and_stays_blocked(
+        tmp_path, kind, crash_point):
+    from core.evaluate import EvaluationOutcome
+    method = make_method(tmp_path, FakeLLM(response(1)), budget=1)
+    calls = []
+    def unavailable(code):
+        calls.append(code)
+        return EvaluationOutcome(None, failure_kind=kind, error='worker startup failed')
+    method.evaluator.evaluate_program_with_details = unavailable
+    if crash_point == 'receipt':
+        original = method.storage.record_evaluation
+        def crash(record):
+            original(record)
+            raise OSError('after durable receipt')
+        method.storage.record_evaluation = crash
+    elif crash_point in ('evaluated', 'committing', 'clear'):
+        original = method._save_checkpoint
+        def crash():
+            original()
+            stage = method.pending['stage'] if method.pending else 'clear'
+            if method.evaluation_attempts and stage == crash_point:
+                raise OSError('after fault checkpoint')
+        method._save_checkpoint = crash
+    with pytest.raises((OSError, RuntimeError)):
+        method.run()
+    for _ in range(2):
+        resumed = make_method(tmp_path, FakeLLM(), budget=1)
+        with pytest.raises(RuntimeError, match='infrastructure failed'):
+            resumed.run()
+        assert resumed.evaluations_used == 0
+        summary = json.loads(resumed.storage.summary_path.read_text())
+        assert summary['search_evaluations'] == summary['budget_reserved'] == 0
+        assert summary['infrastructure_failures'] == summary['evaluation_attempts'] == 1
+        assert summary['evaluation_calls_with_receipts'] == 1
+        assert summary['status'] == 'error'
+    assert len(calls) == 1
+    assert len(read_journal(resumed.storage.evaluations_path)) == 1
+    assert len(read_journal(resumed.storage.events_path)) == 1
+
+
+@pytest.mark.parametrize('kind', ['exec_error', 'runtime_error', 'timeout', 'invalid_result',
+                                 'nonfinite_fitness'])
+def test_candidate_failures_still_cost_one_evaluation(tmp_path, kind):
+    from core.evaluate import EvaluationOutcome
+    method = make_method(tmp_path, FakeLLM(response(1), response(2)), budget=2)
+    results = iter([EvaluationOutcome(1), EvaluationOutcome(None, failure_kind=kind)])
+    method.evaluator.evaluate_program_with_details = lambda code: next(results)
+    method.run()
+    summary = json.loads(method.storage.summary_path.read_text())
+    assert summary['budget_used'] == summary['search_evaluations'] == 2
+    assert summary['budget_reserved'] == summary['infrastructure_failures'] == 0
+
+
+@pytest.mark.parametrize('crash_after_resolution', [False, True])
+def test_unclassified_exception_needs_evidence_and_durable_confirmation(tmp_path, crash_after_resolution):
+    method = make_method(tmp_path, FakeLLM(response(1)), budget=1)
+    def unavailable(code):
+        raise RuntimeError('unclassified evaluator exception')
+    method.evaluator.evaluate_program_with_details = unavailable
+    with pytest.raises(RuntimeError, match='infrastructure failed'):
+        method.run()
+    summary = json.loads(method.storage.summary_path.read_text())
+    assert summary['budget_used'] == summary['budget_reserved'] == 1
+    assert summary['search_evaluations'] == summary['infrastructure_failures'] == 0
+    with pytest.raises(ValueError, match='evidence'):
+        method.confirm_infrastructure_failure(1, evidence=' ')
+    before = method.storage.evaluations_path.read_bytes()
+    if crash_after_resolution:
+        original = method._save_checkpoint
+        def crash():
+            raise OSError('resolution journal persisted before checkpoint')
+        method._save_checkpoint = crash
+        with pytest.raises(OSError):
+            method.confirm_infrastructure_failure(1, evidence='diagnosis: worker service unavailable')
+        method._save_checkpoint = original
+    method.confirm_infrastructure_failure(1, evidence='diagnosis: worker service unavailable')
+    # Repeating the same adjudication is idempotent, even after a torn checkpoint transition.
+    method.confirm_infrastructure_failure(1, evidence='diagnosis: worker service unavailable')
+    resumed = make_method(tmp_path, FakeLLM(), budget=1)
+    with pytest.raises(RuntimeError, match='infrastructure failed'):
+        resumed.run()
+    assert resumed.evaluations_used == 0 and resumed.evaluation_attempts == 1
+    assert resumed.storage.evaluations_path.read_bytes() == before
+    assert len(read_journal(resumed.storage.evaluation_resolutions_path)) == 1
+    assert resumed.llm.calls == []
+
+
+def test_successful_evaluation_cannot_be_exempted_as_infrastructure(tmp_path):
+    method = make_method(tmp_path, FakeLLM(response(1)), budget=1)
+    method.run()
+    with pytest.raises(ValueError, match='failed evaluation'):
+        method.confirm_infrastructure_failure(1, evidence='not a fault')
+    assert method.evaluations_used == 1
+
+
+def test_evaluation_ids_do_not_reuse_released_budget(tmp_path):
+    from core.evaluate import EvaluationOutcome
+    method = make_method(tmp_path, FakeLLM(), budget=2)
+    candidate = method._schedule_candidate()
+    parsed, error = method._parse_completion({'response': response(1), 'finish_reason': 'stop'}, candidate)
+    assert error is None
+    method.pending = {'stage': 'parsed'}
+    method.evaluator.evaluate_program_with_details = lambda code: EvaluationOutcome(
+        None, failure_kind='prepare_error')
+    outcome, _ = method._evaluate_and_add(parsed, candidate)
+    assert outcome['evaluation_id'] == 1 and method.evaluations_used == 0
+    # Exercise dispatch identity independently of the operational fault block.
+    method.evaluator.evaluate_program_with_details = lambda code: EvaluationOutcome(1)
+    method.pending = {'stage': 'parsed'}
+    outcome, _ = method._evaluate_and_add(parsed, candidate)
+    assert outcome['evaluation_id'] == 2 and method.evaluations_used == 1
+    assert [r['evaluation_id'] for r in read_journal(method.storage.evaluations_path)] == [1, 2]
+
+
+def test_secure_evaluator_preparation_fault_is_not_a_candidate_cost(tmp_path):
+    method = make_method(tmp_path, FakeLLM(response(1)), budget=1)
+    def broken_template():
+        raise RuntimeError('test evaluator setup fault')
+    method.evaluator._target_function_name = broken_template
+    with pytest.raises(RuntimeError, match='infrastructure failed'):
+        method.run()
+    assert method.evaluations_used == 0
+    assert read_journal(method.storage.evaluations_path)[0]['reason'] == 'prepare_error'
+
+
+def test_unclassified_last_evaluation_remains_blocked_on_resume_at_budget_limit(tmp_path):
+    from core.evaluate import EvaluationOutcome
+    method = make_method(tmp_path, FakeLLM(response(1), response(2)), budget=2)
+    calls = []
+    def evaluate(code):
+        calls.append(code)
+        if len(calls) == 1:
+            return EvaluationOutcome(1)
+        raise RuntimeError('unclassified exception')
+    method.evaluator.evaluate_program_with_details = evaluate
+    with pytest.raises(RuntimeError, match='infrastructure failed'):
+        method.run()
+    resumed = make_method(tmp_path, FakeLLM(), budget=2)
+    with pytest.raises(RuntimeError, match='infrastructure failed'):
+        resumed.run()
+    assert json.loads(resumed.storage.summary_path.read_text())['status'] == 'error'
+    assert len(calls) == 2 and resumed.llm.calls == []
+
+
+def test_runtime_failure_diagnosed_as_infrastructure_does_not_trigger_candidate_repair(tmp_path):
+    from core.evaluate import EvaluationOutcome
+    method = make_method(tmp_path, FakeLLM(response(1), response(2)), budget=2)
+    results = iter([EvaluationOutcome(1), EvaluationOutcome(None, failure_kind='runtime_error')])
+    method.evaluator.evaluate_program_with_details = lambda code: next(results)
+    method.run()
+    method.confirm_infrastructure_failure(2, evidence='diagnosis: task data service failed')
+    resumed = make_method(tmp_path, FakeLLM(), budget=2)
+    with pytest.raises(RuntimeError, match='infrastructure failed'):
+        resumed.run()
+    assert resumed.evaluations_used == 1 and resumed.llm.calls == []

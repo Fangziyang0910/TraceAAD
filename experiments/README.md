@@ -7,17 +7,17 @@
 ## 近期开发
 
 
-- **V10.8**：[机制设计](../docs/01-主线版本/TraceAAD-V10.8-机制设计.md)、[运行入口](traceaad_v10_8/README.md)。近期连续代码转移、同代码组机会计量；已实现并启动 15 路正式搜索；[启动记录](traceaad_v10_8/launch_20260909.md)，终局收益待验证。
-- **V10.7**：[机制设计](../docs/01-主线版本/TraceAAD-V10.7-机制设计.md)、[运行入口](traceaad_v10_7/README.md)、[修复与启动记录](traceaad_v10_7/launch_20260907.md)。单次 Idea→Code；48 次真实 smoke 通过，分层采样版 15 路正式实验已启动；祖先历史与均匀采样对照尚未启动。
+- **V10.8**：[机制设计](../docs/01-主线版本/生成协议与上下文演进.md)、[运行入口](traceaad_v10_8/README.md)。近期连续代码转移、同代码组机会计量；已实现并启动 15 路正式搜索；[启动记录](traceaad_v10_8/launch_20260909.md)，终局收益待验证。
+- **V10.7**：[机制设计](../docs/01-主线版本/生成协议与上下文演进.md)、[运行入口](traceaad_v10_7/README.md)、[修复与启动记录](traceaad_v10_7/launch_20260907.md)。单次 Idea→Code；48 次真实 smoke 通过，分层采样版 15 路正式实验已启动；祖先历史与均匀采样对照尚未启动。
 - **E2-B'随机干预**：[实验设计与结果](../docs/03-机制验证/04-算子动力学与两步价值/2026-09-07-E2B-Pivot两步选择价值/README.md)、[复现入口](traceaad_e2_b/README.md)。在development-experienced与fitness-matched fresh固定锚点上比较Refine→Refine和Pivot→Refine；预注册正向门槛未通过。
 - **E2-A机制分析**：[实验设计与结果](../docs/03-机制验证/04-算子动力学与两步价值/2026-09-07-E2A-轨迹状态与算子响应/README.md)、[复现入口](traceaad_e2_a/README.md)。使用E1后的未见V10.6 suffix检验行为轨迹状态与Refine/Pivot响应；不修改在线机制。
-- **V10.6**：[机制设计](../docs/01-主线版本/TraceAAD-V10.6-机制设计.md)、[运行与恢复](traceaad_v10_6/README.md)。先生成完整代码再生成实现摘要，父代先行分配；进度读取对应批次 manifest。
-- **V10.5**：[机制设计](../docs/01-主线版本/TraceAAD-V10.5-机制设计.md)、[运行与恢复](traceaad_v10_5/README.md)、[启动记录](traceaad_v10_5/launch_20260905.md)。从批次 manifest 查看实际进度。
-- **V10.4**：[机制设计](../docs/01-主线版本/TraceAAD-V10.4-机制设计.md)，运行入口 `traceaad_v10_4/run.py`、`launch.py`。
-- **V10.3**：[机制设计](../docs/01-主线版本/TraceAAD-V10.3-机制设计.md)，运行入口 `traceaad_v10_3/run.py`、`launch.py`。
-- **V10.2**：[机制设计](../docs/01-主线版本/TraceAAD-V10.2-机制设计.md)、[实验结果](../docs/02-实验结果/各版本实验记录/V10.2-实验结果.md)。
-- **V10.1**：[机制设计](../docs/01-主线版本/TraceAAD-V10.1-机制设计.md)，运行入口 `traceaad_v10_1/run.py`、`launch.py`。
-- **V10.12**（当前主线）：[机制设计](../docs/01-主线版本/TraceAAD-V10.12-机制设计.md)、[运行入口](traceaad_v10_12/README.md)。短形成轨迹加双档案 profile card。
+- **V10.6**：[机制设计](../docs/01-主线版本/生成协议与上下文演进.md)、[运行与恢复](traceaad_v10_6/README.md)。先生成完整代码再生成实现摘要，父代先行分配；进度读取对应批次 manifest。
+- **V10.5**：[机制设计](../docs/01-主线版本/生成协议与上下文演进.md)、[运行与恢复](traceaad_v10_5/README.md)、[启动记录](traceaad_v10_5/launch_20260905.md)。从批次 manifest 查看实际进度。
+- **V10.4**：[机制设计](../docs/01-主线版本/生成协议与上下文演进.md)，运行入口 `traceaad_v10_4/run.py`、`launch.py`。
+- **V10.3**：[机制设计](../docs/01-主线版本/生成协议与上下文演进.md)，运行入口 `traceaad_v10_3/run.py`、`launch.py`。
+- **V10.2**：[机制设计](../docs/01-主线版本/生成协议与上下文演进.md)、[实验结果](../docs/02-实验结果/各版本实验记录/历史版本-实验结果.md#v10-2)。
+- **V10.1**：[机制设计](../docs/01-主线版本/生成协议与上下文演进.md)，运行入口 `traceaad_v10_1/run.py`、`launch.py`。
+- **V10.12**（当前主线）：[机制设计](../docs/01-主线版本/生成协议与上下文演进.md#v10-12)、[运行入口](traceaad_v10_12/README.md)。短形成轨迹加双档案 profile card。
 - **V10.11**：[机制设计](../docs/01-主线版本/TraceAAD-V10.11-机制设计.md)、[运行入口](traceaad_v10_11/README.md)。四方消融（generic / no_traj / idea_code / rand_ctx）。
 - **V10.10**：[机制设计](../docs/01-主线版本/TraceAAD-V10.10-机制设计.md)、[运行入口](traceaad_v10_10/README.md)。目标函数紧凑生成与统一短形成路径。
 - **V10.1 / V10.2**：早期奠基版本，保留作为历史演进对照。

@@ -81,6 +81,7 @@ class RunStorage:
         self.state_path = run_dir / "tree_state.json"
         self.summary_path = run_dir / "logs" / "run_summary.json"
         self.evaluations_path = run_dir / 'evaluations.jsonl'
+        self.evaluation_resolutions_path = run_dir / 'evaluation_resolutions.jsonl'
         self.lock_path = run_dir / '.writer.lock'
         self.last_event = None
         self.last_response = None
