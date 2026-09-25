@@ -41,4 +41,4 @@ Fuse 从代码不同于父代的节点中选择一份参考，质量抽样和均
 
 状态文件只用于继续未完成运行，其他文件直接保存生成内容与评价结果。
 
-实现入口：[traceaad.py](../../traceaad/v10_13/traceaad.py)、[prompts.py](../../traceaad/v10_13/prompts.py)、[parsing.py](../../traceaad/v10_13/parsing.py)、[selection.py](../../traceaad/v10_13/selection.py)。r1、r2、r3 的历史批次与诊断保留在[设计演进](V10.13设计演进.md)。
+实现入口：[traceaad.py](../../traceaad/v10_13/traceaad.py)、[prompts.py](../../traceaad/v10_13/prompts.py)、[parsing.py](../../traceaad/v10_13/parsing.py)、[selection.py](../../traceaad/v10_13/selection.py)。接口实验见[实验记录](V10.13接口实验记录.md)。

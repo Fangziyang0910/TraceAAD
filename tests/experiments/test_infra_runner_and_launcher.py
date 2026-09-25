@@ -6,7 +6,6 @@ import argparse
 import json
 from pathlib import Path
 
-from experiments.infra.base import TASKS
 from experiments.infra.launcher import (
     get_summary_status,
     live_session_name,
@@ -86,4 +85,3 @@ def test_launcher_status_and_session_naming(tmp_path: Path):
 
     assert live_session_name("v101_tsp_r1", 1) == "v101_tsp_r1"
     assert live_session_name("v101_tsp_r1", 2) == "v101_tsp_r1_r2"
-

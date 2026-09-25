@@ -174,4 +174,4 @@ V10.11 现有恢复路径存在已知缺陷：`evaluated` 阶段恢复会重复�
 
 ## 实现范围
 
-V11.0 实现于 `traceaad/v11_0/`：`selection.py` 代码聚合表（CodeBook）、中秩百分位、$1/r$ 参考抽样；`prompts.py` Refine/Tune 轨迹与 Pivot/Fuse 参考上下文构建（含容量裁剪与 Fuse 回退）；`traceaad.py` 搜索主循环（调度、生成、解析、评估、$n/T$ 结算）与检查点续跑；`parsing.py` 解析与修复；`tree.py`/`storage.py` 树与 journal 持久化。测试 `tests/method/test_traceaad_v11_0.py` 覆盖调度、计数、参考抽样、容量削减、Fuse 回退和恢复行为。运行入口与批次清单在 `experiments/traceaad_v11_0/`。
+V11.0 的实现和运行入口已从当前源码树移除；本页与历史结果工件保留其机制定义和实验事实。

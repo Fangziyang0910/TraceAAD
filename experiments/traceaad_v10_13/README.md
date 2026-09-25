@@ -6,7 +6,7 @@
 
 ```bash
 uv run python -m experiments.traceaad_v10_13.launch \
-  --batch 20260924_v1013r3 --session-prefix v1013r3 \
+  --batch 20260925_v1013 --session-prefix v1013 \
   --watch --interval 30
 ```
 
@@ -14,7 +14,7 @@ uv run python -m experiments.traceaad_v10_13.launch \
 
 ```bash
 uv run python -m experiments.traceaad_v10_13.monitor \
-  --host 127.0.0.1 --port 8766 --version 20260924_v1013r3
+  --host 127.0.0.1 --port 8766 --batch 20260925_v1013
 ```
 
-每路默认 E1000。一次评价器调用计一次预算，解析失败不计；节点、轮次、模型调用、当前状态和最终摘要保存在对应结果目录。`20260923_v1013`、`20260924_v1013r2` 和 `20260924_v1013r3` 是旧实现产生的历史批次，说明见[设计演进](../../docs/01-主线版本/V10.13设计演进.md)。
+页面显示批次总进度、五个任务的各次重复，以及单路最佳值曲线、近期候选和最佳代码。每路默认 E1000。一次评价器调用计一次预算，解析失败不计；节点、轮次、模型调用、当前状态和最终摘要保存在对应结果目录。

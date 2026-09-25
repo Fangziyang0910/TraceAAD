@@ -118,5 +118,5 @@ V10.10 首版获得了多任务改善，修订版则呈现任务分化：TSP、V
 ## 8. 实现与复核路径
 
 - [V10.10 实验结果](../02-实验结果/各版本实验记录/V10.10-实验结果.md)：两次机制运行的逐路训练 best、held-out 与原始产物位置。
-- [搜索实现](../../traceaad/v10_10/traceaad.py)、[上下文与提示](../../traceaad/v10_10/trajectory.py)：仓库中的 V10.10 实现；历史批次对应本页批次表中的代码版本。
-- [实验入口与运行说明](../../experiments/traceaad_v10_10/README.md)、[解析重放脚本](../../experiments/traceaad_v10_10/analysis/replay_parser.py)：运行配置、恢复流程与静态重放方法。
+- V10.10 实现已从当前源码树移除；历史批次仍对应本页批次表中的代码版本和结果工件。
+- 历史运行结果与解析重放输出保留在 `experiments/traceaad_v10_10/results/`，旧运行入口与重放程序已移除。
