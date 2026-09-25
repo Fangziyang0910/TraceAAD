@@ -79,6 +79,8 @@ experiments/**/*_sample_*_program.py
 experiments/**/heldout_selection_note.json
 experiments/**/selected_finite.json
 experiments/**/tmux_run.log
+experiments/traceaad_initialization/batch_state.json
+experiments/traceaad_initialization/batch_state.lock
 
 # Historical experiment artifacts are local-only.
 /archive/

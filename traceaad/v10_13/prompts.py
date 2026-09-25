@@ -42,6 +42,25 @@ EVIDENCE_NOTE = (
 )
 
 
+INIT_INSTRUCTIONS = {
+    "independent": (
+        "Generate one competitive, executable algorithm from the task contract and your "
+        "algorithmic knowledge. This is an independent initialization sample: do not assume "
+        "that another candidate is available, and do not invent a previous example. Choose "
+        "a coherent decision principle that can be evaluated as a complete program."
+    ),
+    "informed": (
+        "Study the previous initial algorithms and their measured fitness as evidence. Generate "
+        "one competitive, executable algorithm that adds a plausible decision principle or "
+        "useful state representation to the set. You may retain useful components, but seek "
+        "a meaningful complement in actual decisions, ranking, sampling, or search behavior. "
+        "Variable renaming, algebraically equivalent code, and score rescaling that leaves "
+        "decisions unchanged do not count as a meaningful complement. Fitness is evidence, "
+        "not a requirement to copy the highest-scoring candidate."
+    ),
+}
+
+
 def brief(text, limit=280):
     text = ' '.join(text.split())
     return text if len(text) <= limit else text[:limit].rstrip() + ' … [description shortened]'
@@ -114,13 +133,19 @@ class PromptBuilder:
         return '\n\n'.join(parts + ['# Design Task\n' + OPERATOR_INSTRUCTIONS[operator],
                                      '# Output\n' + output])
 
-    def build_initial(self):
+    def _join_initial(self, parts, condition):
+        return '\n\n'.join(parts + ['# Initialization Task\n' + INIT_INSTRUCTIONS[condition],
+                                     '# Output\n' + FULL_OUTPUT_FORMAT])
+
+    def build_initial(self, condition="informed"):
+        if condition not in INIT_INSTRUCTIONS:
+            raise ValueError(f"unknown initialization condition: {condition}")
         roots = sorted((n for n in self.all_nodes() if n.parent_id is None), key=lambda n: n.id)
         retained = list(roots)
         while True:
             parts = [self.task, EVIDENCE_NOTE]
             parts += [self.program(node, 'Previous Initial Algorithm') for node in retained]
-            prompt = self._join(parts, 'Init')
+            prompt = self._join_initial(parts, condition)
             if self.count(prompt) <= self.max_tokens:
                 return Prompt(prompt)
             if not retained:
