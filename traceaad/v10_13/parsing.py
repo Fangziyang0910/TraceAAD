@@ -1,282 +1,144 @@
-"""Python-first output with optional exact edits and tolerant JSON envelopes."""
+"""Extract and validate one Python implementation from a model response."""
 
 from __future__ import annotations
 
 import ast
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-FENCE_RE = re.compile(r"^[ \t]*```(?:python|py)?[ \t]*\r?$", re.MULTILINE | re.IGNORECASE)
-FULL_OUTPUT_FORMAT = '''Return the complete implementation in one Python code block,
-preserving the target function interface. You may precede it with one short
-Idea sentence describing the actual decision rule or change. Focus on the code.'''
-OUTPUT_FORMAT = FULL_OUTPUT_FORMAT + '''
-For a small change, you may instead return one JSON edit object:
-{"mode":"edit",
-"edits":[{"search":"exact nonempty source block","replacement":"replacement block"}]}.
-Edits apply sequentially to the shown current/host program. Each search block must
-match exactly once, including whitespace. An optional idea string is allowed.'''
+PYTHON_BLOCK_RE = re.compile(
+    r"```(?:python|py)\s*\n(.*?)(?:\n```|\Z)", re.DOTALL | re.IGNORECASE,
+)
+FULL_OUTPUT_FORMAT = """Return the complete implementation in one Python code block.
+You may precede it with one short Idea sentence."""
+OUTPUT_FORMAT = FULL_OUTPUT_FORMAT + """ For a small change to the shown program,
+you may instead return exactly one JSON object:
+{"mode":"edit","edits":[{"search":"exact source","replacement":"new source"}]}"""
 
 
 @dataclass
 class ParsedCandidate:
     idea: str
     program_code: str
-    idea_fields: dict[str, str] = field(default_factory=dict)
-    mode: str = "full"
-    donor_id: int | None = None
 
 
-def response_objects(response):
-    """Find distinct protocol objects without rewriting their strings or code.
-
-    A single complete Python block keeps the code-first interpretation.
-    Otherwise use one explicit JSON proposal. Skip decoded objects as a whole so
-    nested metadata or JSON-looking code strings cannot become extra proposals.
-    """
-    text = THINK_BLOCK_RE.sub('', response).strip()
-    # JSON literals inside a complete Python program are data, not proposals.
-    python_text = text
-    fenced = re.fullmatch(r'```(?:python|py)\s*\n(.*?)\n```', text, re.S | re.I)
-    if fenced:
-        python_text = fenced.group(1)
-    fences = list(FENCE_RE.finditer(text))
-    if len(fences) == 2:
-        python_text = text[fences[0].end():fences[1].start()]
-    try:
-        module = ast.parse(python_text)
-    except (SyntaxError, ValueError):
-        pass
-    else:
-        if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) for node in module.body):
-            return []
-    try:
-        value = json.loads(text)
-    except (ValueError, TypeError):
-        value = None
-    if isinstance(value, dict):
-        return [value]
-    decoder, found, cursor = json.JSONDecoder(), {}, 0
-    while cursor < len(text):
-        start = text.find('{', cursor)
-        if start < 0:
-            break
-        try:
-            value, end = decoder.raw_decode(text, start)
-        except ValueError:
-            cursor = start + 1
-            continue
-        cursor = end
-        if isinstance(value, dict) and (value.get('mode') in ('full', 'edit', 'context') or
-                                      isinstance(value.get('code'), str)):
-            found[json.dumps(value, sort_keys=True, ensure_ascii=False)] = value
-    return list(found.values())
-
-
-def response_object(response):
-    objects = response_objects(response)
-    return objects[0] if len(objects) == 1 else None
-
-
-def idea_metadata(value):
-    # Metadata never gates evaluation; the unabridged response is journaled.
-    if isinstance(value, str):
-        return value.strip(), {}
-    if isinstance(value, dict):
-        fields = {key: value[key].strip() for key in ('mechanism', 'change', 'transfer')
-                  if isinstance(value.get(key), str) and value[key].strip()}
-        return fields.get('mechanism') or fields.get('change', ''), fields
-    return '', {}
-
-
-def apply_edits(base_code, edits):
-    if not isinstance(edits, list) or not edits or len(edits) > 32:
-        raise ValueError('edits must contain 1 to 32 replacements')
-    code = base_code
-    for edit in edits:
-        if not isinstance(edit, dict) or set(edit) != {'search', 'replacement'}:
-            raise ValueError('each edit needs only search and replacement')
-        source, target = edit['search'], edit['replacement']
-        if not isinstance(source, str) or not source or not isinstance(target, str):
-            raise ValueError('search must be nonempty text and replacement must be text')
-        if code.count(source) != 1:
-            raise ValueError('search block must match exactly once; use more surrounding code')
-        code = code.replace(source, target, 1)
-    return code
-
-
-def normalize_code(text: str) -> str:
-    return "\n".join(text.replace("\r\n", "\n").replace("\r", "\n").splitlines()).strip()
-
-
-def signature(args):
-    return ([arg.arg for arg in args.posonlyargs], [arg.arg for arg in args.args],
-            [arg.arg for arg in args.kwonlyargs],
-            args.vararg.arg if args.vararg else None,
-            args.kwarg.arg if args.kwarg else None)
+def _signature(args):
+    return (
+        [arg.arg for arg in args.posonlyargs],
+        [arg.arg for arg in args.args],
+        [arg.arg for arg in args.kwonlyargs],
+        args.vararg.arg if args.vararg else None,
+        args.kwarg.arg if args.kwarg else None,
+    )
 
 
 def template_target(template_program):
-    try:
-        tree = ast.parse(template_program)
-    except (SyntaxError, ValueError) as exc:
-        raise ValueError("evaluation template must define exactly one function") from exc
-    funcs = [node for node in tree.body
-             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
-    if len(funcs) != 1:
+    """Return the template function interface and a compact prompt stub."""
+    tree = ast.parse(template_program)
+    functions = [
+        node for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    if len(functions) != 1:
         raise ValueError("evaluation template must define exactly one function")
-    func = funcs[0]
-    args_text = ast.unparse(func.args)
-    returns = f" -> {ast.unparse(func.returns)}" if func.returns else ""
-    lines = [f"def {func.name}({args_text}){returns}:"]
-    docstring = ast.get_docstring(func)
-    if docstring:
-        lines.append(f'    """{docstring}"""')
-    lines.append("    pass")
-    return (func.name, args_text, signature(func.args)), "\n".join(lines)
+    function = functions[0]
+    args_text = ast.unparse(function.args)
+    returns = f" -> {ast.unparse(function.returns)}" if function.returns else ""
+    stub = f"def {function.name}({args_text}){returns}:\n    pass"
+    return (function.name, args_text, _signature(function.args)), stub
 
 
-def _target_functions(tree, name):
-    return [node for node in tree.body
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name]
+def _apply_edits(code, edits):
+    if not isinstance(edits, list) or not edits:
+        raise ValueError("edits must be a nonempty list")
+    for edit in edits:
+        if not isinstance(edit, dict):
+            raise ValueError("each edit must be an object")
+        search = edit.get("search")
+        replacement = edit.get("replacement")
+        if not isinstance(search, str) or not search or not isinstance(replacement, str):
+            raise ValueError("each edit needs nonempty search text and replacement text")
+        if code.count(search) != 1:
+            raise ValueError("each search must match exactly once")
+        code = code.replace(search, replacement, 1)
+    return code
 
 
-def _merge_candidate(template_program, generated_tree, target):
+def _idea(text):
+    match = re.search(r"(?:^|\n)\s*(?:#+\s*)?Idea\s*:\s*(.+)", text, re.IGNORECASE)
+    return match.group(1).strip() if match else ""
+
+
+def _merge_with_template(template_program, generated_tree, target):
+    """Keep task imports/helpers and replace its target implementation."""
     template_tree = ast.parse(template_program)
-    template_targets = _target_functions(template_tree, target.name)
-    if len(template_targets) != 1:
-        return None
-    template_fn = template_targets[0]
-    preface = [node for node in template_tree.body if node is not template_fn]
-    seen = {ast.dump(node, include_attributes=False) for node in preface}
-    dependencies = []
-    for node in generated_tree.body:
-        if node is target:
-            continue
-        key = ast.dump(node, include_attributes=False)
-        if key not in seen:
-            dependencies.append(node)
-            seen.add(key)
-    module = ast.Module(body=preface + dependencies + [target], type_ignores=[])
+    template_target = next(
+        node for node in template_tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    )
+    template_body = [node for node in template_tree.body if node is not template_target]
+    generated_body = [node for node in generated_tree.body if node is not target]
+    module = ast.Module(body=template_body + generated_body + [target], type_ignores=[])
     ast.fix_missing_locations(module)
-    return normalize_code(ast.unparse(module))
+    return ast.unparse(module).strip()
 
 
-def _extract_idea(prefix: str) -> str | None:
-    lines = prefix.replace("\r\n", "\n").splitlines()
-    cleaned = []
-    collecting = False
-    for line in lines:
-        stripped = line.strip()
-        label = re.match(r"^(?:[*_`#\s]*)(idea|code)\s*:?[\s*`]*$", stripped, re.I)
-        inline = re.match(r"^(?:[*_`#\s]*)idea\s*:\s*(.*?)\s*$", stripped, re.I)
-        if inline:
-            if inline.group(1).strip():
-                cleaned.append(re.sub(r"^[*_`#\s]+", "", inline.group(1)).strip())
-            collecting = True
-            continue
-        if label:
-            collecting = label.group(1).lower() == "idea"
-            continue
-        if collecting and stripped:
-            cleaned.append(stripped)
-    if not cleaned:
-        prose = [line.strip() for line in lines if line.strip() and
-                 not re.match(r"^(?:[*_`#\s]*)code\s*:?[\s*`]*$", line.strip(), re.I)]
-        if prose and not any(re.search(r"\bidea\b", line, re.I) for line in prose):
-            return " ".join(prose)
-    return re.sub(r"^[*_`#\s]+", "", " ".join(cleaned).strip()).strip() or None
+def parse_candidate(response, finish_reason, interface, template_program, *, base_code=None):
+    """Parse a full Python response or one exact edit of the parent program."""
+    del finish_reason
+    text = THINK_BLOCK_RE.sub("", response).strip()
+    idea = _idea(text)
+    mode = "full"
 
+    try:
+        payload = json.loads(text)
+    except (TypeError, ValueError):
+        payload = None
 
-def parse_candidate(response, finish_reason, interface, template_program, *,
-                    base_code=None, allowed_donor_ids=()):
-    if finish_reason not in ("stop", "length", "unknown"):
-        return None, "unsupported finish reason"
-    text = THINK_BLOCK_RE.sub("", response)
-    objects = response_objects(text)
-    if len(objects) > 1:
-        return None, 'format_error: conflicting JSON proposals'
-    payload = objects[0] if objects else None
-    fields, mode, donor_id = {}, 'full', None
-    if payload is not None:
-        idea, fields = idea_metadata(payload.get('idea'))
-        mode = payload.get('mode', 'full')
-        declared = payload.get('donor_id')
-        if type(declared) is int and declared in allowed_donor_ids:
-            donor_id = declared
-        if mode == 'edit':
+    if isinstance(payload, dict):
+        mode = payload.get("mode", "full")
+        if isinstance(payload.get("idea"), str):
+            idea = payload["idea"].strip()
+        if mode == "edit":
             if base_code is None:
-                return None, 'edit_error: no parent is available for editing'
-            if 'code' in payload:
-                return None, 'edit_error: return edits or full code, not both'
+                return None, "edit_error: no parent program is available"
             try:
-                canonical = apply_edits(base_code, payload.get('edits'))
+                code = _apply_edits(base_code, payload.get("edits"))
             except ValueError as exc:
-                return None, f'edit_error: {exc}'
-        elif mode == 'full':
-            if 'edits' in payload or not isinstance(payload.get('code'), str):
-                return None, 'format_error: full mode requires code and no edits'
-            canonical = payload['code']
-        elif mode == 'context':
-            return None, 'context_error: context is already supplied; return code or an edit'
+                return None, f"edit_error: {exc}"
+        elif mode == "full" and isinstance(payload.get("code"), str):
+            code = payload["code"]
         else:
-            return None, 'format_error: expected full or edit mode'
+            return None, "format_error: expected Python code or one edit object"
     else:
-        # Backwards-compatible code-first extraction, including code without Idea.
-        fences = list(FENCE_RE.finditer(text))
-        if len(fences) == 2:
-            idea = _extract_idea(text[:fences[0].start()]) or ''
-            canonical = text[fences[0].end():fences[1].start()]
-        elif len(fences) == 1 and re.search(r'```(?:python|py)\s*$', fences[0].group(), re.I):
-            idea = _extract_idea(text[:fences[0].start()]) or ''
-            canonical = text[fences[0].end():]
-        elif not fences:
-            idea, canonical = '', text
-        else:
-            return None, 'format_error: ambiguous Python code blocks'
-    canonical = normalize_code(canonical)
-    if not canonical:
-        return None, "The code block is empty"
+        block = PYTHON_BLOCK_RE.search(text)
+        code = block.group(1) if block else text
+
+    code = code.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not code:
+        return None, "format_error: empty code"
     try:
-        tree = ast.parse(canonical)
+        tree = ast.parse(code)
     except (SyntaxError, ValueError) as exc:
-        return None, f"syntax_error: {type(exc).__name__}: {exc}"
-    name, args_text, expected = interface
-    targets = _target_functions(tree, name)
+        return None, f"syntax_error: {exc}"
+
+    name, args_text, expected_signature = interface
+    targets = [
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == name
+    ]
     if len(targets) != 1:
-        return None, f"target_function_error: expected exactly one top-level `{name}(...)` function"
-    if signature(targets[0].args) != expected:
-        return None, f"signature_error: `{name}` must declare the parameters ({args_text})"
-    if isinstance(targets[0], ast.AsyncFunctionDef):
-        return None, 'signature_error: target must be synchronous'
-    # An edit operates on the entire displayed program. Do not reinsert template
-    # statements or reorder its top-level code after applying the exact edits.
-    rebuilt = (normalize_code(ast.unparse(tree)) if mode == 'edit' else
-               _merge_candidate(template_program, tree, targets[0]))
-    if rebuilt is None:
-        return None, "template_error: could not find one target function in the task template"
+        return None, f"target_error: expected one top-level {name} function"
+    if _signature(targets[0].args) != expected_signature:
+        return None, f"signature_error: {name} must use ({args_text})"
+
+    program = ast.unparse(tree).strip() if mode == "edit" else _merge_with_template(
+        template_program, tree, targets[0],
+    )
     try:
-        compile(rebuilt, '<candidate>', 'exec')
+        compile(program, "<candidate>", "exec")
     except (SyntaxError, ValueError) as exc:
-        return None, f'syntax_error: {exc}'
-    return ParsedCandidate(idea, rebuilt, fields, mode, donor_id), None
-
-
-def build_repair_prompt(task_contract, response, event, *, base_code=None,
-                        failed_program=None):
-    message = (event.get("error") or event.get("reason") or "Evaluation failed").strip()
-    error_type = event.get("error_type") or "Error"
-    payload = response_object(response)
-    needs_base = payload is not None and payload.get('mode') == 'edit' and not failed_program
-    parent = f'\n\n# Edit base\n```python\n{base_code}\n```' if needs_base and base_code else ''
-    failed = (f'```python\n{failed_program}\n```' if failed_program else
-              json.dumps({k: v for k, v in payload.items() if k in
-                          ('mode', 'code', 'edits')}, ensure_ascii=False)
-              if payload is not None else THINK_BLOCK_RE.sub('', response))
-    return (f"{task_contract}{parent}\n\n# Failed output\n{failed}\n\n"
-            f"# Failure\n{error_type}: {message[:2000]}\n\n"
-            "# Repair\nCorrect the reported failure while preserving the intended algorithmic "
-            "idea. Return the complete corrected implementation in one Python code block.\n\n"
-            + FULL_OUTPUT_FORMAT)
+        return None, f"syntax_error: {exc}"
+    return ParsedCandidate(idea, program), None

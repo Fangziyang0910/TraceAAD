@@ -29,13 +29,8 @@ def main(argv=None):
     }
     ctx = setup_experiment_run(
         args, method="v1013", method_dir=Path(__file__).resolve().parent,
-        resume_file="tree_state.json", method_params={**params, "revision": TraceAADV1013.REVISION},
-        budget_basis=(
-            "Actual evaluator calls, including failures, repairs, and duplicate-code "
-            "generations; LLM-only failures consume no evaluator slot, "
-            "but all LLM calls and available token usage are recorded separately. "
-            "A reserved evaluation without a durable receipt blocks automatic recovery."
-        ),
+        resume_file="tree_state.json", method_params=params,
+        budget_basis="Each evaluator call consumes one budget unit.",
     )
     try:
         method = TraceAADV1013(
@@ -45,9 +40,7 @@ def main(argv=None):
             seed=args.seed,
             **params,
         )
-        ctx.run(method.run, header=[
-            "v10.13-r3: ESS allocation, single-pass evidence, Python-first optional edits"
-        ])
+        ctx.run(method.run, header=["V10.13: compact single-pass evolutionary search"])
     finally:
         ctx.llm.close()
 

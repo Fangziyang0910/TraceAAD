@@ -113,6 +113,14 @@ def load_scored_samples(
                 sample_order = best.get("evaluation_id")
                 if not isinstance(sample_order, int):
                     sample_order = best.get("node_id")
+                if not isinstance(sample_order, int) and isinstance(best.get("id"), int):
+                    events_path = run_dir / "events.jsonl"
+                    if events_path.exists():
+                        for line in events_path.read_text(encoding="utf-8").splitlines():
+                            event = json.loads(line)
+                            if event.get("node_id") == best["id"]:
+                                sample_order = event.get("evaluation_id")
+                                break
                 if isinstance(score, (int, float)) and isinstance(sample_order, int):
                     if max_sample_order is None or sample_order <= max_sample_order:
                         records.append(

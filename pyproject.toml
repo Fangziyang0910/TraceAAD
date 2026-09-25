@@ -1,19 +1,19 @@
 [project]
-name = "traceaad"
+name = "TraceAAD"
 version = "2.0"
 description = "TraceAAD: traced automatic algorithm design research repo (core evaluation from LLM4AD)"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.14,<3.15"
 dependencies = [
-    "numpy<2",
-    "scipy",
-    "tqdm",
-    "numba",
-    "requests",
-    "openai",
-    "pytz",
+    "huggingface-hub",
     "matplotlib",
-    "huggingface_hub",
-    "scikit-learn>=1.9.0",
+    "numba",
+    "numpy>=2",
+    "onnxruntime",
+    "openai",
+    "requests",
+    "scikit-learn",
+    "scipy",
+    "tokenizers",
 ]
 
 [tool.uv]
@@ -26,5 +26,5 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
-    "pytest>=9.1.1",
+    "pytest",
 ]

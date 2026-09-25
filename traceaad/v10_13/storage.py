@@ -1,77 +1,33 @@
-"""Run journals (append-only analysis records) and atomic file writes."""
+"""Small persistence helpers for V10.13 runs."""
 
 import json
 import os
-import fcntl
-from contextlib import contextmanager
 from dataclasses import asdict
 
 
-def atomic_json(path, payload):
+def write_json(path, payload):
+    """Replace a JSON file after writing the new value beside it."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open('w', encoding='utf-8') as handle:
-        handle.write(json.dumps(payload, ensure_ascii=False, allow_nan=False) + '\n')
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(tmp, path)
-    descriptor = os.open(path.parent, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
-
-def _complete_prefix(data):
-    """Bytes through the end of the last complete record line.
-
-    A torn final write lacks the trailing newline; those bytes are dropped.
-    """
-    if data and not data.endswith(b"\n"):
-        newline = data.rfind(b"\n")
-        return data[:newline + 1]
-    return data
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, path)
 
 
 def read_journal(path):
     if not path.exists():
         return []
-    with path.open("rb") as handle:
-        data = _complete_prefix(handle.read())
-    return [json.loads(line) for line in data.splitlines() if line.strip()]
-
-
-def truncate_torn_tail(path):
-    """Preserve torn bytes separately before restoring the complete journal prefix."""
-    if not path.exists():
-        return
-    with path.open("rb") as handle:
-        data = handle.read()
-    if data and not data.endswith(b"\n"):
-        prefix = _complete_prefix(data)
-        tail = data[len(prefix):]
-        suffix = 1
-        backup = path.with_name(path.name + f'.torn-{suffix}')
-        while backup.exists():
-            suffix += 1
-            backup = path.with_name(path.name + f'.torn-{suffix}')
-        with backup.open('wb') as handle:
-            handle.write(tail)
-            handle.flush()
-            os.fsync(handle.fileno())
-        descriptor = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-        with path.open("r+b") as handle:
-            handle.truncate(len(prefix))
-            handle.flush()
-            os.fsync(handle.fileno())
+    records = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            records.append(json.loads(line))
+    return records
 
 
 class RunStorage:
-    """Own call, evaluation, node and event journals plus the checkpoint."""
+    """Save model calls, evaluated nodes, iteration results, and current state."""
 
     def __init__(self, run_dir):
         self.events_path = run_dir / "events.jsonl"
@@ -79,71 +35,24 @@ class RunStorage:
         self.nodes_path = run_dir / "nodes.jsonl"
         self.state_path = run_dir / "tree_state.json"
         self.summary_path = run_dir / "logs" / "run_summary.json"
-        self.evaluations_path = run_dir / 'evaluations.jsonl'
-        self.evaluation_resolutions_path = run_dir / 'evaluation_resolutions.jsonl'
-        self.lock_path = run_dir / '.writer.lock'
-        self.last_event = None
-        self.last_response = None
-        self._indexes = {}
 
-    @contextmanager
-    def writer_lock(self):
-        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.lock_path.open('a') as handle:
-            try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError as exc:
-                raise RuntimeError('another writer owns this run directory') from exc
-            try:
-                yield
-            finally:
-                fcntl.flock(handle, fcntl.LOCK_UN)
-
-    def index(self, path, key):
-        if path not in self._indexes:
-            index = {}
-            for record in read_journal(path):
-                identity = record[key]
-                if identity in index:
-                    raise ValueError(f'duplicate {key} in {path.name}: {identity}')
-                index[identity] = record
-            self._indexes[path] = index
-        return self._indexes[path]
-
-    def append_once(self, path, record, key):
-        index = self.index(path, key)
-        old = index.get(record[key])
-        if old is not None:
-            if old != record:
-                raise ValueError(f'conflicting {key} in {path.name}: {record[key]}')
-            return
-        self.append_record(path, record)
-        index[record[key]] = record
-
-    def append_record(self, path, record):
+    @staticmethod
+    def append(path, record):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
 
     def record_call(self, record):
-        self.append_once(self.llm_calls_path, record, 'call_id')
-        if "response" in record:
-            self.last_response = (record["candidate_id"], record["response"])
+        self.append(self.llm_calls_path, record)
 
     def record_node(self, node):
-        self.append_once(self.nodes_path, asdict(node), 'id')
+        self.append(self.nodes_path, asdict(node))
 
     def record_event(self, record):
-        self.append_once(self.events_path, record, 'candidate_id')
-        self.last_event = record
+        self.append(self.events_path, record)
 
-    def record_evaluation(self, record):
-        self.append_once(self.evaluations_path, record, 'evaluation_id')
+    def save_state(self, state):
+        write_json(self.state_path, state)
 
-    def failed_response(self, candidate_id):
-        if self.last_response and self.last_response[0] == candidate_id:
-            return self.last_response[1]
-        return next(record["response"] for record in reversed(read_journal(self.llm_calls_path))
-                    if record.get("candidate_id") == candidate_id and "response" in record)
+    def save_summary(self, summary):
+        write_json(self.summary_path, summary)

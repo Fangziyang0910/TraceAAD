@@ -2,21 +2,17 @@
 
 The archive is the search population. Quality controls the amount of parent
 attention through an ESS-calibrated distribution; the operators provide the
-creative moves. Parent attempts are recorded for analysis only and never become
-a deterministic novelty or lineage score.
+creative moves.
 """
 
 from __future__ import annotations
 
-import ast
 import math
-from functools import lru_cache
 
 OPERATORS = ("Refine", "Tune", "Pivot", "Fuse")
 OPERATOR_PROBABILITIES = {operator: 0.25 for operator in OPERATORS}
 QUALITY_ESS_TARGET = 8.0
 PARENT_UNIFORM_PROBABILITY = 0.125
-REFERENCE_COUNT = 1
 
 
 def ess(probabilities):
@@ -62,66 +58,26 @@ def calibrate_beta(scores, target):
 
 
 def quality_distribution(nodes):
-    """Return an ESS-calibrated quality distribution over valid nodes."""
+    """Return an ESS-calibrated quality distribution over evaluated nodes."""
     if not nodes:
         raise RuntimeError("cannot allocate an empty archive")
     scores = [node.fitness for node in nodes]
-    beta, target, quality_ess = calibrate_beta(scores, QUALITY_ESS_TARGET)
-    probabilities = softmax(scores, beta)
-    return probabilities, {
-        "beta": beta,
-        "quality_ess": ess(probabilities),
-        "ess_target": target,
-        "population_size": len(nodes),
-    }
+    beta, _, _ = calibrate_beta(scores, QUALITY_ESS_TARGET)
+    return softmax(scores, beta)
 
 
-def sample_parent(nodes, operator, rng):
-    """Keep the previous aggregate exploration mass, independent of operator."""
-    probabilities, stats = quality_distribution(nodes)
+def sample_parent(nodes, rng):
+    """Sample from quality with a small uniform exploration mass."""
+    probabilities = quality_distribution(nodes)
     probabilities = mix_uniform(probabilities, PARENT_UNIFORM_PROBABILITY)
-    index = rng.choices(range(len(nodes)), weights=probabilities)[0]
-    parent = nodes[index]
-    selection = {
-        "parent_probability": probabilities[index],
-        "parent_ess": ess(probabilities),
-        "parent_ess_target": stats["ess_target"],
-        "parent_count_before": parent.attempts,
-        "population_size": len(nodes),
-        "uniform_mass": PARENT_UNIFORM_PROBABILITY,
-    }
-    return parent, selection
+    return rng.choices(nodes, weights=probabilities)[0]
 
 
-@lru_cache(maxsize=8192)
-def code_key(code):
-    return ast.dump(ast.parse(code), include_attributes=False)
-
-
-def reference_shortlist(nodes, parent, rng, count=REFERENCE_COUNT):
-    """Offer one implementation, drawn equally from quality and uniform pools.
-
-    Code uniqueness avoids exact copies; it makes no semantic diversity claim.
-    The model may borrow a useful component or ignore the reference.
-    """
-    parent_key = code_key(parent.code)
-    by_code = {}
-    for node in sorted(nodes, key=lambda item: item.id):
-        key = code_key(node.code)
-        if key != parent_key:
-            by_code[key] = node  # latest measured representative, not best replicate
-    pool = list(by_code.values())
-    selected, sources = [], {}
-    for _ in range(count):
-        if not pool:
-            break
-        source = 'quality' if rng.random() < 0.5 else 'uniform'
-        if source == "quality":
-            weights, _ = quality_distribution(pool)
-        else:
-            weights = [1.0] * len(pool)
-        index = rng.choices(range(len(pool)), weights=weights)[0]
-        node = pool.pop(index)
-        selected.append(node)
-        sources[str(node.id)] = source
-    return selected, {"reference_sources": sources, "distinct_reference_pool": len(by_code)}
+def sample_reference(nodes, parent, rng):
+    """Sample one different implementation for Fuse."""
+    pool = [node for node in nodes if node.code != parent.code]
+    if not pool:
+        return None
+    if rng.random() < 0.5:
+        return rng.choices(pool, weights=quality_distribution(pool))[0]
+    return rng.choice(pool)

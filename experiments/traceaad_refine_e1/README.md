@@ -21,26 +21,25 @@ embedding 对照固定为 [all-MiniLM-L6-v2](https://huggingface.co/sentence-tra
 
 ## 命令
 
-从仓库根目录执行。首次建立独立的embedding环境：
+从仓库根目录执行。首次运行先同步项目环境：
 
 ```bash
-uv venv --python .venv/bin/python experiments/traceaad_refine_e1/raw/refine_e1_20260907/venv
-uv pip install --python experiments/traceaad_refine_e1/raw/refine_e1_20260907/venv/bin/python numpy==2.4.6 onnxruntime==1.29.0 tokenizers==0.22.2 huggingface-hub==0.36.2
+uv sync --all-groups
 ```
 
 主流程：
 
 ```bash
-.venv/bin/python -m experiments.traceaad_refine_e1.prepare
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 .venv/bin/python -m experiments.traceaad_refine_e1.profile validate
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 .venv/bin/python -m experiments.traceaad_refine_e1.seed_check
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 .venv/bin/python -m experiments.traceaad_refine_e1.profile profile --workers 12
-experiments/traceaad_refine_e1/raw/refine_e1_20260907/venv/bin/python -m experiments.traceaad_refine_e1.embed
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python -m experiments.traceaad_refine_e1.replay
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python -m experiments.traceaad_refine_e1.auxiliary
-.venv/bin/python -m experiments.traceaad_refine_e1.report
-.venv/bin/python -m experiments.traceaad_refine_e1.e1a1
-.venv/bin/python -m pytest -q tests/experiments/test_refine_e1.py
+uv run python -m experiments.traceaad_refine_e1.prepare
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 uv run python -m experiments.traceaad_refine_e1.profile validate
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 uv run python -m experiments.traceaad_refine_e1.seed_check
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 uv run python -m experiments.traceaad_refine_e1.profile profile --workers 12
+uv run python -m experiments.traceaad_refine_e1.embed
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python -m experiments.traceaad_refine_e1.replay
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python -m experiments.traceaad_refine_e1.auxiliary
+uv run python -m experiments.traceaad_refine_e1.report
+uv run python -m experiments.traceaad_refine_e1.e1a1
+uv run python -m pytest -q tests/experiments/test_refine_e1.py
 ```
 
-embedding 使用隔离的本地环境（Python3.11、onnxruntime、tokenizers、huggingface-hub、numpy），不修改项目依赖文件。首次运行需下载固定版本模型。`profile` 按运行名与节点 ID 复用已完成缓存，`embed` 按显式文本 ID 复用缓存；画像失败也记录，不以零距离替代。正式搜索与本实验的CPU/耗时分别记录。
+embedding 使用项目环境中的 `onnxruntime`、`tokenizers`、`huggingface-hub` 和 `numpy`。首次运行需下载固定版本模型。`profile` 按运行名与节点 ID 复用已完成缓存，`embed` 按显式文本 ID 复用缓存；画像失败也记录，不以零距离替代。正式搜索与本实验的CPU/耗时分别记录。

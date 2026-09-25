@@ -17,7 +17,7 @@ import re
 import subprocess
 import time
 
-from experiments.infra.base import BACKEND_CAPACITY, BACKENDS, TASKS, TASK_SHORT, free_slots
+from experiments.infra.base import BACKEND_CAPACITY, TASKS, TASK_SHORT, free_slots
 from experiments.infra.launcher import check_backends, get_summary_status
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -101,7 +101,7 @@ def refresh(plan):
         if status == "finished":
             row["status"] = "finished"
             row["finished_at"] = row.get("finished_at") or _timestamp()
-        elif status in {"error", "interrupted", "aborted", "uncertain_evaluation"}:
+        elif status in {"error", "interrupted", "aborted"}:
             row["status"] = "blocked"
             row["last_error"] = status
         elif session_alive(row["session"]):

@@ -1,6 +1,6 @@
-"""Single-pass proposals with small, operator-specific evidence."""
+"""Build the task, parent, and operator prompts used by V10.13."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .parsing import FULL_OUTPUT_FORMAT, OUTPUT_FORMAT
 
@@ -48,40 +48,31 @@ def brief(text, limit=280):
 
 
 @dataclass
-class PromptContext:
+class Prompt:
     prompt: str
-    operator: str
-    reference_ids: list[int]
-    reference_program: object | None = None
-    fallback_reason: str | None = None
-    history_ids: list[int] = field(default_factory=list)
-    trial_ids: list[int] = field(default_factory=list)
+    reference: object | None = None
 
 
 class PromptBuilder:
-    def __init__(self, llm, task_contract, *, max_tokens, history_depth, lookup, all_nodes):
-        self.llm, self.task_contract = llm, task_contract
+    def __init__(self, llm, task, *, max_tokens, history_depth, lookup, all_nodes):
+        self.llm, self.task = llm, task
         self.max_tokens, self.history_depth = max_tokens, history_depth
         self.lookup, self.all_nodes = lookup, all_nodes
 
     def count(self, text):
         return self.llm.count_prompt_tokens(text)
 
-    def formation_edges(self, current):
-        edges = []
+    def history(self, current):
+        nodes = []
         for _ in range(self.history_depth):
             if current is None or current.parent_id is None:
                 break
-            source = self.lookup(current.parent_id)
-            if source is None:
-                raise ValueError('missing formation predecessor')
-            edges.append((source, current))
-            current = source
-        return list(reversed(edges))
+            nodes.append(current)
+            current = self.lookup(current.parent_id)
+        return list(reversed(nodes))
 
     def idea_view(self, node):
-        text = node.idea or node.idea_fields.get('mechanism') or node.idea_fields.get('change', '')
-        return 'Idea: ' + (brief(text, 480) if text else '[not recorded]')
+        return "Idea: " + (brief(node.idea, 480) if node.idea else "[not recorded]")
 
     def card(self, node):
         return f'Node {node.id} | measured fitness: {node.fitness}\n{self.idea_view(node)}'
@@ -89,12 +80,15 @@ class PromptBuilder:
     def program(self, node, title):
         return f'# {title}\n{self.card(node)}\n```python\n{node.code}\n```'
 
-    def _history_text(self, edges):
-        lines = ['# Recent Design History — formation, oldest first']
-        for source, target in edges:
-            lines.append(f'Node {source.id} -> {target.id} | {target.operator} | '
-                         f'whole-program fitness {source.fitness} -> {target.fitness}\n'
-                         + self.idea_view(target))
+    def _history_text(self, nodes):
+        lines = ["# Recent Design History"]
+        for node in nodes:
+            source = self.lookup(node.parent_id)
+            if source is not None:
+                lines.append(
+                    f"Node {source.id} -> {node.id} | {node.operator} | "
+                    f"fitness {source.fitness} -> {node.fitness}\n{self.idea_view(node)}"
+                )
         return '\n\n'.join(lines)
 
     def local_trials(self, parent, operator):
@@ -110,63 +104,53 @@ class PromptBuilder:
         return selected
 
     def _trial_text(self, parent, trials):
-        return '# Local trials — measured children of this exact parent\n' + '\n\n'.join(
+        return '# Local trials from this parent\n' + '\n\n'.join(
             f'Node {parent.id} -> {node.id} | {node.operator} | '
-            f'whole-program fitness {parent.fitness} -> {node.fitness}\n{self.idea_view(node)}'
+            f'fitness {parent.fitness} -> {node.fitness}\n{self.idea_view(node)}'
             for node in trials)
 
-    def _join(self, parts, operator, parent=None):
+    def _join(self, parts, operator):
+        output = FULL_OUTPUT_FORMAT if operator == "Init" else OUTPUT_FORMAT
         return '\n\n'.join(parts + ['# Design Task\n' + OPERATOR_INSTRUCTIONS[operator],
-                                     '# Output\n' + (OUTPUT_FORMAT if parent else FULL_OUTPUT_FORMAT)])
+                                     '# Output\n' + output])
 
-    def build_initial_context(self):
+    def build_initial(self):
         roots = sorted((n for n in self.all_nodes() if n.parent_id is None), key=lambda n: n.id)
         retained = list(roots)
         while True:
-            parts = [self.task_contract, EVIDENCE_NOTE]
+            parts = [self.task, EVIDENCE_NOTE]
             parts += [self.program(node, 'Previous Initial Algorithm') for node in retained]
             prompt = self._join(parts, 'Init')
             if self.count(prompt) <= self.max_tokens:
-                return PromptContext(prompt, 'Init', [n.id for n in retained],
-                                     fallback_reason='initial_examples_trimmed' if retained != roots else None)
+                return Prompt(prompt)
             if not retained:
                 raise ValueError('task and output instructions exceed context capacity')
             retained.pop(0)
 
-    def build_initial(self):
-        return self.build_initial_context().prompt
-
-    def build_development(self, parent, operator, donor=None, *, references=None):
-        references = list(references if references is not None else ([donor] if donor else []))
-        reference = references[0] if operator == 'Fuse' and references else None
-        edges = self.formation_edges(parent) if operator in ('Refine', 'Tune') else []
+    def build_development(self, parent, operator, reference=None):
+        reference = reference if operator == 'Fuse' else None
+        history = self.history(parent) if operator in ('Refine', 'Tune') else []
         trials = self.local_trials(parent, operator) if operator in ('Refine', 'Tune') else []
-        fallback = None
         while True:
-            parts = [self.task_contract, EVIDENCE_NOTE,
+            parts = [self.task, EVIDENCE_NOTE,
                      self.program(parent, 'Host Algorithm' if operator == 'Fuse' else 'Current Algorithm')]
-            if edges:
-                parts.append(self._history_text(edges))
+            if history:
+                parts.append(self._history_text(history))
             if trials:
                 parts.append(self._trial_text(parent, trials))
             if reference is not None:
                 parts.append(self.program(reference, 'Reference Algorithm'))
-            if fallback:
-                parts.append('Context note: ' + fallback + '. Continue with available evidence.')
-            prompt = self._join(parts, operator, parent)
+            prompt = self._join(parts, operator)
             if self.count(prompt) <= self.max_tokens:
-                return PromptContext(prompt, operator, [reference.id] if reference else [], reference,
-                                     fallback, [child.id for _, child in edges], [n.id for n in trials])
-            if edges:
-                edges.pop(0)
+                return Prompt(prompt, reference)
+            if history:
+                history.pop(0)
             elif trials:
                 trials.pop()
-                fallback = 'local_trial_records_trimmed'
             elif reference is not None:
                 reference = None
-                fallback = 'reference_implementation_exceeds_context'
             else:
                 raise ValueError('task, parent and output instructions exceed context capacity')
 
-    def build(self, parent, operator, donor=None):
-        return self.build_development(parent, operator, donor).prompt
+    def build(self, parent, operator, reference=None):
+        return self.build_development(parent, operator, reference).prompt

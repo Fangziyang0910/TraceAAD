@@ -24,9 +24,9 @@ import re
 import sys
 import traceback
 from typing import Any, Literal, Optional, List, Tuple
+from zoneinfo import ZoneInfo
 
 import numpy as np
-import pytz
 import json
 import logging
 from threading import Lock, RLock
@@ -110,7 +110,7 @@ class ProfilerBase:
 
         self._num_objs = num_objs
         self._num_samples = initial_num_samples
-        self._process_start_time = datetime.now(pytz.timezone("Asia/Shanghai"))
+        self._process_start_time = datetime.now(ZoneInfo("Asia/Shanghai"))
         self._result_folder = self._process_start_time.strftime("%Y%m%d_%H%M%S")
 
         self._log_style = log_style
@@ -258,7 +258,7 @@ class ProfilerBase:
         with self._artifact_lock:
             if not self._log_dir or self._finished:
                 return
-            self._process_end_time = datetime.now(pytz.timezone("Asia/Shanghai"))
+            self._process_end_time = datetime.now(ZoneInfo("Asia/Shanghai"))
             summary = {
                 "status": payload.pop("status", "finished"),
                 "started_at": self._process_start_time.isoformat(),
@@ -492,7 +492,7 @@ class ProfilerBase:
     def _with_common_log_fields(self, payload: dict):
         payload = dict(payload)
         payload.setdefault(
-            "timestamp", datetime.now(pytz.timezone("Asia/Shanghai")).isoformat()
+            "timestamp", datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
         )
         payload.setdefault("profiler_sample_order", self._num_samples)
         return payload

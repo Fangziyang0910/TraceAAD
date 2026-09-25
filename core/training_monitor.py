@@ -655,6 +655,7 @@ class MonitorDataEngine:
         recent_timestamps: list[datetime] = []
 
         fit_by_id: dict[int, float] = {}
+        evaluation_by_node: dict[int, int] = {}
         running_best_fitness: float | None = None
 
         if events_p.exists():
@@ -675,6 +676,9 @@ class MonitorDataEngine:
 
                         fit = ev.get("fitness")
                         nid = ev.get("node_id")
+                        eid = ev.get("evaluation_id")
+                        if isinstance(nid, int) and isinstance(eid, int):
+                            evaluation_by_node[nid] = eid
                         pid = ev.get("parent_id")
                         p_imp = ev.get("parent_improved")
                         f_imp = ev.get("frontier_improved")
@@ -758,10 +762,11 @@ class MonitorDataEngine:
         breakthroughs: list[dict[str, Any]] = []
 
         sorted_nodes = sorted(
-            nodes, key=lambda n: n.get("evaluation_id") or 0
+            nodes,
+            key=lambda n: n.get("evaluation_id") or evaluation_by_node.get(n.get("id"), 0),
         )
         for n in sorted_nodes:
-            eid = n.get("evaluation_id")
+            eid = n.get("evaluation_id") or evaluation_by_node.get(n.get("id"))
             fit = n.get("fitness")
             if eid is None or fit is None:
                 continue
@@ -854,6 +859,7 @@ class MonitorDataEngine:
         recent_events: list[dict[str, Any]] = []
         scatter_points: list[dict[str, Any]] = []
         fit_by_id: dict[int, float] = {}
+        evaluation_by_node: dict[int, int] = {}
         running_best_fitness: float | None = None
 
         if events_p.exists():
@@ -867,6 +873,9 @@ class MonitorDataEngine:
                         ev = json.loads(line)
                         fit = ev.get("fitness")
                         nid = ev.get("node_id")
+                        eid = ev.get("evaluation_id")
+                        if isinstance(nid, int) and isinstance(eid, int):
+                            evaluation_by_node[nid] = eid
                         pid = ev.get("parent_id")
                         p_imp = ev.get("parent_improved")
                         f_imp = ev.get("frontier_improved")
@@ -948,7 +957,7 @@ class MonitorDataEngine:
             nodes_compact.append(
                 {
                     "id": n.get("id"),
-                    "evaluation_id": n.get("evaluation_id"),
+                    "evaluation_id": n.get("evaluation_id") or evaluation_by_node.get(n.get("id")),
                     "operator": n.get("operator") or "Init",
                     "fitness": n.get("fitness"),
                     "parent_id": n.get("parent_id"),

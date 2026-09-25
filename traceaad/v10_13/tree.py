@@ -1,6 +1,6 @@
-"""Evaluated algorithms and their formation links."""
+"""Evaluated algorithms and their parent links."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -11,13 +11,9 @@ class Node:
     code: str
     idea: str
     fitness: float
-    evaluation_id: int | None = None
     parent_id: int | None = None
     operator: str = "Init"
-    donor_id: int | None = None
-    attempts: int = 0
-    idea_fields: dict[str, str] = field(default_factory=dict)
-    reference_uses: int = 0
+    reference_id: int | None = None
 
 
 class SearchTree:
@@ -25,18 +21,15 @@ class SearchTree:
 
     def __init__(self):
         self.nodes = {}
-        self.roots = []
         self.next_id = 0
 
     def _attach(self, node):
         self.nodes[node.id] = node
-        if node.parent_id is None and node.id not in self.roots:
-            self.roots.append(node.id)
 
-    def add(self, *, code, idea, fitness, evaluation_id, parent_id, operator,
-            donor_id=None, attempts=0, idea_fields=None):
-        node = Node(self.next_id, code, idea, fitness, evaluation_id, parent_id,
-                    operator, donor_id, attempts, idea_fields or {})
+    def add(self, *, code, idea, fitness, parent_id, operator, reference_id=None):
+        node = Node(
+            self.next_id, code, idea, fitness, parent_id, operator, reference_id,
+        )
         self.next_id += 1
         self._attach(node)
         return node
@@ -52,5 +45,5 @@ class SearchTree:
         return max(self.nodes.values(), key=lambda node: node.fitness)
 
     @property
-    def parent_selections(self):
-        return sum(node.attempts for node in self.nodes.values())
+    def roots(self):
+        return [node.id for node in self.nodes.values() if node.parent_id is None]

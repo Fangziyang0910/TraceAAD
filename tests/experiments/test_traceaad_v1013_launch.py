@@ -21,11 +21,11 @@ def test_v1013_plan_has_four_repeats_and_confirmed_three_pool_distribution():
     assert all(row["session"].startswith("test_v1013_") for row in plan)
 
 
-def test_uncertain_evaluation_is_blocked_even_if_session_still_exits(monkeypatch):
+def test_error_summary_blocks_relaunch_even_if_session_is_alive(monkeypatch):
     from experiments.traceaad_v10_13 import launch
     row = build_plan('test', 'test')[0]
     row['status'] = 'running'
-    monkeypatch.setattr(launch, 'get_summary_status', lambda path: 'uncertain_evaluation')
+    monkeypatch.setattr(launch, 'get_summary_status', lambda path: 'error')
     monkeypatch.setattr(launch, 'session_alive', lambda session: True)
     launch.refresh([row])
-    assert row['status'] == 'blocked' and row['last_error'] == 'uncertain_evaluation'
+    assert row['status'] == 'blocked' and row['last_error'] == 'error'
