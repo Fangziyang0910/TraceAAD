@@ -1,7 +1,6 @@
 """Shared task contracts, design-first generation and grounded implementation ideas."""
 
 from dataclasses import dataclass
-import hashlib
 import re
 
 from core import TextFunctionProgramConverter
@@ -34,9 +33,6 @@ Write approximately 500 words in 2–3 paragraphs, scaled to the implementation'
 complexity. Return your implementation idea as: Idea: <implementation idea>"""
 COMPARISON = 'Describe the important implementation changes relative to the parent code.'
 GENERATION = 'idea_code_then_implementation_idea'
-TEMPLATE_HASH = hashlib.sha256((HISTORY_GUIDANCE + str(INSTRUCTIONS) + OUTPUT + SUMMARY_INSTRUCTION + COMPARISON).encode()).hexdigest()
-
-
 def build_task_contract(evaluation):
     # Match V9.16: shared description and docstring, with the body left to evolve.
     template = TextFunctionProgramConverter.text_to_function(evaluation.template_program)

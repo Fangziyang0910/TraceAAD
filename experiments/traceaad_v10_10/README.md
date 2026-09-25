@@ -10,25 +10,25 @@
 
 当前配方：Refine、Tune、Fuse、Pivot 各 25%。父代选择在全档案上使用 ESS-8 Boltzmann 质量分布，Pivot 与均匀抽样 1:1 混合，selection counts 只记录不参与概率。四个算子统一使用「当前程序完整代码 + 成绩 + 最近八条短形成路径」，每步历史为该步生成算法的 Idea、算子与前后 fitness；Fuse 额外加入本轮 donor 的完整代码与成绩。算子指令按「设计对象 + 认知操作 + 结果目标」书写（如 Fuse 要求识别宿主不足与 donor 计算的对应关系后定向迁移整合），组装顺序为任务接口、当前程序（Fuse 中标题 Host Algorithm）、当前算法的形成路径、donor（仅 Fuse，标题 Donor Algorithm）、算子指令、输出契约。输出契约顺序中性：单个代码块的完整实现 + 描述该代码所实现算法的 Idea，可前置、后置或省略。初始化为 sequential informed initialization，按生成顺序展示全部已有根的完整代码与实测 fitness，不做重复规避；donor 只抽一次。历史不展开祖先代码、diff 或历史 donor，一次组装后检查总容量。删除在线 AST 修改分类，原始代码可供离线分析。
 
-先核验，再创建独立冻结副本：
+直接启动并监控批次：
 
 ```bash
-.venv/bin/python -m pytest -q tests/method/test_traceaad_v1010.py tests/method/test_traceaad_v109.py tests/task/test_vrptw_failure_reasons.py tests/experiments/test_traceaad_v1010_launch.py tests/experiments/test_traceaad_v1010_monitor.py tests/experiments/test_traceaad_v1010_replay.py
-.venv/bin/python -m experiments.traceaad_v10_10.freeze --batch v1010_formal --session-prefix v1010
+uv run python -m experiments.traceaad_v10_10.launch \
+  --batch v1010_formal --session-prefix v1010 --watch
 ```
 
-进入返回的 runtime，使用返回的 `launch_command` 启动。调度继承 V10.9 的空槽分配、冻结身份检查及断点恢复；新 results 路径和会话前缀与 V10.9 隔离。不要在运行中的冻结副本修改代码。
+调度继承 V10.9 的空槽分配及断点恢复；新 results 路径和会话前缀与 V10.9 隔离。
 
 单路入口可通过以下命令查看：
 
 ```bash
-.venv/bin/python -m experiments.traceaad_v10_10.run --help
+uv run python -m experiments.traceaad_v10_10.run --help
 ```
 
 共享监控将两个正式批次分开注册：`v10_10_new` 为新版 `20260911_v1010_formal`（会话前缀 `v1010f`），`v10_10` 为旧版 `20260910_v1010_formal`（前缀 `v1010`）。已停止的 thinking 批次不纳入这两个视图。
 
 ```bash
-.venv/bin/python -m experiments.traceaad_v10_6.monitor \
+uv run python -m experiments.traceaad_v10_6.monitor \
   --version v10_10_new --session-prefix v1010f --port 8765
 ```
 

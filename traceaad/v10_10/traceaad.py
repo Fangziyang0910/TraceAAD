@@ -2,20 +2,16 @@
 
 import ast
 import math
-import platform
 import time
 import traceback
 from functools import lru_cache
-from pathlib import Path
 
-import numpy
 from core import TextFunctionProgramConverter
 
 from traceaad.v10_3.traceaad import calibrate_beta
 from traceaad.v10_8.traceaad import TraceAADV108
 from traceaad.v10_5.traceaad import ess, read_journal, UnknownEvaluation
 from . import trajectory
-from .trajectory import digest
 from . import errors
 
 OPERATOR_PROBABILITIES = {'Refine': 0.25, 'Tune': 0.25, 'Pivot': 0.25, 'Fuse': 0.25}
@@ -40,7 +36,6 @@ class TraceAADV1010(TraceAADV108):
     DISPLAY_NAME = 'V10.10'
     STATE_VERSION = 10100
     OPERATOR_PROBABILITIES = OPERATOR_PROBABILITIES
-    TEMPLATE_HASH = trajectory.TEMPLATE_HASH
     CONTEXT_POLICY = trajectory.CONTEXT_POLICY
 
     def __init__(self, **kwargs):
@@ -62,17 +57,11 @@ class TraceAADV1010(TraceAADV108):
         notes = getattr(self.evaluation, 'design_notes', '').strip()
         if notes:
             self.task_contract += f'\n\n# Evaluator Semantics\n{notes}'
-        # The evaluator environment decides which APIs and how much time a
-        # candidate really has; record it and state it as a short fact.
-        self.mechanism['runtime'] = {
-            'python': platform.python_version(), 'numpy': numpy.__version__,
-        }
-        runtime = (f"Python {self.mechanism['runtime']['python']}, "
-                   f"NumPy {self.mechanism['runtime']['numpy']}.")
         if self.evaluation.timeout_seconds is not None:
-            runtime += (' The complete evaluation of one candidate must finish '
-                        f'within {self.evaluation.timeout_seconds} seconds.')
-        self.task_contract += f'\n\n# Evaluation Runtime\n{runtime}'
+            self.task_contract += (
+                '\n\n# Evaluation Limit\nThe complete evaluation of one candidate must finish '
+                f'within {self.evaluation.timeout_seconds} seconds.'
+            )
         self._parse_interface = errors.expected_interface(
             self._template_func.name, self._template_func.args)
         self._template_program = self.evaluation.template_program
@@ -91,15 +80,10 @@ class TraceAADV1010(TraceAADV108):
             quality_ess_target=QUALITY_ESS_TARGET,
             pivot_uniform_probability=PIVOT_UNIFORM_MIX,
             donor_uniform_probability=DONOR_UNIFORM_MIX,
-            task_contract_hash=digest(self.task_contract),
         )
-        for source in (Path(__file__), Path(trajectory.__file__)):
-            self.mechanism['source_hashes'][str(source.resolve())] = digest(source.read_text())
         self.mechanism.update(generation=trajectory.GENERATION,
                               parse_policy=errors.PARSE_POLICY,
                               error_handling=ERROR_HANDLING, max_repairs=1)
-        for source in (Path(errors.__file__),):
-            self.mechanism['source_hashes'][str(source.resolve())] = digest(source.read_text())
         # The fixed policy above replaces the inherited V10.8 ablation axes;
         # unused parameters must not participate in the checkpoint identity.
         for key in ('allocation_arm', 'allocation_policy', 'count_exponent',
@@ -161,8 +145,8 @@ class TraceAADV1010(TraceAADV108):
                 **{k: previous[k] for k in ('operator', 'requested_operator', 'parent_id',
                     'donor_id', 'parent_fitness', 'donor_fitness', 'selection', 'operator_probabilities')},
                 'best_before': self.tree.best().fitness if self.tree.nodes else None,
-                'prompt': text, 'prompt_tokens': tokens, 'prompt_hash': digest(text),
-                'template_hash': self.TEMPLATE_HASH, 'context_policy': 'failed_output_and_error_v1',
+                'prompt': text, 'prompt_tokens': tokens,
+                'context_policy': 'failed_output_and_error_v1',
                 'context_best_fitness': previous['parent_fitness'],
                 'rng_state': list(self.rng.getstate()), 'llm_attempts': 0,
             }

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import hashlib
 import json
 import math
 import random
@@ -94,10 +93,6 @@ def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", buffering=1) as handle:
         handle.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
-
-
-def _hash(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def _node(row: dict[str, Any]) -> Node:
@@ -327,7 +322,7 @@ def _extract_fuse_pool(task: str, source_version: str) -> list[dict[str, Any]]:
                     "trajectory_display": display,
                     "parent_fitness": parent.fitness,
                     "donor_fitness": donor.fitness,
-                    "baseline_prompt_hash": _hash(baseline_prompt),
+                    "baseline_prompt": baseline_prompt,
                     "recorded_baseline_prompt_match": (
                         event.get("prompt") == baseline_prompt
                         if "prompt" in event
@@ -337,7 +332,7 @@ def _extract_fuse_pool(task: str, source_version: str) -> list[dict[str, Any]]:
             )
     unique = {}
     for anchor in pool:
-        unique.setdefault(anchor["baseline_prompt_hash"], anchor)
+        unique.setdefault(anchor["baseline_prompt"], anchor)
     return list(unique.values())
 
 
@@ -500,7 +495,7 @@ def prepare(
         prompt_audit.append(
             {
                 "trial_id": trial["trial_id"],
-                "prompt_hash": _hash(prompt),
+                "prompt": prompt,
                 "prompt_chars": len(prompt),
             }
         )
@@ -639,9 +634,8 @@ def generate_shard(
                 "source_run": anchor.get("source_run") if anchor else None,
                 "stratum": anchor.get("stratum") if anchor else None,
                 "parent_fitness": anchor.get("parent_fitness") if anchor else None,
-                "prompt_hash": _hash(prompt),
+                "prompt": prompt,
                 "prompt_tokens": prompt_tokens,
-                "response_hash": _hash(response),
                 "response": response,
                 "response_tokens": int(llm.count_prompt_tokens(response)),
                 "sample_seconds": elapsed,
@@ -661,7 +655,6 @@ def generate_shard(
                     "failure_kind": None,
                     "idea": idea,
                     "candidate_code": code,
-                    "candidate_code_hash": _hash(code),
                     "candidate_program": str(program),
                 }
             _append_jsonl(result_path, result)

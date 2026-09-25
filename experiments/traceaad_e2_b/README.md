@@ -2,7 +2,7 @@
 
 本目录执行固定锚点随机干预：在 experienced 与 fitness-matched fresh 锚点上配对比较 Refine→Refine 和 Pivot→Refine。第一步有效的候选无论涨跌，都获得一次使用正常 V10.6 形成历史和 Implementation Summary 的 Refine。
 
-冻结配置见 e2b_config.json，详细识别边界见机制实验文档。运行产物写入被 Git 忽略的 experiments/traceaad_e2_b/raw/traceaad_e2_b_20260907。
+实验配置见 e2b_config.json，详细识别边界见机制实验文档。运行产物写入被 Git 忽略的 experiments/traceaad_e2_b/raw/traceaad_e2_b_20260907。
 
 执行入口：
 

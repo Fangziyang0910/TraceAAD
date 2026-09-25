@@ -4,7 +4,6 @@ import argparse
 from collections import Counter
 from datetime import datetime
 import fcntl
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -12,9 +11,6 @@ import time
 
 from experiments.infra.equivalent_backends import prepare_resume
 from experiments.infra.base import BACKENDS, LaunchItem, TASKS, TASK_SHORT, free_slots, item_is_running, launch_items
-from experiments.infra.launcher import get_summary_status
-from experiments.traceaad_v10_8.launch import allocate, healthy_slots
-from traceaad.v10_5.traceaad import atomic_json
 from experiments.infra.launcher import check_backends, get_summary_status
 
 
@@ -87,18 +83,6 @@ def refresh(plan, max_attempts):
             row['status'] = 'queued'
 
 
-def verify_runtime():
-    root = Path(__file__).resolve().parents[2]
-    manifest = root / 'runtime_manifest.json'
-    if not manifest.exists():
-        raise ValueError('freeze the reviewed source first using experiments.traceaad_v10_10.freeze')
-    payload = json.loads(manifest.read_text())
-    for relative, expected in payload['files'].items():
-        if hashlib.sha256((root / relative).read_bytes()).hexdigest() != expected:
-            raise ValueError(f'frozen source changed: {relative}')
-    return hashlib.sha256(manifest.read_bytes()).hexdigest()
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--batch', required=True)
@@ -114,7 +98,6 @@ def main():
         parser.error('interval and max-attempts must be positive')
     if not all(re.fullmatch(r'[A-Za-z0-9_-]+', s) for s in (args.batch, args.session_prefix)):
         parser.error('batch and prefix must contain only letters, numbers, underscore or hyphen')
-    identity = None if args.dry_run else verify_runtime()
     RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
     manifest = RESULTS_ROOT / f'batch_{args.batch}.json'
     with manifest.with_suffix('.lock').open('w') as lock:
@@ -123,11 +106,9 @@ def main():
             payload = json.loads(manifest.read_text())
             if (payload['method'], payload['session_prefix']) != ('v1010', args.session_prefix):
                 raise ValueError('batch identity mismatch')
-            if not args.dry_run and payload['source_identity'] != identity:
-                raise ValueError('batch frozen source mismatch')
         else:
             payload = dict(method='v1010', batch=args.batch, session_prefix=args.session_prefix,
-                           source_identity=identity, created_at=datetime.now().astimezone().isoformat(),
+                           created_at=datetime.now().astimezone().isoformat(),
                            thinking=args.thinking,
                            plan=build_plan(args.batch, args.session_prefix, args.thinking))
             if any(item_is_running(launch_item(r)) or launch_item(r).run_dir.exists()

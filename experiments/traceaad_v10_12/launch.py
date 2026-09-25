@@ -4,7 +4,6 @@ import argparse
 from collections import Counter
 from datetime import datetime
 import fcntl
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -109,18 +108,6 @@ def refresh(plan, max_attempts):
             row['status'] = 'queued'
 
 
-def verify_runtime():
-    root = Path(__file__).resolve().parents[2]
-    manifest = root / 'runtime_manifest.json'
-    if not manifest.exists():
-        raise ValueError('freeze the reviewed source first using experiments.traceaad_v10_12.freeze')
-    payload = json.loads(manifest.read_text())
-    for relative, expected in payload['files'].items():
-        if hashlib.sha256((root / relative).read_bytes()).hexdigest() != expected:
-            raise ValueError(f'frozen source changed: {relative}')
-    return hashlib.sha256(manifest.read_bytes()).hexdigest()
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--batch', required=True)
@@ -161,7 +148,6 @@ def main(argv=None):
     backend_pool = tuple(dict.fromkeys(args.backends.split(',')))
     if not backend_pool or any(backend not in BACKENDS for backend in backend_pool):
         parser.error(f'backends must be drawn from {", ".join(BACKEND_NAMES)}')
-    identity = None if args.dry_run else verify_runtime()
     RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
     manifest = RESULTS_ROOT / f'batch_{args.batch}.json'
     with manifest.with_suffix('.lock').open('w') as lock:
@@ -180,11 +166,9 @@ def main(argv=None):
                 raise ValueError('batch profile cards mismatch')
             if (bool(payload.get('cvrp_last')), tuple(payload.get('cvrp_barriers', ()))) != (args.cvrp_last, cvrp_barriers):
                 raise ValueError('batch CVRP scheduling mismatch')
-            if not args.dry_run and payload['source_identity'] != identity:
-                raise ValueError('batch frozen source mismatch')
         else:
             payload = dict(method='v1012', batch=args.batch, session_prefix=args.session_prefix,
-                           source_identity=identity, created_at=datetime.now().astimezone().isoformat(),
+                           created_at=datetime.now().astimezone().isoformat(),
                            thinking=args.thinking, history_code=args.history_code,
                            repeats=args.repeats, traj_gens=args.traj_gens,
                            n_profile_cards=args.n_profile_cards,

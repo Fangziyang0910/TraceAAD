@@ -1,4 +1,4 @@
-"""Parse a target function and rebuild it inside the frozen task template."""
+"""Parse a target function and rebuild it inside the task template."""
 import ast
 import re
 
@@ -127,7 +127,7 @@ def parse_candidate(response, finish_reason, interface, template_program):
         return None, 'failed', f'{type(exc).__name__}: {exc}'
     idea, source = _extract_description(text[:fences[0].start()], text[after_start:])
     # The target function is the evolvable object. Rebuild the executable
-    # candidate from the frozen task template so imports and task scaffolding
+    # candidate from the task template so imports and task scaffolding
     # remain system-owned.
     target_source = ast.unparse(targets[0])
     function = TextFunctionProgramConverter.text_to_function(target_source)

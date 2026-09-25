@@ -1,4 +1,4 @@
-"""Summarize frozen E1-A measurements without turning correlations into causal claims."""
+"""Summarize the E1-A snapshot without turning correlations into causal claims."""
 import json
 from collections import Counter,defaultdict
 from pathlib import Path
@@ -30,7 +30,7 @@ def main(out=DEFAULT):
     new=json.loads((out/'summary_new_parents.json').read_text());complete=json.loads((out/'summary_complete_profiles.json').read_text())
     costs=defaultdict(lambda:dict(candidates=0,panels=0,seconds=0.0,valid=0,errors=Counter()))
     for task in LABELS:
-        for p in (out/'profiles'/task).glob('*.json'):
+        for p in (out/'profiles'/task).rglob('*.json'):
             r=json.loads(p.read_text());c=costs[task];c['candidates']+=1
             c['valid']+=int(all(x['ok'] for x in r['panels'].values()))
             for panel in r['panels'].values():
@@ -42,7 +42,8 @@ def main(out=DEFAULT):
     tasks_better=sum(v['M3']['brier']<v['M1']['brier'] for v in s['by']['task'].values())
     gate=relative<=-.02 and tasks_better>=3 and macro['M3']['log_loss']<=macro['M1']['log_loss']
     decision='达到事先固定的进入 E1-B 筛选门槛；仍需固定锚点确认，不能直接上线。' if gate else '未达到事先固定的进入 E1-B 筛选门槛；本轮不据此自动启动固定锚点生成或修改在线选父。'
-    lines=['# E1-A 结果：V10.6 Refine 局部响应历史回放','',f'数据冻结：`{snap["frozen_at"]}`。状态：E1-A 已完成；E1-B 未执行。','',
+    snapshot_time=snap.get('created_at') or next((v for k,v in snap.items() if k.endswith('_at')),None)
+    lines=['# E1-A 结果：V10.6 Refine 局部响应历史回放','',f'快照时间：`{snapshot_time}`。状态：E1-A 已完成；E1-B 未执行。','',
         f'**阶段判断：{decision}**','',
         f'M3 相对 M1 的 run 宏平均 Brier 变化为 **{relative:+.2%}**（负值更好），{tasks_better}/5 个任务的池化 Brier 改善。下面同时给出简单 prior、embedding 和质量邻域对照，避免将局部相关性误写成潜力已可识别。','',
         '### 研究判断','',
@@ -51,7 +52,7 @@ def main(out=DEFAULT):
         'OBP 是唯一 M3 任务池化改善的任务，三个重复中两个改善；但该任务 M3 仍弱于全局 prior（0.05559 对0.05196），也弱于静态行为模型（0.05409）。因此，仅凭 OBP 相对 M1 的改善，不足以支持缩小范围后立即进入 E1-B。ACO 的随机流敏感性则提示行为距离还需要更充分的可靠性核验。','',
         '建议下一步先在新的时间段或独立重复上，事先固定比较 M0、Q_kernel 与 B_kernel，并对 ACO 增加随机流重复以分离采样噪声。若行为邻域在质量条件化对照之外仍有稳定增量，再启动固定锚点近/远配对。本轮保留原门槛和全部负结果，不通过事后更换主模型将实验改判为通过。','',
         '## 1. 实际数据与执行范围','',
-        f'冻结15路修订版 V10.6，共 {sum(r["refine"] for r in snap["runs"])} 次请求且执行 Refine、{sum(r["refine_parents"] for r in snap["runs"])} 个父节点、{sum(r["improved"] for r in snap["runs"])} 次严格改善。每路前50次 Refine 为预热，主比较包含 {s["coverage"]["primary"]} 次尝试。原始事件与评价收据已逐路核对；解析失败、评价失败均保留为未改善，未完成请求排除。冻结数据中没有请求算子与执行算子不一致的记录，故无 Fuse 回退样本需要单列。','',
+        f'快照包含15路修订版 V10.6，共 {sum(r["refine"] for r in snap["runs"])} 次请求且执行 Refine、{sum(r["refine_parents"] for r in snap["runs"])} 个父节点、{sum(r["improved"] for r in snap["runs"])} 次严格改善。每路前50次 Refine 为预热，主比较包含 {s["coverage"]["primary"]} 次尝试。原始事件与评价收据已逐路核对；解析失败、评价失败均保留为未改善，未完成请求排除。快照数据中没有请求算子与执行算子不一致的记录，故无 Fuse 回退样本需要单列。','',
         '| 任务 | 重复 | 已用评价截点 | Refine尝试 | 父节点 | 严格改善 |','| --- | ---: | ---: | ---: | ---: | ---: |']
     for r in snap['runs']:lines.append(f'| {LABELS[r["task"]]} | {r["repeat"]} | {r["cutoff_evaluation"]} | {r["refine"]} | {r["refine_parents"]} | {r["improved"]} |')
     lines+=['',f'预热后样本中，实际提交评价 {s["coverage"]["evaluated"]} 次，得到有限fitness {s["coverage"]["finite_children"]} 次。无条件改善率为 {s["coverage"]["improved"]/s["coverage"]["primary"]:.2%}；给定已提交评价为 {s["coverage"]["improved"]/s["coverage"]["evaluated"]:.2%}；给定有限fitness为 {s["coverage"]["improved"]/s["coverage"]["finite_children"]:.2%}。', '', '## 2. 测量校验与画像覆盖','',

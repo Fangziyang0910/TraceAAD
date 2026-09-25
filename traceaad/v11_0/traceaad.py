@@ -15,7 +15,7 @@ from .prompts import ReferenceContextBuilder, TrajectoryBuilder
 from .selection import (CodeBook, EXPLORATION_C, N_REFERENCES, OPERATORS,
                         OPERATOR_PROBABILITIES, code_key, quality_percentiles,
                         reciprocal_rank_sample)
-from .storage import RunStorage, atomic_json, digest, truncate_torn_tail
+from .storage import RunStorage, atomic_json, truncate_torn_tail
 from .tree import Node, SearchTree
 
 REPAIRABLE_FAILURES = {"exec_error", "runtime_error", "timeout", "invalid_result", "nonfinite_fitness"}
@@ -37,7 +37,6 @@ class Candidate:
     candidate_id: int
     prompt: str
     prompt_tokens: int
-    prompt_hash: str
     requested_operator: str
     operator: str
     parent_id: int | None
@@ -90,7 +89,6 @@ class TraceAADV110:
             "exploration_c": EXPLORATION_C,
             "n_references": n_references,
             "reference_weighting": "reciprocal_rank",
-            "task_contract_hash": digest(self.task_contract),
             "llm": {name: getattr(llm, name, None) for name in
                     ("model", "base_url", "temperature", "top_p", "enable_thinking")},
         }
@@ -113,8 +111,7 @@ class TraceAADV110:
         return Candidate(
             candidate_id=self.completed_attempts + 1,
             best_before=self.tree.best().fitness if self.tree.nodes else None,
-            prompt=prompt, prompt_tokens=self.builder.count(prompt),
-            prompt_hash=digest(prompt), **fields,
+            prompt=prompt, prompt_tokens=self.builder.count(prompt), **fields,
         )
 
     def _score_codes(self):
@@ -139,7 +136,6 @@ class TraceAADV110:
         node_ids = self.codebook.node_ids(key)
         parent = self.tree.nodes[self.rng.choice(node_ids)]
         selection = {
-            "code_digest": digest(key)[:16],
             "mean_fitness": means[index],
             "percentile": percentiles[index],
             "attempts": self.codebook.attempts(key),
@@ -224,8 +220,7 @@ class TraceAADV110:
         started = time.time()
         record = {"ts": _timestamp(),
                   "call_id": f"{candidate.candidate_id}:{candidate.llm_attempts}",
-                  "candidate_id": candidate.candidate_id,
-                  "prompt_hash": candidate.prompt_hash}
+                  "candidate_id": candidate.candidate_id}
         try:
             details = self.llm.draw_sample_with_details(
                 candidate.prompt, max_tokens=self.output_tokens
@@ -304,7 +299,7 @@ class TraceAADV110:
             "parent_id": candidate.parent_id, "donor_id": None,
             "parent_fitness": candidate.parent_fitness, "donor_fitness": None,
             "reference_ids": candidate.reference_ids, "selection": candidate.selection,
-            "prompt_tokens": candidate.prompt_tokens, "prompt_hash": candidate.prompt_hash,
+            "prompt_tokens": candidate.prompt_tokens,
             "status": status, "reason": reason,
             "budget_used": self.budget_used,
             "evaluation_id": outcome["evaluation_id"] if outcome else None,

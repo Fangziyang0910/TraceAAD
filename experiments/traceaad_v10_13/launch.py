@@ -15,13 +15,12 @@ import json
 from pathlib import Path
 import re
 import subprocess
-import sys
 import time
 
 from experiments.infra.base import BACKEND_CAPACITY, BACKENDS, TASKS, TASK_SHORT, free_slots
 from experiments.infra.launcher import check_backends, get_summary_status
-from experiments.traceaad_v10_13.freeze import runtime_environment, verify_runtime
 
+ROOT = Path(__file__).resolve().parents[2]
 RESULTS_ROOT = Path(__file__).resolve().parent / "results"
 BACKEND_POOL = ("server1", "server3", "server3b")
 TARGET_DISTRIBUTION = {"server1": 5, "server3": 8, "server3b": 7}
@@ -126,21 +125,21 @@ def healthy_capacity():
             for backend in BACKEND_POOL}
 
 
-def launch_row(row, runtime):
+def launch_row(row):
     if run_dir(row).exists():
         raise FileExistsError(f"run directory already exists: {run_dir(row)}")
     if session_alive(row["session"]):
         raise RuntimeError(f"tmux session already exists: {row['session']}")
     command = [
-        sys.executable, "-m", "experiments.traceaad_v10_13.run",
+        "uv", "run", "python", "-m", "experiments.traceaad_v10_13.run",
         "--task", row["task"], "--backend", row["backend"],
         "--repeat", str(row["repeat"]), "--seed", str(row["seed"]),
         "--run-name", row["run_name"],
     ]
     subprocess.run(
         ["tmux", "new-session", "-d", "-s", row["session"],
-         "-c", str(runtime), "-e", f"PYTHONPATH={runtime}", *command],
-        cwd=runtime, env=runtime_environment(runtime), check=True,
+         "-c", str(ROOT), *command],
+        cwd=ROOT, check=True,
     )
 
 
@@ -150,7 +149,7 @@ def write_manifest(path, payload):
     tmp.replace(path)
 
 
-def start_available(plan, runtime, manifest, max_attempts):
+def start_available(plan, manifest, max_attempts):
     capacity = healthy_capacity()
     for row in plan:
         if row["status"] != "queued" or capacity.get(row["backend"], 0) <= 0:
@@ -164,7 +163,7 @@ def start_available(plan, runtime, manifest, max_attempts):
         row["started_at"] = row["started_at"] or _timestamp()
         write_manifest(manifest, payload={**_manifest_payload(manifest), "plan": plan})
         try:
-            launch_row(row, runtime)
+            launch_row(row)
         except Exception as exc:
             row["status"] = "queued"
             row["last_error"] = str(exc)
@@ -184,17 +183,13 @@ def _manifest_payload(manifest):
 def run_batch(args):
     RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
     manifest = RESULTS_ROOT / f"batch_{args.batch}.json"
-    runtime = (args.runtime or RESULTS_ROOT / f"runtime_{args.batch}").resolve()
-    source_identity = verify_runtime(runtime)
     lock_path = manifest.with_suffix(".lock")
     with lock_path.open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if manifest.exists():
             payload = json.loads(manifest.read_text())
-            if payload.get("method") != "v1013_three_pool" or payload.get("runtime") != str(runtime):
-                raise ValueError("existing V10.13 batch has a different method or runtime")
-            if payload.get("source_identity") != source_identity:
-                raise ValueError("existing V10.13 batch was frozen from different sources")
+            if payload.get("method") != "v1013_three_pool":
+                raise ValueError("existing V10.13 batch has a different method")
             plan = payload["plan"]
         else:
             plan = build_plan(args.batch, args.session_prefix)
@@ -208,8 +203,6 @@ def run_batch(args):
                 "session_prefix": args.session_prefix,
                 "created_at": _timestamp(),
                 "updated_at": _timestamp(),
-                "runtime": str(runtime),
-                "source_identity": source_identity,
                 "repeats": REPEATS,
                 "backends": list(BACKEND_POOL),
                 "target_distribution": TARGET_DISTRIBUTION,
@@ -220,7 +213,7 @@ def run_batch(args):
         validate_plan(plan)
         while True:
             refresh(plan)
-            start_available(plan, runtime, manifest, args.max_attempts)
+            start_available(plan, manifest, args.max_attempts)
             refresh(plan)
             payload = _manifest_payload(manifest)
             payload.update({"updated_at": _timestamp(), "plan": plan})
@@ -236,7 +229,6 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch", required=True)
     parser.add_argument("--session-prefix", default="v1013")
-    parser.add_argument("--runtime", type=Path)
     parser.add_argument("--watch", action="store_true")
     parser.add_argument("--interval", type=int, default=30)
     parser.add_argument("--max-attempts", type=int, default=3)

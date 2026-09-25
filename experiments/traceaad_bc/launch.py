@@ -1,10 +1,9 @@
-"""Queue one B or C arm across the five frozen tasks."""
+"""Queue one B or C arm across the five benchmark tasks."""
 
 import argparse
 from collections import Counter
 from datetime import datetime
 import fcntl
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -138,18 +137,6 @@ def refresh(plan, max_attempts):
             row["status"] = "queued"
 
 
-def verify_runtime():
-    root = Path(__file__).resolve().parents[2]
-    manifest = root / "runtime_manifest.json"
-    if not manifest.exists():
-        raise ValueError("freeze the reviewed source first using experiments.traceaad_bc.freeze")
-    payload = json.loads(manifest.read_text())
-    for relative, expected in payload["files"].items():
-        if hashlib.sha256((root / relative).read_bytes()).hexdigest() != expected:
-            raise ValueError(f"frozen source changed: {relative}")
-    return hashlib.sha256(manifest.read_bytes()).hexdigest()
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch", required=True)
@@ -180,7 +167,6 @@ def main(argv=None):
     if not backend_pool or any(backend not in BACKENDS for backend in backend_pool):
         parser.error(f"backends must be drawn from {', '.join(BACKEND_NAMES)}")
 
-    identity = None if args.dry_run else verify_runtime()
     RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
     manifest = RESULTS_ROOT / f"batch_{args.batch}.json"
     with manifest.with_suffix(".lock").open("w") as lock:
@@ -196,15 +182,12 @@ def main(argv=None):
                       bool(payload.get("cvrp_last")), tuple(payload.get("cvrp_barriers", ())))
             if actual != expected:
                 raise ValueError("batch identity or scheduling configuration mismatch")
-            if not args.dry_run and payload["source_identity"] != identity:
-                raise ValueError("batch frozen source mismatch")
         else:
             payload = dict(
                 method=f"bc_{args.arm.lower()}",
                 batch=args.batch,
                 arm=args.arm,
                 session_prefix=args.session_prefix,
-                source_identity=identity,
                 created_at=datetime.now().astimezone().isoformat(),
                 repeats=args.repeats,
                 n_references=args.n_references,

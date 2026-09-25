@@ -1,6 +1,5 @@
 """V10.7 task-specific evidence prompts with one Idea-and-Code output."""
 
-import hashlib
 import io
 import re
 import tokenize
@@ -70,11 +69,6 @@ TRANSITION_NOTE = (
     'Treat the fitness change as an outcome of the whole transition; '
     'inspect the code before reusing any changed component.'
 )
-TRAJECTORY_TEMPLATE_HASH = hashlib.sha256(
-    (str(TRAJECTORY_INSTRUCTIONS) + OUTPUT + DESIGN_NOTE_LINE
-     + TRANSITION_NOTE + str(IDEA_TOKENS)).encode()
-).hexdigest()
-
 #: Prompt section titles. Roles are the only program identity; there are no
 #: Algorithm numbers and no fitness ordering, so nothing can be mis-cited.
 #: Every rendered program must carry one of these roles; anything else fails

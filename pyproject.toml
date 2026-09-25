@@ -17,10 +17,8 @@ dependencies = [
 ]
 
 [tool.uv]
-# Virtual project: dependencies only. The repo runs via `python -m` from the
-# repo root (and from frozen runtime copies), so never build/install the
-# project itself — a setuptools packages.find scan walks the huge results
-# trees under experiments/ and stalls.
+# Virtual project: uv manages dependencies and runs repository modules without
+# installing this research tree as a package.
 package = false
 
 [tool.pytest.ini_options]

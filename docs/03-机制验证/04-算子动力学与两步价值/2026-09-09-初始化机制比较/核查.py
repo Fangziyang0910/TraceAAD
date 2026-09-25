@@ -37,7 +37,7 @@ for method in METHODS:
    roots=[n for n in roots if n.get('fitness') is not None and math.isfinite(n['fitness'])]
    label=method.replace('traceaad_','').replace('_','.')
    if method=='traceaad_v10_7':label='v10.7R' if '_v107r_' in d.name else 'v10.7'
-   r=dict(method=label,task=task,path=str(d),repeat=c.get('repeat'),n_roots=len(roots),best=max(n['fitness'] for n in roots),mean=statistics.mean(n['fitness'] for n in roots),scores=[n['fitness'] for n in roots],last_root_eval=max(n.get('evaluation_id',0) or 0 for n in roots),bootstrap_scores=[n['fitness'] for n in bootstrap],root_ids=[n['id'] for n in roots],code_hashes=[])
+   r=dict(method=label,task=task,path=str(d),repeat=c.get('repeat'),n_roots=len(roots),best=max(n['fitness'] for n in roots),mean=statistics.mean(n['fitness'] for n in roots),scores=[n['fitness'] for n in roots],last_root_eval=max(n.get('evaluation_id',0) or 0 for n in roots),bootstrap_scores=[n['fitness'] for n in bootstrap],root_ids=[n['id'] for n in roots])
    rows.append(r)
 Path('/tmp/init_comparison.json').write_text(json.dumps(rows,indent=2))
 groups=defaultdict(list)

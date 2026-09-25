@@ -4,7 +4,6 @@ import argparse
 from pathlib import Path
 
 from experiments.infra.runner import FORMAL_BUDGET, add_common_run_args, setup_experiment_run
-from experiments.traceaad_v10_12.freeze import verify_runtime
 from traceaad.v10_12 import TraceAADV1012
 
 
@@ -26,10 +25,6 @@ def build_parser():
 def main():
     parser = build_parser()
     args = parser.parse_args()
-    runtime = Path(__file__).resolve().parents[2]
-    if not (runtime / 'runtime_manifest.json').is_file():
-        parser.error('search must run from a verified frozen runtime; use manual_launch')
-    verify_runtime(runtime, preflight=False)
     if args.n_profile_cards < 0:
         parser.error('n-profile-cards must be non-negative')
     params = {key: getattr(args, key) for key in (

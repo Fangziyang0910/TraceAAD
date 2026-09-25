@@ -17,7 +17,7 @@ from .selection import (
     PARENT_TEMPERATURE, REFERENCE_TEMPERATURE, reference_pool, sample_parent,
     sample_references,
 )
-from .storage import RunStorage, atomic_json, digest, truncate_torn_tail
+from .storage import RunStorage, atomic_json, truncate_torn_tail
 from .tree import Node, SearchTree
 
 REPAIRABLE_FAILURES = {"exec_error", "runtime_error", "timeout", "invalid_result", "nonfinite_fitness"}
@@ -42,7 +42,6 @@ class Candidate:
     candidate_id: int
     prompt: str
     prompt_tokens: int
-    prompt_hash: str
     requested_operator: str
     operator: str
     parent_id: int | None
@@ -99,7 +98,6 @@ class TraceAADV111:
             "n_references": n_references,
             "reference_weighting": "rank_softmax",
             "reference_temperature": REFERENCE_TEMPERATURE,
-            "task_contract_hash": digest(self.task_contract),
             "llm": {name: getattr(llm, name, None) for name in
                     ("model", "base_url", "temperature", "top_p", "enable_thinking")},
         }
@@ -115,8 +113,7 @@ class TraceAADV111:
         return Candidate(
             candidate_id=self.completed_candidates + 1,
             best_before=self.tree.best().fitness if self.tree.nodes else None,
-            prompt=prompt, prompt_tokens=self.prompts.count(prompt),
-            prompt_hash=digest(prompt), **fields,
+            prompt=prompt, prompt_tokens=self.prompts.count(prompt), **fields,
         )
 
     def _schedule_repair(self, previous):
@@ -182,8 +179,7 @@ class TraceAADV111:
         started = time.time()
         record = {"ts": _timestamp(),
                   "call_id": f"{candidate.candidate_id}:{candidate.llm_attempts}",
-                  "candidate_id": candidate.candidate_id,
-                  "prompt_hash": candidate.prompt_hash}
+                  "candidate_id": candidate.candidate_id}
         try:
             details = self.llm.draw_sample_with_details(
                 candidate.prompt, max_tokens=self.output_tokens
@@ -256,7 +252,7 @@ class TraceAADV111:
             "parent_fitness": candidate.parent_fitness, "donor_fitness": candidate.donor_fitness,
             "reference_ids": candidate.reference_ids, "selection": candidate.selection,
             "parent_selected": candidate.parent_selected,
-            "prompt_tokens": candidate.prompt_tokens, "prompt_hash": candidate.prompt_hash,
+            "prompt_tokens": candidate.prompt_tokens,
             "status": status, "reason": reason,
             "budget_used": self.evaluations_used,
             "evaluation_id": outcome["evaluation_id"] if outcome else None,

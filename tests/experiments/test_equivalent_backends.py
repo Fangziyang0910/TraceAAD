@@ -6,7 +6,7 @@ from experiments.infra.equivalent_backends import allocate_anywhere, prepare_res
 
 def test_route_update_preserves_search_and_is_restartable(tmp_path):
     state = {'version': 1081, 'mechanism': {'llm': {'base_url': 'old', 'model': 'alias',
-             'temperature': 1}, 'source_hashes': {'frozen.py': 'same'}},
+             'temperature': 1}},
              'budget_used': 665, 'nodes': [1, 2], 'rng_state': [3, [4], None]}
     original = json.loads(json.dumps(state))
     (tmp_path/'tree_state.json').write_text(json.dumps(state))
@@ -26,7 +26,7 @@ def test_route_update_preserves_search_and_is_restartable(tmp_path):
     assert json.loads((tmp_path/'run_config.json').read_text())['backend'] == 'new'
 
 
-def test_frozen_allocator_adapter_preserves_original_rows():
+def test_allocator_adapter_preserves_original_rows():
     rows = [{'run_name': 'paused', 'backend': 'busy', 'status': 'queued'},
             {'run_name': 'active', 'backend': 'busy', 'status': 'running'}]
     def pinned_allocator(plan, available, backend_pool):

@@ -1,1 +1,1 @@
-"""Benchmark tasks (frozen contracts) and the shared generated-data config."""
+"""Benchmark tasks and the shared generated-data config."""

@@ -61,7 +61,7 @@ $$S_t(x) = q_t(x) + c \sqrt{\frac{\ln(1 + T)}{1 + n_t(x)}}, \qquad c = 0.1$$
 
 两者共用完全一致的上下文组织结构与参考抽样体系，差异仅由算子指令驱动。组装顺序固定：
 
-1. 任务说明（与 V10.11 完全一致，冻结契约保护）；
+1. 任务说明（与 V10.11 使用同一版本）；
 2. `Fitness: higher is better.`——适应度方向声明四算子统一保留，最小化任务的分数为负值时避免被误读为原始成本；
 3. 当前算法完整代码与实测适应度（`# Current Algorithm`，渲染规则与 V10.11 相同）；
 4. 最多 $K=8$ 个参考节点的 Idea 与适应度，按适应度从好到差陈列，统一引导语：
@@ -157,9 +157,9 @@ V10.11 的 `rand_ctx` 消融使用排名 Softmax（$\tau=8$）抽取最多 8 个
 沿用 V10.11 单份持久化原则，仅扩展调度状态：
 
 - `nodes.jsonl`：每节点一次追加（code、idea、fitness、evaluation_id、parent_id、operator）。`donor_id` 字段保留但恒为空——V11 的 Fuse 不再有单一 donor，参考关系记录在事件流；
-- `events.jsonl`：唯一事件流（含 `best_fitness`、失败 traceback）。新增 `reference_ids`（实际进入该次 Prompt 的参考节点，按展示顺序；容量削减后只记保留者，Fuse 回退与修复候选记空列表）与 `selection` 统计（所选代码摘要、平均成绩、百分位、开发次数、加分、总分、并列组规模）；
-- `llm_calls.jsonl`：不存完整 prompt（prompt_hash / prompt_tokens / response）；prompt 可由谱系＋任务契约＋参考记录重建；
-- `tree_state.json`：小 head——mechanism 指纹、rng 状态、$T$、按代码摘要索引的开发次数表与既有计数。**追加日志是真身**：代码平均成绩与百分位由 `nodes.jsonl` 重放推导，不单独持久化；$n/T$ 可由 `events.jsonl` 重放核对；检查点落后于日志时以日志为准修正。
+- `events.jsonl`：唯一事件流（含 `best_fitness`、失败 traceback）。新增 `reference_ids`（实际进入该次 Prompt 的参考节点，按展示顺序；容量削减后只记保留者，Fuse 回退与修复候选记空列表）与 `selection` 统计（所选代码的平均成绩、百分位、开发次数、加分、总分、并列组规模）；
+- `llm_calls.jsonl`：记录调用 ID、响应、token 使用和耗时；
+- `tree_state.json`：保存机制配置、rng 状态、$T$、按完整 AST 表示索引的开发次数表与既有计数。**追加日志是真身**：代码平均成绩与百分位由 `nodes.jsonl` 重放推导，不单独持久化；$n/T$ 可由 `events.jsonl` 重放核对；检查点落后于日志时以日志为准修正。
 
 **断点恢复契约。** 每个候选经 `pending_candidate.json` 跟踪阶段 `selected → responded → evaluating → evaluated`，结算完成即清理 pending 并推进检查点。恢复按阶段精确续跑，满足三条不变量：**评价结果只测一次**、**节点与事件与 $n/T$ 每候选只提交一次**、**日志领先于检查点时可补齐结算**。日志末行写半（无换行结尾的残缺记录）视为未写入：读取时忽略末尾残缺记录、恢复时先截断再以 pending 补写；日志中段损坏仍报错。
 
@@ -170,8 +170,8 @@ V10.11 的 `rand_ctx` 消融使用排名 Softmax（$\tau=8$）抽取最多 8 个
 
 V10.11 现有恢复路径存在已知缺陷：`evaluated` 阶段恢复会重复调用评价器，节点日志领先时会重复创建节点（已用假评价器复现：实际评价 2 次、预算只记 1 次）。V11 不得照搬上述行为，恢复不变量以专项测试强制。
 
-机制指纹变更（METHOD、prompt_policy、调度参数 `exploration_c=0.1`、`n_references=8`、`reference_weighting=reciprocal_rank`；移除 `quality_ess_target`、`pivot_uniform_probability`、`donor_uniform_probability`）意味着 V10.11 检查点不兼容：新版本使用独立目录与检查点，不能拼接既有批次进度。五任务问题说明、模板与种子/数据配置不动，由冻结契约测试保护；每路 1000 次真实评价的预算口径（含初始化、评价失败与修复后的评价）与 V10.11 完全一致。
+机制配置变更（METHOD、prompt_policy、调度参数 `exploration_c=0.1`、`n_references=8`、`reference_weighting=reciprocal_rank`；移除 `quality_ess_target`、`pivot_uniform_probability`、`donor_uniform_probability`）意味着 V10.11 检查点不兼容：新版本使用独立目录与检查点，不能拼接既有批次进度。五任务问题说明、模板与种子/数据配置沿用 V10.11；每路 1000 次真实评价的预算口径（含初始化、评价失败与修复后的评价）与 V10.11 完全一致。
 
 ## 实现范围
 
-V11.0 实现于 `llm4ad/method/traceaad_v11_0/`（与 V11.1 同构的六文件结构）：`selection.py` 代码聚合表（CodeBook）、中秩百分位、$1/r$ 参考抽样；`prompts.py` Refine/Tune 轨迹与 Pivot/Fuse 参考上下文构建（含容量裁剪与 Fuse 回退）；`traceaad.py` 搜索主循环（调度、生成、解析、评估、$n/T$ 结算）与检查点续跑（每结算一个候选保存全树快照，中断的在途候选从最近检查点重做）；`parsing.py` 解析与修复；`tree.py`/`storage.py` 树与 journal 持久化。测试 `tests/method/test_traceaad_v11_0.py` 覆盖：中秩百分位（含 $[1,2,2,4]\to[0,0.5,0.5,1]$ 与全同分 0.5）、并列均匀与代码内节点均匀、结算计数（解析失败/评价失败/修复各加一次）、重复代码不重置 $n$、参考抽样（$1/r$、无放回、AST 排除、同代码取最近、非空 Idea 过滤）、容量削减顺序、Fuse 参考为空回退 Refine（参考池空与容量裁剪殆尽两条路径）、Pivot 参考为空不回退、检查点指纹不兼容、中断候选从检查点重做且各候选恰结算一次。运行入口与冻结批次清单在 `experiments/traceaad_v11_0/`，沿用 freeze 闭包与监控派生约定。
+V11.0 实现于 `traceaad/v11_0/`：`selection.py` 代码聚合表（CodeBook）、中秩百分位、$1/r$ 参考抽样；`prompts.py` Refine/Tune 轨迹与 Pivot/Fuse 参考上下文构建（含容量裁剪与 Fuse 回退）；`traceaad.py` 搜索主循环（调度、生成、解析、评估、$n/T$ 结算）与检查点续跑；`parsing.py` 解析与修复；`tree.py`/`storage.py` 树与 journal 持久化。测试 `tests/method/test_traceaad_v11_0.py` 覆盖调度、计数、参考抽样、容量削减、Fuse 回退和恢复行为。运行入口与批次清单在 `experiments/traceaad_v11_0/`。

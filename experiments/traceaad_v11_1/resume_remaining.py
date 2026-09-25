@@ -4,17 +4,12 @@ from datetime import datetime
 import json
 from pathlib import Path
 import subprocess
-import sys
-
-from experiments.traceaad_v11_1.freeze import runtime_environment, verify_runtime
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = Path(__file__).resolve().parent / "results"
 
 
-def resume(batch_path: Path, runtime: Path) -> None:
-    runtime = runtime.resolve()
-    source_identity = verify_runtime(runtime)
+def resume(batch_path: Path) -> None:
     payload = json.loads(batch_path.read_text())
     rows = [row for row in payload["plan"] if row.get("status") == "paused"]
     if not 0 < len(rows) <= 8:
@@ -30,7 +25,7 @@ def resume(batch_path: Path, runtime: Path) -> None:
                           capture_output=True).returncode == 0:
             raise RuntimeError(f"session already exists: {row['session']}")
         params = config["method_params"]
-        command = [sys.executable, "-m", "experiments.traceaad_v11_1.run",
+        command = ["uv", "run", "python", "-m", "experiments.traceaad_v11_1.run",
                    "--task", row["task"], "--backend", row["backend"],
                    "--repeat", str(row["repeat"]), "--seed", str(row["seed"]),
                    "--run-name", row["run_name"]]
@@ -43,14 +38,11 @@ def resume(batch_path: Path, runtime: Path) -> None:
             command.append("--thinking")
         with (run / "routing_history.jsonl").open("a") as handle:
             handle.write(json.dumps({"ts": now, "operation": "resume_from_checkpoint",
-                                     "backend": row["backend"], "runtime": str(runtime),
-                                     "source_identity": source_identity,
+                                     "backend": row["backend"],
                                      "budget_used": state["budget_used"]}) + "\n")
         subprocess.run(["tmux", "new-session", "-d", "-s", row["session"], "-c",
-                        str(runtime), "-e", f"PYTHONPATH={runtime}", *command],
-                       cwd=runtime, env=runtime_environment(runtime), check=True)
+                        str(ROOT), *command], cwd=ROOT, check=True)
         row.update(status="running", resumed_at=datetime.now().astimezone().isoformat(),
-                   runtime=str(runtime), source_identity=source_identity,
                    resumed_budget=state["budget_used"])
         batch_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
         print(row["task"], row["repeat"], "resumed", flush=True)
@@ -59,6 +51,5 @@ def resume(batch_path: Path, runtime: Path) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch", type=Path, required=True)
-    parser.add_argument("--runtime", type=Path, required=True)
     args = parser.parse_args()
-    resume(args.batch, args.runtime)
+    resume(args.batch)

@@ -12,8 +12,6 @@ from experiments.infra.launcher import get_summary_status
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "experiments/traceaad_v10_10/results"
-RUNTIME = RESULTS / "runtime_20260911_v1010_formal"
-PYTHON = ROOT / ".venv/bin/python"
 HELD_TASK = "cvrp_aco"
 HELD_NAME = "20260911_v1010_formal_cvrp_v1010_rep1"
 HELD_SESSION = "v1010f_cvrp_r1"
@@ -35,7 +33,9 @@ def alive(session: str) -> bool:
 
 def launch_held() -> None:
     command = [
-        str(PYTHON),
+        "uv",
+        "run",
+        "python",
         "-m",
         "experiments.traceaad_v10_10.run",
         "--task",
@@ -57,7 +57,7 @@ def launch_held() -> None:
             "-s",
             HELD_SESSION,
             "-c",
-            str(RUNTIME),
+            str(ROOT),
             shlex.join(command),
         ],
         check=True,

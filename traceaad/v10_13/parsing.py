@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -21,10 +20,6 @@ Edits apply sequentially to the shown current/host program. Each search block mu
 match exactly once, including whitespace. An optional idea string is allowed.'''
 
 
-def code_hash(code):
-    return hashlib.sha256(code.encode()).hexdigest()
-
-
 @dataclass
 class ParsedCandidate:
     idea: str
@@ -32,7 +27,6 @@ class ParsedCandidate:
     idea_fields: dict[str, str] = field(default_factory=dict)
     mode: str = "full"
     donor_id: int | None = None
-    base_hash: str | None = None
 
 
 def response_objects(response):
@@ -97,9 +91,7 @@ def idea_metadata(value):
     return '', {}
 
 
-def apply_edits(base_code, expected_hash, edits):
-    if expected_hash != code_hash(base_code):
-        raise ValueError('base_hash does not match the supplied parent')
+def apply_edits(base_code, edits):
     if not isinstance(edits, list) or not edits or len(edits) > 32:
         raise ValueError('edits must contain 1 to 32 replacements')
     code = base_code
@@ -207,7 +199,7 @@ def parse_candidate(response, finish_reason, interface, template_program, *,
     if len(objects) > 1:
         return None, 'format_error: conflicting JSON proposals'
     payload = objects[0] if objects else None
-    fields, mode, donor_id, base_hash = {}, 'full', None, None
+    fields, mode, donor_id = {}, 'full', None
     if payload is not None:
         idea, fields = idea_metadata(payload.get('idea'))
         mode = payload.get('mode', 'full')
@@ -219,11 +211,8 @@ def parse_candidate(response, finish_reason, interface, template_program, *,
                 return None, 'edit_error: no parent is available for editing'
             if 'code' in payload:
                 return None, 'edit_error: return edits or full code, not both'
-            # The host binds the persisted candidate to its parent. The model
-            # need not transcribe a digest; a supplied legacy digest must match.
-            base_hash = payload.get('base_hash', code_hash(base_code))
             try:
-                canonical = apply_edits(base_code, base_hash, payload.get('edits'))
+                canonical = apply_edits(base_code, payload.get('edits'))
             except ValueError as exc:
                 return None, f'edit_error: {exc}'
         elif mode == 'full':
@@ -272,7 +261,7 @@ def parse_candidate(response, finish_reason, interface, template_program, *,
         compile(rebuilt, '<candidate>', 'exec')
     except (SyntaxError, ValueError) as exc:
         return None, f'syntax_error: {exc}'
-    return ParsedCandidate(idea, rebuilt, fields, mode, donor_id, base_hash), None
+    return ParsedCandidate(idea, rebuilt, fields, mode, donor_id), None
 
 
 def build_repair_prompt(task_contract, response, event, *, base_code=None,
@@ -284,7 +273,7 @@ def build_repair_prompt(task_contract, response, event, *, base_code=None,
     parent = f'\n\n# Edit base\n```python\n{base_code}\n```' if needs_base and base_code else ''
     failed = (f'```python\n{failed_program}\n```' if failed_program else
               json.dumps({k: v for k, v in payload.items() if k in
-                          ('mode', 'code', 'base_hash', 'edits')}, ensure_ascii=False)
+                          ('mode', 'code', 'edits')}, ensure_ascii=False)
               if payload is not None else THINK_BLOCK_RE.sub('', response))
     return (f"{task_contract}{parent}\n\n# Failed output\n{failed}\n\n"
             f"# Failure\n{error_type}: {message[:2000]}\n\n"

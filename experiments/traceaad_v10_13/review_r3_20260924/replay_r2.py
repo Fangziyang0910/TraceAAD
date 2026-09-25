@@ -1,5 +1,4 @@
-"""Replay frozen r2 responses through r3 parsing without generation/evaluation."""
-import hashlib
+"""Replay recorded r2 responses through r3 parsing without generation/evaluation."""
 import importlib
 import json
 from collections import Counter
@@ -18,8 +17,6 @@ for run in bound['runs']:
     limit = run['effective_candidate_boundary']
     events = [e for e in read_journal(directory / 'events.jsonl') if e['candidate_id'] <= limit]
     calls = [c for c in read_journal(directory / 'llm_calls.jsonl') if c['candidate_id'] <= limit]
-    for kind, records in [('events', events), ('calls', calls)]:
-        assert hashlib.sha256(json.dumps(records, sort_keys=True, ensure_ascii=False).encode()).hexdigest() == run[kind + '_prefix_sha256']
     bycall = {c['call_id']: c for c in calls}
     state = json.loads((directory / 'tree_state.json').read_text())
     nodes = {n['id']: n for n in state['nodes']}

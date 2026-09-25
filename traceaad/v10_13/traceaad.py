@@ -21,7 +21,7 @@ from .selection import (
     reference_shortlist,
     sample_parent,
 )
-from .storage import RunStorage, atomic_json, digest, truncate_torn_tail
+from .storage import RunStorage, atomic_json, truncate_torn_tail
 from .tree import Node, SearchTree
 
 REPAIRABLE_FAILURES = {
@@ -49,7 +49,6 @@ class Candidate:
     candidate_id: int
     prompt: str
     prompt_tokens: int
-    prompt_hash: str
     requested_operator: str
     operator: str
     parent_id: int | None
@@ -118,8 +117,6 @@ class TraceAADV1013:
             "parent_uniform_probability": PARENT_UNIFORM_PROBABILITY,
             "reference_count": REFERENCE_COUNT,
             "reference_policy": "one_quality_or_uniform_full_code_for_fuse",
-            "task_contract_hash": digest(self.task_contract),
-            "template_hash": digest(self._template_program),
             "seed": seed,
             "context_mapping": {"Refine": "idea_formation_and_available_trials",
                                 "Tune": "idea_formation_and_available_trials",
@@ -214,7 +211,6 @@ class TraceAADV1013:
             best_before=self.tree.best().fitness if self.tree.nodes else None,
             prompt=prompt,
             prompt_tokens=prompt_tokens,
-            prompt_hash=digest(prompt),
             **fields,
         )
 
@@ -323,7 +319,6 @@ class TraceAADV1013:
             "operator": candidate.operator,
             "context_round": candidate.context_reads,
             "prompt_tokens": candidate.prompt_tokens,
-            "prompt_hash": candidate.prompt_hash,
             "prompt": candidate.prompt,
         }
         try:
@@ -448,7 +443,6 @@ class TraceAADV1013:
             "selection": candidate.selection,
             "parent_selected": candidate.parent_selected,
             "prompt_tokens": candidate.prompt_tokens,
-            "prompt_hash": candidate.prompt_hash,
             "status": status,
             "reason": reason,
             **self._evaluation_accounting(),
@@ -651,7 +645,7 @@ class TraceAADV1013:
         if self.storage.state_path.exists():
             state = json.loads(self.storage.state_path.read_text())
             if state.get('mechanism') != self.mechanism:
-                raise ValueError('checkpoint belongs to a different revision; use its frozen runtime')
+                raise ValueError('checkpoint belongs to a different revision')
         elif any(path.exists() and path.stat().st_size for path in (
                 self.storage.nodes_path, self.storage.events_path, self.storage.llm_calls_path,
                 self.storage.evaluations_path, self.storage.evaluation_resolutions_path)):

@@ -290,7 +290,7 @@ def test_v1011_generation_uses_fixed_output_budget(tmp_path):
     m = method(tmp_path, llm, budget=1)
     prompt = "token " * 16773
     m._generate(Candidate(
-        candidate_id=1, prompt=prompt, prompt_tokens=16773, prompt_hash="test",
+        candidate_id=1, prompt=prompt, prompt_tokens=16773,
         requested_operator="Refine", operator="Refine", parent_id=None, donor_id=None,
         parent_fitness=None, donor_fitness=None, selection={}, best_before=None))
     assert llm.calls[0][1]["max_tokens"] == 8192
@@ -455,7 +455,7 @@ def test_v1011_persistence_keeps_single_copies(tmp_path):
 
     calls = read_journal(m.storage.llm_calls_path)
     assert calls and all("prompt" not in call for call in calls)
-    assert all(call.get("prompt_hash") and call.get("response") for call in calls)
+    assert all(call.get("response") for call in calls)
     assert not (tmp_path / "evaluations.jsonl").exists()
 
     events = read_journal(m.storage.events_path)

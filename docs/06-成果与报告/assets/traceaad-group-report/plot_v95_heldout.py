@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot TraceAAD V9.5 held-out results against the frozen V9 reference.
+"""Plot TraceAAD V9.5 held-out results against the recorded V9 reference.
 
 V9.5 values are read from the formal held-out ``results.json`` files. V9 values
 are parsed from the authoritative task-level result pages. Error bars are sample

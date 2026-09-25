@@ -2,12 +2,12 @@
 
 独立离线实验；不修改正式调度器、不调用生成模型、不写入搜索评价账本。完整研究协议与实验数据保存在 `experiments/traceaad_refine_e1/raw/refine_e1_20260907/`。
 
-2026-09-07 冻结批次已完成，E1-A 离线回放与 E1-A.1 质量条件行为增量检验均未通过筛选门槛。`report.py` 中的研究判断针对该冻结批次；更换数据时须重新审读，不能沿用这些判断。固定参数保存在 `e1a1_config.json`，结果写入同一冻结日志目录及文档目录。
+2026-09-07 批次快照已完成，E1-A 离线回放与 E1-A.1 质量条件行为增量检验均未通过筛选门槛。`report.py` 中的研究判断针对该批次；更换数据时须重新审读，不能沿用这些判断。参数保存在 `e1a1_config.json`，结果写入同一日志目录及文档目录。
 
 
 ## 实际执行协议
 
-冻结 15 路 `20260906_215231_revised` 运行的原子 checkpoint 和对应已完成事件。每路截点、状态/事件/配置哈希存于 `experiments/traceaad_refine_e1/raw/refine_e1_20260907/snapshot.json`。排除 smoke 和未完成 pending 请求。
+复制 15 路 `20260906_215231_revised` 运行在指定截点的 checkpoint 和对应已完成事件。每路截点与状态存于 `experiments/traceaad_refine_e1/raw/refine_e1_20260907/snapshot.json`。排除 smoke 和未完成 pending 请求。
 
 所有 Refine parent 均安排画像，历史邻域只含当前时刻以前**曾被选择为 Refine parent**的节点，且主比较排除当前 parent。这样避免用最终“哪些节点以后会被选中”泄漏未来，也把画像成本限制在研究的父代集合。这里的密度是历史父代观测子集密度，不是全 archive 密度。M2/M3 采用同一可见节点规则。
 
@@ -43,4 +43,4 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python -m experiments.traceaa
 .venv/bin/python -m pytest -q tests/experiments/test_refine_e1.py
 ```
 
-embedding 使用隔离的本地环境（Python3.11、onnxruntime、tokenizers、huggingface-hub、numpy），不修改项目依赖文件。首次运行需下载固定版本模型。`profile`、`embed`按内容哈希复用已完成缓存；画像失败也记录，不以零距离替代。正式搜索与本实验的CPU/耗时分别记录。
+embedding 使用隔离的本地环境（Python3.11、onnxruntime、tokenizers、huggingface-hub、numpy），不修改项目依赖文件。首次运行需下载固定版本模型。`profile` 按运行名与节点 ID 复用已完成缓存，`embed` 按显式文本 ID 复用缓存；画像失败也记录，不以零距离替代。正式搜索与本实验的CPU/耗时分别记录。

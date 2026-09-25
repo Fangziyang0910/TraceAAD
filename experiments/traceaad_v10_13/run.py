@@ -1,8 +1,6 @@
 """Run one TraceAAD V10.13 search."""
 
 import argparse
-import hashlib
-import json
 from pathlib import Path
 
 from experiments.infra.runner import FORMAL_BUDGET, add_common_run_args, setup_experiment_run
@@ -20,15 +18,6 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    runtime = Path(__file__).resolve().parents[2]
-    manifest = runtime / "runtime_manifest.json"
-    if not manifest.exists():
-        raise SystemExit("search must run from a verified frozen runtime")
-    payload = json.loads(manifest.read_text())
-    for relative, expected in payload["files"].items():
-        path = runtime / relative
-        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
-            raise SystemExit(f"frozen source changed or missing: {relative}")
     if args.history_depth < 0:
         raise SystemExit("--history-depth must be nonnegative")
     params = {

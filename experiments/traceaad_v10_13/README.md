@@ -1,33 +1,25 @@
 # V10.13 实验启动与监控
 
-V10.13-r3 设计见 [r3 机制定义](../../docs/01-主线版本/TraceAAD-V10.13-r3-机制设计.md)。2026-09-24已按用户授权停止 r2，保留原冻结运行时及全部结果；`20260924_v1013r3` 已按同配置启动20路。[切换与启动检查](../../docs/01-主线版本/V10.13设计演进.md)保存证据。不要用 r3 恢复 r2 checkpoint。新批次创建前需确认没有同名结果和会话。
+V10.13-r3 设计见 [r3 机制定义](../../docs/01-主线版本/TraceAAD-V10.13-r3-机制设计.md)。2026-09-24已按用户授权停止 r2，保留原运行副本及全部结果；`20260924_v1013r3` 已按同配置启动20路。[切换与启动检查](../../docs/01-主线版本/V10.13设计演进.md)保存证据。不要用 r3 恢复 r2 checkpoint。新批次创建前需确认没有同名结果和会话。
 
 评价计数、成本字段和故障核定入口见[评价预算规范](../../docs/02-实验结果/00-评价预算与成本口径.md)。
 
 V10.13 正式批次固定为五个任务 × 四个重复，共 20 路。启动器使用三条独立请求池：`server1` 5 路、`server3`（222.201.145.6:8000）8 路、`server3b`（222.201.145.6:8001）7 路。总数 20 路，均低于各端点容量 6、9、9。
 
-先用新的批次名冻结当前代码（已有目录会拒绝覆盖）；启动器随后校验哈希、语法和 spawn：
+使用新的批次名启动并持续监控：
 
 ```bash
-./.venv/bin/python -m experiments.traceaad_v10_13.freeze \
-  --batch 20260924_v1013r3 --session-prefix v1013r3
-```
-
-再启动并持续监控：
-
-```bash
-./.venv/bin/python -m experiments.traceaad_v10_13.launch \
+uv run python -m experiments.traceaad_v10_13.launch \
   --batch 20260924_v1013r3 --session-prefix v1013r3 \
-  --runtime experiments/traceaad_v10_13/results/runtime_20260924_v1013r3 \
   --watch --interval 30
 ```
 
-启动器在每次启动前检查端点 `/v1/models`、可用槽位、tmux 会话和结果目录；manifest 持久化每路的 backend、尝试次数、状态和冻结源身份。它不会覆盖已有结果，也不会自动停止其他版本。
+启动器在每次启动前检查端点 `/v1/models`、可用槽位、tmux 会话和结果目录；manifest 持久化每路的 backend、尝试次数和状态。它不会覆盖已有结果，也不会自动停止其他版本。
 
 旧批次的监控继续服务原批次。新批次如需额外面板，可选一个空闲端口直接运行（以下端口仅为示例）：
 
 ```bash
-./.venv/bin/python -m experiments.traceaad_v10_13.monitor \
+uv run python -m experiments.traceaad_v10_13.monitor \
   --host 127.0.0.1 --port 8766 --version 20260924_v1013r3
 ```
 

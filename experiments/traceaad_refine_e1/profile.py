@@ -1,6 +1,5 @@
 """Training-probe profiles, validation and per-run distance matrices for E1-A."""
 import argparse
-import hashlib
 import json
 import os
 import time
@@ -15,13 +14,13 @@ from .prepare import DEFAULT, dump
 
 
 def candidate(node):
-    return {'id':node['id'], 'key':hashlib.sha256(node['code'].encode()).hexdigest(), 'code':node['code']}
+    return {'id':node['id'], 'code':node['code']}
 
 
 def worker(job):
     task, node = job
     c = candidate(node)
-    result = {'hash':c['key'], 'panels':{}}
+    result = {'node_id':c['id'], 'panels':{}}
     for panel in ['A','B']:
         core._init_worker(task, panel, core.DEFAULT_TRAJECTORY_POINTS[task], core.DEFAULT_TIMEOUT_SECONDS[task])
         result['panels'][panel] = core._profile_candidate(c)
@@ -90,8 +89,9 @@ def profile(out,workers):
     jobs={}
     for run,nodes in inputs(out):
         for node in nodes:
-            key=(run['task'],candidate(node)['key'])
-            if not (out/'profiles'/key[0]/(key[1]+'.json')).exists():jobs[key]=(key[0],node)
+            key=(run['task'],run['run_name'],str(node['id']))
+            path=out/'profiles'/key[0]/key[1]/(key[2]+'.json')
+            if not path.exists():jobs[key]=(key[0],node)
     print('profile jobs',len(jobs),'workers',workers,flush=True)
     started=time.time()
     # Bounded CPU workers; no GPU or generation endpoint used.
@@ -100,7 +100,7 @@ def profile(out,workers):
         from concurrent.futures import as_completed
         for i,future in enumerate(as_completed(futures)):
             key=futures[future];result=future.result()
-            dump(out/'profiles'/key[0]/(key[1]+'.json'),result)
+            dump(out/'profiles'/key[0]/key[1]/(key[2]+'.json'),result)
             if i%25==0:print('profiles',i+1,'/',len(jobs),'seconds',round(time.time()-started),flush=True)
     matrices(out)
 
@@ -108,11 +108,12 @@ def profile(out,workers):
 def matrices(out, ready_only=False):
     stability=[]
     for run,nodes in inputs(out):
-        if ready_only and not all((out/'profiles'/run['task']/(candidate(n)['key']+'.json')).exists() for n in nodes):
+        profile_dir=out/'profiles'/run['task']/run['run_name']
+        if ready_only and not all((profile_dir/(str(n['id'])+'.json')).exists() for n in nodes):
             continue
         panels={'A':[],'B':[]};valid=[]
         for n in nodes:
-            p=json.loads((out/'profiles'/run['task']/(candidate(n)['key']+'.json')).read_text())
+            p=json.loads((profile_dir/(str(n['id'])+'.json')).read_text())
             if all(p['panels'][s]['ok'] for s in panels):
                 valid.append(n['id'])
                 for s in panels:panels[s].append(p['panels'][s])

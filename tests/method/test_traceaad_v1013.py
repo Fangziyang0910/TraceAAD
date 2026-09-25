@@ -164,23 +164,18 @@ def test_idea_never_blocks_valid_code_and_supports_small_structured_fields():
 
 
 def test_edit_mode_exact_base_unique_blocks_and_interface():
-    from traceaad.v10_13.parsing import code_hash
     base = 'def score(x):\n    return x + 1'
     interface, _ = template_target('def score(x):\n    pass')
-    request = {'mode': 'edit', 'base_hash': code_hash(base),
+    request = {'mode': 'edit',
                'edits': [{'search': 'return x + 1', 'replacement': 'return x + 2'}]}
     def parse(value, code=base):
         return parse_candidate(json.dumps(value), 'stop', interface,
                                'def score(x):\n    pass', base_code=code)
     parsed, error = parse(request)
     assert not error and parsed.mode == 'edit' and 'x + 2' in parsed.program_code
-    assert parse({**request, 'base_hash': 'wrong'})[1].startswith('edit_error')
     assert parse({**request, 'edits': [{'search': 'x', 'replacement': 'y'}]})[1].startswith('edit_error')
     assert parse({**request, 'edits': [{'search': 'def score(x)', 'replacement': 'def score(y)'}]})[1].startswith('signature_error')
     assert parse({**request, 'code': base})[1].startswith('edit_error')
-    without_hash = {k: v for k, v in request.items() if k != 'base_hash'}
-    parsed, error = parse(without_hash)
-    assert not error and parsed.base_hash == code_hash(base)
 
 
 def test_one_reference_mixes_quality_and_uniform_without_semantic_categories():
@@ -220,7 +215,7 @@ class ScriptedLLM(FakeLLM):
 
 def test_inline_context_and_edit_cost_one_call_and_parent_opportunity(tmp_path):
     def edit(prompt):
-        assert 'base_hash' not in prompt and 'mode":"context' not in prompt
+        assert 'mode":"context' not in prompt
         return json.dumps({'mode': 'edit',
                           'edits': [{'search': 'return 1', 'replacement': 'return 2'}]})
     llm = ScriptedLLM(response(1), edit)
@@ -308,7 +303,7 @@ def test_old_checkpoint_rejected_before_journal_mutation(tmp_path):
     method = make_method(tmp_path, FakeLLM(response(1)), budget=1)
     method.run()
     state = json.loads(method.storage.state_path.read_text())
-    state['mechanism']['prompt_policy'] = 'old_frozen_revision'
+    state['mechanism']['prompt_policy'] = 'different_revision'
     method.storage.state_path.write_text(json.dumps(state))
     method.storage.events_path.write_bytes(method.storage.events_path.read_bytes() + b'torn')
     before = method.storage.events_path.read_bytes()
@@ -318,12 +313,11 @@ def test_old_checkpoint_rejected_before_journal_mutation(tmp_path):
 
 
 def test_edit_preserves_exact_program_order_and_can_remove_template_import():
-    from traceaad.v10_13.parsing import code_hash
     template = 'import math\n\ndef score(x):\n    pass'
     base = 'import math\n\ndef score(x):\n    return x\n\nexample = score(1)'
     interface, _ = template_target(template)
     parsed, error = parse_candidate(json.dumps({
-        'mode': 'edit', 'base_hash': code_hash(base),
+        'mode': 'edit',
         'edits': [{'search': 'import math\n\n', 'replacement': ''}],
     }), 'stop', interface, template, base_code=base)
     assert not error and 'import math' not in parsed.program_code
@@ -350,7 +344,7 @@ def test_initial_and_repair_prompts_only_offer_full_output(tmp_path):
         'mode': 'full', 'idea': 'irrelevant ' * 10000,
         'code': 'def score(x):\n    return broken',
     }), {'error': 'undefined name'}, base_code='large unrelated parent')
-    assert '"edits"' not in repair and 'base_hash' not in repair
+    assert '"edits"' not in repair
     assert 'irrelevant' not in repair and 'large unrelated parent' not in repair
     assert 'return broken' in repair
 

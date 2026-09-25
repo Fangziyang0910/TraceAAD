@@ -1,4 +1,4 @@
-"""Read-only mechanism audit; real runs and frozen runtimes are never modified.
+"""Read-only mechanism audit; real runs are never modified.
 
 Run from the repository root:
   .venv/bin/python experiments/traceaad_v10_13/review_20260923/audit.py
@@ -10,7 +10,6 @@ The crash reproduction uses a tiny in-process stub in a temporary directory.
 from __future__ import annotations
 
 import ast
-import hashlib
 import json
 import sys
 import tempfile
@@ -39,10 +38,6 @@ def rows(path):
                 break
             if line.strip():
                 yield json.loads(line)
-
-
-def sha(payload):
-    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
 def audit_batch(version, batch, *, partial=False):
@@ -76,7 +71,7 @@ def audit_batch(version, batch, *, partial=False):
                 too_long.add(e['candidate_id'])
             selected = e.get('parent_selected', e.get('parent_id') is not None and not e.get('repair_of'))
             if selected and op in ('Refine', 'Tune'):
-                prompts[(e['parent_id'], op, e['prompt_hash'])] += 1
+                prompts[(e['parent_id'], op)] += 1
             if score is None:
                 continue
             if e.get('parent_fitness') is not None:
@@ -119,8 +114,7 @@ def audit_batch(version, batch, *, partial=False):
             'completed_candidates': limit, 'budget_used': state['budget_used'],
             'summary_status': summary.get('status'),
             'manifest_status': lane.get('status'),
-            'events_count': len(events), 'events_prefix_sha256': sha(events),
-            'nodes_count': len(nodes), 'nodes_prefix_sha256': sha(nodes),
+            'events_count': len(events), 'nodes_count': len(nodes),
         })
     return {
         'batch': batch, 'status': 'partial' if partial else 'finished',
@@ -210,11 +204,6 @@ def main():
         payload['batches'][version] = audit_batch(version, batch, partial=version == 'v10_13')
     payload['heldout'] = heldout_summaries()
     payload['crash_reproduction'] = crash_reproduction()
-    runtime = ROOT / 'experiments/traceaad_v10_13/results/runtime_20260923_v1013'
-    payload['frozen_source_matches'] = {
-        str(path.relative_to(ROOT)): path.read_bytes() == (runtime / path.relative_to(ROOT)).read_bytes()
-        for path in (ROOT / 'traceaad/v10_13').glob('*.py')
-    }
     path = Path(__file__).with_name('snapshot.json')
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n')
     for version, data in payload['batches'].items():

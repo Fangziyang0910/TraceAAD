@@ -1,4 +1,4 @@
-"""Replay frozen V10.10 responses through the template-rebuild parser (read-only).
+"""Replay recorded V10.10 responses through the template-rebuild parser (read-only).
 
 Zero LLM calls: every persisted response of the selected batch is re-parsed
 with the current parser and compared with the outcome recorded at generation
@@ -12,7 +12,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib
 import json
 import sys
@@ -53,7 +52,7 @@ def _interface_from_template(program_text: str):
 def template_interface(task: str, run_dir: Path | None = None):
     """The target-function interface a run actually saw.
 
-    Prefers the template program frozen in the run's own checkpoint
+    Prefers the template program recorded in the run's own checkpoint
     (mechanism.evaluation_config.template_program) over the current repo
     template, and reports whether the two still agree.
     """
@@ -64,15 +63,13 @@ def template_interface(task: str, run_dir: Path | None = None):
                             .get('mechanism', {}).get('evaluation_config', {})
                             .get('template_program'))
             if program_text:
-                frozen = hashlib.sha256(program_text.encode()).hexdigest()
                 repo_text = _repo_template_text(task)
                 return _interface_from_template(program_text), {
                     'template_program': program_text,
-                    'source': 'frozen_checkpoint',
-                    'template_sha256': frozen,
+                    'source': 'checkpoint',
                     'repo_template_differs': (
                         None if repo_text is None
-                        else hashlib.sha256(repo_text.encode()).hexdigest() != frozen),
+                        else repo_text != program_text),
                 }
     program_text = _repo_template_text(task)
     return _interface_from_template(program_text), {
@@ -103,7 +100,6 @@ def read_complete_lines(path: Path) -> dict:
         'records': records,
         'snapshot': {
             'path': str(path), 'bytes': len(data),
-            'sha256': hashlib.sha256(data).hexdigest(),
             'complete_lines': len(records), 'corrupt_lines': corrupt_lines,
             'partial_tail_bytes': partial_bytes,
             'read_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
@@ -156,7 +152,7 @@ def replay_run(run_dir: Path, task: str) -> dict:
     events_read = read_complete_lines(run_dir / 'events.jsonl')
     calls_read = read_complete_lines(run_dir / 'llm_calls.jsonl')
     events = {record['candidate_id']: record for record in events_read['records']}
-    rows, code_mismatches = [], []
+    rows = []
     classifications = Counter()
     new_sources = Counter()
     for call in calls_read['records']:
@@ -181,15 +177,6 @@ def replay_run(run_dir: Path, task: str) -> dict:
         if parsed is not None:
             new_sources[source] += 1
             row['idea_source'] = source
-            code_hash = hashlib.sha256(parsed[1].encode()).hexdigest()
-            if event is not None and event.get('code_hash') and code_hash != event['code_hash']:
-                outcome = 'code_text_differs'
-                row['classification'] = outcome
-                classifications['both_accepted'] -= 1
-                classifications[outcome] += 1
-                code_mismatches.append({
-                    **row, 'response_excerpt': call['response'][:400],
-                    'new_hash': code_hash, 'old_hash': event['code_hash']})
         rows.append(row)
     paired = {row['candidate_id'] for row in rows}
     unpaired_events = sorted(set(events) - paired)
@@ -210,7 +197,6 @@ def replay_run(run_dir: Path, task: str) -> dict:
         'new_idea_sources': new_sources,
         'repair_matrix': {f'{a} -> {b}': n for (a, b), n in sorted(repair_matrix.items())},
         'events_without_response': unpaired_events,
-        'code_mismatches': code_mismatches,
         'snapshots': [events_read['snapshot'], calls_read['snapshot']],
         'rows': rows,
     }
@@ -230,7 +216,7 @@ def replay_batch(results_root: Path, batch: str) -> dict:
         'batch': batch, 'manifest_runs': len(plan),
         'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
         'parser_policy': errors.PARSE_POLICY,
-        'interface_policy': 'per-run frozen checkpoint template with repo hash cross-check',
+        'interface_policy': 'per-run checkpoint template with direct repo comparison',
         'runs': runs,
     }
     totals = Counter()

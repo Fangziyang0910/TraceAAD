@@ -1,15 +1,10 @@
 """Run journals (append-only analysis records) and atomic file writes."""
 
-import hashlib
 import json
 import os
 import fcntl
 from contextlib import contextmanager
 from dataclasses import asdict
-
-
-def digest(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def atomic_json(path, payload):
@@ -55,7 +50,11 @@ def truncate_torn_tail(path):
     if data and not data.endswith(b"\n"):
         prefix = _complete_prefix(data)
         tail = data[len(prefix):]
-        backup = path.with_name(path.name + '.torn-' + hashlib.sha256(tail).hexdigest()[:16])
+        suffix = 1
+        backup = path.with_name(path.name + f'.torn-{suffix}')
+        while backup.exists():
+            suffix += 1
+            backup = path.with_name(path.name + f'.torn-{suffix}')
         with backup.open('wb') as handle:
             handle.write(tail)
             handle.flush()

@@ -1,5 +1,5 @@
 """Read-only audit of five batches; event-time ranks and 100-evaluation follow-up."""
-import ast, bisect, hashlib, json, statistics
+import ast, bisect, json, statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3]
@@ -7,7 +7,7 @@ OUT=Path(__file__).resolve().parent
 TASKS=['tsp_construct','cvrp_aco','op_aco','online_bin_packing','vrptw_construct']
 BATCHES={'generic':('traceaad_v10_11','20260915_v1011_generic'), 'no_traj':('traceaad_v10_11','20260915_v1011_no_traj_idea'), 'idea_code':('traceaad_v10_11','20260915_v1011_idea_code'), 'rand_ctx':('traceaad_v10_11','20260916_v1011_rand_ctx'), 'v11':('traceaad_v11_0','20260917')}
 def mean(v): return statistics.mean(v) if v else None
-def key(code): return hashlib.sha256(ast.dump(ast.parse(code),include_attributes=False).encode()).hexdigest()
+def key(code): return ast.dump(ast.parse(code),include_attributes=False)
 def audit(run):
  nodes=[json.loads(l) for l in (run/'nodes.jsonl').read_text().splitlines()]; nd={n['id']:n for n in nodes}; nk={n['id']:key(n['code']) for n in nodes}
  events=[json.loads(l) for l in (run/'events.jsonl').read_text().splitlines()]; ev=[e for e in events if e.get('candidate_id') is not None]

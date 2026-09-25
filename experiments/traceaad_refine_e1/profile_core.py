@@ -77,7 +77,7 @@ DEFAULT_TRAJECTORY_POINTS = {
 }
 THRESHOLDS = tuple(round(value, 2) for value in np.arange(0.05, 0.96, 0.05))
 PROGRAM_RANDOM_SEED = 730_241
-# Historical E1 callers keep the frozen protocol through the function defaults.
+# Historical E1 callers keep the recorded protocol through the function defaults.
 # New population-geometry analyses should request these calibrated settings.
 CALIBRATED_OBP_SCALE = "matched"
 CALIBRATED_ACO_SEED_OFFSETS = (0, 10_000, 20_000, 30_000)

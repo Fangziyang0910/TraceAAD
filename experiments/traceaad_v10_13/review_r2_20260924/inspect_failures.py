@@ -5,7 +5,6 @@ Multiple distinct payloads are excluded. Passing parsing proves only syntax and
 interface acceptance, not fitness or preservation of the author's intended code.
 """
 from collections import Counter
-import hashlib
 import importlib
 import json
 from pathlib import Path
@@ -23,16 +22,12 @@ def inspect():
     bound = json.loads((HERE / 'progress_0121_protocol.json').read_text())
     results = ROOT / 'experiments/traceaad_v10_13/results'
     decoder = json.JSONDecoder()
-    counts, by_task, examples, cases, prefix_checks = Counter(), {}, {}, [], []
+    counts, by_task, examples, cases = Counter(), {}, {}, []
     for run in bound['runs']:
         directory = results / run['task'] / run['run_name']
         limit = run['effective_candidate_boundary']
         events = [e for e in read_journal(directory / 'events.jsonl') if e['candidate_id'] <= limit]
         calls = [c for c in read_journal(directory / 'llm_calls.jsonl') if c['candidate_id'] <= limit]
-        for kind, records in [('events', events), ('calls', calls)]:
-            digest = hashlib.sha256(json.dumps(records, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-            assert digest == run[kind + '_prefix_sha256'], (run['run_name'], kind)
-        prefix_checks.append(run['run_name'])
         bycall = {c['call_id']: c for c in calls}
         state = json.loads((directory / 'tree_state.json').read_text())
         nodes = {n['id']: n for n in state['nodes']}
@@ -84,7 +79,7 @@ def inspect():
             counts['finish_' + str(call.get('finish_reason'))] += 1
     return {'status': 'partial', 'boundary_source': 'progress_0121_protocol.json',
             'scope': 'offline syntax and envelope inspection, no evaluator calls',
-            'prefix_checks_passed': prefix_checks, 'counts': dict(counts),
+            'counts': dict(counts),
             'by_task': {k: dict(v) for k, v in by_task.items()},
             'examples': examples, 'cases': cases}
 

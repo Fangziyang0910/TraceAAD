@@ -1,4 +1,4 @@
-"""Regression tests for the five frozen main-experiment tasks."""
+"""Regression tests for the five main-experiment tasks."""
 from __future__ import annotations
 
 import ast
@@ -10,7 +10,7 @@ import pytest
 from core import InvalidEvaluationResult
 
 
-FROZEN_TASKS = (
+TASKS = (
     "tsp_construct",
     "cvrp_aco",
     "op_aco",
@@ -19,10 +19,10 @@ FROZEN_TASKS = (
 )
 
 
-def test_no_frozen_template_body_uses_undefined_kwargs():
+def test_no_template_body_uses_undefined_kwargs():
     root = Path("benchmarks")
     offenders = []
-    for relative in FROZEN_TASKS:
+    for relative in TASKS:
         template_path = root / relative / "template.py"
         tree = ast.parse(template_path.read_text(encoding="utf-8"))
         for node in tree.body:

@@ -8,7 +8,6 @@ import argparse
 from collections import Counter
 from dataclasses import asdict
 from datetime import datetime
-import hashlib
 import json
 from pathlib import Path
 import random
@@ -131,8 +130,7 @@ def restore_one(source, cutoff):
                    replayed_candidates=len(tail), final_rng_draws=final_draws,
                    restored_rng_draws=final_draws-tail_draws,
                    rng_and_all_tail_selections_verified=True,
-                   best_fitness=max(n["fitness"] for n in initial_nodes),
-                   prefix_sha256={name: hashlib.sha256(data).hexdigest() for name, data in prefixes.items()})
+                   best_fitness=max(n["fitness"] for n in initial_nodes))
     return restored, prefixes, receipt
 
 

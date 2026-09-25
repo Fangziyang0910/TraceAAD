@@ -1,13 +1,8 @@
 """Run journals (append-only analysis records) and atomic file writes."""
 
-import hashlib
 import json
 import os
 from dataclasses import asdict
-
-
-def digest(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def atomic_json(path, payload):

@@ -15,7 +15,7 @@ from .prompts import TrajectoryBuilder
 from .selection import (DONOR_UNIFORM_PROBABILITY, OPERATORS, OPERATOR_PROBABILITIES,
                         PIVOT_UNIFORM_PROBABILITY, QUALITY_ESS_TARGET, calibrate_beta,
                         code_key, ess, mix_uniform, softmax)
-from .storage import RunStorage, atomic_json, digest, truncate_torn_tail
+from .storage import RunStorage, atomic_json, truncate_torn_tail
 from .tree import Node, SearchTree
 
 REPAIRABLE_FAILURES = {"exec_error", "runtime_error", "timeout", "invalid_result", "nonfinite_fitness"}
@@ -37,7 +37,6 @@ class Candidate:
     candidate_id: int
     prompt: str
     prompt_tokens: int
-    prompt_hash: str
     requested_operator: str
     operator: str
     parent_id: int | None
@@ -92,7 +91,6 @@ class TraceAADV1011:
             "quality_ess_target": QUALITY_ESS_TARGET,
             "pivot_uniform_probability": PIVOT_UNIFORM_PROBABILITY,
             "donor_uniform_probability": DONOR_UNIFORM_PROBABILITY,
-            "task_contract_hash": digest(self.task_contract),
             "llm": {name: getattr(llm, name, None) for name in
                     ("model", "base_url", "temperature", "top_p", "enable_thinking")},
         }
@@ -109,8 +107,7 @@ class TraceAADV1011:
         return Candidate(
             candidate_id=self.completed_attempts + 1,
             best_before=self.tree.best().fitness if self.tree.nodes else None,
-            prompt=prompt, prompt_tokens=self.builder.count(prompt),
-            prompt_hash=digest(prompt), **fields,
+            prompt=prompt, prompt_tokens=self.builder.count(prompt), **fields,
         )
 
     def _quality_distribution(self, nodes):
@@ -194,8 +191,7 @@ class TraceAADV1011:
         started = time.time()
         record = {"ts": _timestamp(),
                   "call_id": f"{candidate.candidate_id}:{candidate.llm_attempts}",
-                  "candidate_id": candidate.candidate_id,
-                  "prompt_hash": candidate.prompt_hash}
+                  "candidate_id": candidate.candidate_id}
         try:
             details = self.llm.draw_sample_with_details(
                 candidate.prompt, max_tokens=self.output_tokens
@@ -269,7 +265,7 @@ class TraceAADV1011:
             "parent_id": candidate.parent_id, "donor_id": candidate.donor_id,
             "parent_fitness": candidate.parent_fitness, "donor_fitness": candidate.donor_fitness,
             "reference_ids": candidate.reference_ids, "selection": candidate.selection,
-            "prompt_tokens": candidate.prompt_tokens, "prompt_hash": candidate.prompt_hash,
+            "prompt_tokens": candidate.prompt_tokens,
             "status": status, "reason": reason,
             "budget_used": self.budget_used,
             "evaluation_id": outcome["evaluation_id"] if outcome else None,

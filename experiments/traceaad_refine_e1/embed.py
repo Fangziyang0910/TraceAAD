@@ -1,6 +1,5 @@
 """CPU-only ONNX MiniLM baseline, pooling every code/summary token in chunks."""
 import ast
-import hashlib
 import json
 import time
 from pathlib import Path
@@ -21,7 +20,7 @@ def main():
     tokenizer.no_truncation();tokenizer.no_padding()
     options=ort.SessionOptions();options.intra_op_num_threads=4;options.inter_op_num_threads=1
     model=ort.InferenceSession(hf_hub_download(MODEL,'onnx/model.onnx',revision=REVISION),sess_options=options,providers=['CPUExecutionProvider'])
-    texts={};runs=[]
+    texts={};text_ids={};runs=[]
     for run in json.loads((OUT/'snapshot.json').read_text())['runs']:
         folder=OUT/'snapshot'/run['run_name']
         nodes=json.loads((folder/'tree_state.json').read_text())['nodes']
@@ -31,9 +30,11 @@ def main():
         for n in nodes:
             if n['id'] not in parents:continue
             code=ast.unparse(ast.parse(n['code']))
-            views=[n.get('idea','').strip(),code]
-            key=hashlib.sha256(json.dumps(views).encode()).hexdigest()
-            texts[key]=views;keys.append(key);ids.append(n['id'])
+            views=(n.get('idea','').strip(),code)
+            if views not in text_ids:
+                key=f'text_{len(text_ids):06d}'
+                text_ids[views]=key;texts[key]=list(views)
+            keys.append(text_ids[views]);ids.append(n['id'])
         runs.append((run['run_name'],ids,keys))
     cache=OUT/'embeddings';cache.mkdir(exist_ok=True)
     total_chunks=0

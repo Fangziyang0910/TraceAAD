@@ -1,14 +1,13 @@
 """Profile the complete historical archive needed by E2-A trajectory sensors."""
 import argparse
 import json
-import shutil
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
 
-from experiments.traceaad_refine_e1.profile import candidate, worker
+from experiments.traceaad_refine_e1.profile import worker
 from experiments.traceaad_refine_e1 import profile_core
 from experiments.traceaad_refine_e1.prepare import dump
 from .prepare import DEFAULT, ROOT
@@ -33,25 +32,25 @@ def profile(out=DEFAULT, workers=12):
     reused = 0
     for run, nodes in inputs(out):
         for node in nodes:
-            key = candidate(node)['key']
-            target = out / 'profiles' / run['task'] / f'{key}.json'
+            key = (run['task'], run['run_name'], str(node['id']))
+            target = out / 'profiles' / key[0] / key[1] / f'{key[2]}.json'
             if target.exists():
                 continue
-            old = E1_PROFILES / run['task'] / f'{key}.json'
+            old = E1_PROFILES / key[0] / key[1] / f'{key[2]}.json'
             if old.exists() and all(v['ok'] for v in json.loads(old.read_text())['panels'].values()):
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(old, target)
+                target.write_bytes(old.read_bytes())
                 reused += 1
             else:
-                jobs[(run['task'], key)] = (run['task'], node)
+                jobs[key] = (run['task'], node)
     print('reused', reused, 'new jobs', len(jobs), 'workers', workers, flush=True)
     started = time.time()
     with ProcessPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(worker, job): key for key, job in jobs.items()}
         for i, future in enumerate(as_completed(futures), 1):
-            task, key = futures[future]
+            task, run_name, node_id = futures[future]
             result = future.result()
-            dump(out / 'profiles' / task / f'{key}.json', result)
+            dump(out / 'profiles' / task / run_name / f'{node_id}.json', result)
             if i == 1 or i % 25 == 0:
                 print('profiles', i, '/', len(jobs), 'seconds', round(time.time() - started), flush=True)
     matrices(out, reused, len(jobs), time.time() - started)
@@ -63,7 +62,7 @@ def matrices(out=DEFAULT, reused=0, new_jobs=0, elapsed=0.0):
         valid = []
         panels = {'A': [], 'B': []}
         for node in nodes:
-            path = out / 'profiles' / run['task'] / f"{candidate(node)['key']}.json"
+            path = out / 'profiles' / run['task'] / run['run_name'] / f"{node['id']}.json"
             record = json.loads(path.read_text())
             if all(record['panels'][panel]['ok'] for panel in panels):
                 valid.append(node['id'])

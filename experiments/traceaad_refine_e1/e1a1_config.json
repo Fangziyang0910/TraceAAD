@@ -1,6 +1,6 @@
 {
   "stage": "E1-A.1",
-  "frozen_before_prediction": true,
+  "protocol_set_before_prediction": true,
   "input": "experiments/traceaad_refine_e1/raw/refine_e1_20260907",
   "warmup_attempts_per_run": 50,
   "k_quality_neighbors": 10,

@@ -1,7 +1,6 @@
 """Deterministic complete-code evidence from one real formation suffix."""
 
 from difflib import unified_diff
-import hashlib
 
 from traceaad.v10_7.prompts import (
     OUTPUT, GENERATION, TrajectoryBuilder as ViewBuilder,
@@ -28,15 +27,6 @@ HISTORY_NOTE = (
     'code is used when shorter. Fitness describes the whole measured transition, '
     'not the causal contribution of an individual change.'
 )
-TEMPLATE_HASH = hashlib.sha256(
-    (str(INSTRUCTIONS) + HISTORY_NOTE + OUTPUT).encode()
-).hexdigest()
-
-
-def digest(text):
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
 class TrajectoryBuilder(ViewBuilder):
     def __init__(self, *args, lookup, **kwargs):
         super().__init__(*args, **kwargs)
@@ -46,8 +36,7 @@ class TrajectoryBuilder(ViewBuilder):
     def view_record(self, node):
         code, removed = self.code_view(node)
         return {
-            'node_id': node.id, 'raw_code_hash': digest(node.code),
-            'view_code_hash': digest(code), 'removed_reference_comments': removed,
+            'node_id': node.id, 'removed_reference_comments': removed,
         }
 
     def program(self, node, title):
@@ -90,7 +79,7 @@ class TrajectoryBuilder(ViewBuilder):
                 'target_evaluation_id': target.evaluation_id,
                 'operator': target.operator, 'source_fitness': source.fitness,
                 'target_fitness': target.fitness, 'historical_donor_id': target.donor_id,
-                'representation': kind, 'text_hash': digest(text),
+                'representation': kind,
             }
             self._transitions[key] = text, facts
         return self._transitions[key]

@@ -8,8 +8,6 @@ loop; alternative adaptive/two-stage policies are deliberately absent.
 from __future__ import annotations
 
 import ast
-import hashlib
-import inspect
 import json
 import math
 import os
@@ -101,10 +99,6 @@ class TraceAADV105(TraceAADV103):
         self._logged_calls = {r['call_id'] for r in read_journal(self.llm_calls_path)}
         self._logged_events = {r['candidate_id'] for r in read_journal(self.events_path)}
         self._outcomes = {r['candidate_id']: r for r in read_journal(self.evaluations_path)}
-        sources = [Path(__file__), Path(prompts.__file__), Path(inspect.getfile(TraceAADV103)),
-                   Path(inspect.getfile(Node)), Path(inspect.getfile(prompts.build_task_contract)),
-                   Path(inspect.getfile(type(self.secure))), Path(inspect.getfile(type(self._template))),
-                   Path(inspect.getfile(type(self.evaluation))), Path(inspect.getfile(type(self.llm)))]
         self.mechanism = {
             "method": self.METHOD, "budget": self.budget, "n_roots": self.n_roots,
             "donor_topk": self.donor_topk, "traj_gens": self.traj_gens,
@@ -113,8 +107,6 @@ class TraceAADV105(TraceAADV103):
             "output_tokens": self.output_tokens, "max_context_tokens": self.max_context_tokens,
             "operator_probabilities": OPERATOR_PROBABILITIES,
             "pivot_uniform_probability": PIVOT_UNIFORM_PROBABILITY,
-            "source_hashes": {str(p.resolve()): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources},
-            "task_contract_hash": hashlib.sha256(self.task_contract.encode()).hexdigest(),
             "llm": {name: getattr(self.llm, name, None) for name in
                     ['model', 'base_url', 'temperature', 'top_p', 'enable_thinking', 'extra_body']},
         }
@@ -220,8 +212,7 @@ class TraceAADV105(TraceAADV103):
             "donor_fitness": donor.fitness if donor else None,
             "best_before": self.tree.best().fitness if self.tree.nodes else None,
             "prompt": prompt.text, "prompt_tokens": prompt.tokens,
-            "prompt_hash": hashlib.sha256(prompt.text.encode()).hexdigest(),
-            "template_hash": prompts.TEMPLATE_HASH, "history_ids": prompt.history_ids,
+            "history_ids": prompt.history_ids,
             "context_omissions": prompt.omissions, "rng_state": list(self.rng.getstate()),
             "llm_attempts": 0,
         }
@@ -251,8 +242,7 @@ class TraceAADV105(TraceAADV103):
             "call_id": f"{p['candidate_id']}:{p['llm_attempts']}",
             "candidate_id": p['candidate_id'], "operator": p['operator'],
             "requested_operator": p['requested_operator'], "prompt": p['prompt'],
-            "prompt_tokens": p['prompt_tokens'], "prompt_hash": p['prompt_hash'],
-            "template_hash": p['template_hash'], "sampling": self.mechanism['llm'],
+            "prompt_tokens": p['prompt_tokens'], "sampling": self.mechanism['llm'],
             "max_tokens": self.output_tokens,
         }
         try:

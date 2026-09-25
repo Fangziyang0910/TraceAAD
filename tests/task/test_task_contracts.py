@@ -1,4 +1,4 @@
-"""Static contract checks for the five frozen main-experiment tasks.
+"""Static interface checks for the five main-experiment tasks.
 
 Guards against empty task descriptions, unparseable templates, missing
 Evaluation wiring, and obvious signature drift between template and evaluator.
@@ -19,7 +19,7 @@ from core.evaluate import Evaluation
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK_ROOT = ROOT / "benchmarks"
-FROZEN_TASKS = (
+TASKS = (
     "tsp_construct",
     "cvrp_aco",
     "op_aco",
@@ -29,7 +29,7 @@ FROZEN_TASKS = (
 
 
 def _all_task_dirs() -> list[Path]:
-    return [TASK_ROOT / relative for relative in FROZEN_TASKS]
+    return [TASK_ROOT / relative for relative in TASKS]
 
 
 def _module_path(py_file: Path) -> str:

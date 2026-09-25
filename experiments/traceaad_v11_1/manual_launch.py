@@ -10,15 +10,11 @@ from datetime import datetime
 import json
 from pathlib import Path
 import subprocess
-import sys
 import time
 
 from experiments.infra.base import (
     BACKENDS, BACKEND_CAPACITY, TASKS, TASK_SHORT,
 )
-from experiments.traceaad_v11_1.freeze import runtime_environment, verify_runtime
-
-
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS_ROOT = Path(__file__).resolve().parent / "results"
 DEFAULT_ASSIGNMENTS = Path(__file__).with_name("manual_assignments.json")
@@ -84,15 +80,12 @@ def _validate(rows: list[dict[str, object]], batch: str) -> None:
         raise ValueError(f"assignment exceeds endpoint capacity: {over}")
 
 
-def launch(batch: str, assignments_path: Path, prefix: str, delay: float,
-           runtime: Path | None = None) -> dict[str, object]:
+def launch(batch: str, assignments_path: Path, prefix: str, delay: float) -> dict[str, object]:
     rows = json.loads(assignments_path.read_text(encoding="utf-8"))
     if not isinstance(rows, list):
         raise ValueError("assignment file must contain a JSON list")
     rows = [dict(row) for row in rows]
     _validate(rows, batch)
-    runtime = (runtime or RESULTS_ROOT / f"runtime_{batch}").resolve()
-    source_identity = verify_runtime(runtime)
     RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
     manifest_path = RESULTS_ROOT / f"batch_{batch}.json"
     if manifest_path.exists():
@@ -127,22 +120,21 @@ def launch(batch: str, assignments_path: Path, prefix: str, delay: float,
         "repeats": 5,
         "backends": list(BACKENDS),
         "assignment_file": str(assignments_path.resolve()),
-        "runtime": str(runtime), "source_identity": source_identity,
         "plan": plan,
     }
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     for item in plan:
         command = [
-            sys.executable, "-m", "experiments.traceaad_v11_1.run",
+            "uv", "run", "python", "-m", "experiments.traceaad_v11_1.run",
             "--task", str(item["task"]), "--backend", str(item["backend"]),
             "--repeat", str(item["repeat"]), "--seed", str(item["seed"]),
             "--run-name", str(item["run_name"]),
         ]
         subprocess.run(
             ["tmux", "new-session", "-d", "-s", str(item["session"]),
-             "-c", str(runtime), "-e", f"PYTHONPATH={runtime}", *command],
-            cwd=runtime, env=runtime_environment(runtime), check=True,
+             "-c", str(ROOT), *command],
+            cwd=ROOT, check=True,
         )
         item["status"] = "running"
         item["started_at"] = datetime.now().astimezone().isoformat()

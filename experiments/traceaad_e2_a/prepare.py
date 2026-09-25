@@ -1,5 +1,4 @@
-"""Freeze the completed V10.6 suffix after E1 without modifying live runs."""
-import hashlib
+"""Copy the completed V10.6 suffix after E1 without modifying live runs."""
 import json
 from collections import Counter
 from datetime import datetime, timezone
@@ -12,7 +11,7 @@ SOURCE = ROOT / 'experiments/traceaad_v10_6/results/batch_20260906_215231_revise
 E1 = ROOT / 'experiments/traceaad_refine_e1/raw/refine_e1_20260907/snapshot.json'
 
 
-def freeze(out=DEFAULT):
+def prepare_snapshot(out=DEFAULT):
     if (out / 'snapshot.json').exists():
         return json.loads((out / 'snapshot.json').read_text())
     batch = json.loads(SOURCE.read_text())
@@ -45,7 +44,6 @@ def freeze(out=DEFAULT):
         dump(target / 'run_config.json', json.loads((source / 'run_config.json').read_text()))
         for name, rows in [('events.jsonl', events), ('evaluations.jsonl', receipts)]:
             (target / name).write_text(''.join(json.dumps(e, ensure_ascii=False) + '\n' for e in rows))
-        hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in target.iterdir()}
         runs.append({
             **spec,
             'source': str(source),
@@ -57,10 +55,9 @@ def freeze(out=DEFAULT):
             'suffix_requested_executed': dict(Counter(
                 f"{e['requested_operator']}->{e['operator']}" for e in suffix)),
             'nodes': len(nodes),
-            'hashes': hashes,
         })
     result = {
-        'frozen_at': datetime.now(timezone.utc).isoformat(),
+        'created_at': datetime.now(timezone.utc).isoformat(),
         'source_batch': str(SOURCE),
         'e1_snapshot': str(E1),
         'runs': runs,
@@ -71,7 +68,7 @@ def freeze(out=DEFAULT):
 
 
 if __name__ == '__main__':
-    snapshot = freeze()
+    snapshot = prepare_snapshot()
     print(json.dumps({
         'runs': len(snapshot['runs']),
         'suffix_attempts': sum(r['suffix_attempts'] for r in snapshot['runs']),

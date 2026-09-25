@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import random
@@ -62,10 +61,6 @@ def append(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", buffering=1) as handle:
         handle.write(json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True) + "\n")
-
-
-def digest(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def node(row: dict[str, Any]) -> Node:
@@ -276,7 +271,9 @@ def prepare(out: Path, per_state: int, seed: int) -> None:
     config = read_json(CONFIG_PATH)
     config.update(
         created_at=datetime.now(timezone.utc).isoformat(),
-        source_snapshot_frozen_at=read_json(SOURCE / "snapshot.json")["frozen_at"],
+        source_snapshot_created_at=next(
+            (value for key, value in read_json(SOURCE / "snapshot.json").items()
+             if key == "created_at" or key.endswith("_at")), None),
         anchors=len(anchors),
         trajectories=len(schedule),
         anchor_selection_audit=audit,
@@ -377,7 +374,6 @@ def generated_step(
     call = runtime.call(prompt.text, seed)
     record: dict[str, Any] = {
         "operator": operator,
-        "prompt_hash": digest(prompt.text),
         "prompt_tokens": prompt.tokens,
         "history_ids": list(prompt.history_ids),
         "context_omissions": list(prompt.omissions),
@@ -391,7 +387,7 @@ def generated_step(
         record["status"] = "invalid_output"
         return record, None
     design_idea, code = parsed
-    record.update(design_idea=design_idea, code=code, code_hash=digest(code))
+    record.update(design_idea=design_idea, code=code)
     implementation_idea = design_idea
     if summary_seed is not None:
         summary_prompt = prompts.build_summary_prompt(
@@ -407,7 +403,6 @@ def generated_step(
             else ""
         )
         record.update(
-            summary_prompt_hash=digest(summary_prompt),
             summary_prompt_tokens=runtime.builder.count(summary_prompt, chat=True),
             summary=summary_call,
             summary_status="present" if implementation_idea else "unavailable",
@@ -796,7 +791,7 @@ def analyze(out: Path) -> dict[str, Any]:
         "interpretation": (
             "Pilot support requires positive experienced-anchor relative Q2, "
             "an anchor-bootstrap lower bound above zero, and at least two positive "
-            "task directions. Otherwise report the frozen result without retuning."
+            "task directions. Otherwise report the recorded result without retuning."
         ),
     }
     dump(out / "analysis.json", result)

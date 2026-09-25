@@ -14,7 +14,7 @@
   "primary_population": "experienced anchors",
   "primary_outcome": "unconditional relative Q2=max(anchor,c1,c2)-anchor; missing/invalid descendants contribute no improvement",
   "secondary_outcomes": ["Q1", "c2-c1 among valid continuations", "step validity", "fresh-anchor contrast"],
-  "behavior_analysis": "post-treatment Pivot parent-child distance against continuation gain; large move threshold frozen from historical Pivot edges",
+  "behavior_analysis": "post-treatment Pivot parent-child distance against continuation gain; large move threshold set from historical Pivot edges",
   "sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "output_tokens": 16384},
   "bootstrap": {"unit": "anchor", "samples": 10000, "seed": 2026090712}
 }

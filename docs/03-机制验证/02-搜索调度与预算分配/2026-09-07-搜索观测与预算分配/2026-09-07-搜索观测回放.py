@@ -2,7 +2,6 @@
 import ast
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
-import hashlib
 import json
 from pathlib import Path
 import time
@@ -13,13 +12,9 @@ PREFIX = 350
 BIRTH_CUTOFF = 175
 
 
-def digest(text):
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
 def identities(code):
     # Keep names, constants, docstrings, imports and the entire evaluated module.
-    return digest(code), digest(ast.dump(ast.parse(code), include_attributes=False))
+    return code, ast.dump(ast.parse(code), include_attributes=False)
 
 
 def concentration(counts):
@@ -68,7 +63,7 @@ def audit(path):
         op = e['operator']
         condition = None
         if pid is not None:
-            repeated = prompt_uses[(op, e['prompt_hash'])] > 0
+            repeated = prompt_uses[(op, pid)] > 0
             condition = 'repeat_prompt' if repeated else 'first_prompt'
             conditioned_response[f'{op}:{condition}']['attempts'] += 1
             conditioned_response[f'{op}:{condition}']['evaluations'] += int(e.get('evaluation_id') is not None)
@@ -92,7 +87,7 @@ def audit(path):
                 if e['selection']['parent_count_before'] == 0 and program_uses[j][ids[pid][j]]:
                     duplicate[f'fresh_id_previously_used_program_{j}'] += 1
                 program_uses[j][ids[pid][j]] += 1
-            prompt_uses[(op, e['prompt_hash'])] += 1
+            prompt_uses[(op, pid)] += 1
             if did is not None:
                 assert did in visited and e['donor_fitness'] == nodes[did]['fitness']
                 donor_uses[did] += 1
@@ -151,7 +146,6 @@ def audit(path):
                 follow=[{k: e.get(k) for k in ['evaluation_id', 'operator', 'fitness', 'donor_fitness', 'both_improved', 'frontier_improved']} for e in follow]))
     return dict(run=path.parent.name, task=config['task'], backend=config['backend'],
                 prefix=PREFIX, valid_nodes=len(nodes), source=str(path.relative_to(ROOT)),
-                state_sha256=digest(raw.decode()), events_prefix_sha256=digest(json.dumps(events, sort_keys=True)),
                 unique_raw=len(seen[0]), unique_ast=len(seen[1]), duplicate=dict(duplicate),
                 parents=concentration(parent_uses), parent_program_raw=concentration(program_uses[0]),
                 parent_program_ast=concentration(program_uses[1]), donors=concentration(donor_uses),

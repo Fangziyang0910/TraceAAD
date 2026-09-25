@@ -1,4 +1,4 @@
-"""Prospective E2-A trajectory-state interaction and frozen Q-kernel audit."""
+"""Prospective E2-A trajectory-state interaction and Q-kernel audit."""
 import json
 import math
 from collections import defaultdict
@@ -365,10 +365,10 @@ def write_report(manifest, behavior_rows, behavior, qsummary, profile_coverage):
              '最低信息量充足但未观察到固定的停滞交互，不修改在线机制。' if status == 'negative' else
              '未达到最低信息量，只能判未决；不修改在线机制，也不自动启动E2-B。')
     lines = ['# E2-A 结果：行为轨迹状态与 Refine/Pivot 响应', '',
-        f'数据冻结：`{manifest["frozen_at"]}`。**阶段判断：{state}**', '',
-        '本实验使用E1冻结点之后的未见suffix；TSP、OBP、VRPTW用于行为交互，五任务用于Q_kernel审计。没有新增LLM生成或正式evaluator调用。', '',
+        f'快照时间：`{manifest.get("created_at") or next((v for k,v in manifest.items() if k.endswith("_at")),None)}`。**阶段判断：{state}**', '',
+        '本实验使用E1截点之后的未见suffix；TSP、OBP、VRPTW用于行为交互，五任务用于Q_kernel审计。没有新增LLM生成或正式evaluator调用。', '',
         '## 1. 数据与状态覆盖', '',
-        f'冻结15路共 {sum(r["suffix_attempts"] for r in manifest["runs"])} 个新尝试。行为主任务中有 {behavior["coverage"]["suffix_binary_actions"]} 个requested=executed Refine/Pivot动作，'
+        f'快照15路共 {sum(r["suffix_attempts"] for r in manifest["runs"])} 个新尝试。行为主任务中有 {behavior["coverage"]["suffix_binary_actions"]} 个requested=executed Refine/Pivot动作，'
         f'{behavior["coverage"]["analyzed_suffix_actions"]} 个具有完整非根轨迹状态；其中 {behavior["coverage"]["stagnant"]} 个满足2/3停滞定义，{behavior["coverage"]["strict_stagnant"]} 个三项全部满足。', '',
         '| 任务 | Prefix状态数 | Move中位数 | Revisit中位数 | Suffix可分析动作 | 停滞动作 |',
         '| --- | ---: | ---: | ---: | ---: | ---: |']
@@ -420,7 +420,7 @@ def write_report(manifest, behavior_rows, behavior, qsummary, profile_coverage):
     lines += ['', f'Q_kernel在 {qsummary["tasks_brier_better"]}/5 个任务上Brier优于M1，allocation candidate门槛判定为 **{"通过" if qgate else "未通过"}**。该门槛同时要求parent与frontier两种top组收益不低于M1，避免把校准改善直接写成预算价值。', '',
         f'这次不是只在排序上失败：Q_kernel的池化Brier为 {qsummary["overall"]["Q_kernel"]["brier"]:.6f}，也弱于M1的 {qsummary["overall"]["M1"]["brier"]:.6f}；AP、run宏平均lift和两项top组gain均更低。E1中观察到的Q校准优势没有在未见suffix复制。', '',
         '## 4. 研究判断', '',
-        ('当前suffix提供了符合固定门槛的停滞交互，但它仍是三任务、一步结果；下一步只能用冻结锚点E2-B确认两步option value，不能直接修改V10.6。' if status == 'positive' else
+        ('当前suffix提供了符合固定门槛的停滞交互，但它仍是三任务、一步结果；下一步只能用既定锚点E2-B确认两步option value，不能直接修改V10.6。' if status == 'positive' else
          '当前suffix在最低信息量充分的条件下没有建立“行为停滞时应提高Pivot”的可靠一步证据，当前停滞定义不形成可迁移控制信号。' if status == 'negative' else
          f'{information_reason}，因此无法把未通过门槛解释为机制不存在。结果只能记为未决，且信息不足本身不自动授权E2-B。'), '',
         ('Q_kernel同时复制了校准与预算排序价值，可保留为独立候选，但仍需新的正式策略比较。' if qgate else
@@ -455,7 +455,7 @@ def plot(behavior):
 
 def main(out=DEFAULT):
     config = json.loads(Path(__file__).with_name('e2a_config.json').read_text())
-    assert config['protocol_frozen_before_suffix_outcomes_read']
+    assert config['protocol_set_before_suffix_outcomes_read']
     dump(out / 'e2a_config.json', config)
     manifest = json.loads((out / 'snapshot.json').read_text())
     profile_coverage = json.loads((out / 'profile_coverage.json').read_text())

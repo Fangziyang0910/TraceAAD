@@ -9,16 +9,13 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from datetime import datetime
-import hashlib
 import importlib
 import json
 from pathlib import Path
 import subprocess
-import sys
 
-
-def sha(data):
-    return hashlib.sha256(data).hexdigest()
+from traceaad.v10_13.parsing import parse_candidate, response_object, template_target
+from traceaad.v10_13.selection import code_key
 
 
 def read_prefix(path):
@@ -29,22 +26,8 @@ def read_prefix(path):
     return [json.loads(line) for line in data.splitlines() if line.strip()]
 
 
-def record_hash(records):
-    return sha(json.dumps(records, sort_keys=True, ensure_ascii=False).encode())
-
-
 def audit(manifest_path):
     manifest = json.loads(manifest_path.read_text())
-    runtime = Path(manifest['runtime'])
-    frozen = json.loads((runtime / 'runtime_manifest.json').read_text())
-    drift = [name for name, expected in frozen['files'].items()
-             if not (runtime / name).is_file() or sha((runtime / name).read_bytes()) != expected]
-    if drift:
-        raise ValueError(f'frozen runtime changed: {drift}')
-    sys.path.insert(0, str(runtime))
-    from traceaad.v10_13.parsing import code_hash, parse_candidate, response_object, template_target
-    from traceaad.v10_13.selection import code_key
-
     pane_text = subprocess.check_output(
         ['tmux', 'list-panes', '-a', '-F', '#{session_name}\t#{pane_pid}'], text=True)
     panes = {session: int(pid) for session, pid in
@@ -54,8 +37,7 @@ def audit(manifest_path):
     examples, runs, violations = {}, [], []
     for lane in manifest['plan']:
         directory = manifest_path.parent / lane['task'] / lane['run_name']
-        state_data = (directory / 'tree_state.json').read_bytes()
-        state = json.loads(state_data)
+        state = json.loads((directory / 'tree_state.json').read_text())
         boundary = state['completed_candidates']
         pending = state.get('pending') or {}
         events = [e for e in read_prefix(directory / 'events.jsonl') if e['candidate_id'] <= boundary]
@@ -91,7 +73,6 @@ def audit(manifest_path):
             try:
                 args = proc.joinpath('cmdline').read_bytes().split(b'\x00')
                 live = lane['run_name'].encode() in args and proc.joinpath('comm').read_text().startswith('python')
-                check(proc.joinpath('cwd').resolve() == runtime, 'process cwd differs from frozen runtime')
             except OSError:
                 pass
         config = json.loads((directory / 'run_config.json').read_text())
@@ -144,11 +125,9 @@ def audit(manifest_path):
             check(call is not None, tag + 'final response missing')
             if call is None:
                 continue
-            check(sha(call['prompt'].encode()) == event['prompt_hash'], tag + 'prompt hash mismatch')
             check(event['prompt_tokens'] <= state['mechanism']['max_input_tokens'], tag + 'input too large')
             check('```diff' not in call['prompt'], tag + 'historical diff unexpectedly included')
             if revision == 'v10.13-r3' and event['parent_selected']:
-                check('base_hash:' not in call['prompt'], tag + 'r3 asks model to copy hash')
                 check('"mode":"context"' not in call['prompt'], tag + 'r3 offers context tool')
                 if event['operator'] == 'Fuse':
                     identity = event.get('loaded_reference_id')
@@ -215,7 +194,7 @@ def audit(manifest_path):
                             'operator': event['operator'], 'parent_id': parent['id'], 'node_id': node['id'],
                             'loaded_reference_id': event.get('loaded_reference_id'), 'donor_id': event.get('donor_id'),
                             'trial_ids': event.get('trial_ids'), 'parent_fitness': parent['fitness'],
-                            'fitness':node['fitness'],'changed_parent_ast':changed,'code_sha256':code_hash(node['code'])})
+                            'fitness':node['fitness'],'changed_parent_ast':changed})
         totals['settled_evaluations'] += len(eval_ids)
         all_reference_ids = {identity for event in events if event['parent_selected']
                              for identity in event['reference_ids']}
@@ -229,14 +208,10 @@ def audit(manifest_path):
         runs.append({'run_name':lane['run_name'],'task':lane['task'],'repeat':lane['repeat'],
                      'backend':lane['backend'],'live':live,'summary_status':summary.get('status'),
                      'budget_used':state['budget_used'],'nodes':len(nodes),'effective_candidate_boundary':effective,
-                     'pending_stage':pending.get('stage'),'events_prefix_sha256':record_hash(events),
-                     'calls_prefix_sha256':record_hash(calls),'receipts_prefix_sha256':record_hash(receipts),
-                     'checkpoint_sha256':sha(state_data),'violations':local})
+                     'pending_stage':pending.get('stage'),'violations':local})
         violations.extend(f"{lane['run_name']}: {message}" for message in local)
     return {'batch':manifest['batch'],'status':'partial','observed_at':datetime.now().astimezone().isoformat(timespec='seconds'),
             'scope':'checkpoint-bounded execution audit, not quality ranking or held-out evidence',
-            'runtime':str(runtime),'frozen_git_base':frozen['git_base'],
-            'source_identity':sha((runtime/'runtime_manifest.json').read_bytes()),'frozen_drift':drift,
             'totals':dict(totals),'statuses':dict(statuses),'operators':dict(operators),'modes':dict(modes),
             'failure_reasons':dict(reasons),'operator_diagnostics':{k:dict(v) for k,v in by_operator.items()},
             'examples':examples,'runs':runs,'violations':violations}

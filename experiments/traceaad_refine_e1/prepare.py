@@ -1,6 +1,5 @@
-"""Freeze a read-only V10.6 prefix; never repair or modify live journals."""
+"""Copy a read-only V10.6 prefix without modifying live journals."""
 import argparse
-import hashlib
 import json
 from collections import Counter
 from datetime import datetime, timezone
@@ -23,7 +22,7 @@ def records(path):
     return [json.loads(line) for line in data[:end].splitlines() if line.strip()]
 
 
-def freeze(out):
+def prepare_snapshot(out):
     if (out / 'snapshot.json').exists():
         return json.loads((out / 'snapshot.json').read_text())
     manifest = ROOT / 'experiments/traceaad_v10_6/results/batch_20260906_215231_revised.json'
@@ -50,21 +49,19 @@ def freeze(out):
             if e.get('parent_delta') is not None:
                 assert abs(e['parent_delta'] - (e['fitness'] - e['parent_fitness'])) < 1e-10
         target = out / 'snapshot' / spec['run_name']
-        # Keep immutable inputs necessary for replay; source journals may keep growing.
+        # Keep the inputs necessary for replay; source journals may keep growing.
         dump(target / 'tree_state.json', state)
         dump(target / 'run_config.json', json.loads((source / 'run_config.json').read_text()))
         for name, rows in [('events.jsonl', events), ('evaluations.jsonl', receipts)]:
             (target / name).write_text(''.join(json.dumps(e, ensure_ascii=False) + '\n' for e in rows))
-        hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in target.iterdir()}
         counts = Counter(e['parent_id'] for e in refinements)
         runs.append(dict(spec, source=str(source), cutoff_attempt=cutoff,
             cutoff_evaluation=state['budget_used'], nodes=len(nodes), refine=len(refinements),
             refine_parents=len(counts), parents_one_or_two=sum(v <= 2 for v in counts.values()),
             improved=sum(bool(e.get('parent_improved')) for e in refinements),
             status_counts=dict(Counter(e['status'] for e in refinements)),
-            fallback_refine=sum(e['requested_operator']=='Fuse' and e['operator']=='Refine' for e in events),
-            hashes=hashes))
-    result = dict(frozen_at=datetime.now(timezone.utc).isoformat(), source_batch=str(manifest), runs=runs)
+            fallback_refine=sum(e['requested_operator']=='Fuse' and e['operator']=='Refine' for e in events)))
+    result = dict(created_at=datetime.now(timezone.utc).isoformat(), source_batch=str(manifest), runs=runs)
     dump(out / 'snapshot.json', result)
     return result
 
@@ -73,7 +70,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', type=Path, default=DEFAULT)
     args = parser.parse_args()
-    result = freeze(args.out)
+    result = prepare_snapshot(args.out)
     print(json.dumps({'runs':len(result['runs']), 'refine':sum(r['refine'] for r in result['runs']),
                       'parents':sum(r['refine_parents'] for r in result['runs']),
                       'improved':sum(r['improved'] for r in result['runs'])}))

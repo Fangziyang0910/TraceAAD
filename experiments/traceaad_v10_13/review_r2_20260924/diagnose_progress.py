@@ -1,7 +1,6 @@
 """Offline diagnostics bounded by the saved 01:22 protocol audit; never evaluates code."""
 from collections import Counter, defaultdict
 from datetime import datetime
-import hashlib
 import json
 from pathlib import Path
 import statistics
@@ -87,7 +86,7 @@ def diagnostics(run, budget=None):
             matches = [c for c in run['calls'] if c['candidate_id'] == event['candidate_id']]
             call = matches[-1] if matches else {}
         if selected and op in ('Refine','Tune'):
-            prompts[event['parent_id'],op,call.get('prompt_hash')] += 1
+            prompts[event['parent_id'],op,call.get('prompt')] += 1
         if event['status'] == 'invalid_output':
             text = THINK_BLOCK_RE.sub('', call.get('response', '')).strip()
             payload = response_object(text)
@@ -144,7 +143,7 @@ def diagnostics(run, budget=None):
 
 def main():
     versions={'r1':load_batch('20260923_v1013'),'r2':load_batch('20260924_v1013r2', LIMITS)}
-    tasks=sorted({t for t,_ in versions['r2']});comparison=[];all_diag={}; prefix_identity=[]
+    tasks=sorted({t for t,_ in versions['r2']});comparison=[];all_diag={}; prefixes=[]
     for task in tasks:
         common=min(max(e.get('evaluation_id') or 0 for e in versions[v][task,rep]['events'])
                    for v in versions for rep in range(1,5))//10*10
@@ -161,10 +160,9 @@ def main():
         for (task,rep), run in runs.items():
             all_diag[v][run['lane']['run_name']]={'task':task,'rep':rep,'all':diagnostics(run),
                                                  'E50':diagnostics(run,50)}
-            prefix_identity.append({'version':v,'run':run['lane']['run_name'],'last_candidate':run['events'][-1]['candidate_id'],
-                 'events_sha256':hashlib.sha256(json.dumps(run['events'],sort_keys=True,ensure_ascii=False).encode()).hexdigest(),
-                 'calls_sha256':hashlib.sha256(json.dumps(run['calls'],sort_keys=True,ensure_ascii=False).encode()).hexdigest()})
-    output={'status':'partial','boundary_source':'progress_0121_protocol.json','comparison':comparison,'diagnostics':all_diag,'prefixes':prefix_identity}
+            prefixes.append({'version':v,'run':run['lane']['run_name'],
+                             'last_candidate':run['events'][-1]['candidate_id']})
+    output={'status':'partial','boundary_source':'progress_0121_protocol.json','comparison':comparison,'diagnostics':all_diag,'prefixes':prefixes}
     path=HERE/'progress_0121_diagnostics.json'
     if path.exists():raise FileExistsError(path)
     path.write_text(json.dumps(output,ensure_ascii=False,indent=2)+'\n')

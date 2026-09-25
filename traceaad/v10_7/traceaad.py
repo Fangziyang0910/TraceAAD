@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-import hashlib
 import json
-from pathlib import Path
 import traceback
 import time
 
@@ -13,8 +11,6 @@ from traceaad.v10_3.traceaad import TraceAADV103
 from traceaad.v10_5.traceaad import (
     TraceAADV105, UnknownEvaluation, atomic_json, ess,
 )
-from traceaad.v10_6 import prompts as v106_prompts
-from traceaad.v10_6 import traceaad as v106_traceaad
 from traceaad.v10_6.traceaad import (
     OPERATOR_PROBABILITIES, TraceAADV106, joint_parent_distribution,
 )
@@ -45,7 +41,6 @@ class TraceAADV107(TraceAADV106):
             context_policy=sampling.CONTEXT_POLICY,
             max_context_programs=max_context_programs,
             reference_fit_attempts=sampling.MAX_FIT_ATTEMPTS,
-            task_contract_hash=hashlib.sha256(self.task_contract.encode()).hexdigest(),
         )
         # donor_topk/traj_gens/history_tokens only satisfy the inherited
         # constructor and feed history rendering the V10.7R path never calls
@@ -57,14 +52,6 @@ class TraceAADV107(TraceAADV106):
             for key in ('donor_topk', 'traj_gens', 'history_tokens')
             if key in self.mechanism
         }
-        for source in [
-            Path(__file__), Path(prompts.__file__), Path(sampling.__file__),
-            Path(v106_traceaad.__file__), Path(v106_prompts.__file__),
-        ]:
-            self.mechanism['source_hashes'][str(source.resolve())] = hashlib.sha256(
-                source.read_bytes()
-            ).hexdigest()
-
     def _log_call(self, record):
         TraceAADV105._log_call(self, record)
 
@@ -136,7 +123,6 @@ class TraceAADV107(TraceAADV106):
             context_program_roles=[roles[node.id] for node in programs],
             context_view_omissions=view_omissions,
         )
-        template_hash = prompts.TRAJECTORY_TEMPLATE_HASH
         context.update(
             context_best_fitness=max(
                 (node.fitness for node in programs), default=None,
@@ -144,7 +130,6 @@ class TraceAADV107(TraceAADV106):
         )
         context.update(scheduling_seconds=time.monotonic() - scheduling_started,
                        tokenizer_requests=len(self.builder._counts) - counts_before)
-        prompt_hash = hashlib.sha256(prompt_text.encode()).hexdigest()
         return {
             'candidate_id': self.completed_attempts + 1, 'phase': 'selected',
             'requested_operator': requested, 'operator': operator,
@@ -155,8 +140,6 @@ class TraceAADV107(TraceAADV106):
             'donor_fitness': donor.fitness if donor else None,
             'best_before': self.tree.best().fitness if self.tree.nodes else None,
             'prompt': prompt_text, 'prompt_tokens': prompt_tokens,
-            'prompt_hash': prompt_hash,
-            'template_hash': template_hash,
             'context_policy': sampling.CONTEXT_POLICY,
             **context,
             'rng_state': list(self.rng.getstate()), 'llm_attempts': 0,
@@ -220,8 +203,6 @@ class TraceAADV107(TraceAADV106):
         )
         if duplicates:
             record['duplicate_matches'] = duplicates
-        if parsed is not None:
-            record['code_hash'] = hashlib.sha256(parsed[1].encode()).hexdigest()
         if node is not None and pending['parent_id'] is not None:
             record.update(
                 parent_improved=node.fitness > pending['parent_fitness'],

@@ -1,4 +1,4 @@
-"""Freeze and continuously fill all 27 slots with the random-reference ablation.
+"""Continuously fill all 27 slots with the random-reference ablation.
 
 Context ablation arm: the formation-history block is replaced by eight archive
 algorithms (idea + measured fitness) drawn per request by rank softmax. CVRP
@@ -7,10 +7,7 @@ starts as soon as slots free up.
 """
 
 import subprocess
-import sys
 from pathlib import Path
-
-from .freeze import freeze
 
 
 BATCH = '20260916_v1011_rand_ctx'
@@ -19,17 +16,14 @@ PREFIX = 'v1011rc'
 
 def main():
     root = Path(__file__).resolve().parents[2]
-    runtime = root / 'experiments/traceaad_v10_11/results' / f'runtime_{BATCH}'
-    if not runtime.exists():
-        freeze(BATCH, PREFIX)
     subprocess.run([
-        sys.executable, '-m', 'experiments.traceaad_v10_11.launch',
+        'uv', 'run', 'python', '-m', 'experiments.traceaad_v10_11.launch',
         '--batch', BATCH, '--session-prefix', PREFIX,
         '--rand-context', '--n-references', '8', '--repeats', '3',
         '--cvrp-last',
         '--backends', 'local,server1,server3,server3b',
         '--direct', '--watch', '--interval', '30',
-    ], cwd=runtime, check=True)
+    ], cwd=root, check=True)
 
 
 if __name__ == '__main__':

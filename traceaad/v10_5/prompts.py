@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import time
 
 from traceaad.v10_3.prompts import build_task_contract, strip_comments_for_prompt
@@ -50,11 +49,6 @@ OUTPUT = (
     "Keep the Idea brief, roughly within 100 words. Use code comments for important\n"
     "implementation constraints when useful, without repeating the design discussion."
 )
-TEMPLATE_HASH = hashlib.sha256(
-    (PRINCIPLE + "\n".join(INSTRUCTIONS.values()) + OUTPUT).encode()
-).hexdigest()
-
-
 @dataclass(frozen=True)
 class Prompt:
     text: str
@@ -98,11 +92,11 @@ class PromptBuilder:
         self._views: dict[int, str] = {}
 
     def count(self, text: str, *, chat: bool = False) -> int:
-        key = (chat, hashlib.sha256(text.encode()).hexdigest())
+        key = (chat, text)
         if key not in self._counts:
             fn = self.llm.count_prompt_tokens if chat else self.llm.count_tokens
             started = time.time()
-            record = {'kind': 'chat' if chat else 'text', 'text_hash': key[1]}
+            record = {'kind': 'chat' if chat else 'text'}
             try:
                 self._counts[key] = fn(text)
                 record['tokens'] = self._counts[key]

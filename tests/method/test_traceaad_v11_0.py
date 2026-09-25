@@ -295,7 +295,7 @@ def test_pivot_prompt_shows_reference_cards_and_records_ids(tmp_path, monkeypatc
     assert events[0]["operator"] == "Pivot"
     assert events[0]["reference_ids"] == [root.id]
     selection = events[0]["selection"]
-    assert set(selection) == {"code_digest", "mean_fitness", "percentile", "attempts",
+    assert set(selection) == {"mean_fitness", "percentile", "attempts",
                               "bonus", "score", "tie_group_size", "formation_candidates"}
     assert selection["percentile"] == 1.0 and selection["mean_fitness"] == 2
 
@@ -333,7 +333,7 @@ def test_new_operator_instructions_match_the_design():
     )
 
 
-def test_frozen_prompt_parts_match_v1011():
+def test_shared_prompt_parts_match_v1011():
     from traceaad.v10_11.parsing import OUTPUT as V1011_OUTPUT
     from traceaad.v10_11.prompts import OPERATOR_INSTRUCTIONS as V1011_INSTRUCTIONS
     assert OUTPUT == V1011_OUTPUT
@@ -501,7 +501,7 @@ def test_persistence_keeps_single_copies_and_replays_code_statistics(tmp_path):
     m.run()
     calls = read_journal(m.storage.llm_calls_path)
     assert calls and all("prompt" not in call for call in calls)
-    assert all(call.get("prompt_hash") and call.get("response") for call in calls)
+    assert all(call.get("response") for call in calls)
     state = json.loads(m.storage.state_path.read_text())
     assert len(state["nodes"]) == 2 and len(state["code_attempts"]) == len(m.codebook.entries)
     assert sum(state["code_attempts"].values()) == state["step_counter"]

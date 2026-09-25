@@ -2,7 +2,6 @@
 
 import json
 import math
-from pathlib import Path
 import time
 import traceback
 
@@ -13,7 +12,6 @@ from traceaad.v10_7.sampling import (
     MAX_FIT_ATTEMPTS, _task_base_weights, _weighted_order,
 )
 from . import trajectory
-from .trajectory import digest
 
 SELECTION_POLICY = 'individual_quality_count_v1'
 DEDUP_POLICY = 'exact_parent_donor_raw_and_view_v1'
@@ -25,7 +23,6 @@ class TraceAADV108(v107.TraceAADV107):
     DISPLAY_NAME = 'V10.8'
     STATE_VERSION = 1081
     OPERATOR_PROBABILITIES = v107.OPERATOR_PROBABILITIES
-    TEMPLATE_HASH = trajectory.TEMPLATE_HASH
     CONTEXT_POLICY = trajectory.CONTEXT_POLICY
 
     def __init__(self, *, history_tokens=8192, allocation_arm='A', **kwargs):
@@ -66,9 +63,6 @@ class TraceAADV108(v107.TraceAADV107):
             except (TypeError, ValueError):
                 continue
         self.mechanism['evaluation_config'] = config
-        for source in (Path(__file__), Path(trajectory.__file__), Path(v107.__file__)):
-            self.mechanism['source_hashes'][str(source.resolve())] = digest(source.read_text())
-
     def node_distribution(self, nodes, operator):
         scores = [node.fitness for node in nodes]
         progress = min(1.0, self.budget_used / self.budget)
@@ -107,7 +101,6 @@ class TraceAADV108(v107.TraceAADV107):
         return None, attempts
 
     def _duplicate_inputs(self, code):
-        code_hash = digest(code)
         matches = []
         for role in ('parent', 'donor'):
             node_id = self.pending[role + '_id']
@@ -115,7 +108,7 @@ class TraceAADV108(v107.TraceAADV107):
                 continue
             node = self.tree.nodes[node_id]
             for view, text in (('raw', node.code), ('prompt', self.builder.code_view(node)[0])):
-                if code_hash == digest(text.strip()) and code == text.strip():
+                if code == text.strip():
                     matches.append({'role': role, 'node_id': node_id, 'view': view})
         return matches
 
@@ -161,7 +154,6 @@ class TraceAADV108(v107.TraceAADV107):
             'best_before': self.tree.best().fitness if self.tree.nodes else None,
             'operator_probabilities': self.OPERATOR_PROBABILITIES, 'selection': selection,
             'donor_attempts': donor_attempts, 'prompt': text, 'prompt_tokens': tokens,
-            'prompt_hash': digest(text), 'template_hash': self.TEMPLATE_HASH,
             'context_policy': self.CONTEXT_POLICY, **context,
             'scheduling_seconds': time.monotonic() - started,
             'tokenizer_requests': len(self.builder._counts) - counts_before,

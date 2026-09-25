@@ -2,7 +2,7 @@
 
 import ast
 
-from traceaad.v10_8.trajectory import TrajectoryBuilder as BaseBuilder, digest
+from traceaad.v10_8.trajectory import TrajectoryBuilder as BaseBuilder
 from .errors import OUTPUT
 
 GENERATION = 'target_function_idea500_template_rebuild_one_repair_v3'
@@ -38,9 +38,6 @@ HISTORY_NOTE = (
     'Use the sequence of design ideas and observed fitness changes to understand '
     'how the current algorithm developed and guide this design.'
 )
-TEMPLATE_HASH = digest(str(INSTRUCTIONS) + HISTORY_TITLE + HISTORY_NOTE + OUTPUT)
-
-
 class TrajectoryBuilder(BaseBuilder):
     def __init__(self, *args, all_nodes, **kwargs):
         super().__init__(*args, **kwargs)

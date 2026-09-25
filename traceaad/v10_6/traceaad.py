@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import ast
-import hashlib
 import json
-from pathlib import Path
 import re
 import time
 import traceback
@@ -37,10 +35,7 @@ class TraceAADV106(TraceAADV105):
             summary_tokens=summary_tokens, lookup=self.tree.nodes.get,
             log_count=lambda record: self._append_record(self.run_dir / 'tokenizer_calls.jsonl', record))
         self.mechanism.update(summary_tokens=summary_tokens, task_name=task_name,
-            generation=prompts.GENERATION,
-            task_contract_hash=hashlib.sha256(self.task_contract.encode()).hexdigest())
-        for p in [Path(__file__), Path(prompts.__file__)]:
-            self.mechanism['source_hashes'][str(p.resolve())] = hashlib.sha256(p.read_bytes()).hexdigest()
+                              generation=prompts.GENERATION)
 
     def parse_response(self, response, finish_reason='unknown'):
         if finish_reason not in ['stop', 'length', 'unknown']:
@@ -103,9 +98,7 @@ class TraceAADV106(TraceAADV105):
                 call_id=f"{p['candidate_id']}:summary:{p['summary_attempts']}",
                 candidate_id=p['candidate_id'], stage='thought_alignment',
                 operator=p['operator'], requested_operator=p['requested_operator'],
-                prompt=prompt, prompt_tokens=tokens,
-                prompt_hash=hashlib.sha256(prompt.encode()).hexdigest(),
-                template_hash=prompts.TEMPLATE_HASH, sampling=self.mechanism['llm'],
+                prompt=prompt, prompt_tokens=tokens, sampling=self.mechanism['llm'],
                 max_tokens=self.output_tokens)
             started = time.time()
             try:
@@ -165,8 +158,7 @@ class TraceAADV106(TraceAADV105):
             "donor_fitness": donor.fitness if donor else None,
             "best_before": self.tree.best().fitness if self.tree.nodes else None,
             "prompt": prompt.text, "prompt_tokens": prompt.tokens,
-            "prompt_hash": hashlib.sha256(prompt.text.encode()).hexdigest(),
-            "template_hash": prompts.TEMPLATE_HASH, "history_ids": prompt.history_ids,
+            "history_ids": prompt.history_ids,
             "context_omissions": prompt.omissions, "history_tokens": prompt.history_tokens,
             "context_summaries": prompt.summaries, "rng_state": list(self.rng.getstate()),
             "llm_attempts": 0,

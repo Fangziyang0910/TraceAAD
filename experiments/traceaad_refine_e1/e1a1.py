@@ -174,7 +174,7 @@ def write_report(out, summary, subsets, q_audit):
     lines = [
         '# E1-A.1 结果：质量条件下的行为增量检验', '',
         f'**阶段判断：{decision}**', '',
-        '本分析由 E1-A 的后验发现触发，复用同一冻结数据和严格时间回放。它不修改 E1-A 的主结论，也不新增 LLM 生成、正式 evaluator 调用或在线控制改动。', '',
+        '本分析由 E1-A 的后验发现触发，复用同一快照数据和严格时间回放。它不修改 E1-A 的主结论，也不新增 LLM 生成、正式 evaluator 调用或在线控制改动。', '',
         '## 1. 核心结果', '',
         f'QB_kernel 相对 Q_kernel 的 run 宏平均 Brier 变化为 **{g["relative_macro_brier_change"]:+.2%}**，'
         f'{g["tasks_better"]}/5 个任务、{d["runs_better"]}/15 个 run 改善。配对差为 {d["mean"]:+.6f}，'
@@ -210,7 +210,7 @@ def write_report(out, summary, subsets, q_audit):
         lines.append(f'| {label} | {q["n"]} | {q["brier"]:.6f} | {qb["brier"]:.6f} | {qb["brier"]-q["brier"]:+.6f} |')
     lines += ['', 'first-parent-use 用于检验新节点能否借用其他节点的历史响应；完整支持子集用于排除行为画像缺失造成的回退。两者均沿用原warmup和当前parent排除规则。', '',
         '## 4. 研究含义', '',
-        ('通过门槛只说明在这批冻结数据上，行为距离在质量局部组内提供了可复现的额外信息；由于问题来自E1-A后验观察，仍需独立数据确认后才能设计控制器。' if gate else
+        ('通过门槛只说明在这批快照数据上，行为距离在质量局部组内提供了可复现的额外信息；由于问题来自E1-A后验观察，仍需独立数据确认后才能设计控制器。' if gate else
          '本轮不能把 Q_kernel 的优势归因于被fitness掩盖的行为局部性。若 QB 与置乱相当或弱于Q，说明当前BehaveSim没有展示出控制质量后的独立响应信息；继续做原版behavior Near/Far E1-B缺少依据。'), '',
         '无论本轮结果如何，Q_kernel 的好表现仍可能只是对非线性 `fitness → improvement rate` 的非参数校准，并不自动等价于更好的预算分配。AP、lift和top组收益只作为后验控制器诊断，不能替代Brier主判断。', '',
         f'控制器诊断本身也不一致：QB 的 pooled AP 从 {summary["overall"]["Q_kernel"]["average_precision"]:.4f} 变为 {summary["overall"]["QB_kernel"]["average_precision"]:.4f}，'
@@ -245,7 +245,7 @@ def plot(summary):
 
 def main(out=DEFAULT):
     config = json.loads((Path(__file__).with_name('e1a1_config.json')).read_text())
-    assert config['frozen_before_prediction'] and config['permutations'] == PERMUTATIONS
+    assert config['protocol_set_before_prediction'] and config['permutations'] == PERMUTATIONS
     manifest = json.loads((out / 'snapshot.json').read_text())
     old = {(r['run'], r['candidate_id']): r for r in map(json.loads, (out / 'replay_predictions.jsonl').read_text().splitlines())}
     rows = []

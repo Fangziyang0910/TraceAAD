@@ -4,8 +4,6 @@ import ast
 from bisect import bisect_left, bisect_right
 from functools import lru_cache
 
-from .storage import digest
-
 OPERATORS = ("Refine", "Tune", "Pivot", "Fuse")
 OPERATOR_PROBABILITIES = {operator: 0.25 for operator in OPERATORS}
 EXPLORATION_C = 0.1
@@ -94,9 +92,9 @@ class CodeBook:
         return self.entries[key]["node_ids"]
 
     def attempts_table(self):
-        return {digest(key): entry["attempts"] for key, entry in self.entries.items()}
+        return {key: entry["attempts"] for key, entry in self.entries.items()}
 
     def restore_attempts(self, table):
-        """Rebuild attempt counts from a checkpoint digest table."""
+        """Rebuild attempt counts from a checkpoint table."""
         for key in self.entries:
-            self.entries[key]["attempts"] = table.get(digest(key), 0)
+            self.entries[key]["attempts"] = table.get(key, 0)

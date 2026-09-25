@@ -39,7 +39,7 @@ def main():
         f'> 更新：{datetime.now().astimezone().isoformat(timespec="seconds")}。本次固定测试 24 路，已有 {count}/24 路写出完整测试记录。', '',
         '## 批次与范围', '',
         '正式批次为五任务 × 五重复（seed=0–4），每路 1000 次真实评价。用户指定测试启动时已经完成的 24 路：TSP、OP、OBP、VRPTW 各 rep1–5，CVRP rep1/2/4/5。CVRP rep3 不在本次 24 路测试集合中；即使随后完赛，也不自动混入本次均值。', '',
-        f'CVRP rep3 已在 929/1000、candidate 939 的 `selected` 阶段保存并切换到 `local` 续跑；本次文档刷新时检查点为 {state["budget_used"]}/1000。保留原任务、seed、搜索机制、总预算和冻结运行时。实际本地调用和后续评价已写入该路 `llm_calls.jsonl`、`events.jsonl`。', '',
+        f'CVRP rep3 已在 929/1000、candidate 939 的 `selected` 阶段保存并切换到 `local` 续跑；本次文档刷新时检查点为 {state["budget_used"]}/1000。保留原任务、seed、搜索机制、总预算和历史运行副本。实际本地调用和后续评价已写入该路 `llm_calls.jsonl`、`events.jsonl`。', '',
         '本次 held-out 对每路只选训练 best，未按测试分数重选程序。CVRP 为四重复，其余为五重复；V10.11 generic 对照为三重复。表中均值与样本标准差描述本次观察，不代表显著性检验，也不能单独归因为 V11 的某一项机制。', '',
         '## 训练 best（本次固定 24 路）', '',
         '| 任务 | rep1 | rep2 | rep3 | rep4 | rep5 | 均值 ± 样本标准差 |',
@@ -53,7 +53,7 @@ def main():
                      f' | {fmt(statistics.fmean(vals))} ± {fmt(statistics.stdev(vals))} |')
     lines += ['', '## Held-out 测试', '',
               'TSP/VRPTW：seed 2025，16 实例，规模 50/100/200；CVRP/OP：固定 test_50/100/200，各 64 实例，ACO seed 1234，蚂蚁数/迭代数分别为 30/100 与 20/50；OBP：seed 2025，六档规模各五实例。评测复用 `experiments.infra.evaluate`，未修改五任务数据与种子契约。TSP timeout=3000 秒，VRPTW held-out timeout=1000 秒，OBP timeout=30 秒；TSP/ACO workers=8。', '',
-              '初始 VRPTW 批量入口在 rep4 的训练 sanity 阶段返回无分数并中止，原始日志保留。补充脚本逐路记录训练 sanity 成败，继续评价同一 best 程序的三个 held-out 规模；未替换候选，也未把失败项删除后冒充完整均值。训练 sanity 仍使用冻结的 30 秒超时。', '']
+              '初始 VRPTW 批量入口在 rep4 的训练 sanity 阶段返回无分数并中止，原始日志保留。补充脚本逐路记录训练 sanity 成败，继续评价同一 best 程序的三个 held-out 规模；未替换候选，也未把失败项删除后冒充完整均值。训练 sanity 仍使用固定的 30 秒超时。', '']
     lines += ['表中若成功数小于应测数，均值仅描述成功子集，不能作为完整批次均值参与排名。', '']
     comparison = []
     errors = []
@@ -125,12 +125,12 @@ def main():
               '按用户最终明确的范围，停止 server1 的一个与 server3 的两个 vLLM，共三项：server1:8080、server3:8000、server3:8001。服务停止前请求队列为空；停止后 API/engine 进程和对应监听端口均已消失。三项 engine 原占用约 32004、30038、29820 MiB，合计 91862 MiB（约 89.71 GiB）。server1 GPU0 最后核对为 5 MiB、server3 GPU0 为 15 MiB；server3 GPU1 的剩余占用来自其他进程，不在本次释放范围。server3:8001 在范围澄清过程中短暂重启，最终已再次停止。', '',
               '## 可复核产物', '',
               '- 正式清单：`experiments/traceaad_v11_0/results/batch_20260917.json`。',
-              '- 冻结运行时：`experiments/traceaad_v11_0/results/runtime_20260917/`。',
+              '- 历史运行副本：`experiments/traceaad_v11_0/results/runtime_20260917/`。',
               '- 服务释放与迁移证据：`experiments/traceaad_v11_0/results/service_release_20260918.json`。',
               '- 固定 24 路选择及 best 标识：`experiments/traceaad_v11_0/results_heldout_20260917_completed24/selection.json`。',
               '- 测试入口：同目录 `run_heldout.sh`，VRPTW 容错补测入口为 `run_vrptw_per_run.py`。',
               '- 结果：同目录各任务 `results.json`；VRPTW 为 `vrptw_construct_per_run/results.json`，原始失败日志为 `vrptw_construct.log`。',
-              '- 本页由 `.venv/bin/python experiments/traceaad_v11_0/report_completed24.py` 从固定选择与结果文件生成。', '']
+              '- 本页由 `uv run python experiments/traceaad_v11_0/report_completed24.py` 从固定选择与结果文件生成。', '']
     DOC.write_text('\n'.join(lines), encoding='utf-8')
     print(json.dumps({'document': str(DOC), 'complete_run_records': count, 'successful_cells': successes,
                       'attempted_cells': attempts, 'all_results_written': count == 24}, ensure_ascii=False))

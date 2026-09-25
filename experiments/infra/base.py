@@ -15,7 +15,6 @@ import os
 import random
 import shlex
 import subprocess
-import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -331,7 +330,9 @@ class LaunchItem:
         if self.backend is None:
             raise ValueError(f"backend not assigned for {self.run_name}")
         return (
-            sys.executable,
+            "uv",
+            "run",
+            "python",
             "-m",
             self.module,
             "--task",
