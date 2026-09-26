@@ -1,5 +1,8 @@
 import json
 import random
+from types import SimpleNamespace
+
+import pytest
 
 from core import Evaluation
 from traceaad.v10_13 import TraceAADV1013
@@ -51,7 +54,7 @@ def response(value):
     return f"Idea: return {value}\n```python\ndef score(x):\n    return {value}\n```"
 
 
-def make_method(path, llm, *, budget=1, n_roots=1, seed=0):
+def make_method(path, llm, *, budget=1, n_roots=1, seed=0, init_mode=None):
     return TraceAADV1013(
         evaluation=TinyEvaluation(),
         llm=llm,
@@ -59,7 +62,53 @@ def make_method(path, llm, *, budget=1, n_roots=1, seed=0):
         budget=budget,
         n_roots=n_roots,
         seed=seed,
+        **({"init_mode": init_mode} if init_mode is not None else {}),
     )
+
+
+@pytest.mark.parametrize("mode,n_roots,expected", [
+    (None, 8, [0, 0, 0, 0, 4, 5, 6, 7]),
+    ("independent", 8, [0] * 8),
+    ("sequential", 8, list(range(8))),
+    ("hybrid", 5, [0, 0, 0, 3, 4]),
+])
+def test_initialization_mode_controls_root_context(tmp_path, mode, n_roots, expected):
+    llm = FakeLLM(*(response(i) for i in range(n_roots)))
+    method = make_method(tmp_path, llm, budget=n_roots, n_roots=n_roots,
+                         init_mode=mode)
+    method.run()
+
+    assert [prompt.count("# Previous Initial Algorithm") for prompt, _ in llm.calls] == expected
+    assert len(method.tree.roots) == n_roots
+    assert all(method.tree.nodes[root_id].parent_id is None
+               for root_id in method.tree.roots)
+
+
+def test_failed_candidate_does_not_advance_hybrid_boundary(tmp_path):
+    llm = FakeLLM("invalid output", *(response(i) for i in range(8)))
+    method = make_method(tmp_path, llm, budget=8, n_roots=8)
+    method.run()
+
+    assert [prompt.count("# Previous Initial Algorithm") for prompt, _ in llm.calls] == [
+        0, 0, 0, 0, 0, 4, 5, 6, 7,
+    ]
+
+
+def test_new_run_defaults_to_hybrid_and_old_run_requires_original_mode(tmp_path, monkeypatch):
+    from experiments.traceaad_v10_13 import run as runner
+
+    args = runner.build_parser().parse_args(["--task", "tsp_construct"])
+    assert (args.init_mode, args.n_roots) == ("hybrid", 8)
+
+    (tmp_path / "run_config.json").write_text(json.dumps({"method_params": {"n_roots": 8}}))
+    llm = SimpleNamespace(close=lambda: None)
+    context = SimpleNamespace(resumed=True, run_dir=tmp_path, llm=llm)
+    monkeypatch.setattr(runner, "setup_experiment_run", lambda *args, **kwargs: context)
+    with pytest.raises(ValueError, match="resume with --init-mode sequential"):
+        runner.main(["--task", "tsp_construct"])
+    with pytest.raises(ValueError, match="resume with --n-roots 8"):
+        runner.main(["--task", "tsp_construct", "--init-mode", "sequential",
+                     "--n-roots", "4"])
 
 
 def test_parent_distribution_keeps_ess_and_uniform_exploration():

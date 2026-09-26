@@ -43,16 +43,19 @@ class TraceAADV1013:
 
     def __init__(self, *, evaluation, llm, run_dir, budget=1000, n_roots=8,
                  history_depth=3, output_tokens=8192, max_input_tokens=24320,
-                 seed=0):
+                 init_mode="hybrid", seed=0):
         if budget < n_roots or n_roots < 1 or history_depth < 0:
             raise ValueError("invalid budget, root, or history settings")
         if output_tokens < 1 or max_input_tokens < 1:
             raise ValueError("token limits must be positive")
+        if init_mode not in {"independent", "sequential", "hybrid"}:
+            raise ValueError("invalid initialization mode")
 
         self.llm = llm
         self.run_dir = Path(run_dir)
         self.budget = budget
         self.n_roots = n_roots
+        self.init_mode = init_mode
         self.output_tokens = output_tokens
         self.evaluator = SecureEvaluator(evaluation)
         self.template_program = evaluation.template_program
@@ -78,11 +81,27 @@ class TraceAADV1013:
             lookup=self.tree.nodes.get,
             all_nodes=self.tree.all_nodes,
         )
+        self.empty_prompts = PromptBuilder(
+            llm,
+            self.task_prompt,
+            max_tokens=max_input_tokens,
+            history_depth=history_depth,
+            lookup=self.tree.nodes.get,
+            all_nodes=lambda: [],
+        )
 
     def _schedule(self):
         candidate_id = self.candidate_count + 1
         if len(self.tree.roots) < self.n_roots:
-            prompt = self.prompts.build_initial()
+            independent_count = {
+                "independent": self.n_roots,
+                "sequential": 1,
+                "hybrid": (self.n_roots + 1) // 2,
+            }[self.init_mode]
+            independent = len(self.tree.roots) < independent_count
+            builder = self.empty_prompts if independent else self.prompts
+            prompt = builder.build_initial(
+                condition="independent" if independent else "informed")
             return Candidate(candidate_id, prompt.prompt, "Init", None, None)
 
         operator = self.rng.choices(
