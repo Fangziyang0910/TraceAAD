@@ -20,12 +20,11 @@ from scipy.stats import spearmanr
 from experiments.infra import behavior_profile as core
 
 from .analyze import read_jsonl, report_job
-from experiments.infra.base import REPO_ROOT
 
 from .launch import RESULTS, SCHEDULE, run_dir
 
 PROFILE_DIR = RESULTS / "behavior_profiles"
-REPORT = REPO_ROOT / "experiments_result" / "reports" / "traceaad_initialization" / "diversity_summary.json"
+REPORT = RESULTS / "diversity_summary.json"
 PANELS = ("A", "B")
 
 
