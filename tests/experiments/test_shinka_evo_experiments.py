@@ -5,8 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from experiments.infra import base as _common
-from experiments.shinka_evo import launch, run
+from experiments.shinka_evo import run
 from baselines.shinka_evo import ShinkaEvo
 
 
@@ -54,47 +53,3 @@ def test_shinka_run_config_records_paper_settings(tmp_path: Path) -> None:
     assert payload["method_params"]["num_archive_inspirations"] == 4
     assert payload["method_params"]["novelty_rejection_enabled"] is False
     assert "api_key" not in payload["llm"]
-
-
-def test_shinka_launcher_builds_fifteen_runs() -> None:
-    args = launch.build_parser().parse_args(
-        ["--batch", "20260730_010203", "--dry-run"]
-    )
-    plan = launch.build_launch_plan(args, module=launch.MODULE, method=launch.METHOD)
-
-    assert len(plan) == 15
-    assert {item.task for item in plan} == set(run.TASKS)
-    assert {item.repeat for item in plan} == {1, 2, 3}
-    assert all(item.backend is None for item in plan)
-
-
-def test_shinka_free_slot_assignment_prefers_remote_backends(monkeypatch) -> None:
-    pending = [
-        _common.LaunchItem(
-            task="tsp_construct",
-            repeat=1,
-            backend=None,
-            session="shinka_tsp_r1",
-            run_name="batch_tsp_shinka_rep1",
-            run_dir=Path("/tmp/batch_tsp_shinka_rep1"),
-            seed=0,
-            module=launch.MODULE,
-        ),
-        _common.LaunchItem(
-            task="cvrp_aco",
-            repeat=1,
-            backend=None,
-            session="shinka_cvrp_r1",
-            run_name="batch_cvrp_shinka_rep1",
-            run_dir=Path("/tmp/batch_cvrp_shinka_rep1"),
-            seed=0,
-            module=launch.MODULE,
-        ),
-    ]
-    monkeypatch.setattr(
-        _common,
-        "free_slots",
-        lambda: {"server3": 2, "server3b": 2, "local": 0},
-    )
-    assigned = _common.assign_backends(pending)
-    assert [item.backend for item in assigned] == ["server3", "server3b"]

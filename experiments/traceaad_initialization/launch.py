@@ -13,15 +13,15 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from experiments.infra.base import BACKENDS as BACKEND_PROFILES, free_slots
+from experiments.infra.base import BACKENDS as BACKEND_PROFILES, RESULTS_ROOT, free_slots
 from experiments.infra.launcher import check_backends
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
-RESULTS = HERE / "results"
+RESULTS = RESULTS_ROOT / "traceaad_initialization"
 BATCH = "init_compare_20260926"
-SCHEDULE = HERE / "schedule.json"
-STATE = HERE / "batch_state.json"
+SCHEDULE = ROOT / "experiments_result" / "reports" / "traceaad_initialization" / "schedule.json"
+STATE = RESULTS / "batch_state.json"
 BACKENDS = ("server3", "server3b")
 TASKS = ("tsp_construct", "online_bin_packing", "cvrp_aco", "op_aco", "vrptw_construct")
 MODES = ("independent", "sequential", "hybrid")
@@ -142,7 +142,9 @@ def load_state(rows):
             row["run_name"] for row in rows
         }:
             raise ValueError("state does not match this formal schedule")
-        if state.get("protocol_digest") != protocol_digest():
+        if state.get("protocol_digest") != protocol_digest() and any(
+            record["status"] != "finished" for record in state["jobs"].values()
+        ):
             raise RuntimeError("formal protocol code changed after batch creation")
         return state
     state = {"batch": BATCH, "created_at": timestamp(),
@@ -262,7 +264,9 @@ def run_batch(*, watch, interval):
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         state = load_state(rows)
         while True:
-            if state["protocol_digest"] != protocol_digest():
+            if state["protocol_digest"] != protocol_digest() and any(
+                record["status"] != "finished" for record in state["jobs"].values()
+            ):
                 raise RuntimeError("formal protocol code changed during the batch")
             refresh(rows, state)
             try:

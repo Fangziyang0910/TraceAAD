@@ -17,6 +17,7 @@ from typing import Any
 from experiments.infra.base import (
     ALL_TASKS,
     BACKENDS,
+    RESULTS_ROOT,
     BackendProfile,
     build_llm_client,
     build_task,
@@ -100,14 +101,14 @@ def setup_experiment_run(
     args: argparse.Namespace,
     *,
     method: str,
-    method_dir: Path,
+    results_root: Path | None = None,
     resume_file: str | None = None,
     method_params: dict[str, Any] | None = None,
     budget_basis: str | None = None,
 ) -> RunContext:
     """Set up the standard environment, LLM, task evaluation, and configuration."""
     profile = resolve_backend(args.backend, args.base_url, args.model, args.no_proxy)
-    task_root = method_dir / "results" / args.task
+    task_root = (results_root or RESULTS_ROOT / method) / args.task
     run_dir, run_name, resumed = resolve_resumable_run_dir(task_root, args.run_name, resume_file)
     log_dir = run_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -168,4 +169,3 @@ def setup_experiment_run(
         log_dir=log_dir,
         args=args,
     )
-

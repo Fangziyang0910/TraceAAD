@@ -2,9 +2,9 @@
 
 import argparse
 import json
-from pathlib import Path
 
 from experiments.infra.runner import FORMAL_BUDGET, add_common_run_args, setup_experiment_run
+from experiments.infra.base import RESULTS_ROOT
 from traceaad.v10_13 import TraceAADV1013
 
 
@@ -34,7 +34,7 @@ def main(argv=None):
         "output_tokens": args.output_tokens,
     }
     ctx = setup_experiment_run(
-        args, method="v1013", method_dir=Path(__file__).resolve().parent,
+        args, method="v1013", results_root=RESULTS_ROOT / "traceaad_v10_13",
         resume_file="tree_state.json", method_params=params,
         budget_basis="Each evaluator call consumes one budget unit.",
     )

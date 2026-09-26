@@ -86,7 +86,10 @@ def main(argv=None):
             summary_path = directory / "logs" / "run_summary.json"
             ready = summary_path.exists() and json.loads(
                 summary_path.read_text(encoding="utf-8")).get("status") == "finished"
-            status = "ready" if ready and not (directory / "heldout.json").exists() else "waiting"
+            if ready:
+                status = "existing" if (directory / "heldout.json").exists() else "ready"
+            else:
+                status = "waiting"
         else:
             status = evaluate_one(job, evaluators)
         counts[status] += 1

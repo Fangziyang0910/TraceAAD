@@ -5,8 +5,9 @@ from experiments.traceaad_v10_13.launch import (
     TARGET_DISTRIBUTION,
     build_plan,
     validate_plan,
+    run_dir,
 )
-from experiments.infra.base import TASKS
+from experiments.infra.base import RESULTS_ROOT, TASKS
 
 
 def test_v1013_plan_has_four_repeats_and_confirmed_three_pool_distribution():
@@ -19,6 +20,8 @@ def test_v1013_plan_has_four_repeats_and_confirmed_three_pool_distribution():
         (task, repeat) for task in TASKS for repeat in range(1, 5)
     }
     assert all(row["session"].startswith("test_v1013_") for row in plan)
+    assert all(run_dir(row) == RESULTS_ROOT / "traceaad_v10_13" / row["task"] / row["run_name"]
+               for row in plan)
 
 
 def test_error_summary_blocks_relaunch_even_if_session_is_alive(monkeypatch):

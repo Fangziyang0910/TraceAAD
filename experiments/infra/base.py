@@ -45,7 +45,7 @@ TaskName = Literal[
 BackendName = Literal["local", "server1", "server3", "server3b"]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-EXPERIMENTS_ROOT = REPO_ROOT / "experiments"
+RESULTS_ROOT = REPO_ROOT / "experiments_result" / "runs"
 TASKS: tuple[TaskName, ...] = (
     "tsp_construct",
     "cvrp_aco",
@@ -361,7 +361,7 @@ def build_launch_plan(
             short = TASK_SHORT[task]
             run_name = f"{args.batch}_{short}_{method}_rep{repeat}"
             session = f"{args.session_prefix}_{short}_r{repeat}"
-            run_dir = REPO_ROOT / "experiments" / task / method / run_name
+            run_dir = RESULTS_ROOT / method / task / run_name
             plan.append(
                 LaunchItem(
                     task=task,

@@ -17,11 +17,11 @@ import re
 import subprocess
 import time
 
-from experiments.infra.base import BACKEND_CAPACITY, TASKS, TASK_SHORT, free_slots
+from experiments.infra.base import BACKEND_CAPACITY, RESULTS_ROOT as ARCHIVE_ROOT, TASKS, TASK_SHORT, free_slots
 from experiments.infra.launcher import check_backends, get_summary_status
 
 ROOT = Path(__file__).resolve().parents[2]
-RESULTS_ROOT = Path(__file__).resolve().parent / "results"
+RESULTS_ROOT = ARCHIVE_ROOT / "traceaad_v10_13"
 BACKEND_POOL = ("server1", "server3", "server3b")
 TARGET_DISTRIBUTION = {"server1": 5, "server3": 8, "server3b": 7}
 REPEATS = 4

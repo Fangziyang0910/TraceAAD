@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RESULTS_ROOT = REPO_ROOT / "experiments/traceaad_v10_13/results"
+DEFAULT_RESULTS_ROOT = REPO_ROOT / "experiments_result/runs/traceaad_v10_13"
 HTML_FILE = Path(__file__).with_name("training_monitor.html")
 
 TASKS = {

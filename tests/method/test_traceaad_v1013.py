@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from core import Evaluation
 from traceaad.v10_13 import TraceAADV1013
 from traceaad.v10_13.parsing import parse_candidate, template_target
 from traceaad.v10_13.prompts import PromptBuilder
@@ -18,40 +17,7 @@ from traceaad.v10_13.selection import (
 )
 from traceaad.v10_13.storage import read_journal
 from traceaad.v10_13.tree import Node
-
-
-class TinyEvaluation(Evaluation):
-    def __init__(self):
-        super().__init__(
-            template_program="def score(x):\n    pass",
-            task_description="Return a numeric score.",
-            safe_evaluate=False,
-        )
-
-    def evaluate_program(self, program_str, callable_func, **kwargs):
-        return callable_func(1)
-
-
-class FakeLLM:
-    def __init__(self, *responses):
-        self.responses = iter(responses)
-        self.calls = []
-
-    def count_prompt_tokens(self, text):
-        return len(text.split())
-
-    def draw_sample_with_details(self, prompt, **kwargs):
-        self.calls.append((prompt, kwargs))
-        return {
-            "content": next(self.responses),
-            "finish_reason": "stop",
-            "usage": {},
-            "model": "test",
-        }
-
-
-def response(value):
-    return f"Idea: return {value}\n```python\ndef score(x):\n    return {value}\n```"
+from tests.support import FakeLLM, TinyEvaluation, response
 
 
 def make_method(path, llm, *, budget=1, n_roots=1, seed=0, init_mode=None):

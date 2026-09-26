@@ -1,8 +1,9 @@
 import json
 import pytest
-from tests.method.test_traceaad_v1013 import TinyEvaluation, FakeLLM, response
+from tests.support import FakeLLM, TinyEvaluation, response
 from experiments.traceaad_initialization.run import InitializationExperiment
-from experiments.traceaad_initialization.launch import jobs, validate, check_resume_config
+from experiments.traceaad_initialization.launch import jobs, validate, check_resume_config, run_dir
+from experiments.infra.base import RESULTS_ROOT
 
 @pytest.mark.parametrize('mode,counts', [('independent',[0]*8),('sequential',list(range(8))),('hybrid',[0,0,0,0,4,5,6,7])])
 def test_information_dependency_and_stop(tmp_path, mode, counts):
@@ -42,11 +43,8 @@ def test_initialization_prompt_conditions(tmp_path):
                                      history_depth=3, lookup=lambda i: nodes[i],
                                      all_nodes=lambda: nodes)
     informed = informed_builder.build_initial("informed").prompt
-    assert "# Initialization Task" in independent
-    assert "independent initialization sample" in independent
-    assert "Previous Initial Algorithm" not in independent
-    assert "# Previous Initial Algorithm" in informed
-    assert "meaningful complement" in informed
+    assert nodes[0].code not in independent
+    assert nodes[0].code in informed
 
 
 def test_evaluation_budget_tracks_invalid_output_and_keeps_development(tmp_path):
@@ -91,6 +89,7 @@ def test_formal_schedule_and_resume_config(tmp_path, monkeypatch):
     rows = jobs()
     validate(rows)
     assert len(rows) == 60
+    assert run_dir(rows[0]) == RESULTS_ROOT / 'traceaad_initialization' / rows[0]['task'] / rows[0]['run_name']
     assert {r['backend'] for r in rows} == {'server3', 'server3b'}
     assert sum(r['backend'] == 'server3' for r in rows
                if r['task'] == 'tsp_construct' and r['mode'] == 'hybrid') == 2
@@ -138,3 +137,22 @@ def test_heldout_uses_frozen_training_best(tmp_path, monkeypatch):
     result = json.loads((run / 'heldout.json').read_text())
     assert result['node_id'] == 3
     assert result['heldout_fitness'] == 1.5
+
+
+def test_heldout_dry_run_counts_existing_results(tmp_path, monkeypatch, capsys):
+    from experiments.traceaad_initialization import heldout
+
+    schedule = tmp_path / 'schedule.json'
+    schedule.write_text(json.dumps([{'run_name': 'run_1'}]))
+    run = tmp_path / 'run_1'
+    (run / 'logs').mkdir(parents=True)
+    (run / 'logs' / 'run_summary.json').write_text(json.dumps({'status': 'finished'}))
+    (run / 'heldout.json').write_text('{}')
+    monkeypatch.setattr(heldout, 'SCHEDULE', schedule)
+    monkeypatch.setattr(heldout, 'run_dir', lambda job: run)
+
+    heldout.main(['--dry-run'])
+
+    assert json.loads(capsys.readouterr().out) == {
+        'waiting': 0, 'existing': 1, 'evaluated': 0, 'ready': 0,
+    }

@@ -3,8 +3,8 @@ import argparse
 import json
 import re
 import traceback
-from pathlib import Path
 from experiments.infra.runner import add_common_run_args, setup_experiment_run
+from experiments.traceaad_initialization.launch import RESULTS
 from traceaad.v10_13.traceaad import TraceAADV1013, Candidate
 from traceaad.v10_13.prompts import PromptBuilder
 
@@ -95,7 +95,7 @@ def main():
         max_input_tokens=24320, output_tokens=args.output_tokens,
         init_mode=args.init_mode, init_only=args.init_only, max_calls=max_calls)
     ctx = setup_experiment_run(args, method='initialization_v1013',
-        method_dir=Path(__file__).parent, resume_file='tree_state.json',
+        results_root=RESULTS, resume_file='tree_state.json',
         method_params=params, budget_basis='evaluator_calls')
     try:
         method = InitializationExperiment(evaluation=ctx.evaluation, llm=ctx.llm,

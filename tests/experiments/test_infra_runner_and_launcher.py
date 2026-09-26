@@ -54,7 +54,7 @@ def test_setup_experiment_run_writes_valid_config(tmp_path: Path):
     ctx = setup_experiment_run(
         args,
         method="test_method",
-        method_dir=tmp_path,
+        results_root=tmp_path,
         resume_file="tree_state.json",
         method_params={"custom_param": 123},
         budget_basis="1000 budget test",

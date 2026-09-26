@@ -17,7 +17,7 @@ batch fits within the 27 total slots only if the assignment table respects each
 endpoint limit.
 
 For V11.1, put one backend label on each row of
-`experiments/traceaad_v11_1/manual_assignments.json` and start through the
+`experiments_result/reports/traceaad_v11_1/manual_assignments.json` and start through the
 capacity-validating launcher.  Do not start all 25 `run.py` commands by hand.  When
 an experiment is moved, retain its `tree_state.json` and append a routing event
 to that run's `routing_history.jsonl`; the next process resumes from the last

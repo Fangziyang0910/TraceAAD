@@ -17,13 +17,15 @@ from statistics import mean
 import numpy as np
 from scipy.stats import spearmanr
 
-from experiments.traceaad_refine_e1 import profile_core as core
+from experiments.infra import behavior_profile as core
 
 from .analyze import read_jsonl, report_job
-from .launch import HERE, RESULTS, SCHEDULE, run_dir
+from experiments.infra.base import REPO_ROOT
+
+from .launch import RESULTS, SCHEDULE, run_dir
 
 PROFILE_DIR = RESULTS / "behavior_profiles"
-REPORT = HERE / "diversity_summary.json"
+REPORT = REPO_ROOT / "experiments_result" / "reports" / "traceaad_initialization" / "diversity_summary.json"
 PANELS = ("A", "B")
 
 

@@ -12,7 +12,7 @@ from baselines.pathwise import PathWise, PathWiseProfiler
 from experiments.infra.base import (
     ALL_TASKS,
     BACKENDS,
-    EXPERIMENTS_ROOT,
+    RESULTS_ROOT,
     TASKS,
     TaskName,
     build_llm_client,
@@ -54,11 +54,11 @@ class RunSpec:
     seed: int = 0
     repeat: int | None = None
     run_name: str | None = None
-    experiments_root: Path = EXPERIMENTS_ROOT
+    experiments_root: Path = RESULTS_ROOT
 
     @property
     def experiment_root(self) -> Path:
-        return self.experiments_root / self.task / "pathwise"
+        return self.experiments_root / "pathwise" / self.task
 
 
 def make_run_spec(
@@ -80,7 +80,7 @@ def make_run_spec(
     seed: int = 0,
     repeat: int | None = None,
     run_name: str | None = None,
-    experiments_root: Path = EXPERIMENTS_ROOT,
+    experiments_root: Path = RESULTS_ROOT,
 ) -> RunSpec:
     profile = resolve_backend(backend, base_url, model, no_proxy)
     spec = RunSpec(

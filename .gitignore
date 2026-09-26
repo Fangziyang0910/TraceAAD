@@ -54,33 +54,8 @@ experiments/.traceaad_v8_scheduler/
 .dispatch_state.json
 .playwright-mcp/
 
-# Generated experiment runs and evaluation artifacts.
-# Experiment entrypoints and condensed reports under docs/ remain trackable.
-experiments/**/raw/
-experiments/**/results/
-experiments/**/results_*/
-experiments/**/20[0-9]*/
-experiments/**/tm_*/
-experiments/**/v[0-9]*/
-experiments/**/smoke_*/
-experiments/**/eval*/
-experiments/**/_eval*/
-experiments/**/logs/
-experiments/**/logs_*/
-experiments/**/artifacts/
-experiments/**/checkpoints/
-experiments/**/run_config.json
-experiments/**/results.json
-experiments/**/best_curve.csv
-experiments/**/best_history.jsonl
-experiments/**/best_program.py
-experiments/**/evaluations.csv
-experiments/**/*_sample_*_program.py
-experiments/**/heldout_selection_note.json
-experiments/**/selected_finite.json
-experiments/**/tmux_run.log
-experiments/traceaad_initialization/batch_state.json
-experiments/traceaad_initialization/batch_state.lock
+# Raw experiment runs remain local; small referenced reports stay trackable.
+/experiments_result/runs/
 
 # Historical experiment artifacts are local-only.
 /archive/
