@@ -54,8 +54,8 @@ experiments/.traceaad_v8_scheduler/
 .dispatch_state.json
 .playwright-mcp/
 
-# Raw experiment runs remain local; small referenced reports stay trackable.
-/experiments_result/runs/
+# Raw experiment results remain local; the root README stays trackable.
+/experiments_result/*/
 
 # Historical experiment artifacts are local-only.
 /archive/

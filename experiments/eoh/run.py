@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 from baselines.eoh import EoH, EoHProfiler
@@ -17,13 +16,12 @@ from experiments.infra.base import (
     TaskName,
     build_llm_client,
     build_task,
-    llm_payload,
     resolve_backend,
     resolve_run_dir as resolve_run_dir_file,
-    run_in_tmux_log,
     set_random_seed,
     write_run_config as write_run_config_file,
 )
+from experiments.infra.runner import baseline_run_config, run_baseline_experiment
 
 FORMAL_BUDGET = 1000
 PAPER_GENERATIONS = 20
@@ -150,27 +148,9 @@ def build_method(spec: RunSpec, log_dir: Path) -> EoH:
 
 
 def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
-    _, task_config = build_task(spec.task, spec.eval_workers)
     write_run_config_file(
         run_dir,
-        {
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-            "run_dir": str(run_dir),
-            "run_name": run_name,
-            "task": spec.task,
-            "method": "eoh",
-            "repeat": spec.repeat,
-            "backend": spec.backend,
-            "seed": spec.seed,
-            "llm": llm_payload(
-                base_url=spec.base_url,
-                model=spec.model,
-                no_proxy=spec.no_proxy,
-                max_tokens=spec.output_tokens,
-                temperature=1.0,
-            ),
-            "task_eval": task_config,
-            "method_params": {
+        baseline_run_config(spec, run_dir, run_name, "eoh", {
                 "paper_generations": spec.generations,
                 "max_sample_nums": spec.effective_budget,
                 "population_size": spec.effective_pop_size,
@@ -184,8 +164,7 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                 "budget_basis": (
                     "all formal task comparisons use a fixed 1000-evaluation budget"
                 ),
-            },
-        },
+            }),
     )
 
 
@@ -195,23 +174,11 @@ def resolve_run_dir(spec: RunSpec) -> tuple[Path, str]:
 
 
 def run_experiment(spec: RunSpec) -> Path:
-    run_dir, run_name = resolve_run_dir(spec)
-    log_dir = run_dir / "logs"
-    write_run_config(spec, run_dir, run_name)
-    print(f"run_dir={run_dir}")
-    run_in_tmux_log(
-        run_dir,
-        log_dir,
-        [
-            f"log_dir={log_dir}",
-            f"llm={spec.model} @ {spec.base_url}",
-            "eoh="
-            f"pop={spec.effective_pop_size}, parents={spec.parents}, "
-            f"budget={spec.effective_budget}, operators={','.join(OPERATORS)}",
-        ],
-        lambda: build_method(spec, log_dir).run(),
+    return run_baseline_experiment(
+        spec, write_config=write_run_config, build_method=build_method,
+        description=(f"eoh=pop={spec.effective_pop_size}, parents={spec.parents}, "
+                     f"budget={spec.effective_budget}, operators={','.join(OPERATORS)}"),
     )
-    return run_dir
 
 
 def build_parser() -> argparse.ArgumentParser:

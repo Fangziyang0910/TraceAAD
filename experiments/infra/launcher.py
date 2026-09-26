@@ -1,34 +1,21 @@
-"""Standard batch launcher and watchdog.
-
-Provides multi-backend rotation, backend reachability checks, tmux session
-management, and automatic in-place relaunch (resume) until all runs finish.
-"""
+"""Shared backend checks and tmux launch operations."""
 
 from __future__ import annotations
 
-import argparse
 import json
+import os
 import shlex
 import subprocess
-import time
 from collections.abc import Iterable, Sequence
-from datetime import datetime
 from pathlib import Path
 from urllib.request import ProxyHandler, Request, build_opener
 
 from experiments.infra.base import (
     BACKENDS,
     REPO_ROOT,
-    TASKS,
-    TASK_SHORT,
     BackendName,
-    LaunchItem,
-    launch_items,
 )
 from .env import resolve_llm_api_key
-
-DEFAULT_MAX_ATTEMPTS = 5
-
 
 def check_backends(backends: Iterable[BackendName]) -> None:
     """Read each backend's /v1/models once; abort if any is unreachable."""
@@ -68,6 +55,25 @@ def get_summary_status(run_dir: Path) -> str | None:
     return None
 
 
+def write_json_atomic(path: Path, payload: object) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    temporary.replace(path)
+
+
+def launch_command(session: str, command: Sequence[str]) -> None:
+    if is_session_alive(session):
+        raise RuntimeError(f"tmux session already exists: {session}")
+    subprocess.run(
+        ["tmux", "new-session", "-d", "-s", session, "-c", str(REPO_ROOT),
+         shlex.join(command)], cwd=REPO_ROOT, check=True,
+    )
+
+
 def is_session_alive(session: str) -> bool:
     result = subprocess.run(
         ["tmux", "has-session", "-t", f"={session}"],
@@ -76,60 +82,5 @@ def is_session_alive(session: str) -> bool:
         check=False,
     )
     return result.returncode == 0
-
-
-def live_session_name(base_session: str, attempt: int) -> str:
-    return base_session if attempt == 1 else f"{base_session}_r{attempt}"
-
-
-def is_any_attempt_alive(item: LaunchItem, max_attempts: int = DEFAULT_MAX_ATTEMPTS) -> bool:
-    if is_session_alive(item.session):
-        return True
-    return any(
-        is_session_alive(live_session_name(item.session, retry))
-        for retry in range(2, max_attempts + 1)
-    )
-
-
-def tmux_launch(item: LaunchItem, session: str) -> None:
-    printable = shlex.join(item.command())
-    subprocess.run(
-        [
-            "tmux",
-            "new-session",
-            "-d",
-            "-s",
-            session,
-            "-c",
-            str(REPO_ROOT),
-            printable,
-        ],
-        check=True,
-    )
-
-
-def ensure_launchable(items: list[LaunchItem], max_attempts: int = DEFAULT_MAX_ATTEMPTS) -> None:
-    """Guard against duplicate tmux sessions."""
-    sessions = [item.session for item in items]
-    if len(sessions) != len(set(sessions)):
-        raise ValueError("tmux session names must be unique")
-    alive = [item.session for item in items if is_any_attempt_alive(item, max_attempts)]
-    if alive:
-        raise RuntimeError(f"tmux sessions already exist: {alive}")
-
-
-def build_batch_parser(
-    description: str = "Launch a batch experiment.",
-    default_session_prefix: str = "batch",
-    default_watch_interval: int = 120,
-) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--repeats", type=int, default=3)
-    parser.add_argument("--batch", default=datetime.now().strftime("%Y%m%d_%H%M%S"))
-    parser.add_argument("--session-prefix", default=default_session_prefix)
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--watch", action="store_true")
-    parser.add_argument("--watch-interval", type=int, default=default_watch_interval)
-    return parser
 
 

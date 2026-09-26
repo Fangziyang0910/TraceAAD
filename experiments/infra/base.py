@@ -45,7 +45,7 @@ TaskName = Literal[
 BackendName = Literal["local", "server1", "server3", "server3b"]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RESULTS_ROOT = REPO_ROOT / "experiments_result" / "runs"
+RESULTS_ROOT = REPO_ROOT / "experiments_result"
 TASKS: tuple[TaskName, ...] = (
     "tsp_construct",
     "cvrp_aco",

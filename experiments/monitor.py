@@ -1,8 +1,4 @@
-"""Small V10.13 batch monitor.
-
-The monitor consumes the V10.13 batch manifest, run configuration, search
-journal, and final summary.
-"""
+"""Read-only training monitor for experiment results."""
 
 from __future__ import annotations
 
@@ -14,12 +10,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from experiments.infra.artifacts import pick_best_sample
 from traceaad.v10_13.storage import JOURNAL_NAME, RunStorage, read_journal
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RESULTS_ROOT = REPO_ROOT / "experiments_result/runs/traceaad_v10_13"
-HTML_FILE = Path(__file__).with_name("training_monitor.html")
+DEFAULT_RESULTS_ROOT = REPO_ROOT / "experiments_result"
+HTML_FILE = Path(__file__).with_name("monitor.html")
 
 TASKS = {
     "tsp_construct": {"label": "TSP 构造", "direction": "min", "unit": "距离"},
@@ -89,8 +86,78 @@ def _sample(points: list[dict[str, Any]], limit: int = 240) -> list[dict[str, An
     return [point for index, point in enumerate(points) if index in indexes]
 
 
+def _search_events(run_dir: Path):
+    journal = run_dir / JOURNAL_NAME
+    if journal.exists():
+        with journal.open(encoding="utf-8") as handle:
+            for line in handle:
+                record = json.loads(line)
+                if "source" in record:
+                    source = record["source"]
+                    if source in {"events.jsonl", "evaluations.csv", "artifacts/candidates.jsonl"}:
+                        yield source, record.get("data")
+                elif record.get("kind") == "candidate":
+                    yield "native", record
+    else:
+        for path in (run_dir / "events.jsonl", run_dir / "logs/method_events.jsonl"):
+            if path.exists():
+                with path.open(encoding="utf-8") as handle:
+                    for line in handle:
+                        yield path.name, json.loads(line)
+                break
+
+
+def _search_trend(run_dir: Path, task: str):
+    streams = {}
+    for source, event in _search_events(run_dir):
+        if not isinstance(event, dict):
+            continue
+        if source == "evaluations.csv":
+            index, score = event.get("slot"), event.get("fitness")
+        elif source == "artifacts/candidates.jsonl":
+            index, score = event.get("order"), event.get("child_fitness")
+        elif source == "method_events.jsonl":
+            if event.get("event") == "epoch":
+                index, score = event.get("sample_count"), event.get("best_perf")
+            elif event.get("event") == "sample_registered":
+                index, score = event.get("profiler_sample_order"), event.get("score")
+            else:
+                continue
+        else:
+            index = event.get("budget_used", event.get("evaluation_id"))
+            score = event.get("fitness")
+        if index is None or score is None:
+            continue
+        try:
+            index, score = int(index), float(score)
+        except (ValueError, TypeError):
+            continue
+        if not (index >= 0 and abs(score) < float("inf")):
+            continue
+        streams.setdefault(source, []).append((index, score, event))
+    for source in ("native", "events.jsonl", "evaluations.csv",
+                   "method_events.jsonl", "artifacts/candidates.jsonl"):
+        if source in streams:
+            break
+    else:
+        return [], [], {}, {}
+    best = None
+    points, recent = [], []
+    operators, outcomes = Counter(), Counter()
+    for index, score, event in sorted(streams[source], key=lambda row: row[0]):
+        best = score if best is None else max(best, score)
+        points.append({"evaluation": index, "value": _objective(best, task)})
+        operator = event.get("operator") or event.get("action") or "unknown"
+        status = event.get("status") or event.get("outcome") or "unknown"
+        operators[str(operator)] += 1
+        outcomes[str(status)] += 1
+        recent.append({"evaluation": index, "operator": operator,
+                       "status": status, "value": _objective(score, task)})
+    return _sample(points), recent[-12:][::-1], dict(operators), dict(outcomes)
+
+
 class V1013Monitor:
-    def __init__(self, results_root: Path = DEFAULT_RESULTS_ROOT, batch: str | None = None):
+    def __init__(self, results_root: Path = DEFAULT_RESULTS_ROOT / "traceaad_v10_13", batch: str | None = None):
         self.results_root = results_root
         self.default_batch = batch
 
@@ -276,7 +343,166 @@ class V1013Monitor:
         }
 
 
-def make_request_handler(monitor: V1013Monitor) -> type[BaseHTTPRequestHandler]:
+class ResultsMonitor:
+    """List experiment directories; reuse the detailed V10.13 reader where applicable."""
+
+    def __init__(self, results_root: Path = DEFAULT_RESULTS_ROOT,
+                 experiment: str | None = None, batch: str | None = None):
+        self.results_root = Path(results_root)
+        self.default_experiment = experiment
+        self.v1013 = V1013Monitor(self.results_root / "traceaad_v10_13", batch)
+        self._progress_cache = {}
+
+    def _recorded_progress(self, run_dir: Path) -> tuple[int, int]:
+        journal = run_dir / JOURNAL_NAME
+        if not journal.exists():
+            return 0, 0
+        stamp = (journal.stat().st_size, journal.stat().st_mtime_ns)
+        cached = self._progress_cache.get(run_dir)
+        if cached and cached[0] == stamp:
+            return cached[1]
+        streams = {}
+        for source, event in _search_events(run_dir):
+            if not isinstance(event, dict):
+                continue
+            if source == "artifacts/candidates.jsonl":
+                counted = bool(event.get("evaluator_called"))
+                valid = isinstance(event.get("child_fitness"), (int, float))
+                position = None
+            elif source == "events.jsonl":
+                counted = event.get("budget_used") is not None
+                valid = isinstance(event.get("fitness"), (int, float))
+                position = event.get("budget_used")
+            else:
+                continue
+            record = streams.setdefault(source, [0, 0])
+            if counted:
+                record[0] = max(record[0], int(position)) if position is not None else record[0] + 1
+            record[1] += valid
+        result = tuple(streams.get("events.jsonl", streams.get("artifacts/candidates.jsonl", [0, 0])))
+        self._progress_cache[run_dir] = stamp, result
+        return result
+
+    def batches(self) -> list[dict[str, str]]:
+        names = []
+        for directory in self.results_root.iterdir():
+            if directory.is_dir() and any(directory.glob("*/*/run_config.json")):
+                names.append(directory.name)
+        names.sort(reverse=True)
+        if self.default_experiment in names:
+            names.remove(self.default_experiment)
+            names.insert(0, self.default_experiment)
+        return [{"id": name, "label": name} for name in names]
+
+    def _runs(self, experiment: str):
+        if experiment not in {item["id"] for item in self.batches()}:
+            return []
+        rows = []
+        for config_path in sorted((self.results_root / experiment).glob("*/*/run_config.json")):
+            run_dir = config_path.parent
+            config = _read_json(config_path)
+            summary = _read_json(run_dir / "logs/run_summary.json")
+            raw_status = summary.get("status")
+            if raw_status == "finished":
+                status = "finished"
+            elif raw_status == "unknown":
+                status = "unknown"
+            else:
+                status = "blocked" if raw_status else "queued"
+            params = config.get("method_params") or {}
+            best = summary.get("best") or {}
+            if not isinstance(best, dict):
+                best = {}
+            score = best.get("fitness", summary.get("best_score"))
+            budget = summary.get("budget", summary.get("budget_slots", params.get("budget", params.get("max_sample_nums", 0))))
+            used = summary.get("budget_used", summary.get("budget_slots", summary.get("num_samples", summary.get("evaluator_call_count", 0))))
+            nodes = summary.get("num_nodes", summary.get("n_algorithms", summary.get("evaluate_success_program_num", 0)))
+            if raw_status == "unknown":
+                used, nodes = self._recorded_progress(run_dir)
+            task = config.get("task", run_dir.parent.name)
+            if task not in TASKS:
+                continue
+            rows.append({
+                "task": task, "name": run_dir.name, "repeat": config.get("repeat"),
+                "seed": config.get("seed"), "backend": config.get("backend"),
+                "status": status, "raw_status": raw_status, "budget": int(budget or 0),
+                "budget_used": int(used or 0), "valid_nodes": int(nodes or 0),
+                "best_fitness": score, "best_value": _objective(score, task),
+                "updated_at": summary.get("finished_at"), "run_dir": run_dir,
+            })
+        return rows
+
+    def overview(self, experiment: str | None = None):
+        experiment = experiment or (self.batches()[0]["id"] if self.batches() else None)
+        if experiment == "traceaad_v10_13":
+            result = self.v1013.overview()
+            return {**result, "batch": experiment}
+        runs = self._runs(experiment) if experiment else []
+        counts = Counter(row["status"] for row in runs)
+        groups = []
+        for task, meta in TASKS.items():
+            task_runs = [row for row in runs if row["task"] == task]
+            if task_runs:
+                groups.append({"key": task, **meta, "runs": [
+                    {key: value for key, value in row.items() if key != "run_dir"}
+                    for row in task_runs
+                ]})
+        return {
+            "batch": experiment, "updated_at": max((row["updated_at"] or "" for row in runs), default=""),
+            "summary": {
+                "runs": len(runs), "finished": counts["finished"],
+                "running": counts["running"], "queued": counts["queued"],
+                "blocked": counts["blocked"], "unknown": counts["unknown"],
+                "budget_used": sum(row["budget_used"] for row in runs),
+                "budget": sum(row["budget"] for row in runs),
+                "valid_nodes": sum(row["valid_nodes"] for row in runs),
+            },
+            "tasks": groups,
+        }
+
+    def run_detail(self, experiment: str, task: str, name: str):
+        if experiment == "traceaad_v10_13":
+            return self.v1013.run_detail(self.v1013.default_batch or "", task, name)
+        row = next((row for row in self._runs(experiment)
+                    if row["task"] == task and row["name"] == name), None)
+        if row is None:
+            return None
+        run_dir = row["run_dir"]
+        summary = _read_json(run_dir / "logs/run_summary.json")
+        best = summary.get("best")
+        if not isinstance(best, dict) or not isinstance(best.get("code"), str):
+            try:
+                sample, _ = pick_best_sample(run_dir, allow_incomplete=True)
+                best = {"code": sample["program"], "fitness": sample["score"],
+                        "operator": sample.get("operator")}
+            except (RuntimeError, OSError, ValueError, KeyError):
+                best = None
+        if best is None:
+            journal = run_dir / JOURNAL_NAME
+            if journal.exists():
+                with journal.open(encoding="utf-8") as handle:
+                    for line in handle:
+                        record = json.loads(line)
+                        node = record.get("data") if record.get("kind") == "node" else None
+                        if (isinstance(node, dict) and isinstance(node.get("code"), str)
+                                and isinstance(node.get("fitness"), (int, float))
+                                and (best is None or node["fitness"] > best["fitness"])):
+                            best = node
+        curve, recent, operators, outcomes = _search_trend(run_dir, task)
+        return {
+            **{key: value for key, value in row.items() if key != "run_dir"},
+            "task_meta": TASKS[task], "curve": curve, "operators": operators,
+            "outcomes": outcomes, "recent": recent,
+            "best": None if best is None else {
+                "id": best.get("id", best.get("node_id")),
+                "value": _objective(best.get("fitness"), task),
+                "operator": best.get("operator"), "idea": best.get("idea") or "",
+                "code": best.get("code") or "",
+            },
+        }
+
+
+def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
@@ -322,17 +548,18 @@ def make_request_handler(monitor: V1013Monitor) -> type[BaseHTTPRequestHandler]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="TraceAAD V10.13 training monitor")
-    parser.add_argument("--host", default="0.0.0.0")
+    parser = argparse.ArgumentParser(description="Experiment results monitor")
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_ROOT)
+    parser.add_argument("--experiment", default="traceaad_v10_13")
     parser.add_argument("--batch", "--version", dest="batch", default=None)
     args = parser.parse_args()
 
-    monitor = V1013Monitor(args.results_dir, args.batch)
+    monitor = ResultsMonitor(args.results_dir, args.experiment, args.batch)
     server = ThreadingHTTPServer((args.host, args.port), make_request_handler(monitor))
-    selected = monitor.overview().get("batch") or "无批次"
-    print(f"TraceAAD V10.13 monitor: http://127.0.0.1:{args.port} ({selected})", flush=True)
+    selected = monitor.overview().get("batch") or "无实验"
+    print(f"Experiment monitor: http://127.0.0.1:{args.port} ({selected})", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

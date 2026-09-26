@@ -5,14 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
-from experiments.infra.launcher import (
-    get_summary_status,
-    live_session_name,
-)
+from experiments.infra.launcher import get_summary_status
 from experiments.infra.runner import (
     add_common_run_args,
     resolve_resumable_run_dir,
+    run_baseline_experiment,
     setup_experiment_run,
 )
 
@@ -83,5 +82,23 @@ def test_launcher_status_and_session_naming(tmp_path: Path):
     (log_dir / "run_summary.json").write_text(json.dumps({"status": "finished"}), encoding="utf-8")
     assert get_summary_status(run_dir) == "finished"
 
-    assert live_session_name("v101_tsp_r1", 1) == "v101_tsp_r1"
-    assert live_session_name("v101_tsp_r1", 2) == "v101_tsp_r1_r2"
+
+
+def test_baseline_lifecycle_runs_once_and_writes_config(tmp_path, monkeypatch):
+    from experiments.infra import runner
+
+    calls = []
+    spec = SimpleNamespace(experiment_root=tmp_path / "eoh" / "tsp_construct",
+                           run_name="rep1", model="model", base_url="local")
+    monkeypatch.setattr(runner, "run_in_tmux_log",
+                        lambda run_dir, log_dir, header, body: body())
+    def write_config(spec, run_dir, run_name):
+        (run_dir / "run_config.json").write_text(json.dumps({"run_name": run_name}))
+    def build_method(spec, log_dir):
+        return SimpleNamespace(run=lambda: calls.append(log_dir))
+
+    run_dir = run_baseline_experiment(spec, write_config=write_config,
+                                      build_method=build_method, description="eoh")
+    assert run_dir == tmp_path / "eoh" / "tsp_construct" / "rep1"
+    assert json.loads((run_dir / "run_config.json").read_text())["run_name"] == "rep1"
+    assert calls == [run_dir / "logs"]

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from pathlib import Path
 
 from baselines.calm import CALM, CALMProfiler
@@ -18,13 +17,12 @@ from experiments.infra.base import (
     TaskName,
     build_llm_client,
     build_task,
-    llm_payload,
     resolve_backend,
     resolve_run_dir as resolve_run_dir_file,
-    run_in_tmux_log,
     set_random_seed,
     write_run_config as write_run_config_file,
 )
+from experiments.infra.runner import baseline_run_config, run_baseline_experiment
 
 FAIR_MAX_SAMPLE_NUMS = 1000
 METHOD_LABEL = "CALM (w/o GRPO)"
@@ -128,27 +126,7 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
     hp = get_task_hyperparams(task_key)
     write_run_config_file(
         run_dir,
-        {
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-            "run_dir": str(run_dir),
-            "run_name": run_name,
-            "task": spec.task,
-            "method": "calm",
-            "method_label": METHOD_LABEL,
-            "enable_grpo": False,
-            "repeat": spec.repeat,
-            "backend": spec.backend,
-            "seed": spec.seed,
-            "llm": llm_payload(
-                base_url=spec.base_url,
-                model=spec.model,
-                no_proxy=spec.no_proxy,
-                max_tokens=spec.output_tokens,
-                temperature=float(hp.generation_temperature),
-                top_p=float(hp.generation_top_p),
-            ),
-            "task_eval": task_config,
-            "method_params": {
+        baseline_run_config(spec, run_dir, run_name, "calm", {
                 "max_sample_nums": spec.max_sample_nums,
                 "num_evaluators": spec.num_evaluators,
                 "task_hyperparams": asdict(hp),
@@ -157,8 +135,10 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                     "search hyperparameters from CALM local.yaml per task; "
                     "GRPO disabled (search framework only)."
                 ),
-            },
-        },
+            }, task_config=task_config,
+            llm_options={"temperature": float(hp.generation_temperature),
+                         "top_p": float(hp.generation_top_p)},
+            extra={"method_label": METHOD_LABEL, "enable_grpo": False}),
     )
 
 
@@ -168,22 +148,11 @@ def resolve_run_dir(spec: RunSpec) -> tuple[Path, str]:
 
 
 def run_experiment(spec: RunSpec) -> Path:
-    run_dir, run_name = resolve_run_dir(spec)
-    log_dir = run_dir / "logs"
-    write_run_config(spec, run_dir, run_name)
-    print(f"run_dir={run_dir}")
-    run_in_tmux_log(
-        run_dir,
-        log_dir,
-        [
-            f"log_dir={log_dir}",
-            f"llm={spec.model} @ {spec.base_url}",
-            f"method={METHOD_LABEL}, budget={spec.max_sample_nums}, "
-            f"evaluators={spec.num_evaluators}",
-        ],
-        lambda: build_method(spec, log_dir).run(),
+    return run_baseline_experiment(
+        spec, write_config=write_run_config, build_method=build_method,
+        description=(f"method={METHOD_LABEL}, budget={spec.max_sample_nums}, "
+                     f"evaluators={spec.num_evaluators}"),
     )
-    return run_dir
 
 
 def build_parser() -> argparse.ArgumentParser:

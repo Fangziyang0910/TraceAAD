@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 from baselines.shinka_evo import ShinkaEvo, ShinkaEvoProfiler
@@ -17,13 +16,12 @@ from experiments.infra.base import (
     TaskName,
     build_llm_client,
     build_task,
-    llm_payload,
     resolve_backend,
     resolve_run_dir as resolve_run_dir_file,
-    run_in_tmux_log,
     set_random_seed,
     write_run_config as write_run_config_file,
 )
+from experiments.infra.runner import baseline_run_config, run_baseline_experiment
 
 # Paper Circle Packing table used generations=150. Fair comparison across
 # methods in this repo uses a unified evaluation budget of 1000.
@@ -217,27 +215,9 @@ def build_method(spec: RunSpec, log_dir: Path) -> ShinkaEvo:
 
 
 def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
-    _, task_config = build_task(spec.task, spec.eval_workers)
     write_run_config_file(
         run_dir,
-        {
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-            "run_dir": str(run_dir),
-            "run_name": run_name,
-            "task": spec.task,
-            "method": "shinka_evo",
-            "repeat": spec.repeat,
-            "backend": spec.backend,
-            "seed": spec.seed,
-            "llm": llm_payload(
-                base_url=spec.base_url,
-                model=spec.model,
-                no_proxy=spec.no_proxy,
-                max_tokens=spec.output_tokens,
-                temperature=1.0,
-            ),
-            "task_eval": task_config,
-            "method_params": {
+        baseline_run_config(spec, run_dir, run_name, "shinka_evo", {
                 "max_sample_nums": spec.max_sample_nums,
                 "num_generations": spec.num_generations,
                 "num_islands": spec.num_islands,
@@ -265,8 +245,7 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                     "meta interval=10, UCB exploration=1.0; novelty disabled; "
                     "meta LLM reuses the same Qwen endpoint"
                 ),
-            },
-        },
+            }),
     )
 
 
@@ -276,24 +255,12 @@ def resolve_run_dir(spec: RunSpec) -> tuple[Path, str]:
 
 
 def run_experiment(spec: RunSpec) -> Path:
-    run_dir, run_name = resolve_run_dir(spec)
-    log_dir = run_dir / "logs"
-    write_run_config(spec, run_dir, run_name)
-    print(f"run_dir={run_dir}")
-    run_in_tmux_log(
-        run_dir,
-        log_dir,
-        [
-            f"log_dir={log_dir}",
-            f"llm={spec.model} @ {spec.base_url}",
-            "shinka_evo="
-            f"gens={spec.num_generations}, budget={spec.max_sample_nums}, "
-            f"archive={spec.archive_size}, islands={spec.num_islands}, "
-            f"insp={spec.num_archive_inspirations}/{spec.num_top_k_inspirations}",
-        ],
-        lambda: build_method(spec, log_dir).run(),
+    return run_baseline_experiment(
+        spec, write_config=write_run_config, build_method=build_method,
+        description=(f"shinka_evo=gens={spec.num_generations}, budget={spec.max_sample_nums}, "
+                     f"archive={spec.archive_size}, islands={spec.num_islands}, "
+                     f"insp={spec.num_archive_inspirations}/{spec.num_top_k_inspirations}"),
     )
-    return run_dir
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -3,8 +3,12 @@
 import pytest
 
 from experiments import launch
-from experiments.infra.base import RESULTS_ROOT, TASKS, assign_backends
+from experiments.infra.base import REPO_ROOT, RESULTS_ROOT, TASKS, assign_backends
 from experiments.eoh import run as eoh_run
+
+
+def test_results_root_has_no_runs_layer():
+    assert RESULTS_ROOT == REPO_ROOT / "experiments_result"
 
 
 @pytest.mark.parametrize("method", launch.METHODS)

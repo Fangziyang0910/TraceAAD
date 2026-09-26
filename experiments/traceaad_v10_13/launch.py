@@ -12,15 +12,15 @@ from collections import Counter
 from datetime import datetime
 import fcntl
 import json
-from pathlib import Path
 import re
-import subprocess
 import time
 
 from experiments.infra.base import BACKEND_CAPACITY, RESULTS_ROOT as ARCHIVE_ROOT, TASKS, TASK_SHORT, free_slots
-from experiments.infra.launcher import check_backends, get_summary_status
+from experiments.infra.launcher import (
+    check_backends, get_summary_status, is_session_alive, launch_command,
+    write_json_atomic,
+)
 
-ROOT = Path(__file__).resolve().parents[2]
 RESULTS_ROOT = ARCHIVE_ROOT / "traceaad_v10_13"
 BACKEND_POOL = ("server1", "server3", "server3b")
 TARGET_DISTRIBUTION = {"server1": 5, "server3": 8, "server3b": 7}
@@ -46,10 +46,7 @@ def _timestamp():
 
 
 def session_alive(session: str) -> bool:
-    return subprocess.run(
-        ["tmux", "has-session", "-t", f"={session}"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-    ).returncode == 0
+    return is_session_alive(session)
 
 
 def build_plan(batch: str, session_prefix: str, repeats: int = REPEATS):
@@ -136,17 +133,11 @@ def launch_row(row):
         "--repeat", str(row["repeat"]), "--seed", str(row["seed"]),
         "--run-name", row["run_name"],
     ]
-    subprocess.run(
-        ["tmux", "new-session", "-d", "-s", row["session"],
-         "-c", str(ROOT), *command],
-        cwd=ROOT, check=True,
-    )
+    launch_command(row["session"], command)
 
 
 def write_manifest(path, payload):
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
-    tmp.replace(path)
+    write_json_atomic(path, payload)
 
 
 def start_available(plan, manifest, max_attempts):

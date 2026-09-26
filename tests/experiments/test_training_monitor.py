@@ -1,6 +1,6 @@
 import json
 
-from core.training_monitor import V1013Monitor
+from experiments.monitor import ResultsMonitor, V1013Monitor
 from traceaad.v10_13.storage import RunStorage
 
 
@@ -125,3 +125,76 @@ def test_finished_run_uses_summary_and_journal(tmp_path):
     assert overview["summary"]["valid_nodes"] == 2
     assert overview["summary"]["finished"] == 1
     assert detail["best"]["code"] == best["code"]
+
+
+def test_unified_monitor_lists_experiments_and_reads_summary(tmp_path):
+    root = tmp_path / "results"
+    results, run_name = make_run(tmp_path)
+    run_dir = results / "tsp_construct" / run_name
+    write_json(run_dir / "logs/run_summary.json", {
+        "status": "finished", "budget": 4, "budget_used": 3,
+        "num_nodes": 2, "best": {"fitness": -10, "code": "def f(): return 2"},
+    })
+    target = root / "comparison" / "tsp_construct"
+    target.mkdir(parents=True)
+    run_dir.rename(target / run_name)
+
+    monitor = ResultsMonitor(root, "comparison")
+    assert monitor.batches() == [{"id": "comparison", "label": "comparison"}]
+    overview = monitor.overview("comparison")
+    assert overview["summary"]["finished"] == 1
+    assert overview["tasks"][0]["runs"][0]["best_value"] == 10
+    assert monitor.run_detail("comparison", "tsp_construct", run_name)["best"]["code"] == "def f(): return 2"
+    assert monitor.run_detail("comparison", "tsp_construct", "missing") is None
+
+
+def test_historical_budget_and_incomplete_node(tmp_path):
+    run = tmp_path / "traceaad_v9_19" / "tsp_construct" / "rep1"
+    write_json(run / "run_config.json", {
+        "task": "tsp_construct", "repeat": 1, "method_params": {"budget": 1000},
+    })
+    write_json(run / "logs/run_summary.json", {
+        "status": "finished", "budget_slots": 1000,
+        "evaluator_call_count": 1097, "best_score": -6.0,
+    })
+    (run / "search.jsonl").write_text("\n".join(json.dumps({
+        "kind": "evaluation", "source": "evaluations.csv", "data": row,
+    }) for row in [
+        {"slot": "1", "fitness": "-9", "status": "ok"},
+        {"slot": "2", "fitness": "-7", "status": "ok"},
+    ]) + "\n")
+    monitor = ResultsMonitor(tmp_path, "traceaad_v9_19")
+    row = monitor.overview("traceaad_v9_19")["tasks"][0]["runs"][0]
+    assert row["budget_used"] == row["budget"] == 1000
+    assert monitor.run_detail("traceaad_v9_19", "tsp_construct", "rep1")["curve"] == [
+        {"evaluation": 1, "value": 9.0}, {"evaluation": 2, "value": 7.0},
+    ]
+
+    write_json(run / "logs/run_summary.json", {"status": "unknown"})
+    (run / "search.jsonl").write_text("\n".join(json.dumps({
+        "kind": "node", "source": "nodes.jsonl", "data": node,
+    }) for node in [
+        {"id": 1, "fitness": -8.0, "code": "first"},
+        {"id": 2, "fitness": -7.0, "code": "second"},
+    ]) + "\n")
+    detail = monitor.run_detail("traceaad_v9_19", "tsp_construct", "rep1")
+    assert detail["status"] == "unknown"
+    assert detail["best"]["code"] == "second"
+
+
+def test_missing_final_summary_uses_recorded_evaluations(tmp_path):
+    run = tmp_path / "traceaad_v9_7" / "tsp_construct" / "rep1"
+    write_json(run / "run_config.json", {
+        "task": "tsp_construct", "method_params": {"budget": 10},
+    })
+    write_json(run / "logs/run_summary.json", {"status": "unknown"})
+    (run / "search.jsonl").write_text("\n".join(json.dumps({
+        "kind": "candidate", "source": "artifacts/candidates.jsonl", "data": row,
+    }) for row in [
+        {"evaluator_called": True, "child_fitness": -9.0},
+        {"evaluator_called": False, "child_fitness": None},
+        {"evaluator_called": True, "child_fitness": -8.0},
+    ]) + "\n")
+    monitor = ResultsMonitor(tmp_path)
+    row = monitor.overview("traceaad_v9_7")["tasks"][0]["runs"][0]
+    assert (row["status"], row["budget_used"], row["valid_nodes"]) == ("unknown", 2, 2)

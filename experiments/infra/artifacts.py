@@ -1,13 +1,12 @@
 """Shared helpers for locating finished-run summaries and scored samples.
 
-Supports the profiler layout (`logs/run_summary.json` + `logs/samples/`),
-TraceAAD V8/V9 layout (`logs/summary.json` + `artifacts/candidates.jsonl`),
-and the V9.8 explicit `best_program.py` artifact.
+Supports profiler samples, historical TraceAAD journals and legacy artifacts.
 """
 
 from __future__ import annotations
 
 import json
+from itertools import chain
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +70,22 @@ def load_scored_samples(
                     raise RuntimeError(f"Cannot parse {candidates_path}: {error}") from error
                 records.extend(_filter_scored([record], max_sample_order=max_sample_order))
 
+    journal_path = run_dir / "search.jsonl"
+    if not records and journal_path.exists():
+        history = []
+        candidates = []
+        with journal_path.open(encoding="utf-8") as handle:
+            first = handle.readline()
+            if first:
+                first_record = json.loads(first)
+                if "source" in first_record:
+                    for record in chain([first_record], (json.loads(line) for line in handle)):
+                        if record.get("kind") == "candidate" and "data" in record:
+                            candidates.extend(_filter_scored([record["data"]], max_sample_order=max_sample_order))
+                        elif record.get("kind") == "best" and "data" in record:
+                            history.extend(_scored_history([record["data"]], max_sample_order=max_sample_order))
+        records.extend(history or candidates)
+
     # Some completed TraceAAD runs (including the local Qwen3.8 V9.7 batch,
     # V9.8, and V9.14) write the selected final program explicitly and keep its
     # score and response order in the completed run summary, without the legacy
@@ -79,8 +94,9 @@ def load_scored_samples(
     # order.
     if not records:
         best_program_path = run_dir / "best_program.py"
-        summary_path = run_dir / "logs" / "summary.json"
-        if best_program_path.exists() and summary_path.exists():
+        summary_path = next((p for p in (run_dir / "logs" / "run_summary.json",
+                                          run_dir / "logs" / "summary.json") if p.exists()), None)
+        if summary_path is not None and (best_program_path.exists() or journal_path.exists()):
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             score = summary.get("best_score")
             sample_order = summary.get(
@@ -92,13 +108,16 @@ def load_scored_samples(
             )
             if isinstance(score, (int, float)) and isinstance(sample_order, int):
                 if max_sample_order is None or sample_order <= max_sample_order:
-                    records.append(
-                        {
-                            "program": best_program_path.read_text(encoding="utf-8"),
-                            "score": score,
-                            "sample_order": sample_order,
-                        }
-                    )
+                    program = (best_program_path.read_text(encoding="utf-8")
+                               if best_program_path.exists() else _journal_program(journal_path))
+                    if program is not None:
+                        records.append(
+                            {
+                                "program": program,
+                                "score": score,
+                                "sample_order": sample_order,
+                            }
+                        )
 
     # V10.x runs keep the search-selected best node directly in
     # logs/run_summary.json (tree node id + fitness + code + operator),
@@ -121,6 +140,14 @@ def load_scored_samples(
                             if event.get("node_id") == best["id"]:
                                 sample_order = event.get("evaluation_id")
                                 break
+                    elif journal_path.exists():
+                        with journal_path.open(encoding="utf-8") as handle:
+                            for line in handle:
+                                record = json.loads(line)
+                                event = record.get("data") if record.get("kind") == "event" else None
+                                if isinstance(event, dict) and event.get("node_id") == best["id"]:
+                                    sample_order = event.get("evaluation_id")
+                                    break
                 if isinstance(score, (int, float)) and isinstance(sample_order, int):
                     if max_sample_order is None or sample_order <= max_sample_order:
                         records.append(
@@ -142,35 +169,39 @@ def _load_best_history(
     *,
     max_sample_order: int | None,
 ) -> list[dict[str, Any]]:
+    with path.open(encoding="utf-8") as handle:
+        return _scored_history((json.loads(line) for line in handle if line.strip()),
+                               max_sample_order=max_sample_order)
+
+
+def _scored_history(records, *, max_sample_order: int | None) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    for record in records:
+        score = record.get("fitness", record.get("score"))
+        if not isinstance(score, (int, float)):
+            continue
+        program = record.get("program")
+        if not isinstance(program, str):
+            continue
+        sample_order = record.get(
+            "eval_count",
+            record.get("slot", record.get("sample_order", record.get("order"))),
+        )
+        if not isinstance(sample_order, int):
+            continue
+        if max_sample_order is not None and sample_order > max_sample_order:
+            continue
+        out.append({"program": program, "score": float(score), "sample_order": sample_order})
+    return out
+
+
+def _journal_program(path: Path) -> str | None:
     with path.open(encoding="utf-8") as handle:
         for line in handle:
-            line = line.strip()
-            if not line:
-                continue
             record = json.loads(line)
-            score = record.get("fitness", record.get("score"))
-            if not isinstance(score, (int, float)):
-                continue
-            program = record.get("program")
-            if not isinstance(program, str):
-                continue
-            sample_order = record.get(
-                "eval_count",
-                record.get("slot", record.get("sample_order", record.get("order"))),
-            )
-            if not isinstance(sample_order, int):
-                continue
-            if max_sample_order is not None and sample_order > max_sample_order:
-                continue
-            out.append(
-                {
-                    "program": program,
-                    "score": float(score),
-                    "sample_order": sample_order,
-                }
-            )
-    return out
+            if record.get("source") == "best_program.py" and isinstance(record.get("data"), str):
+                return record["data"]
+    return None
 
 
 def _filter_scored(

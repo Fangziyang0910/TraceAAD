@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 from baselines.reevo import ReEvo, ReEvoProfiler
@@ -17,13 +16,12 @@ from experiments.infra.base import (
     TaskName,
     build_llm_client,
     build_task,
-    llm_payload,
     resolve_backend,
     resolve_run_dir as resolve_run_dir_file,
-    run_in_tmux_log,
     set_random_seed,
     write_run_config as write_run_config_file,
 )
+from experiments.infra.runner import baseline_run_config, run_baseline_experiment
 
 # Paper table / original cfg/config.yaml used max_fe=100 for sample-efficiency
 # claims. Fair comparison across methods in this repo uses a unified budget.
@@ -139,27 +137,9 @@ def build_method(spec: RunSpec, log_dir: Path) -> ReEvo:
 
 
 def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
-    _, task_config = build_task(spec.task, spec.eval_workers)
     write_run_config_file(
         run_dir,
-        {
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-            "run_dir": str(run_dir),
-            "run_name": run_name,
-            "task": spec.task,
-            "method": "reevo",
-            "repeat": spec.repeat,
-            "backend": spec.backend,
-            "seed": spec.seed,
-            "llm": llm_payload(
-                base_url=spec.base_url,
-                model=spec.model,
-                no_proxy=spec.no_proxy,
-                max_tokens=spec.output_tokens,
-                temperature=1.0,
-            ),
-            "task_eval": task_config,
-            "method_params": {
+        baseline_run_config(spec, run_dir, run_name, "reevo", {
                 "max_sample_nums": spec.max_sample_nums,
                 "population_size": spec.pop_size,
                 "init_pop_size": spec.init_pop_size,
@@ -174,8 +154,7 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                     "init_pop_size=30, mutation_rate=0.5, temperature=1; "
                     "initialization uses temperature+0.3"
                 ),
-            },
-        },
+            }),
     )
 
 
@@ -185,23 +164,11 @@ def resolve_run_dir(spec: RunSpec) -> tuple[Path, str]:
 
 
 def run_experiment(spec: RunSpec) -> Path:
-    run_dir, run_name = resolve_run_dir(spec)
-    log_dir = run_dir / "logs"
-    write_run_config(spec, run_dir, run_name)
-    print(f"run_dir={run_dir}")
-    run_in_tmux_log(
-        run_dir,
-        log_dir,
-        [
-            f"log_dir={log_dir}",
-            f"llm={spec.model} @ {spec.base_url}",
-            "reevo="
-            f"pop={spec.pop_size}, init={spec.init_pop_size}, "
-            f"budget={spec.max_sample_nums}, mutation_rate={spec.mutation_rate}",
-        ],
-        lambda: build_method(spec, log_dir).run(),
+    return run_baseline_experiment(
+        spec, write_config=write_run_config, build_method=build_method,
+        description=(f"reevo=pop={spec.pop_size}, init={spec.init_pop_size}, "
+                     f"budget={spec.max_sample_nums}, mutation_rate={spec.mutation_rate}"),
     )
-    return run_dir
 
 
 def build_parser() -> argparse.ArgumentParser:

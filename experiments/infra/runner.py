@@ -169,3 +169,41 @@ def setup_experiment_run(
         log_dir=log_dir,
         args=args,
     )
+
+
+def run_baseline_experiment(spec, *, write_config, build_method, description: str) -> Path:
+    """Run a baseline with the shared directory, config and log lifecycle."""
+    from experiments.infra.base import resolve_run_dir
+
+    run_dir, run_name = resolve_run_dir(spec.experiment_root, spec.run_name)
+    log_dir = run_dir / "logs"
+    write_config(spec, run_dir, run_name)
+    print(f"run_dir={run_dir}")
+    run_in_tmux_log(
+        run_dir, log_dir,
+        [f"log_dir={log_dir}", f"llm={spec.model} @ {spec.base_url}", description],
+        lambda: build_method(spec, log_dir).run(),
+    )
+    return run_dir
+
+
+def baseline_run_config(spec, run_dir: Path, run_name: str, method: str,
+                        method_params: dict[str, Any], *,
+                        task_config: dict[str, Any] | None = None,
+                        llm_options: dict[str, Any] | None = None,
+                        extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    if task_config is None:
+        _, task_config = build_task(spec.task, spec.eval_workers)
+    return {
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "run_dir": str(run_dir), "run_name": run_name, "task": spec.task,
+        "method": method, "repeat": spec.repeat, "backend": spec.backend,
+        "seed": spec.seed,
+        "llm": llm_payload(
+            base_url=spec.base_url, model=spec.model, no_proxy=spec.no_proxy,
+            max_tokens=spec.output_tokens,
+            **{"temperature": 1.0, **(llm_options or {})},
+        ),
+        "task_eval": task_config, "method_params": method_params,
+        **(extra or {}),
+    }

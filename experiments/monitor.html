@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TraceAAD V10.13 训练监控</title>
+<title>实验监控</title>
 <style>
 :root {
   --ink: #202124;
@@ -115,6 +115,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .status.running::before { background: var(--green); }
 .status.queued::before { background: var(--amber); }
 .status.blocked::before { background: var(--red); }
+.status.unknown::before { background: var(--amber); }
 .progress { min-width: 110px; }
 .progress-line { height: 5px; background: #e6e8e6; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--green); }
@@ -212,10 +213,11 @@ pre {
 <body>
 <header class="topbar">
   <div class="identity">
-    <strong>TraceAAD V10.13</strong>
-    <span>训练监控</span>
+    <strong>实验监控</strong>
+    <span>训练结果</span>
   </div>
   <div class="controls">
+    <select id="experiment" aria-label="选择实验"></select>
     <button class="button" id="refresh" type="button">刷新</button>
   </div>
 </header>
@@ -224,7 +226,7 @@ pre {
   <section class="summary" aria-label="批次摘要">
     <div class="metric"><div class="metric-label">运行</div><div class="metric-value" id="runs">-</div><div class="metric-note" id="run-note">-</div></div>
     <div class="metric"><div class="metric-label">评价进度</div><div class="metric-value" id="budget">-</div><div class="metric-note" id="budget-note">-</div></div>
-    <div class="metric"><div class="metric-label">有效节点</div><div class="metric-value" id="nodes">-</div><div class="metric-note">已通过评价的候选</div></div>
+    <div class="metric"><div class="metric-label">有效候选</div><div class="metric-value" id="nodes">-</div><div class="metric-note">训练结果</div></div>
     <div class="metric"><div class="metric-label">更新时间</div><div class="metric-value" id="updated">-</div><div class="metric-note" id="batch-name">-</div></div>
   </section>
   <div class="error" id="error"></div>
@@ -242,7 +244,7 @@ pre {
 </div>
 
 <script>
-const statusText = {finished: "已完成", running: "运行中", queued: "排队中", blocked: "受阻"};
+const statusText = {finished: "已完成", running: "运行中", queued: "排队中", blocked: "受阻", unknown: "未确认"};
 const operatorOrder = ["Init", "Refine", "Tune", "Pivot", "Fuse"];
 const overlay = document.getElementById("overlay");
 let activeBatch = "";
@@ -271,7 +273,15 @@ async function loadBatches() {
   const response = await fetch("/api/batches");
   if (!response.ok) throw new Error("批次列表读取失败");
   const data = await response.json();
-  activeBatch = data.batches[0]?.id || "";
+  const select = document.getElementById("experiment");
+  select.replaceChildren(...data.batches.map(item => {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.label || item.id;
+    return option;
+  }));
+  if (data.batches.some(item => item.id === activeBatch)) select.value = activeBatch;
+  activeBatch = select.value || "";
 }
 
 async function loadState() {
@@ -289,13 +299,13 @@ async function loadState() {
 function renderState(data) {
   const s = data.summary;
   document.getElementById("runs").textContent = `${s.finished}/${s.runs}`;
-  document.getElementById("run-note").textContent = `${s.running} 运行 · ${s.queued} 排队 · ${s.blocked} 受阻`;
+  document.getElementById("run-note").textContent = `${s.running} 运行 · ${s.queued} 排队 · ${s.blocked} 受阻 · ${s.unknown || 0} 未确认`;
   const percent = s.budget ? Math.round(s.budget_used / s.budget * 100) : 0;
   document.getElementById("budget").textContent = `${percent}%`;
   document.getElementById("budget-note").textContent = `${s.budget_used.toLocaleString()} / ${s.budget.toLocaleString()}`;
   document.getElementById("nodes").textContent = s.valid_nodes.toLocaleString();
   document.getElementById("updated").textContent = shortTime(data.updated_at);
-  document.getElementById("batch-name").textContent = "V10.13";
+  document.getElementById("batch-name").textContent = data.batch || "-";
 
   const container = document.getElementById("tasks");
   if (!data.tasks.length) {
@@ -306,11 +316,11 @@ function renderState(data) {
     <section class="task-section">
       <header class="task-heading"><h2>${esc(task.label)}</h2><span>${task.direction === "min" ? "越低越好" : "越高越好"} · ${esc(task.unit)}</span></header>
       <div class="table-wrap"><table>
-        <thead><tr><th style="width:12%">重复</th><th style="width:15%">状态</th><th style="width:25%">评价</th><th style="width:16%">最佳值</th><th style="width:14%">有效节点</th><th style="width:18%">后端</th></tr></thead>
+        <thead><tr><th style="width:12%">重复</th><th style="width:15%">状态</th><th style="width:25%">评价</th><th style="width:16%">最佳值</th><th style="width:14%">有效候选</th><th style="width:18%">后端</th></tr></thead>
         <tbody>${task.runs.map(run => {
           const pct = run.budget ? Math.min(100, run.budget_used / run.budget * 100) : 0;
           return `<tr>
-            <td><button class="run-button" type="button" data-task="${esc(task.key)}" data-run="${esc(run.name)}">Rep ${run.repeat}</button></td>
+            <td><button class="run-button" type="button" data-task="${esc(task.key)}" data-run="${esc(run.name)}">${run.repeat == null ? esc(run.name) : `Rep ${run.repeat}`}</button></td>
             <td><span class="status ${esc(run.status)}">${statusText[run.status] || esc(run.status)}</span></td>
             <td><div class="progress"><div class="progress-line"><div class="progress-fill" style="width:${pct}%"></div></div><div class="progress-text">${run.budget_used} / ${run.budget}</div></div></td>
             <td class="number">${number(run.best_value)}</td>
@@ -339,7 +349,7 @@ async function openRun(task, name) {
 }
 
 function renderDetail(run) {
-  document.getElementById("detail-title").textContent = `${run.task_meta.label} · Rep ${run.repeat}`;
+  document.getElementById("detail-title").textContent = `${run.task_meta.label} · ${run.repeat == null ? run.name : `Rep ${run.repeat}`}`;
   document.getElementById("detail-subtitle").textContent = `${run.backend || "-"} · seed ${run.seed ?? "-"} · ${statusText[run.status] || run.status}`;
   const operators = operatorOrder.filter(key => run.operators[key] !== undefined).map(key => `<span class="count">${key} ${run.operators[key]}</span>`).join("");
   const outcomes = Object.entries(run.outcomes).map(([key, value]) => `<span class="count">${esc(key)} ${value}</span>`).join("");
@@ -347,14 +357,14 @@ function renderDetail(run) {
   document.getElementById("detail-body").innerHTML = `
     <div class="detail-stats">
       <div class="detail-stat"><small>评价</small><strong>${run.budget_used} / ${run.budget}</strong></div>
-      <div class="detail-stat"><small>有效节点</small><strong>${run.valid_nodes}</strong></div>
+      <div class="detail-stat"><small>有效候选</small><strong>${run.valid_nodes}</strong></div>
       <div class="detail-stat"><small>最佳值</small><strong>${number(run.best_value)}</strong></div>
       <div class="detail-stat"><small>状态</small><strong>${statusText[run.status] || esc(run.status)}</strong></div>
     </div>
     <section class="detail-section"><h3>最佳值曲线</h3><svg class="chart" id="curve" viewBox="0 0 660 220" preserveAspectRatio="none"></svg></section>
     <section class="detail-section"><h3>算子</h3><div class="counts">${operators || "-"}</div></section>
     <section class="detail-section"><h3>结果</h3><div class="counts">${outcomes || "-"}</div></section>
-    <section class="detail-section"><h3>最近候选</h3><table class="recent"><thead><tr><th>评价</th><th>算子</th><th>结果</th><th>值</th></tr></thead><tbody>${recent}</tbody></table></section>
+    <section class="detail-section"><h3>最近候选</h3><table class="recent"><thead><tr><th>序号</th><th>算子</th><th>结果</th><th>值</th></tr></thead><tbody>${recent}</tbody></table></section>
     ${run.best ? `<section class="detail-section"><h3>最佳 Idea</h3><p class="idea" id="best-idea"></p></section><section class="detail-section"><h3>最佳代码</h3><pre id="best-code"></pre></section>` : ""}`;
   if (run.best) {
     document.getElementById("best-idea").textContent = run.best.idea || "-";
@@ -396,6 +406,10 @@ document.getElementById("close").addEventListener("click", closeDetail);
 overlay.addEventListener("click", event => { if (event.target === overlay) closeDetail(); });
 document.addEventListener("keydown", event => { if (event.key === "Escape") closeDetail(); });
 document.getElementById("refresh").addEventListener("click", loadState);
+document.getElementById("experiment").addEventListener("change", event => {
+  activeBatch = event.target.value;
+  loadState();
+});
 
 (async function start() {
   try {

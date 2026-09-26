@@ -14,7 +14,10 @@ from datetime import datetime
 from pathlib import Path
 
 from experiments.infra.base import BACKENDS as BACKEND_PROFILES, RESULTS_ROOT, free_slots
-from experiments.infra.launcher import check_backends
+from experiments.infra.launcher import (
+    check_backends, get_summary_status, is_session_alive, launch_command,
+    write_json_atomic,
+)
 from traceaad.v10_13.storage import JOURNAL_NAME
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -111,29 +114,16 @@ def run_dir(row):
 
 
 def summary_status(row):
-    path = run_dir(row) / "logs" / "run_summary.json"
-    if path.exists():
-        try:
-            value = json.loads(path.read_text(encoding="utf-8")).get("status")
-            if isinstance(value, str):
-                return value
-        except (OSError, json.JSONDecodeError):
-            pass
-    return None
+    return get_summary_status(run_dir(row))
 
 
 def session_alive(row):
-    return subprocess.run(["tmux", "has-session", "-t", f"={row['session']}"],
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                          check=False).returncode == 0
+    return is_session_alive(row["session"])
 
 
 def save_state(state):
     state["updated_at"] = timestamp()
-    temporary = STATE.with_suffix(".tmp")
-    temporary.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n",
-                         encoding="utf-8")
-    temporary.replace(STATE)
+    write_json_atomic(STATE, state)
 
 
 def load_state(rows):
@@ -224,8 +214,7 @@ def launch(row):
         "--repeat", str(row["repeat"]), "--run-name", row["run_name"],
         "--budget", "32", "--output-tokens", "8192", "--eval-workers", "2",
     ]
-    subprocess.run(["tmux", "new-session", "-d", "-s", row["session"],
-                    "-c", str(ROOT), *command], cwd=ROOT, check=True)
+    launch_command(row["session"], command)
 
 
 def start_available(rows, state):

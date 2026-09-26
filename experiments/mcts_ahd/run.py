@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 from baselines.mcts_ahd import MAProfiler, MCTS_AHD
@@ -17,12 +16,11 @@ from experiments.infra.base import (
     TaskName,
     build_llm_client,
     build_task,
-    llm_payload,
     resolve_backend,
     resolve_run_dir as resolve_run_dir_file,
-    run_in_tmux_log,
     write_run_config as write_run_config_file,
 )
+from experiments.infra.runner import baseline_run_config, run_baseline_experiment
 
 # Paper-aligned defaults (MCTS-AHD icml2025: N_I=4, lambda_0=0.1, alpha=0.5).
 MAX_SAMPLE_NUMS = 1000
@@ -155,27 +153,9 @@ def build_method(spec: RunSpec, log_dir: Path) -> MCTS_AHD:
 
 
 def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
-    _, task_config = build_task(spec.task, spec.eval_workers)
     write_run_config_file(
         run_dir,
-        {
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-            "run_dir": str(run_dir),
-            "task": spec.task,
-            "method": "mcts_ahd",
-            "timestamp": run_name,
-            "repeat": spec.repeat,
-            "backend": spec.backend,
-            "seed": spec.seed,
-            "llm": llm_payload(
-                base_url=spec.base_url,
-                model=spec.model,
-                no_proxy=spec.no_proxy,
-                max_tokens=spec.output_tokens,
-                temperature=1.0,
-            ),
-            "task_eval": task_config,
-            "method_params": {
+        baseline_run_config(spec, run_dir, run_name, "mcts_ahd", {
                 "max_sample_nums": spec.max_sample_nums,
                 "init_size": spec.init_size,
                 "pop_size": spec.pop_size,
@@ -187,8 +167,7 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                 "max_consecutive_sample_failures": MAX_CONSECUTIVE_SAMPLE_FAILURES,
                 "eval_executor": EVAL_EXECUTOR,
                 "debug": False,
-            },
-        },
+            }, extra={"timestamp": run_name}),
     )
 
 
@@ -198,23 +177,12 @@ def resolve_run_dir(spec: RunSpec) -> tuple[Path, str]:
 
 
 def run_experiment(spec: RunSpec) -> Path:
-    run_dir, run_name = resolve_run_dir(spec)
-    log_dir = run_dir / "logs"
-    write_run_config(spec, run_dir, run_name)
-    print(f"run_dir={run_dir}")
-    run_in_tmux_log(
-        run_dir,
-        log_dir,
-        [
-            f"log_dir={log_dir}",
-            f"llm={spec.model} @ {spec.base_url}",
-            f"mcts_ahd=init={spec.init_size}, pop={spec.pop_size}, "
-            f"budget={spec.max_sample_nums}, "
-            f"lambda_0={spec.lambda_0}, alpha={spec.alpha}",
-        ],
-        lambda: build_method(spec, log_dir).run(),
+    return run_baseline_experiment(
+        spec, write_config=write_run_config, build_method=build_method,
+        description=(f"mcts_ahd=init={spec.init_size}, pop={spec.pop_size}, "
+                     f"budget={spec.max_sample_nums}, "
+                     f"lambda_0={spec.lambda_0}, alpha={spec.alpha}"),
     )
-    return run_dir
 
 
 def build_parser() -> argparse.ArgumentParser:

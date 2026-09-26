@@ -5,3 +5,5 @@
 单路 V10.13：`uv run python -m experiments.traceaad_v10_13.run --task tsp_construct --run-name trial_1 --budget 1000`。正式批次使用 `uv run python -m experiments.traceaad_v10_13.launch --batch <批次名> --session-prefix <前缀> --watch`。初始化对照的固定协议入口是 `experiments.traceaad_initialization.launch`。
 
 对比方法使用同一个批量入口，例如 `uv run python -m experiments.launch --method eoh --batch <批次名> --repeats 3 --dry-run`；去掉 `--dry-run` 后启动。可用 `--tasks tsp_construct cvrp_aco` 限定任务，用 `--run-arg=--budget=100` 向各路运行脚本传递参数。各方法的 `run.py` 保存自身的算法参数；通用调度、后端和 held-out 评价位于 `infra/`。
+
+训练监控统一入口：`uv run python -m experiments.monitor --port 8765`。页面可切换实验，查看运行状态、最佳程序和有明确记录序号的最佳值曲线。
