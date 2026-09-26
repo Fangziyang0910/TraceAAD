@@ -4,6 +4,7 @@ from tests.support import FakeLLM, TinyEvaluation, response
 from experiments.traceaad_initialization.run import InitializationExperiment
 from experiments.traceaad_initialization.launch import jobs, validate, check_resume_config, run_dir
 from experiments.infra.base import RESULTS_ROOT
+from traceaad.v10_13.storage import RunStorage
 
 @pytest.mark.parametrize('mode,counts', [('independent',[0]*8),('sequential',list(range(8))),('hybrid',[0,0,0,0,4,5,6,7])])
 def test_information_dependency_and_stop(tmp_path, mode, counts):
@@ -96,7 +97,7 @@ def test_formal_schedule_and_resume_config(tmp_path, monkeypatch):
     row = rows[0]
     run = tmp_path / row['run_name']
     run.mkdir()
-    (run / 'tree_state.json').write_text('{}')
+    RunStorage(run).save_state({'candidate_count': 0, 'budget_used': 0})
     (run / 'run_config.json').write_text(json.dumps({
         'task': row['task'], 'seed': row['seed'], 'repeat': row['repeat'],
         'backend': row['backend'], 'method_params': {

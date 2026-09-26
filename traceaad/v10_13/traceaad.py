@@ -15,7 +15,7 @@ from core import SecureEvaluator
 from .parsing import parse_candidate, template_target
 from .prompts import PromptBuilder
 from .selection import OPERATORS, OPERATOR_PROBABILITIES, sample_parent, sample_reference
-from .storage import RunStorage, read_journal
+from .storage import RunStorage
 from .tree import Node, SearchTree
 
 
@@ -161,7 +161,6 @@ class TraceAADV1013:
         return value, result.failure_kind, result.error
 
     def _evaluate(self, parsed, candidate):
-        self.evaluations_used += 1
         started = time.time()
         try:
             fitness, reason, error = self._fitness(
@@ -180,7 +179,6 @@ class TraceAADV1013:
                 operator=candidate.operator,
                 reference_id=candidate.reference.id if candidate.reference else None,
             )
-            self.storage.record_node(node)
         return node, reason, error, time.time() - started
 
     def _run_candidate(self):
@@ -201,6 +199,16 @@ class TraceAADV1013:
             status, reason, error = "invalid_output", parse_error, None
         else:
             self.invalid_streak = 0
+            self.evaluations_used += 1
+            self.storage.reserve_evaluation(self._state(pending_evaluation={
+                "candidate_id": candidate.id,
+                "evaluation_id": self.evaluations_used,
+                "operator": candidate.operator,
+                "parent_id": candidate.parent.id if candidate.parent else None,
+                "reference_id": candidate.reference.id if candidate.reference else None,
+                "code": parsed.program_code,
+                "idea": parsed.idea,
+            }))
             node, reason, error, eval_seconds = self._evaluate(parsed, candidate)
             status = "ok" if node else "eval_failed"
 
@@ -220,28 +228,37 @@ class TraceAADV1013:
             "fitness": node.fitness if node else None,
             "eval_seconds": eval_seconds,
         }
-        self.storage.record_event(event)
-        self._save_state()
+        if parsed is not None and node is None:
+            event["code"] = parsed.program_code
+            event["idea"] = parsed.idea
+        self.storage.commit_candidate(event, asdict(node) if node else None, self._state())
         if self.invalid_streak >= 50:
             raise RuntimeError("50 consecutive generations produced no valid output")
 
-    def _save_state(self):
-        self.storage.save_state({
+    def _state(self, pending_evaluation=None):
+        return {
             "started_at": self.started_at,
             "rng_state": list(self.rng.getstate()),
             "candidate_count": self.candidate_count,
             "budget_used": self.evaluations_used,
             "invalid_streak": self.invalid_streak,
-        })
+            "pending_evaluation": pending_evaluation,
+        }
 
-    def _resume(self):
-        import json
+    def _save_state(self):
+        self.storage.save_state(self._state())
 
-        state = json.loads(self.storage.state_path.read_text(encoding="utf-8"))
+    def _resume(self, state=None):
+        if state is None:
+            state = self.storage.load_state()
+        if state.get("pending_evaluation"):
+            raise RuntimeError(
+                "evaluation result is uncertain; inspect the reserved candidate before resuming"
+            )
         self.started_at = state.get("started_at", self.started_at)
         if state.get("rng_state"):
             _restore_rng(self.rng, state["rng_state"])
-        for entry in read_journal(self.storage.nodes_path):
+        for entry in self.storage.records("nodes"):
             self.tree.add_raw(Node(
                 id=entry["id"],
                 code=entry["code"],
@@ -257,6 +274,13 @@ class TraceAADV1013:
 
     def _write_summary(self, status, error=None):
         best = self.tree.best() if self.tree.nodes else None
+        best_record = asdict(best) if best else None
+        if best_record is not None:
+            best_record["evaluation_id"] = next(
+                (event["evaluation_id"] for event in self.storage.records("events")
+                 if event.get("node_id") == best.id),
+                None,
+            )
         summary = {
             "status": status,
             "method": self.METHOD,
@@ -266,7 +290,7 @@ class TraceAADV1013:
             "budget_used": self.evaluations_used,
             "num_nodes": len(self.tree.nodes),
             "num_roots": len(self.tree.roots),
-            "best": asdict(best) if best else None,
+            "best": best_record,
         }
         if error:
             summary["error"] = error
@@ -274,8 +298,12 @@ class TraceAADV1013:
 
     def run(self):
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        if self.storage.state_path.exists():
-            self._resume()
+        state = self.storage.load_state()
+        finished = self.storage.load_summary()
+        if finished and finished.get("status") == "finished" and finished.get("budget", 0) >= self.budget:
+            return
+        if state is not None:
+            self._resume(state)
         else:
             self._save_state()
         try:

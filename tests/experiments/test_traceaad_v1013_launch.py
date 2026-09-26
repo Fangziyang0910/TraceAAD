@@ -1,5 +1,7 @@
 from collections import Counter
 
+import pytest
+
 from experiments.traceaad_v10_13.launch import (
     BACKEND_POOL,
     TARGET_DISTRIBUTION,
@@ -32,3 +34,17 @@ def test_error_summary_blocks_relaunch_even_if_session_is_alive(monkeypatch):
     monkeypatch.setattr(launch, 'session_alive', lambda session: True)
     launch.refresh([row])
     assert row['status'] == 'blocked' and row['last_error'] == 'error'
+
+
+def test_runner_rejects_existing_results_without_journal(tmp_path, monkeypatch):
+    from experiments.traceaad_v10_13 import run as runner
+
+    monkeypatch.setattr(runner, 'RESULTS_ROOT', tmp_path)
+    run_dir = tmp_path / 'traceaad_v10_13' / 'tsp_construct' / 'old_run'
+    run_dir.mkdir(parents=True)
+    (run_dir / 'run_config.json').write_text('{}')
+
+    with pytest.raises(SystemExit, match='no V10.13 journal'):
+        runner.main(['--task', 'tsp_construct', '--run-name', 'old_run'])
+
+    assert (run_dir / 'run_config.json').read_text() == '{}'

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from experiments.infra.artifacts import load_scored_samples
 from traceaad.v10_13 import TraceAADV1013
 from traceaad.v10_13.parsing import parse_candidate, template_target
 from traceaad.v10_13.prompts import PromptBuilder
@@ -15,8 +16,8 @@ from traceaad.v10_13.selection import (
     sample_parent,
     sample_reference,
 )
-from traceaad.v10_13.storage import read_journal
 from traceaad.v10_13.tree import Node
+from traceaad.v10_13.storage import RunStorage, read_journal
 from tests.support import FakeLLM, TinyEvaluation, response
 
 
@@ -60,21 +61,30 @@ def test_failed_candidate_does_not_advance_hybrid_boundary(tmp_path):
     ]
 
 
-def test_new_run_defaults_to_hybrid_and_old_run_requires_original_mode(tmp_path, monkeypatch):
+def test_runner_checks_resume_settings_and_skips_finished_run(tmp_path, monkeypatch):
     from experiments.traceaad_v10_13 import run as runner
 
     args = runner.build_parser().parse_args(["--task", "tsp_construct"])
     assert (args.init_mode, args.n_roots) == ("hybrid", 8)
 
-    (tmp_path / "run_config.json").write_text(json.dumps({"method_params": {"n_roots": 8}}))
+    (tmp_path / "run_config.json").write_text(json.dumps({
+        "seed": 0, "method_params": {"n_roots": 8, "init_mode": "sequential"},
+    }))
     llm = SimpleNamespace(close=lambda: None)
-    context = SimpleNamespace(resumed=True, run_dir=tmp_path, llm=llm)
+    context = SimpleNamespace(resumed=True, run_dir=tmp_path, llm=llm,
+                              evaluation=TinyEvaluation())
     monkeypatch.setattr(runner, "setup_experiment_run", lambda *args, **kwargs: context)
     with pytest.raises(ValueError, match="resume with --init-mode sequential"):
         runner.main(["--task", "tsp_construct"])
     with pytest.raises(ValueError, match="resume with --n-roots 8"):
         runner.main(["--task", "tsp_construct", "--init-mode", "sequential",
                      "--n-roots", "4"])
+
+    with pytest.raises(ValueError, match="seed=0"):
+        runner.main(["--task", "tsp_construct", "--init-mode", "sequential", "--seed", "7"])
+
+    RunStorage(tmp_path).save_summary({"status": "finished", "budget": 1000})
+    runner.main(["--task", "tsp_construct"])
 
 
 def test_parent_distribution_keeps_ess_and_uniform_exploration():
@@ -191,17 +201,22 @@ def test_run_saves_results_with_a_small_state(tmp_path):
     )
     method.run()
 
-    state = json.loads(method.storage.state_path.read_text())
+    state = method.storage.load_state()
     summary = json.loads(method.storage.summary_path.read_text())
-    events = read_journal(method.storage.events_path)
+    events = method.storage.records("events")
 
-    assert state.keys() == {
-        "started_at", "rng_state", "candidate_count", "budget_used", "invalid_streak",
-    }
-    assert state["budget_used"] == len(read_journal(method.storage.nodes_path)) == 3
+    assert state["budget_used"] == len(method.storage.records("nodes")) == 3
     assert len(events) == 3
+    calls = method.storage.records("calls")
+    assert len(calls) == 3
+    assert calls[0]["prompt"] == method.llm.calls[0][0]
+    assert calls[0]["response"] == response(1)
+    assert all("state" in record and "node" in record
+               for record in read_journal(method.storage.path) if record["kind"] == "candidate")
     assert summary["status"] == "finished"
     assert summary["best"]["fitness"] == 3
+    assert summary["best"]["evaluation_id"] == 3
+    assert load_scored_samples(tmp_path)[0]["sample_order"] == 3
 
 
 def test_invalid_output_does_not_spend_evaluation_budget(tmp_path):
@@ -212,7 +227,7 @@ def test_invalid_output_does_not_spend_evaluation_budget(tmp_path):
     )
     method.run()
 
-    events = read_journal(method.storage.events_path)
+    events = method.storage.records("events")
     assert [event["status"] for event in events] == ["invalid_output", "ok"]
     assert [event["budget_used"] for event in events] == [0, 1]
 
@@ -225,8 +240,9 @@ def test_failed_evaluation_spends_budget_and_search_continues(tmp_path):
     )
     method.run()
 
-    events = read_journal(method.storage.events_path)
+    events = method.storage.records("events")
     assert [event["status"] for event in events] == ["eval_failed", "ok"]
+    assert "def score(x):" in events[0]["code"]
     assert method.evaluations_used == 2
 
 
@@ -237,4 +253,62 @@ def test_resume_reads_saved_state_and_finishes_remaining_budget(tmp_path):
 
     assert resumed.evaluations_used == 2
     assert len(resumed.tree.nodes) == 2
-    assert len(read_journal(resumed.storage.events_path)) == 2
+    assert len(resumed.storage.records("events")) == 2
+
+
+def test_missing_summary_is_rebuilt_from_completed_search(tmp_path):
+    method = make_method(tmp_path, FakeLLM(response(1)), budget=1)
+    method.run()
+    method.storage.summary_path.unlink()
+
+    resumed = make_method(tmp_path, FakeLLM(), budget=1)
+    resumed.run()
+
+    assert resumed.storage.load_summary()["status"] == "finished"
+    assert len(resumed.storage.records("calls")) == 1
+
+
+def test_failed_model_call_is_preserved_and_candidate_retries(tmp_path):
+    with pytest.raises(StopIteration):
+        make_method(tmp_path, FakeLLM(), budget=1).run()
+
+    resumed = make_method(tmp_path, FakeLLM(response(1)), budget=1)
+    resumed.run()
+
+    assert [call["candidate_id"] for call in resumed.storage.records("calls")] == [1, 1]
+    assert [event["candidate_id"] for event in resumed.storage.records("events")] == [1]
+    assert resumed.storage.load_state()["budget_used"] == 1
+
+
+def test_uncertain_evaluation_blocks_automatic_resume(tmp_path, monkeypatch):
+    method = make_method(tmp_path, FakeLLM(response(1)), budget=1)
+
+    def interrupt_before_commit(*_args):
+        raise OSError("interrupted after evaluator call")
+
+    monkeypatch.setattr(method.storage, "commit_candidate", interrupt_before_commit)
+    with pytest.raises(OSError, match="interrupted after evaluator call"):
+        method.run()
+
+    pending = method.storage.load_state()["pending_evaluation"]
+    assert pending["candidate_id"] == pending["evaluation_id"] == 1
+    assert pending["operator"] == "Init"
+    assert "def score(x):" in pending["code"]
+    assert len(method.storage.records("calls")) == 1
+    assert method.storage.records("events") == []
+    with pytest.raises(RuntimeError, match="evaluation result is uncertain"):
+        make_method(tmp_path, FakeLLM(response(2)), budget=1).run()
+
+
+def test_damaged_journal_blocks_resume(tmp_path):
+    storage = RunStorage(tmp_path)
+    storage.save_state({"candidate_count": 0, "budget_used": 0})
+    with storage.path.open("ab") as handle:
+        handle.write(b'{"kind":"candidate","candidate_id":')
+
+    with pytest.raises(RuntimeError, match="incomplete search record"):
+        storage.load_state()
+
+    storage.path.write_text('{"kind":"state","state":{}}\nnot json\n', encoding="utf-8")
+    with pytest.raises(RuntimeError, match="invalid search record"):
+        storage.load_state()

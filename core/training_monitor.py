@@ -1,7 +1,7 @@
 """Small V10.13 batch monitor.
 
-The monitor consumes only the files owned by a V10.13 run: the batch manifest,
-run configuration, state, events, nodes, and final summary.
+The monitor consumes the V10.13 batch manifest, run configuration, search
+journal, and final summary.
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
+
+from traceaad.v10_13.storage import JOURNAL_NAME, RunStorage, read_journal
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -36,25 +38,7 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return []
-    records = []
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict):
-            records.append(value)
-    return records
-
-
-def _last_jsonl(path: Path) -> dict[str, Any]:
+def _last_candidate(path: Path) -> dict[str, Any]:
     try:
         with path.open("rb") as handle:
             handle.seek(0, 2)
@@ -68,28 +52,25 @@ def _last_jsonl(path: Path) -> dict[str, Any]:
             value = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if isinstance(value, dict):
+        if isinstance(value, dict) and value.get("kind") == "candidate":
             return value
+    if path.exists():
+        last = {}
+        for value in read_journal(path):
+            if value.get("kind") == "candidate":
+                last = value
+        return last
     return {}
 
 
-def _node_stats(path: Path) -> tuple[int, float | None]:
-    count = 0
-    best = None
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return count, best
-    for line in lines:
-        if not line.strip():
-            continue
-        count += 1
-        try:
-            fitness = json.loads(line).get("fitness")
-        except (json.JSONDecodeError, AttributeError):
-            continue
-        if fitness is not None:
-            fitness = float(fitness)
+def _run_node_stats(run_dir: Path) -> tuple[int, float | None]:
+    path = run_dir / JOURNAL_NAME
+    count, best = 0, None
+    for item in read_journal(path):
+        node = item.get("node") if item["kind"] == "candidate" else None
+        if node is not None:
+            count += 1
+            fitness = node["fitness"]
             best = fitness if best is None else max(best, fitness)
     return count, best
 
@@ -146,7 +127,7 @@ class V1013Monitor:
         run_dir = self._run_dir(row)
         config = _read_json(run_dir / "run_config.json")
         final = _read_json(run_dir / "logs/run_summary.json")
-        last_event = _last_jsonl(run_dir / "events.jsonl")
+        last_event = _last_candidate(run_dir / JOURNAL_NAME)
         params = config.get("method_params") or {}
 
         status = str(row.get("status") or "queued")
@@ -172,7 +153,7 @@ class V1013Monitor:
         if best_fitness is None:
             best_fitness = last_event.get("best_fitness")
         if valid_nodes is None or best_fitness is None:
-            journal_count, journal_best = _node_stats(run_dir / "nodes.jsonl")
+            journal_count, journal_best = _run_node_stats(run_dir)
             valid_nodes = journal_count if valid_nodes is None else valid_nodes
             best_fitness = journal_best if best_fitness is None else best_fitness
         valid_nodes = int(valid_nodes or 0)
@@ -239,8 +220,9 @@ class V1013Monitor:
 
         summary = self._run_summary(row)
         run_dir = self._run_dir(row)
-        events = _read_jsonl(run_dir / "events.jsonl")
-        nodes = _read_jsonl(run_dir / "nodes.jsonl")
+        storage = RunStorage(run_dir)
+        events = storage.records("events")
+        nodes = storage.records("nodes")
 
         best_fitness = None
         curve = []

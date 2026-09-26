@@ -1,16 +1,12 @@
 import json
 
 from core.training_monitor import V1013Monitor
+from traceaad.v10_13.storage import RunStorage
 
 
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value), encoding="utf-8")
-
-
-def write_jsonl(path, values):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(json.dumps(value) + "\n" for value in values), encoding="utf-8")
 
 
 def make_run(tmp_path):
@@ -33,15 +29,19 @@ def make_run(tmp_path):
     })
     run_dir = results / "tsp_construct" / run_name
     write_json(run_dir / "run_config.json", {"method_params": {"budget": 4}})
-    write_jsonl(run_dir / "events.jsonl", [
+    events = [
         {"candidate_id": 1, "budget_used": 1, "operator": "Init", "status": "ok", "fitness": -12.0},
         {"candidate_id": 2, "budget_used": 2, "operator": "Refine", "status": "ok", "fitness": -10.0},
         {"candidate_id": 3, "budget_used": 3, "operator": "Tune", "status": "eval_failed", "fitness": None},
-    ])
-    write_jsonl(run_dir / "nodes.jsonl", [
+    ]
+    nodes = [
         {"id": 0, "fitness": -12.0, "operator": "Init", "idea": "first", "code": "def f(): return 1"},
         {"id": 1, "fitness": -10.0, "operator": "Refine", "idea": "best", "code": "def f(): return 2"},
-    ])
+    ]
+    storage = RunStorage(run_dir)
+    for index, event in enumerate(events):
+        storage.commit_candidate(event, nodes[index] if index < len(nodes) else None,
+                                 {"candidate_count": index + 1, "budget_used": index + 1})
     return results, run_name
 
 
@@ -108,3 +108,20 @@ def test_run_detail_builds_minimization_curve_and_best_program(tmp_path):
     assert detail["operators"] == {"Init": 1, "Refine": 1, "Tune": 1}
     assert detail["best"]["idea"] == "best"
     assert detail["best"]["value"] == 10.0
+
+
+def test_finished_run_uses_summary_and_journal(tmp_path):
+    results, run_name = make_run(tmp_path)
+    run_dir = results / "tsp_construct" / run_name
+    storage = RunStorage(run_dir)
+    best = storage.records("nodes")[-1]
+    storage.save_summary({"status": "finished", "budget": 4, "budget_used": 3,
+                          "num_nodes": 2, "best": best})
+
+    monitor = V1013Monitor(results)
+    overview = monitor.overview("batch")
+    detail = monitor.run_detail("batch", "tsp_construct", run_name)
+    assert overview["summary"]["budget_used"] == 3
+    assert overview["summary"]["valid_nodes"] == 2
+    assert overview["summary"]["finished"] == 1
+    assert detail["best"]["code"] == best["code"]

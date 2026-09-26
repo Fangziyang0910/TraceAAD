@@ -15,6 +15,7 @@ from pathlib import Path
 
 from experiments.infra.base import BACKENDS as BACKEND_PROFILES, RESULTS_ROOT, free_slots
 from experiments.infra.launcher import check_backends
+from traceaad.v10_13.storage import JOURNAL_NAME
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -167,7 +168,7 @@ def refresh(rows, state):
         elif record["attempts"] >= MAX_ATTEMPTS:
             record["status"] = "blocked"
             record["last_error"] = status or "no terminal summary"
-        elif run_dir(row).exists() and not (run_dir(row) / "tree_state.json").exists():
+        elif run_dir(row).exists() and not (run_dir(row) / JOURNAL_NAME).exists():
             record["status"] = "blocked"
             record["last_error"] = "existing directory has no resumable checkpoint"
         elif record["attempts"] > 0:
@@ -179,7 +180,7 @@ def check_resume_config(row):
     run = run_dir(row)
     if not run.exists():
         return
-    if not (run / "tree_state.json").exists():
+    if not (run / JOURNAL_NAME).exists():
         raise RuntimeError(f"existing run lacks checkpoint: {run}")
     config_path = run / "run_config.json"
     if not config_path.exists():

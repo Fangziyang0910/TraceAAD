@@ -7,6 +7,7 @@ from experiments.infra.runner import add_common_run_args, setup_experiment_run
 from experiments.traceaad_initialization.launch import RESULTS
 from traceaad.v10_13.traceaad import TraceAADV1013, Candidate
 from traceaad.v10_13.prompts import PromptBuilder
+from traceaad.v10_13.storage import JOURNAL_NAME
 
 MODES = {'independent': 8, 'sequential': 1, 'hybrid': 4}
 
@@ -37,8 +38,9 @@ class InitializationExperiment(TraceAADV1013):
         return super()._schedule()
 
     def run(self):
-        if self.storage.state_path.exists():
-            self._resume()
+        state = self.storage.load_state()
+        if state is not None:
+            self._resume(state)
         else:
             self._save_state()
         try:
@@ -94,8 +96,12 @@ def main():
     params = dict(budget=args.budget, n_roots=8, history_depth=3,
         max_input_tokens=24320, output_tokens=args.output_tokens,
         init_mode=args.init_mode, init_only=args.init_only, max_calls=max_calls)
+    if args.run_name:
+        existing = RESULTS / args.task / args.run_name
+        if (existing / 'tree_state.json').exists() and not (existing / JOURNAL_NAME).exists():
+            raise SystemExit(f'legacy initialization run cannot resume with the new storage: {existing}')
     ctx = setup_experiment_run(args, method='initialization_v1013',
-        results_root=RESULTS, resume_file='tree_state.json',
+        results_root=RESULTS, resume_file=JOURNAL_NAME,
         method_params=params, budget_basis='evaluator_calls')
     try:
         method = InitializationExperiment(evaluation=ctx.evaluation, llm=ctx.llm,
