@@ -11,8 +11,8 @@ Usage:
 
     uv run python experiments/traceaad_v9_7/analyze.py \
         --batch 20260813_184519 \
-        --json-out docs/01-主线版本/V9.7/机制诊断/traceaad_v97_allocation/summary.json \
-        --markdown-out docs/01-主线版本/V9.7/机制诊断/结论.md
+        --json-out experiments/traceaad_v9_7/analysis/allocation_summary.json \
+        --markdown-out experiments/traceaad_v9_7/analysis/allocation_report.md
 """
 
 from __future__ import annotations
@@ -505,8 +505,8 @@ def render_markdown(result: dict[str, Any]) -> str:
             "```bash",
             "uv run python experiments/traceaad_v9_7/analyze.py \\",
             f"  --batch {result['batch']} \\",
-            "  --json-out docs/01-主线版本/V9.7/机制诊断/traceaad_v97_allocation/summary.json \\",
-            "  --markdown-out docs/01-主线版本/V9.7/机制诊断/结论.md",
+            "  --json-out experiments/traceaad_v9_7/analysis/allocation_summary.json \\",
+            "  --markdown-out experiments/traceaad_v9_7/analysis/allocation_report.md",
             "```",
             "",
         ]
