@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+import time
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from experiments.infra.artifacts import pick_best_sample
+from experiments.infra.monitor_history import TrainingHistory
+from experiments.infra.monitor_timing import batch_timing, search_timing
 from traceaad.v10_13.storage import JOURNAL_NAME, RunStorage, read_journal
 
 
@@ -78,14 +82,6 @@ def _objective(fitness: float | None, task: str) -> float | None:
     return -fitness if TASKS[task]["direction"] == "min" else fitness
 
 
-def _sample(points: list[dict[str, Any]], limit: int = 240) -> list[dict[str, Any]]:
-    if len(points) <= limit:
-        return points
-    step = (len(points) - 1) / (limit - 1)
-    indexes = {round(index * step) for index in range(limit)}
-    return [point for index, point in enumerate(points) if index in indexes]
-
-
 def _search_events(run_dir: Path):
     journal = run_dir / JOURNAL_NAME
     if journal.exists():
@@ -107,53 +103,13 @@ def _search_events(run_dir: Path):
                 break
 
 
+@lru_cache(maxsize=128)
+def _history(run_dir: Path, task: str):
+    return TrainingHistory(run_dir, minimize=TASKS[task]["direction"] == "min")
+
+
 def _search_trend(run_dir: Path, task: str):
-    streams = {}
-    for source, event in _search_events(run_dir):
-        if not isinstance(event, dict):
-            continue
-        if source == "evaluations.csv":
-            index, score = event.get("slot"), event.get("fitness")
-        elif source == "artifacts/candidates.jsonl":
-            index, score = event.get("order"), event.get("child_fitness")
-        elif source == "method_events.jsonl":
-            if event.get("event") == "epoch":
-                index, score = event.get("sample_count"), event.get("best_perf")
-            elif event.get("event") == "sample_registered":
-                index, score = event.get("profiler_sample_order"), event.get("score")
-            else:
-                continue
-        else:
-            index = event.get("budget_used", event.get("evaluation_id"))
-            score = event.get("fitness")
-        if index is None or score is None:
-            continue
-        try:
-            index, score = int(index), float(score)
-        except (ValueError, TypeError):
-            continue
-        if not (index >= 0 and abs(score) < float("inf")):
-            continue
-        streams.setdefault(source, []).append((index, score, event))
-    for source in ("native", "events.jsonl", "evaluations.csv",
-                   "method_events.jsonl", "artifacts/candidates.jsonl"):
-        if source in streams:
-            break
-    else:
-        return [], [], {}, {}
-    best = None
-    points, recent = [], []
-    operators, outcomes = Counter(), Counter()
-    for index, score, event in sorted(streams[source], key=lambda row: row[0]):
-        best = score if best is None else max(best, score)
-        points.append({"evaluation": index, "value": _objective(best, task)})
-        operator = event.get("operator") or event.get("action") or "unknown"
-        status = event.get("status") or event.get("outcome") or "unknown"
-        operators[str(operator)] += 1
-        outcomes[str(status)] += 1
-        recent.append({"evaluation": index, "operator": operator,
-                       "status": status, "value": _objective(score, task)})
-    return _sample(points), recent[-12:][::-1], dict(operators), dict(outcomes)
+    return _history(Path(run_dir), task).read()
 
 
 class V1013Monitor:
@@ -189,7 +145,7 @@ class V1013Monitor:
     def _run_dir(self, row: dict[str, Any]) -> Path:
         return self.results_root / row["task"] / row["run_name"]
 
-    def _run_summary(self, row: dict[str, Any]) -> dict[str, Any]:
+    def _run_summary(self, row: dict[str, Any], now: float | None = None) -> dict[str, Any]:
         task = row["task"]
         run_dir = self._run_dir(row)
         config = _read_json(run_dir / "run_config.json")
@@ -227,7 +183,7 @@ class V1013Monitor:
         if best_fitness is not None:
             best_fitness = float(best_fitness)
 
-        return {
+        result = {
             "task": task,
             "name": row["run_name"],
             "repeat": int(row.get("repeat") or config.get("repeat") or 0),
@@ -241,14 +197,21 @@ class V1013Monitor:
             "best_value": _objective(best_fitness, task),
             "updated_at": last_event.get("ts") or final.get("finished_at") or row.get("started_at"),
             "error": None if active else final.get("error") or row.get("last_error"),
+            "curve": _search_trend(run_dir, task)[0],
+            "x_label": "评价次数",
         }
+        timing_summary = {**final, "started_at": final.get("started_at") or row.get("started_at")}
+        result["timing"] = search_timing(result, timing_summary,
+                                         _history(run_dir, task).timing_snapshot(), unit="评价", now=now)
+        return result
 
     def overview(self, batch: str | None = None) -> dict[str, Any]:
         manifest = self._manifest(batch)
         if not manifest:
             return {"batch": None, "summary": {}, "tasks": []}
 
-        runs = [self._run_summary(row) for row in manifest["plan"]]
+        now = time.time()
+        runs = [self._run_summary(row, now) for row in manifest["plan"]]
         status_counts = Counter(run["status"] for run in runs)
         task_groups = []
         for key, meta in TASKS.items():
@@ -271,6 +234,7 @@ class V1013Monitor:
                 "budget_used": sum(run["budget_used"] for run in runs),
                 "budget": sum(run["budget"] for run in runs),
                 "valid_nodes": sum(run["valid_nodes"] for run in runs),
+                "timing": batch_timing(runs),
             },
             "tasks": task_groups,
         }
@@ -288,25 +252,8 @@ class V1013Monitor:
         summary = self._run_summary(row)
         run_dir = self._run_dir(row)
         storage = RunStorage(run_dir)
-        events = storage.records("events")
         nodes = storage.records("nodes")
-
-        best_fitness = None
-        curve = []
-        status_counts: Counter[str] = Counter()
-        operator_counts: Counter[str] = Counter()
-        for event in events:
-            status_counts[str(event.get("status") or "unknown")] += 1
-            operator_counts[str(event.get("operator") or "unknown")] += 1
-            fitness = event.get("fitness")
-            if fitness is not None:
-                fitness = float(fitness)
-                best_fitness = fitness if best_fitness is None else max(best_fitness, fitness)
-            if event.get("budget_used") is not None and best_fitness is not None:
-                curve.append({
-                    "evaluation": int(event["budget_used"]),
-                    "value": _objective(best_fitness, task),
-                })
+        curve, recent, operators, outcomes = _search_trend(run_dir, task)
 
         valid_nodes = [node for node in nodes if node.get("fitness") is not None]
         best_node = max(valid_nodes, key=lambda node: float(node["fitness"]), default=None)
@@ -314,27 +261,16 @@ class V1013Monitor:
             final_best = _read_json(run_dir / "logs/run_summary.json").get("best")
             best_node = final_best if isinstance(final_best, dict) else None
 
-        recent = []
-        for event in events[-12:][::-1]:
-            fitness = event.get("fitness")
-            recent.append({
-                "candidate": event.get("candidate_id"),
-                "evaluation": event.get("budget_used") or event.get("evaluation_id"),
-                "operator": event.get("operator"),
-                "status": event.get("status"),
-                "value": _objective(float(fitness), task) if fitness is not None else None,
-                "reason": event.get("reason") or event.get("error_type"),
-            })
-
         return {
             **summary,
             "task_meta": TASKS[task],
-            "curve": _sample(curve),
-            "operators": dict(operator_counts),
-            "outcomes": dict(status_counts),
+            "curve": curve,
+            "operators": operators,
+            "outcomes": outcomes,
             "recent": recent,
             "best": None if best_node is None else {
                 "id": best_node.get("id", best_node.get("node_id")),
+                "fitness": float(best_node["fitness"]),
                 "value": _objective(float(best_node["fitness"]), task),
                 "operator": best_node.get("operator"),
                 "idea": best_node.get("idea") or "",
@@ -369,7 +305,7 @@ class ResultsMonitor:
                 counted = bool(event.get("evaluator_called"))
                 valid = isinstance(event.get("child_fitness"), (int, float))
                 position = None
-            elif source == "events.jsonl":
+            elif source in {"events.jsonl", "native"}:
                 counted = event.get("budget_used") is not None
                 valid = isinstance(event.get("fitness"), (int, float))
                 position = event.get("budget_used")
@@ -379,7 +315,7 @@ class ResultsMonitor:
             if counted:
                 record[0] = max(record[0], int(position)) if position is not None else record[0] + 1
             record[1] += valid
-        result = tuple(streams.get("events.jsonl", streams.get("artifacts/candidates.jsonl", [0, 0])))
+        result = tuple(streams.get("native", streams.get("events.jsonl", streams.get("artifacts/candidates.jsonl", [0, 0]))))
         self._progress_cache[run_dir] = stamp, result
         return result
 
@@ -398,6 +334,7 @@ class ResultsMonitor:
         if experiment not in {item["id"] for item in self.batches()}:
             return []
         rows = []
+        now = time.time()
         for config_path in sorted((self.results_root / experiment).glob("*/*/run_config.json")):
             run_dir = config_path.parent
             config = _read_json(config_path)
@@ -405,6 +342,8 @@ class ResultsMonitor:
             raw_status = summary.get("status")
             if raw_status == "finished":
                 status = "finished"
+            elif raw_status == "running":
+                status = "running"
             elif raw_status == "unknown":
                 status = "unknown"
             else:
@@ -422,14 +361,20 @@ class ResultsMonitor:
             task = config.get("task", run_dir.parent.name)
             if task not in TASKS:
                 continue
-            rows.append({
+            native_v1014 = config.get("method") == "v1014" or experiment == "traceaad_v10_14"
+            row = {
                 "task": task, "name": run_dir.name, "repeat": config.get("repeat"),
                 "seed": config.get("seed"), "backend": config.get("backend"),
                 "status": status, "raw_status": raw_status, "budget": int(budget or 0),
                 "budget_used": int(used or 0), "valid_nodes": int(nodes or 0),
                 "best_fitness": score, "best_value": _objective(score, task),
                 "updated_at": summary.get("finished_at"), "run_dir": run_dir,
-            })
+                "curve": _search_trend(run_dir, task)[0],
+                "x_label": "候选尝试" if native_v1014 else "已记录序号",
+            }
+            row["timing"] = search_timing(row, summary, _history(run_dir, task).timing_snapshot(),
+                                           unit="候选" if native_v1014 else "预算单位", now=now)
+            rows.append(row)
         return rows
 
     def overview(self, experiment: str | None = None):
@@ -456,6 +401,7 @@ class ResultsMonitor:
                 "budget_used": sum(row["budget_used"] for row in runs),
                 "budget": sum(row["budget"] for row in runs),
                 "valid_nodes": sum(row["valid_nodes"] for row in runs),
+                "timing": batch_timing(runs),
             },
             "tasks": groups,
         }
@@ -495,6 +441,7 @@ class ResultsMonitor:
             "outcomes": outcomes, "recent": recent,
             "best": None if best is None else {
                 "id": best.get("id", best.get("node_id")),
+                "fitness": best.get("fitness"),
                 "value": _objective(best.get("fitness"), task),
                 "operator": best.get("operator"), "idea": best.get("idea") or "",
                 "code": best.get("code") or "",

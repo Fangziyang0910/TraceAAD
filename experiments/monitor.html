@@ -63,14 +63,15 @@ select, .button {
 main { max-width: 1260px; margin: 0 auto; padding: 22px 24px 60px; }
 .summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 6px;
   margin-bottom: 24px;
 }
 .metric { min-width: 0; padding: 14px 18px; border-right: 1px solid var(--line); }
-.metric:last-child { border-right: 0; }
+.metric:nth-child(3n) { border-right: 0; }
+.metric:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
 .metric-label { color: var(--muted); font-size: 12px; }
 .metric-value { margin-top: 4px; font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .metric-note { margin-top: 2px; color: var(--muted); font-size: 12px; white-space: normal; }
@@ -120,7 +121,19 @@ tbody tr:last-child td { border-bottom: 0; }
 .progress-line { height: 5px; background: #e6e8e6; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--green); }
 .progress-text { margin-top: 3px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.run-speed { margin-top: 7px; color: var(--ink); }
+.run-eta { color: var(--green); }
+.timing-note { color: var(--muted); font-size: 12px; margin: -12px 0 22px; }
+.timing-stats { margin-top: 12px; }
+.detail-stat { min-width: 0; overflow-wrap: anywhere; }
 .number { font-variant-numeric: tabular-nums; }
+.chart-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: -8px 0 20px; }
+.chart-toolbar p { margin: 0; color: var(--muted); font-size: 12px; }
+.chart-toolbar label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.training-table { min-width: 920px; }
+.curve-cell { padding: 8px 10px; }
+.curve-caption { display: flex; justify-content: space-between; color: var(--muted); font-size: 10px; margin-bottom: 3px; }
+.breakthrough-count { color: var(--green); }
 
 .overlay {
   position: fixed;
@@ -176,6 +189,22 @@ tbody tr:last-child td { border-bottom: 0; }
 .chart text { fill: var(--muted); font-size: 10px; }
 .chart .grid { stroke: #e3e5e2; stroke-width: 1; }
 .chart .curve { fill: none; stroke: var(--green); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.chart.inline-curve { height: 112px; border: 0; background: transparent; }
+.chart .record-dot { fill: var(--green); stroke: white; stroke-width: 1.5; }
+.chart .initial-dot { fill: white; stroke: var(--green); stroke-width: 1.7; }
+.chart .point-hit { fill: transparent; cursor: pointer; }
+.chart .record-point { outline: none; }
+.chart .record-point:hover .record-dot, .chart .record-point:focus .record-dot,
+.chart .record-point:hover .initial-dot, .chart .record-point:focus .initial-dot { stroke: var(--ink); stroke-width: 2.5; }
+.chart .hover-guide { stroke: var(--green); stroke-dasharray: 3 3; opacity: .4; pointer-events: none; }
+.chart-note { color: var(--muted); font-size: 12px; margin: 7px 0 0; }
+.chart-tooltip { position: fixed; z-index: 50; width: 290px; max-width: calc(100vw - 20px); padding: 12px 14px; color: var(--ink); background: white; border: 1px solid #b5cfc3; border-radius: 7px; box-shadow: 0 6px 25px #15281826; pointer-events: none; }
+.chart-tooltip[hidden] { display: none; }
+.tooltip-heading { color: var(--green); font-weight: 700; margin-bottom: 8px; }
+.tooltip-row { display: flex; justify-content: space-between; gap: 14px; margin-top: 4px; font-size: 12px; }
+.tooltip-row span { color: var(--muted); flex-shrink: 0; }
+.tooltip-row strong { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.tooltip-idea { border-top: 1px solid var(--line); margin: 9px 0 0; padding-top: 8px; font-size: 12px; overflow-wrap: anywhere; }
 .counts { display: flex; flex-wrap: wrap; gap: 7px; }
 .count { padding: 5px 8px; background: var(--soft); border: 1px solid var(--line); border-radius: 4px; }
 .idea { margin: 0; padding: 12px; background: var(--green-soft); border-left: 3px solid var(--green); white-space: pre-wrap; }
@@ -200,10 +229,12 @@ pre {
   .topbar select { min-width: 0; width: auto; flex: 1 1 auto; }
   main { padding: 16px 12px 44px; }
   .summary { grid-template-columns: repeat(2, 1fr); }
-  .metric:nth-child(2) { border-right: 0; }
-  .metric:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .metric:nth-child(n) { border-right: 1px solid var(--line); border-bottom: 0; }
+  .metric:nth-child(2n) { border-right: 0; }
+  .metric:nth-child(-n+4) { border-bottom: 1px solid var(--line); }
   th, td { padding: 9px 8px; }
-  th:nth-child(5), td:nth-child(5), th:nth-child(6), td:nth-child(6) { display: none; }
+  .optional-col { display: none; }
+  .training-table { min-width: 690px; }
   .detail-stats { grid-template-columns: repeat(2, 1fr); }
   .detail-stat:nth-child(2) { border-right: 0; }
   .detail-stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
@@ -225,10 +256,17 @@ pre {
 <main>
   <section class="summary" aria-label="批次摘要">
     <div class="metric"><div class="metric-label">运行</div><div class="metric-value" id="runs">-</div><div class="metric-note" id="run-note">-</div></div>
-    <div class="metric"><div class="metric-label">评价进度</div><div class="metric-value" id="budget">-</div><div class="metric-note" id="budget-note">-</div></div>
+    <div class="metric"><div class="metric-label">搜索进度</div><div class="metric-value" id="budget">-</div><div class="metric-note" id="budget-note">-</div></div>
+    <div class="metric"><div class="metric-label">搜索总速度</div><div class="metric-value" id="speed">-</div><div class="metric-note" id="speed-note">-</div></div>
+    <div class="metric"><div class="metric-label">预计搜索剩余</div><div class="metric-value" id="eta">-</div><div class="metric-note" id="eta-note">-</div></div>
     <div class="metric"><div class="metric-label">有效候选</div><div class="metric-value" id="nodes">-</div><div class="metric-note">训练结果</div></div>
     <div class="metric"><div class="metric-label">更新时间</div><div class="metric-value" id="updated">-</div><div class="metric-note" id="batch-name">-</div></div>
   </section>
+  <p class="timing-note">速度按已消耗预算与耗时取平均，包含失败和重复；并行剩余时间取最慢一路。估算不含搜索后的独立选择或测试，随实际速度更新。</p>
+  <div class="chart-toolbar">
+    <p>● 刷新该路历史最优　○ 首个有效候选 · 悬停或点按查看详情 · 每 15 秒刷新</p>
+    <label>曲线纵轴 <select id="curve-metric" aria-label="曲线纵轴"><option value="fitness">Fitness · 越高越好</option><option value="value">原始目标值</option></select></label>
+  </div>
   <div class="error" id="error"></div>
   <div id="tasks"><div class="empty">正在读取批次</div></div>
 </main>
@@ -243,11 +281,19 @@ pre {
   </aside>
 </div>
 
+<div id="chart-tooltip" class="chart-tooltip" role="tooltip" hidden></div>
+
 <script>
 const statusText = {finished: "已完成", running: "运行中", queued: "排队中", blocked: "受阻", unknown: "未确认"};
-const operatorOrder = ["Init", "Refine", "Tune", "Pivot", "Fuse"];
 const overlay = document.getElementById("overlay");
 let activeBatch = "";
+let chartMetric = "fitness";
+let lastState = null;
+let activeRun = null;
+let lastDetail = null;
+let stateRequest = 0;
+let detailRequest = 0;
+const tooltip = document.getElementById("chart-tooltip");
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
@@ -262,6 +308,34 @@ function shortTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("zh-CN", {month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"});
+}
+function duration(seconds) {
+  if (seconds == null || !Number.isFinite(seconds)) return "—";
+  if (seconds <= 0) return "0 分钟";
+  if (seconds < 60) return "不足 1 分钟";
+  const minutes = Math.ceil(seconds / 60);
+  const days = Math.floor(minutes / 1440), hours = Math.floor(minutes % 1440 / 60), rest = minutes % 60;
+  return [days ? `${days} 天` : "", hours ? `${hours} 小时` : "", rest ? `${rest} 分钟` : ""].filter(Boolean).join(" ");
+}
+function speedText(timing) {
+  const rate = timing?.rate_per_minute;
+  if (rate == null) return "—";
+  return `${rate < .01 ? "<0.01" : rate.toFixed(2)} ${timing.unit}/分`;
+}
+function etaText(timing) {
+  if (!timing) return "暂无估算";
+  const labels = {finished: "已完成", search_complete: "搜索已结束", warming_up: "采样积累中",
+    stale: "久未推进 · 暂停估算", inactive: "等待运行", partial: "部分运行暂不可估算", unavailable: "暂无估算"};
+  return timing.state === "estimated" ? `约 ${duration(timing.eta_seconds)}` : labels[timing.state] || "暂无估算";
+}
+function timingHint(timing) {
+  if (!timing) return "缺少计时记录";
+  if (timing.state === "stale") return "超过 15 分钟且超过平均单次耗时的 5 倍未见候选完成；可能是慢评价，待新记录恢复估算。";
+  if (timing.state === "warming_up") return "至少完成 3 个预算单位且累计 1 分钟后开始估算。";
+  if (timing.state === "search_complete") return "搜索已结束；独立选择或收尾是否完成请查看运行状态。";
+  if (timing.state === "inactive") return "当前未确认正在搜索，不推算完成时刻。";
+  if (timing.state === "unavailable") return "缺少可靠的开始、进度时间或预算，暂不估算。";
+  return `${timing.basis === "active_time" ? "按日志累计运行耗时（排除已记录的暂停间隔）" : "按开始以来的墙钟耗时（可能包含暂停）"}计算平均速度；搜索后的选择和测试另计。`;
 }
 function showError(message = "") {
   const el = document.getElementById("error");
@@ -286,17 +360,23 @@ async function loadBatches() {
 
 async function loadState() {
   if (!activeBatch) return;
+  const batch = activeBatch, request = ++stateRequest;
   try {
-    const response = await fetch(`/api/state?batch=${encodeURIComponent(activeBatch)}`);
+    const response = await fetch(`/api/state?batch=${encodeURIComponent(batch)}`);
     if (!response.ok) throw new Error("批次状态读取失败");
-    renderState(await response.json());
+    const data = await response.json();
+    if (batch !== activeBatch || request !== stateRequest) return;
+    renderState(data);
     showError();
+    if (activeRun) await loadRunDetail(false);
   } catch (error) {
-    showError(error.message);
+    if (batch === activeBatch && request === stateRequest) showError(error.message);
   }
 }
 
 function renderState(data) {
+  lastState = data;
+  hideTooltip();
   const s = data.summary;
   document.getElementById("runs").textContent = `${s.finished}/${s.runs}`;
   document.getElementById("run-note").textContent = `${s.running} 运行 · ${s.queued} 排队 · ${s.blocked} 受阻 · ${s.unknown || 0} 未确认`;
@@ -306,6 +386,11 @@ function renderState(data) {
   document.getElementById("nodes").textContent = s.valid_nodes.toLocaleString();
   document.getElementById("updated").textContent = shortTime(data.updated_at);
   document.getElementById("batch-name").textContent = data.batch || "-";
+  const timing = s.timing;
+  document.getElementById("speed").textContent = speedText(timing);
+  document.getElementById("speed-note").textContent = timing ? `运行均速之和 · 可估算 ${timing.rate_runs}/${timing.active_runs} 路` : "暂无计时数据";
+  document.getElementById("eta").textContent = etaText(timing);
+  document.getElementById("eta-note").textContent = timing?.eta_at ? `预计 ${shortTime(timing.eta_at)} · 按最慢一路` : timing?.pending_runs ? `可估算 ${timing.eta_runs}/${timing.pending_runs} 路待完成搜索` : "不含独立选择和测试";
 
   const container = document.getElementById("tasks");
   if (!data.tasks.length) {
@@ -314,99 +399,251 @@ function renderState(data) {
   }
   container.innerHTML = data.tasks.map(task => `
     <section class="task-section">
-      <header class="task-heading"><h2>${esc(task.label)}</h2><span>${task.direction === "min" ? "越低越好" : "越高越好"} · ${esc(task.unit)}</span></header>
-      <div class="table-wrap"><table>
-        <thead><tr><th style="width:12%">重复</th><th style="width:15%">状态</th><th style="width:25%">评价</th><th style="width:16%">最佳值</th><th style="width:14%">有效候选</th><th style="width:18%">后端</th></tr></thead>
+      <header class="task-heading"><h2>${esc(task.label)}</h2><span>${chartMetric === "fitness" ? "Fitness ↑ · " : ""}原始${esc(task.unit)}${task.direction === "min" ? "越低越好" : "越高越好"}</span></header>
+      <div class="table-wrap"><table class="training-table">
+        <thead><tr><th style="width:7%">重复</th><th style="width:10%">状态</th><th style="width:15%">进度</th><th style="width:35%">历史最优曲线</th><th style="width:12%">${chartMetric === "fitness" ? "最佳 Fitness" : "最佳目标值"}</th><th class="optional-col" style="width:9%">有效候选</th><th class="optional-col" style="width:12%">后端</th></tr></thead>
         <tbody>${task.runs.map(run => {
           const pct = run.budget ? Math.min(100, run.budget_used / run.budget * 100) : 0;
+          const records = (run.curve || []).filter(point => point.kind === "breakthrough").length;
+          const best = run.curve?.at(-1)?.[chartMetric] ?? (chartMetric === "fitness" ? run.best_fitness : run.best_value);
           return `<tr>
             <td><button class="run-button" type="button" data-task="${esc(task.key)}" data-run="${esc(run.name)}">${run.repeat == null ? esc(run.name) : `Rep ${run.repeat}`}</button></td>
             <td><span class="status ${esc(run.status)}">${statusText[run.status] || esc(run.status)}</span></td>
-            <td><div class="progress"><div class="progress-line"><div class="progress-fill" style="width:${pct}%"></div></div><div class="progress-text">${run.budget_used} / ${run.budget}</div></div></td>
-            <td class="number">${number(run.best_value)}</td>
-            <td class="number">${run.valid_nodes.toLocaleString()}</td>
-            <td>${esc(run.backend || "-")}</td>
+            <td><div class="progress" title="${esc(timingHint(run.timing))}"><div class="progress-line"><div class="progress-fill" style="width:${pct}%"></div></div><div class="progress-text">${run.budget_used} / ${run.budget}</div><div class="progress-text run-speed">${esc(speedText(run.timing))}</div><div class="progress-text run-eta">${run.timing?.state === "estimated" ? "剩余 " : ""}${esc(etaText(run.timing))}</div></div></td>
+            <td class="curve-cell"><div class="curve-caption"><span>${esc(run.x_label || "已记录序号")}</span><span class="breakthrough-count">${records} 次突破</span></div><svg class="chart inline-curve" aria-label="${esc(task.label)} Rep ${esc(run.repeat)} 历史最优曲线"></svg></td>
+            <td class="number">${number(best, 5)}</td>
+            <td class="number optional-col">${run.valid_nodes.toLocaleString()}</td>
+            <td class="optional-col">${esc(run.backend || "-")}</td>
           </tr>`;
         }).join("")}</tbody>
       </table></div>
     </section>`).join("");
   container.querySelectorAll(".run-button").forEach(button => button.addEventListener("click", () => openRun(button.dataset.task, button.dataset.run)));
+  const runs = data.tasks.flatMap(task => task.runs.map(run => ({run, task})));
+  container.querySelectorAll(".inline-curve").forEach((svg, index) => {
+    const {run, task} = runs[index];
+    drawCurve(svg, run.curve, {compact: true, run, task});
+  });
 }
 
 async function openRun(task, name) {
+  hideTooltip();
+  activeRun = {batch: activeBatch, task, name};
+  lastDetail = null;
   overlay.classList.add("open");
   document.body.style.overflow = "hidden";
   document.getElementById("detail-title").textContent = name;
   document.getElementById("detail-subtitle").textContent = "正在读取";
   document.getElementById("detail-body").innerHTML = '<div class="empty">正在读取</div>';
+  await loadRunDetail(true);
+}
+
+async function loadRunDetail(initial) {
+  if (!activeRun) return;
+  const selected = activeRun, request = ++detailRequest;
   try {
-    const response = await fetch(`/api/run?batch=${encodeURIComponent(activeBatch)}&task=${encodeURIComponent(task)}&name=${encodeURIComponent(name)}`);
+    const response = await fetch(`/api/run?batch=${encodeURIComponent(selected.batch)}&task=${encodeURIComponent(selected.task)}&name=${encodeURIComponent(selected.name)}`);
     if (!response.ok) throw new Error("运行详情读取失败");
-    renderDetail(await response.json());
+    const data = await response.json();
+    if (activeRun !== selected || request !== detailRequest) return;
+    renderDetail(data);
   } catch (error) {
-    document.getElementById("detail-body").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+    if (activeRun !== selected || request !== detailRequest) return;
+    if (initial) document.getElementById("detail-body").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+    else document.getElementById("detail-subtitle").textContent = `刷新失败，保留上次数据：${error.message}`;
   }
 }
 
 function renderDetail(run) {
+  lastDetail = run;
+  hideTooltip();
+  const scrollTop = document.querySelector(".drawer").scrollTop;
   document.getElementById("detail-title").textContent = `${run.task_meta.label} · ${run.repeat == null ? run.name : `Rep ${run.repeat}`}`;
   document.getElementById("detail-subtitle").textContent = `${run.backend || "-"} · seed ${run.seed ?? "-"} · ${statusText[run.status] || run.status}`;
-  const operators = operatorOrder.filter(key => run.operators[key] !== undefined).map(key => `<span class="count">${key} ${run.operators[key]}</span>`).join("");
+  const operators = Object.entries(run.operators).map(([key, count]) => `<span class="count">${esc(key)} ${count}</span>`).join("");
   const outcomes = Object.entries(run.outcomes).map(([key, value]) => `<span class="count">${esc(key)} ${value}</span>`).join("");
-  const recent = run.recent.map(item => `<tr><td>${item.evaluation ?? "-"}</td><td>${esc(item.operator || "-")}</td><td>${esc(item.status || "-")}</td><td class="number">${number(item.value)}</td></tr>`).join("");
+  const recent = run.recent.map(item => `<tr><td>${esc(item.evaluation ?? "-")}</td><td>${esc(item.operator || "-")}</td><td>${esc(item.status || "-")}</td><td class="number">${number(item.fitness, 5)}</td></tr>`).join("");
+  const bestFitness = run.curve?.at(-1)?.fitness ?? run.best_fitness;
+  const breakthroughs = (run.curve || []).filter(point => point.kind === "breakthrough").length;
   document.getElementById("detail-body").innerHTML = `
     <div class="detail-stats">
-      <div class="detail-stat"><small>评价</small><strong>${run.budget_used} / ${run.budget}</strong></div>
+      <div class="detail-stat"><small>${esc(run.x_label || "搜索进度")}</small><strong>${run.budget_used} / ${run.budget}</strong></div>
       <div class="detail-stat"><small>有效候选</small><strong>${run.valid_nodes}</strong></div>
-      <div class="detail-stat"><small>最佳值</small><strong>${number(run.best_value)}</strong></div>
+      <div class="detail-stat"><small>历史最佳 Fitness</small><strong>${number(bestFitness, 5)}</strong></div>
       <div class="detail-stat"><small>状态</small><strong>${statusText[run.status] || esc(run.status)}</strong></div>
     </div>
-    <section class="detail-section"><h3>最佳值曲线</h3><svg class="chart" id="curve" viewBox="0 0 660 220" preserveAspectRatio="none"></svg></section>
+    <div class="detail-stats timing-stats" title="${esc(timingHint(run.timing))}">
+      <div class="detail-stat"><small>平均搜索速度</small><strong>${esc(speedText(run.timing))}</strong></div>
+      <div class="detail-stat"><small>${run.timing?.basis === "active_time" ? "累计搜索耗时" : "搜索墙钟耗时"}</small><strong>${esc(duration(run.timing?.elapsed_seconds))}</strong></div>
+      <div class="detail-stat"><small>预计搜索剩余</small><strong>${esc(etaText(run.timing))}</strong></div>
+      <div class="detail-stat"><small>预计搜索完成</small><strong>${run.timing?.eta_at ? esc(shortTime(run.timing.eta_at)) : "—"}</strong></div>
+    </div>
+    <p class="chart-note">${esc(timingHint(run.timing))}</p>
+    <section class="detail-section"><h3>历史最优${chartMetric === "fitness" ? " Fitness" : "目标值"} · ${breakthroughs} 次突破</h3><svg class="chart" id="curve" aria-label="历史最优详情曲线"></svg><p class="chart-note">悬停、键盘聚焦或点按标记查看候选信息。改进幅度相对这一路此前的历史最优 Fitness。</p></section>
     <section class="detail-section"><h3>算子</h3><div class="counts">${operators || "-"}</div></section>
     <section class="detail-section"><h3>结果</h3><div class="counts">${outcomes || "-"}</div></section>
-    <section class="detail-section"><h3>最近候选</h3><table class="recent"><thead><tr><th>序号</th><th>算子</th><th>结果</th><th>值</th></tr></thead><tbody>${recent}</tbody></table></section>
+    <section class="detail-section"><h3>最近候选</h3><table class="recent"><thead><tr><th>序号</th><th>算子</th><th>结果</th><th>Fitness</th></tr></thead><tbody>${recent}</tbody></table></section>
     ${run.best ? `<section class="detail-section"><h3>最佳 Idea</h3><p class="idea" id="best-idea"></p></section><section class="detail-section"><h3>最佳代码</h3><pre id="best-code"></pre></section>` : ""}`;
   if (run.best) {
     document.getElementById("best-idea").textContent = run.best.idea || "-";
     document.getElementById("best-code").textContent = run.best.code || "";
   }
-  drawCurve(run.curve);
+  drawCurve(document.getElementById("curve"), run.curve, {run, task: run.task_meta});
+  document.querySelector(".drawer").scrollTop = scrollTop;
 }
 
-function drawCurve(points) {
-  const svg = document.getElementById("curve");
-  if (!points?.length) {
-    svg.innerHTML = '<text x="330" y="112" text-anchor="middle">暂无曲线</text>';
+function precise(value) {
+  return value == null || !Number.isFinite(Number(value)) ? "未记录" : String(Number(Number(value).toPrecision(10)));
+}
+
+function hideTooltip() {
+  tooltip.hidden = true;
+  document.querySelectorAll(".hover-guide").forEach(line => line.remove());
+}
+
+function showTooltip(point, options, target, event) {
+  const {run, task} = options;
+  const channels = {init: "初始化", main: "主干开发", trial: "连续试用", recheck: "局部重验"};
+  const title = point.kind === "initial" ? "首个有效候选" : "刷新历史最优";
+  const row = (label, value) => `<div class="tooltip-row"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+  tooltip.innerHTML = `<div class="tooltip-heading">${title} · Rep ${esc(run.repeat ?? "-")}</div>`
+    + row("Fitness ↑", precise(point.fitness))
+    + row(`原始${task.unit || "目标值"}`, precise(point.value))
+    + row("Fitness 改进", point.gain == null ? "初始基准" : `+${precise(point.gain)}`)
+    + row("算子", point.operator === "unknown" ? "未记录" : point.operator || "未记录")
+    + row(run.x_label || "已记录序号", point.evaluation)
+    + row("候选编号", point.candidate ?? point.node_id ?? "未记录")
+    + (point.parent_id != null ? row("父代编号", point.parent_id) : "")
+    + (point.channel ? row("开发通道", channels[point.channel] || point.channel) : "")
+    + (point.repair_of != null ? row("修复自候选", point.repair_of) : "")
+    + (point.idea ? `<p class="tooltip-idea">${esc(point.idea)}</p>` : "");
+  tooltip.hidden = false;
+  const rect = target.getBoundingClientRect();
+  const px = Number.isFinite(event?.clientX) ? event.clientX : rect.left + rect.width / 2;
+  const py = Number.isFinite(event?.clientY) ? event.clientY : rect.top + rect.height / 2;
+  const box = tooltip.getBoundingClientRect();
+  let left = px + 16, top = py - box.height - 12;
+  if (left + box.width > window.innerWidth - 10) left = px - box.width - 16;
+  if (top < 10) top = py + 16;
+  tooltip.style.left = `${Math.max(10, Math.min(left, window.innerWidth - box.width - 10))}px`;
+  tooltip.style.top = `${Math.max(10, Math.min(top, window.innerHeight - box.height - 10))}px`;
+}
+
+function drawCurve(svg, points, options) {
+  svg._curveData = {points, options};
+  svg.onpointermove = null;
+  svg.onclick = null;
+  svg.onpointerleave = hideTooltip;
+  const width = Math.max(220, Math.round(svg.getBoundingClientRect().width));
+  const height = options.compact ? 112 : 220;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  const data = (points || []).filter(point => Number.isFinite(point[chartMetric]));
+  if (!data.length) {
+    svg.innerHTML = `<text x="${width / 2}" y="${height / 2}" text-anchor="middle">暂无有效评价</text>`;
     return;
   }
-  const width = 660, height = 220, left = 54, right = 16, top = 16, bottom = 30;
-  const values = points.map(point => point.value);
-  const minX = points[0].evaluation, maxX = points.at(-1).evaluation;
+  const left = 57, right = 12, top = 13, bottom = 27;
+  const maxX = Math.max(1, data.at(-1).evaluation, options.run.budget_used || 0);
+  const values = data.map(point => point[chartMetric]);
   let minY = Math.min(...values), maxY = Math.max(...values);
-  if (minY === maxY) { minY -= 1; maxY += 1; }
-  const x = value => left + (value - minX) / Math.max(1, maxX - minX) * (width - left - right);
+  const padding = (maxY - minY) * .12 || Math.max(Math.abs(maxY) * .015, .000001);
+  minY -= padding; maxY += padding;
+  const x = value => left + value / maxX * (width - left - right);
   const y = value => top + (maxY - value) / (maxY - minY) * (height - top - bottom);
-  const polyline = points.map(point => `${x(point.evaluation).toFixed(1)},${y(point.value).toFixed(1)}`).join(" ");
-  svg.innerHTML = `
-    <line class="grid" x1="${left}" y1="${top}" x2="${left}" y2="${height-bottom}" />
-    <line class="grid" x1="${left}" y1="${height-bottom}" x2="${width-right}" y2="${height-bottom}" />
-    <line class="grid" x1="${left}" y1="${top}" x2="${width-right}" y2="${top}" />
-    <text x="${left-7}" y="${top+4}" text-anchor="end">${number(maxY)}</text>
-    <text x="${left-7}" y="${height-bottom+4}" text-anchor="end">${number(minY)}</text>
-    <text x="${left}" y="${height-9}" text-anchor="middle">${minX}</text>
-    <text x="${width-right}" y="${height-9}" text-anchor="middle">${maxX}</text>
-    <polyline class="curve" points="${polyline}" />`;
+  const coord = value => value.toFixed(2);
+  let path = `M ${coord(x(data[0].evaluation))} ${coord(y(data[0][chartMetric]))}`;
+  for (const point of data.slice(1)) path += ` H ${coord(x(point.evaluation))} V ${coord(y(point[chartMetric]))}`;
+  path += ` H ${coord(x(maxX))}`;
+  const tick = value => String(Number(value.toPrecision(5)));
+  const ticks = options.compact ? [maxY, minY] : [maxY, (maxY + minY) / 2, minY];
+  svg.innerHTML = ticks.map(value => `<line class="grid" x1="${left}" y1="${y(value)}" x2="${width-right}" y2="${y(value)}" /><text x="${left-6}" y="${y(value)+3}" text-anchor="end">${tick(value)}</text>`).join("")
+    + `<text x="${left}" y="${height-8}" text-anchor="middle">0</text>
+       <text x="${(left+width-right)/2}" y="${height-8}" text-anchor="middle">${esc(options.run.x_label || "已记录序号")}</text>
+       <text x="${width-right}" y="${height-8}" text-anchor="end">${maxX}</text>
+       <path class="curve" d="${path}" />`;
+  const markers = data.filter(point => point.kind === "initial" || point.kind === "breakthrough");
+  const targets = [];
+  for (const point of markers) {
+    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    const cx = x(point.evaluation), cy = y(point[chartMetric]);
+    group.setAttribute("class", "record-point");
+    group.setAttribute("tabindex", "0");
+    group.setAttribute("role", "button");
+    group.setAttribute("aria-describedby", "chart-tooltip");
+    group.setAttribute("aria-label", `${point.kind === "initial" ? "初始候选" : "突破"} ${point.candidate ?? point.evaluation}，Fitness ${point.fitness}，算子 ${point.operator}`);
+    group.dataset.kind = point.kind;
+    group.dataset.candidate = point.candidate ?? "";
+    group.innerHTML = `<circle class="${point.kind === "initial" ? "initial-dot" : "record-dot"}" cx="${cx}" cy="${cy}" r="${options.compact ? 3.3 : 4.3}" />
+      <circle class="point-hit" cx="${cx}" cy="${cy}" r="9" />`;
+    const show = event => {
+      const key = `${options.run.name}:${point.evaluation}:${point.candidate}`;
+      if (!tooltip.hidden && tooltip.dataset.pointKey === key) return;
+      hideTooltip();
+      const guide = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      for (const [key, value] of Object.entries({class: "hover-guide", x1: cx, x2: cx, y1: top, y2: height-bottom})) guide.setAttribute(key, value);
+      svg.prepend(guide);
+      showTooltip(point, options, group, event);
+      tooltip.dataset.pointKey = key;
+    };
+    group.addEventListener("pointerenter", show);
+    group.addEventListener("pointerleave", hideTooltip);
+    group.addEventListener("focus", () => show());
+    group.addEventListener("blur", hideTooltip);
+    group.addEventListener("keydown", event => {
+      if (["Enter", " "].includes(event.key)) {event.preventDefault(); show();}
+    });
+    svg.append(group);
+    targets.push({cx, cy, show});
+  }
+  // Choose the nearest actual point when adjacent transparent hit areas overlap.
+  // Keyboard focus still visits every record, including coincident points.
+  const nearest = event => {
+    const transform = svg.getScreenCTM();
+    if (!transform) return;
+    const cursor = new DOMPoint(event.clientX, event.clientY).matrixTransform(transform.inverse());
+    let selected = null, distance = 12;
+    for (const target of targets) {
+      const d = Math.hypot(cursor.x - target.cx, cursor.y - target.cy);
+      if (d < distance) {distance = d; selected = target;}
+    }
+    if (selected) selected.show(event);
+    else hideTooltip();
+  };
+  svg.onpointermove = event => {if (event.pointerType !== "touch") nearest(event);};
+  svg.onclick = event => {event.stopPropagation(); nearest(event);};
 }
 
 function closeDetail() {
+  hideTooltip();
+  activeRun = null;
+  lastDetail = null;
+  detailRequest++;
   overlay.classList.remove("open");
   document.body.style.overflow = "";
 }
 document.getElementById("close").addEventListener("click", closeDetail);
 overlay.addEventListener("click", event => { if (event.target === overlay) closeDetail(); });
 document.addEventListener("keydown", event => { if (event.key === "Escape") closeDetail(); });
+document.addEventListener("pointerdown", event => {if (!event.target.closest(".record-point")) hideTooltip();});
+document.addEventListener("scroll", hideTooltip, true);
+document.getElementById("curve-metric").addEventListener("change", event => {
+  chartMetric = event.target.value;
+  if (lastState) renderState(lastState);
+  if (lastDetail) renderDetail(lastDetail);
+});
+let resizeFrame;
+window.addEventListener("resize", () => {
+  cancelAnimationFrame(resizeFrame);
+  resizeFrame = requestAnimationFrame(() => {
+    hideTooltip();
+    document.querySelectorAll(".chart").forEach(svg => {
+      if (svg._curveData) drawCurve(svg, svg._curveData.points, svg._curveData.options);
+    });
+  });
+});
 document.getElementById("refresh").addEventListener("click", loadState);
 document.getElementById("experiment").addEventListener("change", event => {
+  closeDetail();
   activeBatch = event.target.value;
   loadState();
 });
