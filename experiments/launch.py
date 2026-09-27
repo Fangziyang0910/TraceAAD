@@ -14,7 +14,7 @@ from experiments.infra.base import (
     watch_and_fill,
 )
 
-METHODS = ("eoh", "reevo", "mcts_ahd", "pathwise", "calm", "shinka_evo", "traceaad_v10_14")
+METHODS = ("eoh", "reevo", "mcts_ahd", "pathwise", "calm", "shinka_evo", "traceaad_v10_14", "traceaad_v10_14_2")
 
 
 def build_parser() -> argparse.ArgumentParser:

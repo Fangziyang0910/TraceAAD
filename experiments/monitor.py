@@ -361,7 +361,7 @@ class ResultsMonitor:
             task = config.get("task", run_dir.parent.name)
             if task not in TASKS:
                 continue
-            native_v1014 = config.get("method") == "v1014" or experiment == "traceaad_v10_14"
+            native_v1014 = config.get("method") in {"v1014", "v1014_2"} or experiment in {"traceaad_v10_14", "traceaad_v10_14_2"}
             row = {
                 "task": task, "name": run_dir.name, "repeat": config.get("repeat"),
                 "seed": config.get("seed"), "backend": config.get("backend"),

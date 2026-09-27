@@ -2,7 +2,7 @@
 
 这里保存可继续使用的运行入口。原始结果在 [experiments_result](../experiments_result/README.md)，可阅读的成绩表在 [docs/02-实验结果](../docs/02-实验结果/)；旧版本的运行代码已移除，历史数据仍保留。
 
-最新实现为 [V10.14](traceaad_v10_14/README.md)：`uv run python -m experiments.traceaad_v10_14.run --task tsp_construct --run-name trial_1 --budget 1000`。先加 `--dry-run` 可检查配置。它按候选尝试计预算，包含局部重验与独立选择集，不能把其 `--budget` 直接与旧版评价次数等同。
+最新实现为 [V10.14-2](traceaad_v10_14_2/README.md)：`uv run python -m experiments.traceaad_v10_14_2.run --task tsp_construct --run-name trial_1 --budget 1000`。先加 `--dry-run` 可检查配置。默认全有效档案参与质量／次数竞争，四个可用动作等概率，在线重验、三步票与行为资格门槛关闭；按候选尝试计预算，使用独立选择集。原 [V10.14](traceaad_v10_14/README.md) 实现与结果保留，不将二者混合续跑。
 
 已有正式实验 V10.13：`uv run python -m experiments.traceaad_v10_13.run --task tsp_construct --run-name trial_1 --budget 1000`。其批次使用 `uv run python -m experiments.traceaad_v10_13.launch --batch <批次名> --session-prefix <前缀> --watch`。初始化对照的固定协议入口是 `experiments.traceaad_initialization.launch`。
 
