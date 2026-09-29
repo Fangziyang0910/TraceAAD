@@ -1,0 +1,271 @@
+"""V10.15's identity, budget and selection invariants."""
+
+import json
+import math
+import random
+
+import pytest
+
+from tests.support import TinyEvaluation, TokenLLM, response
+from traceaad.v10_15 import Config, TraceAADV1015
+from traceaad.v10_15.canonical import canonical, key
+from traceaad.v10_15.delivery import DeliveryError, SourceError, parse_response
+from traceaad.v10_15.history import change_summary, code_diff
+from traceaad.v10_15.prompts import PromptBuilder
+from traceaad.v10_15.selection import choose_reference, probabilities
+
+
+class SelectionEvaluation(TinyEvaluation):
+    def __init__(self, offset=0):
+        super().__init__()
+        self.offset = offset
+
+    def evaluate_program(self, program_str, callable_func, **kwargs):
+        return callable_func(1) + self.offset
+
+
+def method(tmp_path, *answers, budget=10, selection=False):
+    return TraceAADV1015(
+        evaluation=TinyEvaluation(),
+        selection_evaluation=SelectionEvaluation(100) if selection else None,
+        llm=TokenLLM(*answers), run_dir=tmp_path,
+        config=Config(budget=budget))
+
+
+def test_canonical_identity_discards_comments_docs_and_formatting():
+    a = '"module"\n# comment\ndef score(x):\n    "doc"\n    return x+1\n'
+    b = 'def score( x ):\n return x + 1 # another comment\n'
+    assert canonical(a) == canonical(b)
+    assert key(canonical(a)) == key(canonical(b))
+    assert canonical('class C:\n "doc"\n') == 'class C:\n    pass\n'
+
+
+def test_ess_and_top_ties():
+    nodes = [{'fitness': q} for q in (0, 1, 2, 3)]
+    p, beta, ess, target = probabilities(nodes)
+    assert beta > 0 and sum(p) == pytest.approx(1)
+    assert ess == pytest.approx(target) and target == 2
+    assert probabilities(nodes[:1])[0] == [1]
+    assert probabilities([{'fitness': 1}] * 3)[0] == [1/3] * 3
+    tied = [{'fitness': q} for q in (0, 2, 2, 2)]
+    assert probabilities(tied)[0] == [0, 1/3, 1/3, 1/3]
+    assert probabilities(tied)[1] == math.inf
+
+
+def test_numeric_change_and_diff_truncation():
+    a = 'def score(x):\n    return x + 0.15 + 3\n'
+    b = 'def score(x):\n    return x + 0.12 + 4\n'
+    assert change_summary(a, b) == 'numeric constants only, in score: 0.15 → 0.12; 3 → 4'
+    assert change_summary('def score(x):\n return x - 1\n',
+                          'def score(x):\n return x - 2\n') == 'numeric constants only, in score: 1 → 2'
+    assert change_summary('def score(x):\n return x + -1\n',
+                          'def score(x):\n return x + 2\n') == 'numeric constants only, in score: -1 → 2'
+    structural = 'def score(x):\n    y = x + 1\n    return y\n'
+    assert '+2/−1 lines in score' in change_summary(a, structural)
+    assert 'more diff lines not shown' in code_diff(a, structural, max_lines=2)
+
+
+def test_delivery_strict_finish_and_single_repair_payload():
+    template = TinyEvaluation().template_program
+    with pytest.raises(DeliveryError):
+        parse_response(response(1), None, template)
+    with pytest.raises(DeliveryError):
+        parse_response('Idea: only a thought', 'stop', template)
+    with pytest.raises(SourceError) as exc:
+        parse_response('Idea: fix this\n```python\ndef wrong(x): return x\n```', 'stop', template)
+    assert 'def wrong' in exc.value.code
+    code, idea, meta = parse_response('Idea: use two\nCode:\n```python\ndef score(x): return 1\n```\n'
+                                      '```python\ndef score(x): return 2\n```', 'stop', template)
+    assert 'return 2' in code and idea == 'use two'
+    assert meta['block_indices'] == [1]
+
+
+def test_template_import_completion_retains_submitted_source():
+    from benchmarks.tsp_construct.template import template_program
+
+    raw = ('def select_next_node(current_node, destination_node, unvisited_nodes, distance_matrix):\n'
+           '    return int(np.min(unvisited_nodes))\n')
+    code, _, metadata = parse_response(f'```python\n{raw}```', 'stop', template_program)
+    assert code.startswith('import numpy as np\n')
+    assert metadata['submitted_code'] == raw.rstrip('\n')
+    assert metadata['template_additions'] == ['np']
+
+
+def test_whole_search_selects_on_independent_set_and_records_provenance(tmp_path):
+    m = method(tmp_path, *(response(i) for i in range(1, 11)), selection=True)
+    result = m.run()
+    assert result['status'] == 'finished'
+    assert result['budget_used'] == 10 and result['num_roots'] == 8
+    assert result['num_nodes'] == 10 and result['selection_evaluations'] == 5
+    assert result['search_evaluations'] == 10 and result['model_calls'] == 10
+    assert result['best']['fitness'] == 10 and result['best']['selection_fitness'] == 110
+    assert m.facts.tables['request'][9]['parent_id'] in range(1, 9)
+    assert m.facts.tables['attempt'][9]['status'] == 'valid'
+    assert (tmp_path / 'best_program.py').exists()
+    assert json.loads((tmp_path / 'selection.json').read_text())['selected_node'] == 10
+    assert '[Task]' in m.facts.tables['request'][9]['prompt']
+    assert '[Current Algorithm]' in m.facts.tables['request'][9]['prompt']
+
+
+def test_invalid_source_gets_exactly_one_paid_repair(tmp_path):
+    invalid = 'Idea: try division\n```python\ndef score(x)\n return x\n```'
+    m = method(tmp_path, invalid, response(2), budget=2)
+    result = m.run()
+    assert result['budget_used'] == result['model_calls'] == 2
+    assert result['num_nodes'] == 1 and result['num_roots'] == 1
+    assert m.facts.tables['attempt'][1]['status'] == 'invalid_source'
+    assert m.facts.tables['attempt'][2]['repair_of'] == 1
+    assert m.facts.tables['node'][2]['repaired']
+
+
+def test_known_failure_and_repair_do_not_recurse(tmp_path):
+    bad = 'Idea: divide\n```python\ndef score(x): return 1/0\n```'
+    m = method(tmp_path, bad, bad, bad, budget=3)
+    result = m.run()
+    assert result['status'] == 'no_valid_root'
+    assert [m.facts.tables['attempt'][i]['status'] for i in (1, 2, 3)] == [
+        'runtime_error', 'known_failure', 'known_failure']
+    assert result['search_evaluations'] == 1
+    assert m.facts.tables['attempt'][2]['repair_of'] == 1
+    assert m.facts.tables['attempt'][3]['repair_of'] is None
+
+
+def test_duplicate_is_paid_without_another_evaluation(tmp_path):
+    m = method(tmp_path, response(1), response(1), budget=2)
+    result = m.run()
+    assert result['budget_used'] == 2 and result['search_evaluations'] == 1
+    assert result['num_nodes'] == 1
+    assert m.facts.tables['attempt'][2]['status'] == 'duplicate'
+
+
+def test_initialization_cap_includes_repair_generations(tmp_path):
+    wrong = 'Idea: wrong interface\n```python\ndef other(x): return x\n```'
+    m = method(tmp_path, *([wrong] * 16), budget=20)
+    result = m.run()
+    assert result['status'] == 'no_valid_root'
+    assert result['budget_used'] == result['init_attempts'] == 16
+    assert result['search_evaluations'] == 0
+    assert sum(a['repair_of'] is not None for a in m.facts.tables['attempt'].values()) == 8
+
+
+def test_too_long_parent_is_removed_without_spending_budget(tmp_path):
+    m = TraceAADV1015(evaluation=TinyEvaluation(), llm=TokenLLM(response(1)),
+                       run_dir=tmp_path, config=Config(budget=2, max_input_tokens=280))
+    m._roots()
+    assert m.attempts == 1
+    m.phase = 'search'
+    m.action_rng.choices = lambda *args, **kwargs: ['Refine']
+    m._search()
+    assert m.attempts == 1 and m.too_long == {1}
+    m._search()
+    assert m.phase == 'freeze'
+
+
+def test_service_retry_does_not_spend_candidate_budget(tmp_path):
+    class FlakyLLM(TokenLLM):
+        def draw_sample_with_details(self, prompt, **kwargs):
+            if not self.calls:
+                self.calls.append((prompt, kwargs))
+                raise ConnectionError('temporary')
+            return super().draw_sample_with_details(prompt, **kwargs)
+
+    m = TraceAADV1015(evaluation=TinyEvaluation(), llm=FlakyLLM(response(1)),
+                        run_dir=tmp_path, config=Config(budget=1))
+    result = m.run()
+    assert result['budget_used'] == 1 and result['model_calls'] == 2
+    assert result['service_failures'] == 1
+
+
+def test_reference_lineage_filter_and_copy_status(tmp_path):
+    m = method(tmp_path, *(response(i) for i in range(1, 9)), response(2), budget=9)
+    for _ in range(8):
+        m._roots()
+    assert m.phase == 'roots'
+    parent = m.archive[8]
+    reference, info = choose_reference(parent, m.archive, m.reference_rng)
+    assert reference is not None and not info['relaxed_lineage']
+    # Submit the exact chosen reference, independent of its sampled ID.
+    m.llm.responses = iter([f"Idea: copy\n```python\n{reference['code']}```"])
+    request = m.prompts.build('Crossover', parent, reference=reference)
+    m._attempt(request, parent=parent, action='Crossover', reference=reference)
+    assert m.facts.tables['attempt'][9]['status'] == 'copied_reference'
+    assert len(m.archive) == 8 and m.evaluation_calls == 8
+
+
+def test_reference_excludes_ancestor_and_descendant_then_relaxes():
+    nodes = {
+        1: {'id': 1, 'parent_id': None, 'key': '1', 'code': 'def score(x): return x', 'fitness': 1},
+        2: {'id': 2, 'parent_id': 1, 'key': '2', 'code': 'def score(x): return x+1', 'fitness': 2},
+        3: {'id': 3, 'parent_id': 2, 'key': '3', 'code': 'def score(x): return x+2', 'fitness': 3},
+        4: {'id': 4, 'parent_id': None, 'key': '4', 'code': 'def score(x): return x*2', 'fitness': 4},
+    }
+    picked, info = choose_reference(nodes[2], nodes, random.Random(0))
+    assert picked['id'] == 4 and not info['relaxed_lineage']
+    picked, info = choose_reference(nodes[2], {k: v for k, v in nodes.items() if k != 4},
+                                    random.Random(0))
+    assert picked['id'] == 3 and info['relaxed_lineage']
+
+
+def test_distinct_selection_protocol_is_required(tmp_path):
+    with pytest.raises(ValueError, match='distinct frozen'):
+        TraceAADV1015(evaluation=TinyEvaluation(), selection_evaluation=TinyEvaluation(),
+                       llm=TokenLLM(), run_dir=tmp_path, config=Config(budget=1))
+
+
+def test_prompt_contract_and_crossover_context_fallback():
+    parent = {"id": 1, "key": "a", "code": "def score(x):\n    return x\n",
+              "score": 1, "fitness": 1, "parent_id": None,
+              "action": "Init", "idea": "Use the input.", "depth": 0}
+    reference = {**parent, "id": 2, "key": "b", "code": "\n".join(
+        [f"v{i} = {i}" for i in range(450)]) + "\ndef score(x): return x + v1\n"}
+    archive = {1: parent, 2: reference}
+    builder = PromptBuilder(TokenLLM(), None, TinyEvaluation(), archive,
+                            Config(max_input_tokens=500))
+    prompt = builder.build("Crossover", parent, reference=reference)
+    assert prompt['action'] == 'Refine'
+    assert 'crossover_context_fallback' in prompt['trims']
+    assert '[Reference Algorithm]' not in prompt['prompt']
+    assert '[How the Current Algorithm Was Formed]' in prompt['prompt']
+    assert '[Your Task: Refine]' in prompt['prompt']
+    assert '[Evaluation]' in prompt['prompt']
+
+
+def test_resume_does_not_regenerate_completed_attempts(tmp_path):
+    m = method(tmp_path, response(1), budget=1)
+    assert m.run()['budget_used'] == 1
+    resumed = method(tmp_path, budget=1)
+    assert resumed.run()['budget_used'] == 1
+    assert resumed.model_calls == 1
+
+
+@pytest.mark.parametrize('task', [
+    'tsp_construct', 'vrptw_construct', 'online_bin_packing', 'cvrp_aco', 'op_aco'])
+def test_real_task_template_can_run_through_search_and_selection(tmp_path, task):
+    from experiments.traceaad_v10_14_3.preflight import small_task
+
+    train, selection = small_task(task), small_task(task, seed=11)
+    if task in {'vrptw_construct', 'online_bin_packing'}:
+        train.timeout_seconds = selection.timeout_seconds = 20
+    candidate = f"Idea: use the supplied baseline\n```python\n{train.template_program.strip()}\n```"
+    m = TraceAADV1015(evaluation=train, selection_evaluation=selection,
+                       llm=TokenLLM(candidate), run_dir=tmp_path,
+                       task=task, config=Config(budget=1))
+    result = m.run()
+    assert result['status'] == 'finished', result
+    assert result['budget_used'] == result['model_calls'] == 1
+    assert result['search_evaluations'] == result['selection_evaluations'] == 1
+    assert result['best']['key'] == key((tmp_path / 'best_program.py').read_text())
+
+
+def test_aco_wrong_output_shape_is_invalid_output(tmp_path):
+    from experiments.traceaad_v10_14_3.preflight import small_task
+
+    train = small_task('cvrp_aco')
+    bad = ('Idea: return a small matrix\n```python\n'
+           'import numpy as np\n'
+           'def heuristics(distance_matrix, coordinates, demands, capacity):\n'
+           '    return np.zeros((1, 1))\n```')
+    m = TraceAADV1015(evaluation=train, llm=TokenLLM(bad), run_dir=tmp_path,
+                       task='cvrp_aco', config=Config(budget=1))
+    assert m.run()['status'] == 'no_valid_root'
+    assert m.facts.tables['attempt'][1]['status'] == 'invalid_output'

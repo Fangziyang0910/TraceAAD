@@ -103,6 +103,7 @@ V10.15 是一个独立版本，不是 V10.14 的后代，版本号只作标识�
   - 解析失败、重复、已知失败；
   - 运行错误、无效输出和超时。
 - **不计入预算：** 模型服务错误（连接失败、限流、服务端 5xx），这类错误自动重试。
+- 同一次生成连续 3 次服务错误时暂停运行并保留可恢复状态；尚未产出候选，因此不占候选预算。
 - **另行记录：** 评价器调用数、模型调用数、输入/输出 token 和墙钟时间。重复候选和已知失败不调用评价器。
 
 ### 3.2 程序表示与去重
@@ -110,6 +111,7 @@ V10.15 是一个独立版本，不是 V10.14 的后代，版本号只作标识�
 - **规范形式** `canonical(code)`：先解析为 AST，删除模块、函数和类的 docstring（注释在解析时自然消失），再 `ast.unparse`。
 - **程序身份** `key = sha256(canonical(code))`。
 - 给模型看的所有程序（当前算法、参考算法、已有根）一律用规范形式，所有 diff 也在规范形式上计算。原始响应和原始代码另行完整保存。
+- 评价器运行规范代码，使程序身份与实际受评程序一致；补全依赖前的模型原始代码另存。
 - **重复：** `key` 与任一有效节点相同，记为 `duplicate`。如果与本轮 Crossover 的参考程序相同，记为 `copied_reference`，单独统计复制率。
 - **已知失败：** `key` 与此前评价失败的程序相同，记为 `known_failure`。
 - 这三类都不评价、不建节点、不修复，但计入预算。
@@ -117,6 +119,7 @@ V10.15 是一个独立版本，不是 V10.14 的后代，版本号只作标识�
 ### 3.3 初始化
 
 - **目标：** 得到 8 个有效且互不相同的根，初始化尝试上限 16 次。
+- 初始化阶段的修复生成也计入这 16 次尝试。
 - **前 4 个有效根**使用独立提示，只含任务和目标函数。
 - **第 5–8 个根**使用参考提示：给出已有全部有效根（规范代码、分数、Idea），要求采用不同的核心决策原则。上下文不够时，从最早的根开始省略，至少保留 1 个。
 - 选用哪种提示，按"当前已有几个有效根"决定，不按尝试序号决定。
@@ -278,7 +281,7 @@ The whole evaluation must finish within {timeout} seconds, so keep the computati
 | online_bin_packing | the average number of bins used | Lower | 30 |
 | vrptw_construct | the average total travel distance of the constructed routes | Lower | 30 |
 
-`task_description`、`design_notes` 和 `template_program` 取自冻结的任务契约，原文不改。给出时限，是因为超时属于失败，这是模型设计时需要知道的事实。
+`task_description`、`design_notes` 和 `template_program` 取自冻结的任务契约，原文不改。当前 TSP、OP 定义了 `design_notes`。给出时限，是因为超时属于失败，这是模型设计时需要知道的事实。
 
 **Target Function**
 
@@ -816,4 +819,5 @@ evaluate finalists on the selection set; best_program ← argmax selection score
   - V9 系列用的是 Qwen3.6；
   - 服务端 int4/g128 别名问题（8 月 28 日起）；
   - VRPTW 任务描述改写窗口（影响 V9.19–V10.5）。
+  - V10.15 提示中的时限与训练评价器一致（OBP、VRPTW 为 30 秒）；现行 V10.14 运行入口为 30 秒，两版本一致。
 - **判读：** 以 held-out 为主。4 路重复只能检出较大的差异，不宜把 1–2% 的均值差写成机制优势。过程指标（§8.2）用来解释结果是怎样发生的。
