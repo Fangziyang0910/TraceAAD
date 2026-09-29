@@ -137,7 +137,7 @@ ESS(β) = 1 / Σ_a p_β(a)²
 - 所有质量相同时取均匀分布。如果最高分并列的节点数 `m ≥ T`，就在这 m 个节点上均匀抽。
 - β 随分数尺度自动调整，不需要做任务间归一化。
 - 三个动作共用同一个分布。被选次数只做记录，不进入分数。
-- 标记为 `too_long` 的节点（见 4.6）不参与抽样。
+- 标记为 `too_long` 的节点（见 4.4）不参与抽样。
 
 ### 3.5 动作选择
 
@@ -210,7 +210,7 @@ ESS(β) = 1 / Σ_a p_β(a)²
 
 ### 4.3 每条边的呈现
 
-```
+````text
 Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse | same score>)
   Idea: <当时的 Idea，≤300 字符>
   Change: <改动摘要>                         ← 除最近一步外
@@ -218,13 +218,13 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
   ```diff
   <unified diff>
   ```
-```
+````
 
 - **分数：** 原任务单位，6 位有效数字。
 - **判定：** 容差 `1e-9 · max(1, |父代分数|)`，并按任务方向判断 improved / worse / same score。
 - **Change 摘要**（沿用 V9.7 格式，≤400 字符）：
   - 若两份规范代码只在数值常量上不同（把数值常量全部掩码后 AST 相同），写 `numeric constants only, in <函数>: 0.15 → 0.12; 3 → 4`。数值对按源码位置排序，最多列 4 对。
-  - 否则写 `+A/−R lines in <改动的顶层函数，最多 4 个>; removed: `<第一行>` | `<最后一行>`; added: `<第一行>` | `<最后一行>``，每行最多 110 字符。
+  - 否则写 `+A/−R lines in <改动的顶层函数，最多 4 个>; removed: <第一行> | <最后一行>; added: <第一行> | <最后一行>`，每行最多 110 字符。
 - **最近一步的 diff：** 在规范形式上计算，上下文 2 行，最多 60 行，超出部分写 `… (N more diff lines not shown)`。
 
 ### 4.4 Token 预算与裁剪
@@ -626,7 +626,7 @@ Step 3 (latest: produced the current algorithm) · Refine · score 6.0324 → 5.
 ```diff
 @@ -11,5 +11,5 @@
      return path
- 
+
 -def _two_opt(path, start, end, dm, sweeps=3):
 +def _two_opt(path, start, end, dm, sweeps=6):
      route = [start] + path + [end]
