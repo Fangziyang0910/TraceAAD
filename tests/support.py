@@ -35,3 +35,21 @@ class FakeLLM:
 
 def response(value):
     return f"Idea: return {value}\n```python\ndef score(x):\n    return {value}\n```"
+
+
+class TokenLLM(FakeLLM):
+    """Actual local tokenizer for offline tests, never production accounting."""
+
+    def count_tokens(self, text):
+        from tokenizers import Tokenizer, models, pre_tokenizers
+        tokenizer = Tokenizer(models.WordLevel({"[UNK]": 0}, unk_token="[UNK]"))
+        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+        return len(tokenizer.encode(text).ids)
+
+    def count_prompt_tokens(self, text):
+        return self.count_tokens(text) + 16
+
+
+def text_candidate(value=1, idea='Return this constant to test the score.', code=None):
+    code = code or f'def score(x):\n    return {value}\n'
+    return f'Idea: {idea}\nFinal implementation:\n```python\n{code}\n```'
