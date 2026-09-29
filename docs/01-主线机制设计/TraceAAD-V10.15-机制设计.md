@@ -270,7 +270,7 @@ Score: {score_meaning}. {Lower|Higher} is better.
 The whole evaluation must finish within {timeout} seconds, so keep the computation efficient.
 ```
 
-| 任务 | score_meaning | 方向 | 训练评价 timeout（当前配置） |
+| 任务 | score_meaning | 方向 | 训练评价 timeout |
 |---|---|---|---|
 | tsp_construct | the average length of the constructed tours | Lower | 20 |
 | cvrp_aco | the average total length of the best routes found by the ant colony | Lower | 120 |
@@ -279,8 +279,6 @@ The whole evaluation must finish within {timeout} seconds, so keep the computati
 | vrptw_construct | the average total travel distance of the constructed routes | Lower | 30 |
 
 `task_description`、`design_notes` 和 `template_program` 取自冻结的任务契约，原文不改。给出时限，是因为超时属于失败，这是模型设计时需要知道的事实。
-
-**`{timeout}` 在运行时读取实际训练评价器的 `timeout_seconds`，不在提示模块里写死。** 这样提示和评价器不会不一致。上表只是当前配置的记录：TSP、OBP、VRPTW 来自 `benchmarks/generated_data_config.py` 的 train 配置，CVRP、OP 来自 `experiments/infra/base.py` 的 `build_task`，与此前各版本的实验相同。各任务目录下 `paras.yaml` 里的 timeout 并不是实验实际使用的值，不作为依据。修复提示（§5.7）中的 `{timeout}` 取同一个值。
 
 **Target Function**
 
