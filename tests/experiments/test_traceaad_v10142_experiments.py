@@ -94,20 +94,6 @@ def test_monitor_understands_native_candidate_budget(tmp_path):
     assert monitor._recorded_progress(directory) == (1, 1)
 
 
-def test_batch_plan_preserves_route_conditions_without_launching():
-    from experiments.traceaad_v10_14_2.launch_batch import build_plan
-    tasks = ['tsp_construct', 'cvrp_aco', 'op_aco', 'online_bin_packing', 'vrptw_construct']
-    prior = {'plan': [{'task': task, 'repeat': rep, 'seed': rep-1, 'backend': 'server3',
-                       'run_dir': f'/old/{task}/{rep}'} for task in tasks for rep in range(1, 5)]}
-    plan = build_plan(prior, 'test_new_batch')
-    assert len(plan) == 20 and len({p['session'] for p in plan}) == 20
-    for old, new in zip(prior['plan'], plan):
-        assert all(old[k] == new[k] for k in ('task', 'repeat', 'seed', 'backend'))
-        assert new['run_dir'] != old['run_dir']
-        assert 'experiments.traceaad_v10_14_2.run' in new['command']
-        assert '--thinking' not in new['command']
-
-
 def test_cli_experimental_switches_are_explicit():
     args = runner.build_parser().parse_args(['--task', 'tsp_construct', '--online-revalidation',
         '--recheck-fraction', '.1', '--fixed-three-step-commitment', '--trial-fraction', '.2'])

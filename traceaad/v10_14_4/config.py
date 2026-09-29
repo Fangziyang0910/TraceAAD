@@ -12,19 +12,12 @@ class Config:
     init_mode: str = "hybrid"
     regions: int = 8
     initial_regions: int = 4
-    trial_fraction: float = 0.
-    recheck_fraction: float = 0.
-    fixed_three_step_commitment: bool = False
-    online_revalidation: bool = False
-    behavior_eligibility_gate: bool = False
     exploration_constant: float = .35
     discovery_fraction: float = .12
     parent_policy: str = "rank_count"
     pivot_context: str = "independent"
     idea_tokens: int = 320
-    trial_length: int = 3
     delta: float = 1e-6
-    challenger_gap: float = .1
     min_behavior_distance: float = .01
     output_tokens: int = 8192
     max_input_tokens: int = 24320
@@ -33,19 +26,13 @@ class Config:
     history_depth: int = 4
     output_mode: str = "full"
     evaluation_seeds: tuple[int, ...] = (730241,)
-    comparison_tolerance: float = 1e-6
     final_candidates: int = 5
     max_total_tokens: int | None = None
     max_seconds: float | None = None
     evidence_policy: str = "conditional"
-    comparison_feedback: bool = True
     seed: int = 0
 
     def __post_init__(self):
-        if not self.fixed_three_step_commitment and self.trial_fraction:
-            raise ValueError("trial_fraction requires fixed_three_step_commitment")
-        if not self.online_revalidation and self.recheck_fraction:
-            raise ValueError("recheck_fraction requires online_revalidation")
         if not math.isfinite(self.exploration_constant) or self.exploration_constant < 0:
             raise ValueError("exploration_constant must be finite and nonnegative")
         if not math.isfinite(self.discovery_fraction) or not 0 <= self.discovery_fraction <= .3:
@@ -53,16 +40,14 @@ class Config:
         if not isinstance(self.idea_tokens, int) or not 1 <= self.idea_tokens <= 500:
             raise ValueError("idea_tokens must be an integer from 1 to 500")
         for field in ("budget", "max_evaluations", "init_proposals", "regions", "initial_regions",
-                      "trial_length", "output_tokens", "max_input_tokens",
+                      "output_tokens", "max_input_tokens",
                       "evidence_tokens", "max_events", "history_depth", "final_candidates"):
             value = getattr(self, field)
             if not isinstance(value, int) or isinstance(value, bool) or value < 1:
                 raise ValueError(f"{field} must be a positive integer")
-        if self.regions > 8 or self.final_candidates > 5 or self.trial_length > 3:
-            raise ValueError("V10.14-4 supports at most 8 regions, 5 finalists and 3 trial steps")
-        if not (0 <= self.trial_fraction <= .2 and 0 <= self.recheck_fraction <= .1):
-            raise ValueError("trial/recheck fractions exceed optional legacy channel caps")
-        for field in ("delta", "challenger_gap", "min_behavior_distance", "comparison_tolerance"):
+        if self.regions > 8 or self.final_candidates > 5:
+            raise ValueError("V10.14-4 supports at most 8 regions and 5 finalists")
+        for field in ("delta", "min_behavior_distance"):
             if not math.isfinite(getattr(self, field)) or getattr(self, field) < 0:
                 raise ValueError(f"{field} must be finite and nonnegative")
         if self.delta == 0:

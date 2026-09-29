@@ -13,7 +13,7 @@ import traceback
 from core import SecureEvaluator
 from traceaad.v10_13.storage import write_json
 from .config import Config
-from .edits import changed_symbols, close_trace, numeric_parameters, observed_change, parse_response, source_id, symbols, validate_source
+from .edits import changed_symbols, numeric_parameters, observed_change, parse_response, source_id, validate_source
 from .evaluation import SeededEvaluation, fingerprint, protocol_identity, training_probes
 from .frontier import Frontier
 from .prompts import ContextError, PromptBuilder, source_diff
@@ -76,7 +76,6 @@ class TraceAADV10144:
         self.session = None
         self.session_count = 0
         self.repairs = {}
-        self.checked_closures = {}
         self.finalists = []
         self.selection_results = []
         self.pending = None
@@ -84,9 +83,19 @@ class TraceAADV10144:
         self.started_at = now()
         self.service_failures = 0
         self._clock = time.monotonic()
+        package_root = Path(__file__).parents[1]
+        implementation_files = [
+            *Path(__file__).parent.glob("*.py"),
+            *(package_root / "v10_14_3" / f"{name}.py"
+              for name in ("edits", "evaluation", "selection", "state")),
+            package_root / "v10_13" / "storage.py",
+            package_root / "v10_13" / "parsing.py",
+            package_root.parent / "core" / "llm.py",
+        ]
         self.identity = {"config": asdict(self.config), "task": task, "protocol": self.protocol,
                          "selection_protocol": self.selection_protocol,
-                         "implementation": fingerprint({str(p): source_id(p.read_text()) for p in [*Path(__file__).parent.glob("*.py"), Path(__file__).parents[1] / "v10_13" / "storage.py", Path(__file__).parents[1] / "v10_13" / "parsing.py", Path(__file__).parents[2] / "core" / "llm.py"]}),
+                         "implementation": fingerprint({str(p): source_id(p.read_text())
+                                                        for p in implementation_files}),
                          "model": {k: getattr(llm, k, None) for k in
                                    ("model", "temperature", "top_p", "enable_thinking", "chars_per_token", "stop", "extra_body")}}
         # JSON round-trip makes tuple/list representation identical at resume.
@@ -101,7 +110,7 @@ class TraceAADV10144:
                 "init_index": self.init_index, "bootstrap": self.bootstrap,
                 "bootstrap_index": self.bootstrap_index, "session": self.session,
                 "session_count": self.session_count, "repairs": self.repairs,
-                "checked_closures": self.checked_closures, "finalists": self.finalists,
+                "finalists": self.finalists,
                 "selection_results": self.selection_results, "pending": self.pending,
                 "rng": self.rng.getstate(), "elapsed": self.elapsed + time.monotonic()-self._clock,
                 "started_at": self.started_at, "service_failures": self.service_failures}
@@ -120,16 +129,11 @@ class TraceAADV10144:
         self.develop_queue = state["develop_queue"]
         self.frontier = Frontier(self.config, self.anchors, state["frontier"])
         for key in ("phase", "init_index", "bootstrap", "bootstrap_index", "session", "session_count",
-                    "repairs", "checked_closures", "finalists", "selection_results", "elapsed",
+                    "repairs", "finalists", "selection_results", "elapsed",
                     "started_at", "service_failures"):
             setattr(self, key, state[key])
         rng = state["rng"]
         self.rng.setstate((rng[0], tuple(rng[1]), rng[2]))
-
-    @property
-    def caps(self):
-        return {"trial": math.floor(self.ledger.search_limit * self.config.trial_fraction),
-                "recheck": math.floor(self.ledger.search_limit * self.config.recheck_fraction)}
 
     def _time_available(self):
         return (self.config.max_seconds is None or
@@ -139,14 +143,13 @@ class TraceAADV10144:
         if not self._time_available():
             return False
         if self.config.max_total_tokens is not None:
-            calls = length - 1 if channel == "recheck" else length
-            worst = calls * (self.config.max_input_tokens + self.config.output_tokens)
+            worst = length * (self.config.max_input_tokens + self.config.output_tokens)
             if self.ledger.tokens + worst > self.config.max_total_tokens:
                 return False
-        return self.ledger.can_reserve(channel, length, len(self.config.evaluation_seeds), self.caps)
+        return self.ledger.can_reserve(channel, length, len(self.config.evaluation_seeds), {})
 
-    def _begin(self, channel, length, anchor=None, region=None, closure=None):
-        self.ledger.reserve(channel, length, len(self.config.evaluation_seeds), self.caps)
+    def _begin(self, channel, length, anchor=None, region=None):
+        self.ledger.reserve(channel, length, len(self.config.evaluation_seeds), {})
         self.session_count += 1
         ref = anchor["fitness"] if anchor else None
         if region is not None:
@@ -158,31 +161,8 @@ class TraceAADV10144:
         self.session = {"id": self.session_count, "channel": channel, "stage": self.phase, "length": length, "step": 0,
             "origin": anchor["id"] if anchor else None, "working": anchor["id"] if anchor else None,
             "origin_region": region, "reference_quality": ref, "best_new": None,
-            "hypothesis": "", "repair": None, "attempt_ids": [], "closure": closure,
-            "comparison_id": None, "status": "active"}
-        if channel == "trial" and anchor:
-            r = self.frontier.regions[region]
-            if r["challenger"] == anchor["id"]:
-                r["challenger"] = None
-                self.session["hypothesis"] = self._hypothesis(anchor)
-            else:
-                self.session["discover"] = True
-            if anchor["artifact_id"] not in r["tried"]:
-                r["tried"].append(anchor["artifact_id"])
-        if closure:
-            revision = self.facts.tables["revision"][closure["revision_id"]]
-            self.session["hypothesis"] = (
-                f"Revalidate retaining historical revision {revision['id']} in current anchor {anchor['id']}; "
-                "its original effect alone does not establish its current value.")
+            "attempt_ids": [], "status": "active"}
         self._save()
-
-    def _hypothesis(self, anchor):
-        revision = self.facts.tables["revision"].get(anchor.get("revision_id"))
-        if not revision:
-            return "Develop one concrete change to the current decision mechanism and test its consequences."
-        return (f"Continue testing actual revision {revision['id']} touching {', '.join(revision['symbols'])}. "
-                f"Candidate's optional rationale (unverified): {anchor.get('idea_metadata', {}).get('display', anchor.get('idea', ''))}\n"
-                "Correct dependencies or calibrate this change before proposing an unrelated redesign.")
 
     def _finish_session(self, reason="completed"):
         session = self.session
@@ -192,11 +172,6 @@ class TraceAADV10144:
             session["best_new"] is not None and session["reference_quality"] is not None) else 0.
         session["global_gain"] = sum(self.facts.tables["attempt"][i].get("global_gain", 0.)
                                      for i in session["attempt_ids"])
-        if session["channel"] == "recheck" and len(session["attempt_ids"]) > 1:
-            followup = self.facts.tables["attempt"][session["attempt_ids"][-1]]
-            parent = self.anchors[followup["parent_id"]]
-            session["followup_gain"] = (max(0., followup["fitness"]-parent["fitness"])
-                if followup.get("is_new") and followup.get("fitness") is not None else 0.)
         session["finished_at"] = now()
         if session["id"] not in self.facts.tables["session"]:
             self.facts.add("session", dict(session))
@@ -211,8 +186,6 @@ class TraceAADV10144:
     def _donor(self, anchor):
         candidates = [a for a in unique_archive(self.anchors)
                       if opportunity_key(a) != opportunity_key(anchor)]
-        if self.config.behavior_eligibility_gate:
-            candidates = [a for a in candidates if not a["profile"] or a["profile"] != anchor["profile"]]
         # Uniform reference opportunity over all distinct valid sources; no
         # same-probe veto. The parent still follows the frozen quality/count rule.
         return self.rng.choice(candidates) if candidates else None
@@ -411,10 +384,6 @@ class TraceAADV10144:
             r = self.frontier.regions[region]
             if session["channel"] == "main" and record["status"] != "service_error":
                 r["stagnation"] += 1
-            if session["channel"] == "trial":
-                r["trial_used"] += 1
-                if new_anchor and new_anchor["artifact_id"] not in r["tried"]:
-                    r["tried"].append(new_anchor["artifact_id"])
         if new_anchor:
             discovered = (request is not None and request["scope"] == "Pivot" and anchor is None
                           and session["stage"] == "search" and new_anchor["is_new"])
@@ -432,30 +401,23 @@ class TraceAADV10144:
                     source_region["checkpoint"], source_region["stagnation"] = new_anchor["fitness"], 0
             if new_anchor["is_new"]:
                 session["working"] = new_anchor["id"]
-                if session["channel"] == "trial" and not session["hypothesis"]:
-                    session["hypothesis"] = self._hypothesis(new_anchor)
         # Delivery failures without a complete source are facts, not editable programs.
         if error and code and anchor and not repair_of and record["status"] != "service_error" and request:
-            if session["channel"] == "trial":
-                session["repair"] = cid
-                if not session["hypothesis"]:
-                    session["hypothesis"] = (f"Test and repair the concrete change in failed attempt {cid}; "
-                        f"affected symbols: {', '.join(symbols(code))}. "
-                        "Its validity and quality are unresolved; a repair must address its recorded failure.")
-            elif session["channel"] == "main":
-                self.repairs[str(anchor["id"])] = cid
+            self.repairs[str(anchor["id"])] = cid
         session["attempt_ids"].append(cid)
         session["step"] += 1
         if request and request["scope"] == "Pivot" and anchor is None and session["stage"] == "search":
             self.discovery_count += 1
         self.facts.add("attempt", record)
         self.pending = None
-        # Compatibility projection for monitors; immutable facts remain separate.
+        # Compact progress event for the existing monitor.
         self.facts._append({"kind": "candidate", "candidate_id": cid, "budget_used": cid,
             "evaluation_id": self.ledger.evaluations, "status": record["status"],
             "operator": record["scope"], "node_id": new_anchor["id"] if new_anchor else None,
             "fitness": new_anchor["fitness"] if new_anchor else None,
-            "node": self._export(new_anchor) if new_anchor else None, "state": self._state()})
+            "node": {"id": new_anchor["id"], "fitness": new_anchor["fitness"]} if new_anchor else None,
+            "state": {"elapsed": self.elapsed + time.monotonic()-self._clock,
+                      "started_at": self.started_at, "phase": self.phase}})
         self._save()
         self._summary("running")
         return new_anchor, record
@@ -464,134 +426,30 @@ class TraceAADV10144:
         return {**anchor, "code": self.facts.code(anchor),
                 "evaluation_id": anchor["evaluation_ids"][-1]}
 
-    def _closure_options(self):
-        options = []
-        active = [(i, r, anchor_id) for i, r in enumerate(self.frontier.regions)
-                  for anchor_id in (r["champion"], r["challenger"]) if anchor_id is not None]
-        for region_id, region, anchor_id in active:
-            current = self.anchors.get(anchor_id)
-            if current is None or current["parent_id"] is None:
-                continue
-            middle = self.anchors[current["parent_id"]]
-            if middle["parent_id"] is None or not middle.get("revision_id"):
-                continue
-            old = self.anchors[middle["parent_id"]]
-            if any(a["protocol"] != self.protocol for a in (old, middle, current)):
-                continue
-            revision_id = middle["revision_id"]
-            # Select only evidence that fits the current decision packet. This
-            # preview is NOT recorded as a model request; the trigger is logged.
-            try:
-                packet = self.prompts.build(current)
-            except ContextError:
-                continue
-            if f"revision:{revision_id}" not in packet["evidence_ids"]:
-                continue
-            key = fingerprint([old["artifact_id"], middle["artifact_id"], current["artifact_id"], self.protocol])
-            if key in self.checked_closures:
-                continue
-            started = time.monotonic()
-            try:
-                source, check = close_trace(*(self.facts.code(a) for a in (old, middle, current)))
-            except ValueError as exc:
-                self.checked_closures[key] = "not_reconstructable"
-                self.facts._append({"kind": "closure_check", "key": key,
-                    "anchors": [old["id"], middle["id"], current["id"]],
-                    "status": "not_reconstructable", "error": str(exc),
-                    "seconds": time.monotonic()-started})
-                continue
-            closure = {"key": key, "anchors": [old["id"], middle["id"], current["id"]],
-                       "revision_id": revision_id, "source": source, "check": check,
-                       "trigger_evidence_ids": packet["evidence_ids"],
-                       "reconstruction_seconds": time.monotonic()-started}
-            # Compare only if its provenance can also fit the subsequent request.
-            options.append((region_id, closure))
-        options.sort(key=lambda item: (
-            -int(self.frontier.regions[item[0]]["stagnation"] > 0),
-            -self.anchors[item[1]["anchors"][2]]["fitness"],
-            -abs(self.anchors[item[1]["anchors"][1]]["fitness"] - self.anchors[item[1]["anchors"][0]]["fitness"]),
-            -item[1]["anchors"][2]))
-        return options
-
     def _schedule_search(self):
-        choices, weights = [], []
-        c = self.config
-        if self._can_start("main", 1):
-            choices.append("main")
-            weights.append(1-c.trial_fraction-c.recheck_fraction)
-        if c.trial_fraction and self._can_start("trial", c.trial_length):
-            choices.append("trial")
-            weights.append(c.trial_fraction/c.trial_length)
-        closures = []
-        if c.recheck_fraction and self._can_start("recheck", 2):
-            closures = self._closure_options()
-            if closures:
-                choices.append("recheck")
-                weights.append(c.recheck_fraction/2)
-        if not choices:
+        if not self._can_start("main", 1):
             return False
-        channel = self.rng.choices(choices, weights=weights)[0]
-        if channel == "recheck":
-            region, closure = closures[0]
-            self._begin(channel, 2, self.anchors[closure["anchors"][2]], region, closure)
-        elif channel == "trial":
-            region = self.frontier.trial(self.rng)
-            r = self.frontier.regions[region]
-            selected = r["challenger"] if r["challenger"] is not None else r["champion"]
-            self._begin(channel, c.trial_length, self.anchors[selected], region)
+        c = self.config
+        search_used = self.ledger.candidates - (self.config.budget - self.ledger.search_limit)
+        discover_target = min(math.floor(self.ledger.search_limit * c.discovery_fraction),
+                              math.floor((search_used + 1) * c.discovery_fraction))
+        if self.develop_queue:
+            anchor = self.anchors[self.develop_queue.pop(0)]
+            region = self.frontier.region_for(anchor)
+            self._begin("main", 1, anchor, region)
+            self.session["force_develop"] = True
+        elif self.discovery_count < discover_target:
+            self._begin("main", 1)
+            self.session["force_discovery"] = True
         else:
-            search_used = self.ledger.candidates - (self.config.budget - self.ledger.search_limit)
-            discover_target = min(math.floor(self.ledger.search_limit * c.discovery_fraction),
-                                  math.floor((search_used + 1) * c.discovery_fraction))
-            if self.develop_queue:
-                anchor = self.anchors[self.develop_queue.pop(0)]
-                region = self.frontier.region_for(anchor)
-                self._begin(channel, 1, anchor, region)
-                self.session["force_develop"] = True
-            elif self.discovery_count < discover_target:
-                self._begin(channel, 1)
-                self.session["force_discovery"] = True
-            else:
-                region = self.frontier.main(self.rng)
-                pool = {i: a for i, a in self.anchors.items() if self.frontier.region_for(a) == region}
-                if c.behavior_eligibility_gate:
-                    champion = self.frontier.regions[region]["champion"]
-                    pool = {champion: self.anchors[champion]}
-                anchor, selection = select_parent(pool, self.parent_counts, c.exploration_constant, c.parent_policy)
-                self._begin(channel, 1, anchor, region)
-                self.session["selection"] = selection
-                self.session["selection"]["region"] = region
-            self._save()
+            region = self.frontier.main(self.rng)
+            pool = {i: a for i, a in self.anchors.items() if self.frontier.region_for(a) == region}
+            anchor, selection = select_parent(pool, self.parent_counts, c.exploration_constant, c.parent_policy)
+            self._begin("main", 1, anchor, region)
+            self.session["selection"] = selection
+            self.session["selection"]["region"] = region
+        self._save()
         return True
-
-    def _comparison(self, closure, counterfactual):
-        existing = next((r for r in self.facts.tables["comparison"].values()
-                         if r.get("closure_key") == closure["key"]), None)
-        if existing:
-            return existing
-        old, middle, current = [self.anchors[i] for i in closure["anchors"]]
-        cid = len(self.facts.tables["comparison"]) + 1
-        record = {"id": cid, "closure_key": closure["key"], "protocol": self.protocol, "historical_revision": closure["revision_id"],
-            "anchors": [old["id"], middle["id"], current["id"], counterfactual["id"] if counterfactual else None],
-            "source_hashes": closure["check"]["snapshots"], "edits": closure["check"],
-            "construction": "actual parent is current p11; inverse A; B(p00) is an identity check only",
-            "status": "invalid" if counterfactual is None else "measured",
-            "scope": "specific code bundles, fixed data, numeric scale and seed panel; not a universal causal effect"}
-        if counterfactual:
-            panels = [a["scores"] for a in (old, middle, current, counterfactual)]
-            before = [b-a for a, b in zip(panels[0], panels[1])]
-            after = [a-b for a, b in zip(panels[2], panels[3])]
-            interaction = [b-a for a, b in zip(before, after)]
-            tol = self.config.comparison_tolerance
-            verdict = ("positive_on_fixed_panel" if all(x > tol for x in after) else
-                       "negative_on_fixed_panel" if all(x < -tol for x in after) else "inconclusive")
-            record.update(scores=panels, evaluation_ids=[a["evaluation_ids"] for a in (old, middle, current, counterfactual)],
-                delta_old=statistics.fmean(before), delta_current=statistics.fmean(after),
-                interaction=statistics.fmean(interaction), paired_current=after, verdict=verdict,
-                seeds=list(self.config.evaluation_seeds),
-                uncertainty="fixed-panel observation; a single seed is not statistical evidence of generality")
-        self.facts.add("comparison", record)
-        return record
 
     def _step_session(self):
         s = self.session
@@ -601,33 +459,8 @@ class TraceAADV10144:
         if not self._time_available():
             self._finish_session("time_limit")
             return
-        if s["channel"] == "recheck" and s["comparison_id"] is None:
-            closure = s["closure"]
-            current = self.anchors[s["origin"]]
-            if s["step"] == 0:
-                counterfactual, _ = self._attempt(anchor=current, source=closure["source"])
-            else:
-                counterfactual = self.anchors.get(s["attempt_ids"][0])
-            comparison = self._comparison(closure, counterfactual)
-            self.checked_closures[closure["key"]] = comparison["id"]
-            s["comparison_id"] = comparison["id"]
-            s["direct_recheck_gain"] = max(0., counterfactual["fitness"]-current["fitness"]) if counterfactual else None
-            if counterfactual:
-                self.frontier.reactivate(current, comparison["id"])
-            # Both feedback/no-feedback branches start from exactly the same
-            # deterministic better-of-current-and-counterfactual rule.
-            s["working"] = (counterfactual["id"] if counterfactual and counterfactual["fitness"] > current["fitness"]
-                            else current["id"])
-            self._save()
-            if counterfactual is None:
-                self._finish_session("invalid_comparison")
-            return
-        if s["channel"] == "recheck" and self.facts.tables["comparison"][s["comparison_id"]]["status"] == "invalid":
-            self._finish_session("invalid_comparison")
-            return
         anchor = self.anchors.get(s["working"])
-        failed_id = s.pop("repair", None) or (self.repairs.pop(str(anchor["id"]), None)
-                                             if anchor and s["channel"] == "main" else None)
+        failed_id = self.repairs.pop(str(anchor["id"]), None) if anchor else None
         failed = self.facts.tables["attempt"].get(failed_id)
         if anchor:
             scope, reference_mode, donor = (("Refine", "None", None) if s["stage"] == "bootstrap" or s.get("force_develop")
@@ -638,7 +471,6 @@ class TraceAADV10144:
         else:
             scope, reference_mode, donor = ("Pivot" if s.get("force_discovery") else "Init"), "None", None
             sampled_action = scope
-        comparison = self.facts.tables["comparison"].get(s["comparison_id"])
         independent = (scope == "Pivot" and anchor is not None and not failed and s["channel"] == "main"
                        and self.config.pivot_context == "independent")
         if independent:
@@ -647,8 +479,7 @@ class TraceAADV10144:
             s["scheduled_parent_id"] = anchor["id"]
             s["origin"] = s["working"] = s["origin_region"] = None
             s["reference_quality"] = None
-            s["hypothesis"] = ""
-            anchor, donor, comparison = None, None, None
+            anchor, donor = None, None
             reference_mode = "None"
         roots = []
         if not anchor and not independent:
@@ -662,7 +493,7 @@ class TraceAADV10144:
                 roots = sorted(unique.values(), key=lambda a: -a["fitness"])
         try:
             request = self.prompts.build(anchor, scope=scope, reference_mode=reference_mode,
-                donor=donor, hypothesis=s["hypothesis"], failed=failed, comparison=comparison, roots=roots)
+                donor=donor, failed=failed, roots=roots)
         except ContextError as exc:
             self.facts._append({"kind": "context_failure", "session_id": s["id"], "error": str(exc)})
             # A non-fitting required request is not silently sampled again.
@@ -672,10 +503,7 @@ class TraceAADV10144:
             return
         request["sampled_action"] = sampled_action
         request["executed_action"] = "Repair" if failed else ("Transfer" if request["reference_mode"] == "Transfer" else request["scope"])
-        child, _ = self._attempt(anchor=anchor, request=request, repair_of=failed_id)
-        if s["channel"] == "recheck":
-            s["followup_gain"] = max(0., child["fitness"]-anchor["fitness"]) if child and child["is_new"] else 0.
-            self._save()
+        self._attempt(anchor=anchor, request=request, repair_of=failed_id)
 
     def _initialize(self):
         if self.phase == "roots":

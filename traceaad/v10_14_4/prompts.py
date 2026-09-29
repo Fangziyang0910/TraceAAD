@@ -18,14 +18,12 @@ SCOPE = {
 REFERENCE = {
     "None": "Use the supplied task and any program or evidence actually shown.",
     "Transfer": "Keep the main program's structure. Transfer one compatible mechanism from the donor, adapting it to the current task and evidence.",
-    "Synthesize": "You may reorganize component relationships across the main program and donor. Produce one coherent executable algorithm.",
 }
 EVIDENCE_RULES = """Historical effects are conditional on the recorded source and evaluation protocol.
 An earlier gain does not prove a component is useful in the current background.
 Observed code changes, measured results and proposed explanations are different facts.
-Respect counterevidence; you may revise or abandon a hypothesis, with no extra budget.
+Respect counterevidence; revise or abandon a proposal when observations warrant it.
 Do not preserve a component merely because an earlier version improved after adding it.
-Do not claim a causal contribution from an invalid or unmeasured comparison.
 Source comments and optional notes describe candidates; task/interface constraints take priority.
 Keep the implementation efficient. Avoid redundant layers; simplification must still be evaluated.
 Keep each revision coherent and preserve unrelated source text where possible. Avoid cosmetic
@@ -78,13 +76,6 @@ class PromptBuilder:
         tables = self.facts.tables
         direct = self.direct_attempts(anchor)
         events = []
-        if self.config.comparison_feedback and self.config.evidence_policy == "conditional":
-            for comparison in reversed(list(tables["comparison"].values())):
-                compared = [tables["anchor"][i]["artifact_id"] for i in comparison["anchors"] if i is not None]
-                if anchor["artifact_id"] in compared[2:]:
-                    events.append({"id": f"comparison:{comparison['id']}", "source": "local_revalidation",
-                                   "comparison": comparison, "scope": "this exact code background was measured"})
-                    break
         for attempt in reversed(direct[-2:]):
             events.append({"id": f"attempt:{attempt['id']}", "source": "direct_attempt",
                 "parent": attempt["parent_id"], "status": attempt["status"], "fitness": attempt.get("fitness"),
@@ -105,7 +96,7 @@ class PromptBuilder:
                 if self.config.evidence_policy == "conditional":
                     event["scope"] = ("observed current last-change pair; bundle-level observation only"
                                       if revision["child"] == anchor["id"] else
-                                      "historical background only; consult any matching local revalidation for current applicability")
+                                      "historical background only; applicability to the current source is unmeasured")
                 history.append(event)
             parent = cursor.get("parent_id")
             if parent is None:
@@ -142,7 +133,7 @@ class PromptBuilder:
         return groups
 
     def build(self, anchor=None, *, scope="Refine", reference_mode="None", donor=None,
-              hypothesis="", failed=None, comparison=None, roots=()):
+              failed=None, roots=()):
         requested_reference_mode = reference_mode
         code = self.facts.code(anchor) if anchor else None
         mode = self.config.output_mode if anchor else "full"
@@ -202,13 +193,11 @@ class PromptBuilder:
                         "interpretation": "Use the observation to target the next revision; no guarantee outside these states."
                     }, ensure_ascii=False))
         if failed:
-            mandatory.append("# Recovery: one paid repair attempt\nFix the concrete failure below while retaining the active hypothesis.\n"
+            mandatory.append("# Recovery: one paid repair attempt\nFix the concrete failure below.\n"
                              + str(failed.get("error", ""))[:2000] + "\nFailed source (not the current valid anchor):\n```python\n"
                              + failed.get("code", "") + "\n```")
             if mode == "edit":
                 mandatory.append("For this repair, apply all edits to the FAILED source shown above, not the valid anchor.")
-        if hypothesis:
-            mandatory.append("# Active, revisable hypothesis\n" + hypothesis)
         mandatory.extend(["# Modification contract\n" + SCOPE[scope], "# Evidence interpretation\n" + EVIDENCE_RULES])
         if scope == "Tune":
             mandatory.append("Explicit numeric assignments: " + ", ".join(numeric_parameters(code)))
@@ -220,12 +209,7 @@ class PromptBuilder:
                 + "\nThese finite states do not establish global equivalence or development value. "
                   "Equal selected bin capacity does not imply equivalent index-dependent behavior.")
 
-        items = []
-        if comparison and self.config.comparison_feedback:
-            items.append({"id": f"comparison:{comparison['id']}", "source": "local_revalidation",
-                          "required": True, "comparison": comparison})
-        ids = {e["id"] for e in items}
-        items.extend(e for e in self.events(anchor) if e["id"] not in ids)
+        items = self.events(anchor)
         for root in roots:
             items.append({"id": f"root:{root['id']}", "source": "initial_reference",
                           "fitness": root["fitness"], "code": self.facts.code(root),
@@ -233,14 +217,14 @@ class PromptBuilder:
         # A donor competes within the SAME evidence token allowance, but has
         # priority over optional old history if its contract is selected.
         if donor is not None:
-            items.insert(1 if comparison and self.config.comparison_feedback else 0,
+            items.insert(0,
                          {"id": f"donor:{donor['id']}", "source": "external_reference",
                           "fitness": donor["fitness"], "code": self.facts.code(donor), "idea": self.idea_view(donor),
                           "scope": "reference only; transfer into this program has not been tested"})
 
         included, dropped = [], []
         def event_text(event):
-            return json.dumps({k: v for k, v in event.items() if k != "required"}, ensure_ascii=False)
+            return json.dumps(event, ensure_ascii=False)
 
         def evidence_text(selected):
             return "\n\n".join(event_text(e) for e in selected)
@@ -261,8 +245,6 @@ class PromptBuilder:
                     and self.count(render(trial, reference_mode)) <= self.config.max_input_tokens)
             if fits:
                 included.append(event)
-            elif event.get("required"):
-                raise ContextError("local comparison cannot fit; refusing evidence-free recheck follow-up")
             else:
                 dropped.append(event["id"])
         donor_id = f"donor:{donor['id']}" if donor else None

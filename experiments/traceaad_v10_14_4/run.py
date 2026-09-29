@@ -42,21 +42,13 @@ def build_parser():
     parser.add_argument("--init-mode", choices=("independent", "hybrid", "sequential"), default="hybrid")
     parser.add_argument("--regions", type=int, default=8)
     parser.add_argument("--initial-regions", type=int, default=4)
-    parser.add_argument("--trial-fraction", type=float, default=0.)
-    parser.add_argument("--recheck-fraction", type=float, default=0.)
-    parser.add_argument("--fixed-three-step-commitment", action="store_true")
-    parser.add_argument("--online-revalidation", action="store_true")
-    parser.add_argument("--behavior-eligibility-gate", action="store_true")
     parser.add_argument("--exploration-constant", type=float, default=.35)
     parser.add_argument("--discovery-fraction", type=float, default=.12)
     parser.add_argument("--parent-policy", choices=("rank_count", "raw_count"), default="rank_count")
     parser.add_argument("--pivot-context", choices=("independent", "anchored"), default="independent")
     parser.add_argument("--idea-tokens", type=int, default=320)
-    parser.add_argument("--trial-length", type=int, default=3)
     parser.add_argument("--delta", type=float, default=1e-6)
-    parser.add_argument("--challenger-gap", type=float, default=.1)
     parser.add_argument("--min-behavior-distance", type=float, default=.01)
-    parser.add_argument("--comparison-tolerance", type=float, default=1e-6)
     parser.add_argument("--max-input-tokens", type=int, default=24320)
     parser.add_argument("--evidence-tokens", type=int, default=3000)
     parser.add_argument("--max-events", type=int, default=4)
@@ -67,8 +59,6 @@ def build_parser():
     parser.add_argument("--max-total-tokens", type=int)
     parser.add_argument("--max-seconds", type=float)
     parser.add_argument("--evidence-policy", choices=("none", "trajectory", "bag", "conditional"), default="conditional")
-    parser.add_argument("--no-comparison-feedback", action="store_true",
-                        help="keep reconstruction and candidate admission, withhold organized comparison from next generation")
     parser.add_argument("--dry-run", action="store_true", help="print policy without creating a run or calling a model")
     return parser
 
@@ -78,7 +68,6 @@ def config_from_args(args):
               if hasattr(args, name) and name != "max_evaluations"}
     values["evaluation_seeds"] = tuple(args.evaluation_seeds)
     values["max_evaluations"] = args.max_evaluations if args.max_evaluations is not None else args.budget * len(args.evaluation_seeds)
-    values["comparison_feedback"] = not args.no_comparison_feedback
     return Config(**values)
 
 
