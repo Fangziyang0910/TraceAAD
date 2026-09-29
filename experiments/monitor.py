@@ -319,6 +319,18 @@ class ResultsMonitor:
         self._progress_cache[run_dir] = stamp, result
         return result
 
+    def _journal_is_hot(self, run_dir: Path, *, max_age_sec: float = 1200.0) -> bool:
+        """A run whose journal was appended recently is live even without a summary.
+
+        Covers methods that only write ``run_summary.json`` at completion; the
+        margin exceeds the LLM request timeout plus service-error retries.
+        """
+        journal = run_dir / JOURNAL_NAME
+        try:
+            return (time.time() - journal.stat().st_mtime) < max_age_sec
+        except OSError:
+            return False
+
     def batches(self) -> list[dict[str, str]]:
         names = []
         for directory in self.results_root.iterdir():
@@ -346,6 +358,8 @@ class ResultsMonitor:
                 status = "running"
             elif raw_status == "unknown":
                 status = "unknown"
+            elif not raw_status and self._journal_is_hot(run_dir):
+                status = "running"
             else:
                 status = "blocked" if raw_status else "queued"
             params = config.get("method_params") or {}
@@ -356,7 +370,7 @@ class ResultsMonitor:
             budget = summary.get("budget", summary.get("budget_slots", params.get("budget", params.get("max_sample_nums", 0))))
             used = summary.get("budget_used", summary.get("budget_slots", summary.get("num_samples", summary.get("evaluator_call_count", 0))))
             nodes = summary.get("num_nodes", summary.get("n_algorithms", summary.get("evaluate_success_program_num", 0)))
-            if raw_status == "unknown":
+            if raw_status == "unknown" or (not raw_status and status == "running"):
                 used, nodes = self._recorded_progress(run_dir)
             task = config.get("task", run_dir.parent.name)
             if task not in TASKS:
