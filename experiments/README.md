@@ -1,8 +1,8 @@
 # 实验脚本
 
-这里保存可继续使用的运行入口。原始结果在 [experiments_result](../experiments_result/README.md)，可阅读的成绩表在 [docs/02-实验结果](../docs/02-实验结果/)；旧版本的运行代码已移除，历史数据仍保留。
+这里保存可继续使用的运行入口。V10.14 正式结果仅保留最终完整的 20 路批次；其他 V10.14 试跑和测试产物已清理。结果记录说明见 [experiments_result](../experiments_result/README.md)，正式机制与成绩见 [V10.14 机制设计](../docs/01-主线机制设计/TraceAAD-V10.14-机制设计.md) 和 [正式实验分析](../docs/03-机制探索与验证/2026-09-29-V10.14-正式实验结果与分析.md)。
 
-最新实现为 [V10.14-4](traceaad_v10_14_4/README.md)：`uv run python -m experiments.traceaad_v10_14_4.run --task tsp_construct --run-name trial_1 --budget 1000`。先加 `--dry-run` 检查配置。正式模式保留普通文本 Idea／完整代码交付与独立选择集，限制独立发现预算，按训练探针区域分配发展机会，并在下一轮提示中写入父子行为差分；按候选尝试计费。原 [V10.14-3](traceaad_v10_14_3/README.md)、[V10.14-2](traceaad_v10_14_2/README.md) 与 [V10.14](traceaad_v10_14/README.md) 的实现、结果保留，不混合续跑。
+正式机制实现位于 [V10.14 运行说明](traceaad_v10_14_3/README.md)，其 Python 模块名和结果目录保留历史内部标识 `traceaad_v10_14_3`。例如：`uv run python -m experiments.traceaad_v10_14_3.run --task tsp_construct --run-name trial_1 --budget 1000`。先加 `--dry-run` 检查配置。正式机制使用普通文本 Idea／完整代码交付、全档案分位秩选父、独立 Pivot、有限候选预算和独立选择集。在线重验、固定三步票及行为区域调度未启用。
 
 已有正式实验 V10.13：`uv run python -m experiments.traceaad_v10_13.run --task tsp_construct --run-name trial_1 --budget 1000`。其批次使用 `uv run python -m experiments.traceaad_v10_13.launch --batch <批次名> --session-prefix <前缀> --watch`。初始化对照的固定协议入口是 `experiments.traceaad_initialization.launch`。
 
