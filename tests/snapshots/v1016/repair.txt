@@ -1,0 +1,40 @@
+[Task]
+Return a numeric score.
+
+[Evaluation]
+Each candidate program is run on a fixed set of training instances.
+Score: the task fitness. Higher is better.
+The whole evaluation must finish within 20 seconds, so keep the computation efficient.
+
+[Target Function]
+```python
+def score(x):
+    pass
+```
+Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses.
+
+[Failed Program]
+This program was written to improve an algorithm with score 1, but it failed during evaluation.
+Idea: Fix the signature.
+```python
+def score(x)
+ return x
+```
+
+[Error]
+SyntaxError: expected ':'
+
+[Your Task: Repair]
+Fix the program so that it runs correctly, while keeping its intended design.
+- Change only what is needed to remove the failure.
+- If the evaluation timed out, reduce the cost of the most expensive computation instead of dropping the idea.
+- If the output was invalid, make sure the function returns exactly what the target function's contract requires.
+
+[Output Format]
+Reply with exactly one Idea line followed by one Python code block:
+Idea: <one sentence, at most 300 characters, describing the fix>
+Code:
+```python
+<the complete program>
+```
+Write no comments or docstrings in the code, and nothing after the code block.

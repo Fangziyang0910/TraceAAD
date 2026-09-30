@@ -7,14 +7,17 @@ def select_next_node(current_node: int, depot: int, unvisited_nodes: np.ndarray,
     Args:
         current_node: ID of the current node.
         depot: ID of the depot.
-        unvisited_nodes: Array of feasible unvisited node IDs under capacity and time-window constraints.
+        unvisited_nodes: Array of feasible unvisited customer IDs under capacity and time-window constraints.
+            It is never empty when this function is called.
         rest_capacity: Remaining vehicle capacity before selecting the next node.
         current_time: Current time on the active route.
         demands: Demand of each node.
         distance_matrix: Pairwise distance matrix.
         time_windows: Time window of each node.
     Return:
-        ID of the next node to visit, or depot to start a new route.
+        ID of the next customer to visit, or depot to end the current route and start a new one.
+        Returning depot is only valid away from the depot: when current_node == depot, return a
+        customer from unvisited_nodes.
     """
     next_node = unvisited_nodes[0]
     return next_node
@@ -25,5 +28,6 @@ task_description = (
     "Routes must respect vehicle capacity and customer time windows while minimizing total travel cost. "
     "At each step the heuristic receives the current node, depot id, feasible unvisited customers, "
     "remaining capacity, current time, demands, distance matrix, and time windows, and must return "
-    "the next customer id or the depot. Help me design an algorithm to select the next node in each step."
+    "the next customer id, or the depot to end the current route (only valid when the vehicle is not "
+    "already at the depot). Help me design an algorithm to select the next node in each step."
 )

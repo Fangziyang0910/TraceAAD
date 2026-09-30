@@ -132,7 +132,6 @@ def build_method(spec: RunSpec, log_dir: Path) -> MCTS_AHD:
         model=spec.model,
         no_proxy=spec.no_proxy,
         max_tokens=spec.output_tokens,
-        temperature=1.0,
     )
     return MCTS_AHD(
         llm=llm,

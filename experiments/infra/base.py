@@ -130,11 +130,31 @@ BACKEND_MARKERS: dict[BackendName, tuple[str, ...]] = {
     "local": ("127.0.0.1:8001",),
 }
 
-# Qwen3.8-27B official thinking-mode sampling, sent identically by every
-# backend so served-side defaults never differ across sources.
-SAMPLING_TEMPERATURE = 1.0
-SAMPLING_TOP_P = 0.95
-SAMPLING_TOP_K = 20
+# Qwen3.8-27B's official sampling settings per mode (model card). Every
+# control is sent explicitly: left unset, vLLM fills it from the model's
+# generation_config.json and llama.cpp from its CLI defaults, so the "same"
+# request could sample differently per server. vLLM reads
+# repetition_penalty and llama.cpp repeat_penalty; each ignores the other.
+# Searches run with thinking disabled, so the non-thinking profile is the
+# default. Until 2026-09-30 all runs used the thinking profile (temperature
+# 1.0, top_p 0.95, no presence penalty) with thinking disabled.
+SAMPLING_PROFILES: dict[bool, dict[str, float]] = {
+    False: {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0,
+            "presence_penalty": 1.5, "frequency_penalty": 0.0,
+            "repetition_penalty": 1.0, "repeat_penalty": 1.0},
+    True: {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0,
+           "presence_penalty": 0.0, "frequency_penalty": 0.0,
+           "repetition_penalty": 1.0, "repeat_penalty": 1.0},
+}
+_EXPLICIT = ("temperature", "top_p", "top_k")
+
+
+def sampling_controls(enable_thinking: bool, **overrides: float | None) -> dict[str, float]:
+    """The mode's profile with any method-specified temperature/top_p/top_k."""
+    controls = dict(SAMPLING_PROFILES[bool(enable_thinking)])
+    controls.update({k: v for k, v in overrides.items() if v is not None})
+    return controls
+
 
 LLM_TIMEOUT_SECONDS = 600
 # Local ACO parallelism only; seeded scores do not depend on this count.
@@ -178,14 +198,16 @@ def build_llm_client(
     model: str,
     no_proxy: str,
     max_tokens: int,
-    temperature: float = SAMPLING_TEMPERATURE,
-    top_p: float | None = SAMPLING_TOP_P,
-    top_k: int | None = SAMPLING_TOP_K,
+    temperature: float | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
     enable_thinking: bool = False,
     chars_per_token: float | None = None,
 ) -> OpenAIAPI:
     set_no_proxy(no_proxy)
-    extra_body = None if top_k is None else {"top_k": top_k}
+    controls = sampling_controls(enable_thinking, temperature=temperature, top_p=top_p, top_k=top_k)
+    temperature, top_p = controls.pop("temperature"), controls.pop("top_p")
+    extra_body = controls
     return OpenAIAPI(
         base_url=base_url,
         api_key=resolve_llm_api_key(base_url=base_url),
@@ -200,8 +222,27 @@ def build_llm_client(
     )
 
 
+def use_cpu_timeout(evaluation: Any) -> Any:
+    """Time evaluations by CPU seconds of the evaluation's process group.
+
+    Wall-clock limits stretch with host load: under ~20 concurrent searches,
+    two thirds of the TSP programs that timed out finished well within the
+    limit when re-run on an idle host. The CPU budget is timeout_seconds per
+    worker, so an ACO evaluation with 4 workers may use 4x timeout CPU seconds.
+    """
+    evaluation.timeout_mode = "cpu"
+    evaluation.cpu_parallelism = max(1, int(getattr(evaluation, "n_workers", 1) or 1))
+    return evaluation
+
+
 def build_task(task: TaskName, eval_workers: int | None) -> tuple[Any, dict[str, Any]]:
     """Construct the training evaluation for a task (identical across methods)."""
+    evaluation, config = _build_task(task, eval_workers)
+    use_cpu_timeout(evaluation)
+    return evaluation, {**config, "timeout_mode": "cpu"}
+
+
+def _build_task(task: TaskName, eval_workers: int | None) -> tuple[Any, dict[str, Any]]:
     if task == "tsp_construct":
         kwargs = get_generated_task_kwargs(task, "train")
         return TSPEvaluation(**kwargs), {"split": "train", **kwargs}
@@ -238,26 +279,26 @@ def llm_payload(
     model: str,
     no_proxy: str,
     max_tokens: int,
-    temperature: float = SAMPLING_TEMPERATURE,
-    top_p: float | None = SAMPLING_TOP_P,
-    top_k: int | None = SAMPLING_TOP_K,
+    temperature: float | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
     enable_thinking: bool = False,
     chars_per_token: float | None = None,
 ) -> dict[str, Any]:
+    controls = sampling_controls(enable_thinking, temperature=temperature, top_p=top_p, top_k=top_k)
     payload: dict[str, Any] = {
         "base_url": base_url,
         "model": model,
         "timeout": LLM_TIMEOUT_SECONDS,
         "max_tokens": max_tokens,
-        "temperature": temperature,
+        "temperature": controls["temperature"],
+        "top_p": controls["top_p"],
+        "top_k": controls["top_k"],
         "enable_thinking": enable_thinking,
+        "sampling": controls,
         "no_proxy": no_proxy,
         "api_key_configured": resolve_llm_api_key(base_url=base_url) != "EMPTY",
     }
-    if top_p is not None:
-        payload["top_p"] = top_p
-    if top_k is not None:
-        payload["top_k"] = top_k
     if chars_per_token is not None:
         payload["chars_per_token"] = chars_per_token
     return payload

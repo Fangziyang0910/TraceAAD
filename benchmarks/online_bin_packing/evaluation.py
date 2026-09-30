@@ -104,7 +104,17 @@ class OBPEvaluation(Evaluation):
         )
 
     def evaluate_program(self, program_str: str, callable_func: callable) -> Any | None:
-        return self.evaluate(callable_func)
+        # Execute the program afresh for every instance: module-level state
+        # (e.g. running item statistics) must not carry over between
+        # instances, or the score would depend on instance order.
+        name = callable_func.__name__
+
+        def fresh() -> callable:
+            namespace = {}
+            exec(program_str, namespace)
+            return namespace[name]
+
+        return self.evaluate(callable_func, fresh=fresh)
 
     def plot_solution(self, bins_packed: np.ndarray, items: list, capacity: int, max_unused_bins: int = 5):
         """
@@ -221,8 +231,11 @@ class OBPEvaluation(Evaluation):
         packing = [bin_items for bin_items in packing if bin_items]
         return packing, bins
 
-    def evaluate(self, priority: callable) -> float:
-        """Evaluate heuristic function on a set of online binpacking instances."""
+    def evaluate(self, priority: callable, fresh: callable | None = None) -> float:
+        """Evaluate heuristic function on a set of online binpacking instances.
+
+        ``fresh`` returns a newly executed copy of the heuristic per instance.
+        """
         # List storing number of bins used for each instance.
         num_bins = []
         # Perform online binpacking for each instance.
@@ -235,7 +248,7 @@ class OBPEvaluation(Evaluation):
             bins = np.array([capacity for _ in range(instance['num_items'])])
             # Pack items into bins and return remaining capacity in bins_packed, which
             # has shape (num_items,).
-            _, bins_packed = self.online_binpack(items, bins, priority)
+            _, bins_packed = self.online_binpack(items, bins, fresh() if fresh else priority)
 
             # If remaining capacity in a bin is equal to initial capacity, then it is
             # unused. Count number of used bins.

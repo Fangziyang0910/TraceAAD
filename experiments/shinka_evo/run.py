@@ -165,7 +165,6 @@ def build_method(spec: RunSpec, log_dir: Path) -> ShinkaEvo:
         model=spec.model,
         no_proxy=spec.no_proxy,
         max_tokens=spec.output_tokens,
-        temperature=1.0,
     )
     # Paper uses a separate meta model; with a single Qwen endpoint we reuse it
     # so meta-scratchpad updates remain active.
@@ -174,7 +173,6 @@ def build_method(spec: RunSpec, log_dir: Path) -> ShinkaEvo:
         model=spec.model,
         no_proxy=spec.no_proxy,
         max_tokens=spec.output_tokens,
-        temperature=1.0,
     )
     return ShinkaEvo(
         llm=llm,

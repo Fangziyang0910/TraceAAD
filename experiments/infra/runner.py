@@ -202,7 +202,7 @@ def baseline_run_config(spec, run_dir: Path, run_name: str, method: str,
         "llm": llm_payload(
             base_url=spec.base_url, model=spec.model, no_proxy=spec.no_proxy,
             max_tokens=spec.output_tokens,
-            **{"temperature": 1.0, **(llm_options or {})},
+            **(llm_options or {}),
         ),
         "task_eval": task_config, "method_params": method_params,
         **(extra or {}),
