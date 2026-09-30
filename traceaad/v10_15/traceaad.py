@@ -19,7 +19,7 @@ from .config import Config
 from .delivery import DeliveryError, SourceError, extract_idea, parse_response
 from .evaluation import SeededEvaluation, fingerprint, protocol_identity
 from .prompts import ContextTooLong, PromptBuilder, idea_view
-from .selection import choose_explore_references, choose_reference, sample_parent
+from .selection import choose_explore_references, choose_reference, sample_parent, score_classes
 from .state import Facts
 
 
@@ -197,7 +197,8 @@ class TraceAADV1015:
                 "protocol": protocol, "seed": seed, "valid": valid,
                 "score": value["score"] if valid else None, "failure_kind": result.failure_kind,
                 "error_type": result.error_type, "error": result.error,
-                "traceback": result.traceback, "seconds": time.monotonic() - started})
+                "traceback": result.traceback, "seconds": time.monotonic() - started,
+                "cpu_seconds": result.cpu_seconds})
             self.pending = previous_pending
             self._save()
             ids.append(eid)
@@ -275,7 +276,8 @@ class TraceAADV1015:
                             "idea": idea, "depth": parent["depth"] + 1 if parent else 0,
                             "repaired": repair_of is not None, "attempt_id": aid}
                     self.facts.add("node", node)
-                    record.update(status="valid", score=score, fitness=fitness, node_id=aid)
+                    record.update(status="valid", score=score, fitness=fitness, node_id=aid,
+                                  same_as_parent=parent is not None and fitness == parent["fitness"])
         self.facts.add("attempt", record)
         self.facts._append({"kind": "candidate", "candidate_id": aid, "budget_used": aid,
                             "status": record["status"], "fitness": record["fitness"],
@@ -363,8 +365,10 @@ class TraceAADV1015:
                       selection=selection)
 
     def _freeze(self):
-        ordered = sorted(self.archive.values(), key=lambda n: (-n["fitness"], n["id"]))
-        self.finalists = [n["id"] for n in ordered[:self.config.final_candidates]]
+        # One finalist per score class (its earliest program): equal training
+        # fitness means equivalent behaviour, so repeats would tie at selection.
+        classes = score_classes(self.archive.values())
+        self.finalists = [members[0]["id"] for members in classes[:self.config.final_candidates]]
         write_json(self.run_dir / "finalists.json", {
             "protocol": self.protocol, "selection_protocol": self.selection_protocol,
             "frozen_at": now(), "candidates": [self.archive[i] for i in self.finalists]})
@@ -447,12 +451,18 @@ class TraceAADV1015:
                              "improvement_per_valid": improved / len(new) if new else None}
         repaired = [a for a in attempts if a["repair_of"] is not None]
         best = max(self.archive.values(), key=lambda n: (n["fitness"], -n["id"])) if self.archive else None
+        # Improvement over the parent penalises Explore, whose children leave a
+        # quality-selected parent's skeleton; new training frontiers do not.
         frontier = -math.inf
-        explore_frontiers = 0
+        frontiers = Counter()
         for node in sorted(self.archive.values(), key=lambda n: n["id"]):
-            if node["action"] == "Explore" and node["fitness"] > frontier:
-                explore_frontiers += 1
+            if node["fitness"] > frontier:
+                frontiers[node["action"]] += 1
             frontier = max(frontier, node["fitness"])
+        classes = score_classes(self.archive.values()) if self.archive else []
+        search = [e for e in self.facts.tables["evaluation"].values() if e["role"] == "search"]
+        cpu = sorted(e["cpu_seconds"] for e in search
+                     if e["valid"] and isinstance(e.get("cpu_seconds"), (int, float)))
         ordered = sorted(self.archive.values(), key=lambda n: n["id"])
         quartiles = [ordered[i * len(ordered) // 4:(i + 1) * len(ordered) // 4]
                      for i in range(4)]
@@ -461,7 +471,13 @@ class TraceAADV1015:
                 "repair_attempts": len(repaired),
                 "crossover_copy_rate": counts.get("copied_reference", 0) / actions["Crossover"]["attempts"]
                 if actions["Crossover"]["attempts"] else None,
-                "explore_new_frontiers": explore_frontiers,
+                "explore_new_frontiers": frontiers["Explore"],
+                "new_frontiers_by_action": dict(frontiers),
+                "score_classes": len(classes),
+                "top_class_size": len(classes[0]) if classes else 0,
+                "largest_class_size": max((len(c) for c in classes), default=0),
+                "valid_cpu_seconds": {"median": cpu[len(cpu) // 2], "p95": cpu[int(len(cpu) * .95)],
+                                      "max": cpu[-1]} if cpu else None,
                 "best_training_depth": best["depth"] if best else None,
                 "mean_code_chars_by_node_quartile": [statistics.fmean(len(n["code"]) for n in group)
                                                      if group else None for group in quartiles],

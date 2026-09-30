@@ -12,7 +12,8 @@ from traceaad.v10_15.canonical import canonical, key
 from traceaad.v10_15.delivery import DeliveryError, SourceError, parse_response
 from traceaad.v10_15.history import change_summary, code_diff
 from traceaad.v10_15.prompts import PromptBuilder
-from traceaad.v10_15.selection import choose_explore_references, choose_reference, probabilities
+from traceaad.v10_15.selection import (choose_explore_references, choose_reference, probabilities,
+                                      sample_parent, score_classes)
 
 
 class SelectionEvaluation(TinyEvaluation):
@@ -40,16 +41,55 @@ def test_canonical_identity_discards_comments_docs_and_formatting():
     assert canonical('class C:\n "doc"\n') == 'class C:\n    pass\n'
 
 
-def test_ess_and_top_ties():
-    nodes = [{'fitness': q} for q in (0, 1, 2, 3)]
-    p, beta, ess, target = probabilities(nodes)
+def test_parent_distribution_is_over_score_classes_with_fixed_ess():
+    p, beta, ess, target = probabilities([float(q) for q in range(20)])
     assert beta > 0 and sum(p) == pytest.approx(1)
-    assert ess == pytest.approx(target) and target == 2
-    assert probabilities(nodes[:1])[0] == [1]
-    assert probabilities([{'fitness': 1}] * 3)[0] == [1/3] * 3
-    tied = [{'fitness': q} for q in (0, 2, 2, 2)]
-    assert probabilities(tied)[0] == [0, 1/3, 1/3, 1/3]
-    assert probabilities(tied)[1] == math.inf
+    assert target == 8 and ess == pytest.approx(8)
+    assert probabilities([1.0]) == ([1.0], 0.0, 1.0, 1.0)
+    # Few classes: ESS cannot exceed the class count, so sampling is uniform.
+    assert probabilities([0.0, 1.0, 2.0])[0] == [1/3] * 3
+    # 200 rewrites tied at the top form one class: the tie gets one class's share,
+    # and runners-up keep theirs instead of dropping to zero (V10.15's tie mode).
+    nodes = [{'id': i, 'fitness': 2.0} for i in range(200)] + [
+        {'id': 200 + i, 'fitness': float(i) / 10} for i in range(3)]
+    classes = score_classes(nodes)
+    assert [len(c) for c in classes] == [200, 1, 1, 1]
+    assert [m[0]['id'] for m in classes] == [0, 202, 201, 200]
+    draws = [sample_parent(nodes, random.Random(seed))[1] for seed in range(400)]
+    top_share = sum(d['class_size'] == 200 for d in draws) / len(draws)
+    assert 0.25 < top_share < 0.5
+    assert all(d['classes'] == 4 and d['eligible'] == 203 for d in draws)
+
+
+def test_finalists_are_one_per_score_class(tmp_path):
+    answers = [response(v) for v in (1, 2, 3, 4, 5, 6, 7, 8)]
+    answers += [f"Idea: same\n```python\ndef score(x):\n    return {v}  # variant\n    pass\n```"
+                for v in ('8.0', '4 + 4', '16 / 2')]
+    m = method(tmp_path, *answers, budget=11, selection=True)
+    m.run()
+    fitness = {n['id']: n['fitness'] for n in m.archive.values()}
+    assert sorted(fitness.values()).count(8) == 4
+    assert m.finalists == [8, 7, 6, 5, 4]
+    assert len({fitness[i] for i in m.finalists}) == 5
+    same = [a for a in m.facts.tables['attempt'].values() if a.get('same_as_parent')]
+    assert all(m.archive[a['parent_id']]['fitness'] == a['fitness'] for a in same)
+    diagnostics = json.loads((tmp_path / 'diagnostics.json').read_text())
+    assert diagnostics['score_classes'] == 8 and diagnostics['top_class_size'] == 4
+    assert diagnostics['new_frontiers_by_action']['Init'] == 8
+
+
+def test_unclosed_final_block_is_accepted_only_when_complete():
+    template = TinyEvaluation().template_program
+    code, idea, meta = parse_response('Idea: close enough\n```python\ndef score(x):\n    return 3\n',
+                                      'stop', template)
+    assert 'return 3' in code and idea == 'close enough'
+    assert meta['strategy'] == 'unclosed_final_block'
+    with pytest.raises(DeliveryError):  # truncated body
+        parse_response('```python\ndef score(x):\n    return (', 'stop', template)
+    with pytest.raises(DeliveryError):  # target missing
+        parse_response('```python\ndef helper(x):\n    return 1\n', 'stop', template)
+    with pytest.raises(DeliveryError):  # not a finished completion
+        parse_response('```python\ndef score(x):\n    return 3\n', 'length', template)
 
 
 def test_numeric_change_and_complete_diff():
@@ -233,6 +273,21 @@ def test_explore_references_exclude_lineage_and_duplicate_visible_ideas():
     lineage = {n['id']: n for n in [root, parent, descendant]}
     relaxed, info = choose_explore_references(parent, lineage, random.Random(7))
     assert relaxed and info['relaxed_lineage']
+
+
+def test_explore_references_take_one_card_per_score_class():
+    from tests.method.test_traceaad_v1015_prompts import node
+
+    parent = node(1)
+    others = [node(i) for i in range(2, 6)]
+    for i, other in enumerate(others):
+        other['idea'] = f'Distinct idea {i}.'
+        other['code'] = f'def score(x):\n    return x + {i} * {i}\n'
+    others[1]['fitness'] = others[2]['fitness'] = 42.0  # reworded, same behaviour
+    archive = {n['id']: n for n in [parent, *others]}
+    references, _ = choose_explore_references(parent, archive, random.Random(0))
+    assert len(references) == 3
+    assert [n['fitness'] for n in references].count(42.0) == 1
 
 
 def test_search_explore_displays_and_records_archive_references(tmp_path):

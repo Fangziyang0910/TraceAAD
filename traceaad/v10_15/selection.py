@@ -1,27 +1,42 @@
-"""Quality-only Boltzmann parent sampling and cross-branch reference choice."""
+"""Score-class Boltzmann parent sampling and reference choice.
+
+Under one deterministic training evaluation, programs with identical
+training fitness almost always behave identically (first V10.15 batch: up
+to 68% of valid children reproduced their parent's score exactly). Sampling
+therefore weighs score classes, not code variants: a class of many
+equivalent rewrites gets no more attention than one program with that score.
+"""
 
 import math
 import statistics
 
 from .canonical import similarity, token_set
 
+# Effective number of score classes the parent distribution spreads over
+# (V10.13's quality ESS). The first V10.15 batch targeted 10% of the
+# archive, which widened with every new node.
+TARGET_ESS = 8.0
 
-def probabilities(nodes):
-    """Return probabilities aligned with nodes plus beta, ESS and target ESS."""
-    if not nodes:
+
+def score_classes(nodes):
+    """Group nodes by exact training fitness, best class first, members by id."""
+    groups = {}
+    for node in nodes:
+        groups.setdefault(float(node["fitness"]), []).append(node)
+    return [sorted(groups[q], key=lambda n: n["id"]) for q in sorted(groups, reverse=True)]
+
+
+def probabilities(values):
+    """Probabilities over distinct qualities plus beta, ESS and target ESS."""
+    if not values:
         raise ValueError("no eligible parents")
-    values = [float(n["fitness"]) for n in nodes]
     if not all(math.isfinite(q) for q in values):
         raise ValueError("nonfinite quality")
-    n = len(nodes)
-    target = min(n, max(2.0, 0.1 * n))
+    n = len(values)
+    target = min(float(n), TARGET_ESS)
+    if n == 1:
+        return [1.0], 0.0, 1.0, target
     maximum = max(values)
-    top = [i for i, q in enumerate(values) if q == maximum]
-    if len(top) == n:
-        return [1 / n] * n, 0.0, float(n), target
-    if len(top) >= target:
-        p = [1 / len(top) if i in top else 0.0 for i in range(n)]
-        return p, math.inf, float(len(top)), target
 
     def weighted(beta):
         weights = [math.exp(beta * (q - maximum)) for q in values]
@@ -29,6 +44,9 @@ def probabilities(nodes):
         p = [w / total for w in weights]
         return p, 1 / math.fsum(x * x for x in p)
 
+    if weighted(0.0)[1] <= target:
+        p, ess = weighted(0.0)
+        return p, 0.0, ess, target
     lo, hi = 0.0, 1.0
     while weighted(hi)[1] > target:
         hi *= 2
@@ -45,11 +63,16 @@ def probabilities(nodes):
 
 
 def sample_parent(nodes, rng):
-    p, beta, ess, target = probabilities(nodes)
-    index = rng.choices(range(len(nodes)), weights=p, k=1)[0]
-    return nodes[index], {"beta": beta if math.isfinite(beta) else "inf",
-                          "ess": ess, "target_ess": target, "probability": p[index],
-                          "eligible": len(nodes), "top_tie_limit": not math.isfinite(beta)}
+    """Draw a score class by quality, then one of its members uniformly."""
+    classes = score_classes(nodes)
+    p, beta, ess, target = probabilities([members[0]["fitness"] for members in classes])
+    index = rng.choices(range(len(classes)), weights=p, k=1)[0]
+    members = classes[index]
+    node = members[rng.randrange(len(members))]
+    return node, {"beta": beta, "ess": ess, "target_ess": target,
+                  "class_probability": p[index], "class_size": len(members),
+                  "probability": p[index] / len(members), "classes": len(classes),
+                  "eligible": len(nodes)}
 
 
 def ancestor_ids(node, archive):
@@ -95,13 +118,16 @@ def choose_explore_references(parent, archive, rng, count=4):
     unrelated = [n for n in eligible if n["id"] not in ancestry and
                  parent["id"] not in ancestor_ids(n, archive)]
     pool = unrelated or eligible
-    # Prefer the best representative of each identical visible idea or program.
-    ideas, keys, unique = set(), set(), []
+    # Prefer the best representative of each identical visible idea, program
+    # or score class: equal training fitness marks equivalent behaviour, so
+    # reworded variants of one algorithm would fill several cards.
+    ideas, keys, scores, unique = set(), set(), set(), []
     for node in sorted(pool, key=lambda n: (-n["fitness"], n["id"])):
         idea = normalize(node["idea"])
-        if idea not in ideas and node["key"] not in keys:
+        if idea not in ideas and node["key"] not in keys and node["fitness"] not in scores:
             ideas.add(idea)
             keys.add(node["key"])
+            scores.add(node["fitness"])
             unique.append(node)
     tokens = {n["id"]: token_set(n["code"]) for n in [parent, *unique]}
 

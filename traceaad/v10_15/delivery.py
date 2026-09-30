@@ -20,6 +20,7 @@ class DeliveryError(ValueError):
 
 
 BLOCK = re.compile(r"```(?:python|py)?[ \t]*\n(.*?)\n[ \t]*```", re.S | re.I)
+OPENER = re.compile(r"```(?:python|py)?[ \t]*\n", re.I)
 IDEA = re.compile(r"(?im)^[ \t]*Idea[ \t]*:[ \t]*")
 CODE = re.compile(r"(?im)^[ \t]*Code[ \t]*:[ \t]*$")
 
@@ -32,7 +33,7 @@ def extract_idea(text):
     label = IDEA.search(text)
     if not label:
         return ""
-    block = BLOCK.search(text, label.end())
+    block = BLOCK.search(text, label.end()) or OPENER.search(text, label.end())
     stop = block.start() if block else len(text)
     code_label = CODE.search(text, label.end(), stop)
     if code_label:
@@ -44,7 +45,7 @@ def _delivery(text, template):
     blocks = list(BLOCK.finditer(text))
     if not blocks:
         if "```" in text:
-            raise DeliveryError("no complete Python code block")
+            return _unclosed_final_block(text, template)
         label = IDEA.search(text)
         if label:
             code_label = CODE.search(text, label.end())
@@ -68,6 +69,27 @@ def _delivery(text, template):
     if len(blocks) == 1:
         return blocks[0].group(1), {"strategy": "single_payload_for_repair", "block_indices": [0]}
     raise DeliveryError("no complete candidate implementation")
+
+
+def _unclosed_final_block(text, template):
+    """A single opened block that runs to the end of a stopped response.
+
+    Some servings end the answer without the closing fence. The completion
+    finished (``stop``), so the block is whole when it parses and defines the
+    target exactly once; anything else stays a delivery failure.
+    """
+    opener = OPENER.search(text)
+    if text.count("```") != 1 or opener is None:
+        raise DeliveryError("no complete Python code block")
+    code = text[opener.end():].rstrip()
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as exc:
+        raise DeliveryError("unclosed code block does not parse") from exc
+    target = target_name(template)
+    if sum(isinstance(node, ast.FunctionDef) and node.name == target for node in tree.body) != 1:
+        raise DeliveryError("unclosed code block lacks one complete target function")
+    return code, {"strategy": "unclosed_final_block", "block_indices": [0]}
 
 
 def complete_template_dependencies(code, template):
