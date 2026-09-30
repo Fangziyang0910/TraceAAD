@@ -135,6 +135,18 @@ BACKEND_MARKERS: dict[BackendName, tuple[str, ...]] = {
 SAMPLING_TEMPERATURE = 1.0
 SAMPLING_TOP_P = 0.95
 SAMPLING_TOP_K = 20
+# Every other sampling control is sent explicitly as well. Left unset, vLLM
+# fills them from the model's generation_config.json and llama.cpp from its
+# CLI defaults, so the "same" request could sample differently per server.
+# vLLM reads repetition_penalty and llama.cpp repeat_penalty; each ignores
+# the other's name.
+SAMPLING_NEUTRAL: dict[str, float] = {
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "frequency_penalty": 0.0,
+    "repetition_penalty": 1.0,
+    "repeat_penalty": 1.0,
+}
 
 LLM_TIMEOUT_SECONDS = 600
 # Local ACO parallelism only; seeded scores do not depend on this count.
@@ -185,7 +197,9 @@ def build_llm_client(
     chars_per_token: float | None = None,
 ) -> OpenAIAPI:
     set_no_proxy(no_proxy)
-    extra_body = None if top_k is None else {"top_k": top_k}
+    extra_body = dict(SAMPLING_NEUTRAL)
+    if top_k is not None:
+        extra_body["top_k"] = top_k
     return OpenAIAPI(
         base_url=base_url,
         api_key=resolve_llm_api_key(base_url=base_url),
@@ -270,6 +284,7 @@ def llm_payload(
         "max_tokens": max_tokens,
         "temperature": temperature,
         "enable_thinking": enable_thinking,
+        "sampling_neutral": dict(SAMPLING_NEUTRAL),
         "no_proxy": no_proxy,
         "api_key_configured": resolve_llm_api_key(base_url=base_url) != "EMPTY",
     }

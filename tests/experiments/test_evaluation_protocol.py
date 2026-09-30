@@ -66,3 +66,14 @@ def test_vrptw_template_states_the_depot_rule():
     assert "when current_node == depot, return a" in template_program
     assert "never empty" in template_program
     assert "already at the depot" in task_description
+
+
+def test_every_backend_receives_explicit_sampling_controls():
+    from experiments.infra.base import SAMPLING_NEUTRAL, build_llm_client
+
+    client = build_llm_client(base_url="http://127.0.0.1:1/v1", model="m", no_proxy="127.0.0.1",
+                              max_tokens=16)
+    body = client._merged_extra_body(None)
+    assert body["top_k"] == 20
+    assert {k: body[k] for k in SAMPLING_NEUTRAL} == SAMPLING_NEUTRAL
+    assert body["chat_template_kwargs"]["enable_thinking"] is False
