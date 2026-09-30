@@ -36,7 +36,9 @@ class RunSpec:
     model: str
     no_proxy: str
     max_sample_nums: int = FAIR_MAX_SAMPLE_NUMS
-    num_evaluators: int = 4
+    # Every method evaluates one candidate at a time, so methods load the host
+    # alike; the evaluator count only sets how many evaluations run concurrently.
+    num_evaluators: int = 1
     eval_workers: int | None = None
     output_tokens: int = 16384
     seed: int = 0
@@ -57,7 +59,7 @@ def make_run_spec(
     model: str | None = None,
     no_proxy: str | None = None,
     max_sample_nums: int = FAIR_MAX_SAMPLE_NUMS,
-    num_evaluators: int = 4,
+    num_evaluators: int = 1,
     eval_workers: int | None = None,
     output_tokens: int = 16384,
     seed: int = 0,
@@ -165,7 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model")
     parser.add_argument("--no-proxy")
     parser.add_argument("--max-sample-nums", type=int, default=FAIR_MAX_SAMPLE_NUMS)
-    parser.add_argument("--num-evaluators", type=int, default=4)
+    parser.add_argument("--num-evaluators", type=int, default=1)
     parser.add_argument("--eval-workers", type=int)
     parser.add_argument("--output-tokens", type=int, default=16384)
     parser.add_argument("--seed", type=int, default=0)

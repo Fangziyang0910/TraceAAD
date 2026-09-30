@@ -31,6 +31,9 @@ PAPER_NUM_ACTIONS = 2
 PAPER_NUM_ROLLOUTS = 2
 PAPER_MAX_INNER_STEPS = 3
 PAPER_NUM_EVALUATORS = 4
+# Every method evaluates one candidate at a time, so methods load the host
+# alike; the evaluator count only sets how many evaluations run concurrently.
+NUM_EVALUATORS = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +49,7 @@ class RunSpec:
     num_actions: int = PAPER_NUM_ACTIONS
     num_rollouts: int = PAPER_NUM_ROLLOUTS
     max_inner_steps: int = PAPER_MAX_INNER_STEPS
-    num_evaluators: int = PAPER_NUM_EVALUATORS
+    num_evaluators: int = NUM_EVALUATORS
     eval_workers: int | None = None
     output_tokens: int = 16384
     seed: int = 0
@@ -72,7 +75,7 @@ def make_run_spec(
     num_actions: int = PAPER_NUM_ACTIONS,
     num_rollouts: int = PAPER_NUM_ROLLOUTS,
     max_inner_steps: int = PAPER_MAX_INNER_STEPS,
-    num_evaluators: int = PAPER_NUM_EVALUATORS,
+    num_evaluators: int = NUM_EVALUATORS,
     eval_workers: int | None = None,
     output_tokens: int = 16384,
     seed: int = 0,
@@ -162,8 +165,8 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                     "Fair comparison budget max_sample_nums=1000 "
                     f"(PathWise paper/example default was {PAPER_MAX_SAMPLE_NUMS}); "
                     "other hyperparams follow method paras: pop_size=6, "
-                    "num_actions=2, num_rollouts=2, max_inner_steps=3, "
-                    "num_evaluators=4"
+                    "num_actions=2, num_rollouts=2, max_inner_steps=3; "
+                    f"evaluations run one at a time (paper: {PAPER_NUM_EVALUATORS} evaluators)"
                 ),
             }),
     )

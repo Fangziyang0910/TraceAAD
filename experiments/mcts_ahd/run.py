@@ -28,7 +28,9 @@ INIT_SIZE = 4
 POP_SIZE = 10
 SELECTION_NUM = 2
 NUM_SAMPLERS = 4
-NUM_EVALUATORS = 4
+# Every method evaluates one candidate at a time, so methods load the host
+# alike; the evaluator count only sets how many evaluations run concurrently.
+NUM_EVALUATORS = 1
 ALPHA = 0.5
 LAMBDA_0 = 0.1
 MAX_CONSECUTIVE_SAMPLE_FAILURES = 20
