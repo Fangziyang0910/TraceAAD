@@ -30,7 +30,9 @@ def selection_task(task, search):
         return selection
     kwargs = get_generated_task_kwargs(task, "train")
     kwargs["seed"] = SELECTION_SEED
-    kwargs["timeout_seconds"] = search.timeout_seconds
+    # Five one-off evaluations: no efficiency pressure is needed here, and a
+    # finalist that met the search limit should not be lost to host load.
+    kwargs["timeout_seconds"] = None if search.timeout_seconds is None else 2 * search.timeout_seconds
     cls = {"tsp_construct": TSPEvaluation, "vrptw_construct": VRPTWEvaluation,
            "online_bin_packing": OBPEvaluation}[task]
     return cls(**kwargs)
@@ -54,7 +56,7 @@ def main(argv=None):
                     evaluation_seeds=tuple(args.evaluation_seeds), seed=args.seed)
     if args.dry_run:
         print(json.dumps({"method": "v1015", "task": args.task, "config": asdict(config),
-            "search_timeout": TRAIN_TIMEOUT.get(args.task, 20 if args.task == "tsp_construct" else 120 if args.task == "cvrp_aco" else 60),
+            "search_timeout": TRAIN_TIMEOUT.get(args.task, 30 if args.task == "tsp_construct" else 120 if args.task == "cvrp_aco" else 60),
             "selection": "val_50" if args.task in {"cvrp_aco", "op_aco"} else {"seed": SELECTION_SEED},
             "test": "separate heldout.py after selection"}, indent=2))
         return

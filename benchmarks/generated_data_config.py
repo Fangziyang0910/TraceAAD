@@ -210,15 +210,17 @@ GENERATED_TASK_CONFIGS: dict[str, dict[str, dict[str, Any]]] = {
             "seed": EVAL_SEED,
         },
     },
+    # 30 s like VRPTW and OBP: V10.15's selected TSP programs take 1.5-4.4 s on
+    # an idle host, so 20 s left under 5x headroom for concurrent searches.
     "tsp_construct": {
         "train": {
-            "timeout_seconds": 20,
+            "timeout_seconds": 30,
             "n_instance": 16,
             "problem_size": 50,
             "seed": TRAIN_SEED,
         },
         "eval": {
-            "timeout_seconds": 20,
+            "timeout_seconds": 30,
             "n_instance": 16,
             "problem_size": 50,
             "seed": EVAL_SEED,

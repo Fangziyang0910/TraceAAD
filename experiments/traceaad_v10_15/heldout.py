@@ -17,6 +17,15 @@ from traceaad.v10_13.storage import write_json
 from traceaad.v10_15.evaluation import SeededEvaluation, protocol_identity
 
 
+# Held-out runs measure solution quality, not efficiency, so limits only guard
+# against hangs. They match the shared baseline evaluator (TSP 3,000 s,
+# VRPTW/OBP 1,000 s) so every method faces the same held-out rule. Growing
+# limits by (n/50)^2 was too tight: an O(n^3)-per-step TSP heuristic grows
+# about 136x from n=50 to n=200.
+HELDOUT_TIMEOUT = {"tsp_construct": 3000, "vrptw_construct": 1000, "online_bin_packing": 1000,
+                   "cvrp_aco": 3600, "op_aco": 3600}
+
+
 def heldout_task(task, split, workers, timeout_seconds=None):
     if timeout_seconds is not None and (not math.isfinite(timeout_seconds) or timeout_seconds <= 0):
         raise ValueError("timeout_seconds must be finite and positive")
@@ -28,7 +37,7 @@ def heldout_task(task, split, workers, timeout_seconds=None):
         if split not in allowed:
             raise ValueError("unknown ACO held-out split")
         cls = CVRPACOEvaluation if task == "cvrp_aco" else OPACOEvaluation
-        return cls(split=split, timeout_seconds=timeout_seconds or 900,
+        return cls(split=split, timeout_seconds=timeout_seconds or HELDOUT_TIMEOUT[task],
                    n_ants=30 if task == "cvrp_aco" else 20,
                    n_iterations=100 if task == "cvrp_aco" else 50, aco_seed=1234,
                    n_workers=workers)
@@ -38,8 +47,7 @@ def heldout_task(task, split, workers, timeout_seconds=None):
             raise ValueError("constructive tasks use eval_50/eval_100/eval_200")
         size = 50 if split == "eval" else int(split.split("_")[1])
         kwargs["problem_size"] = size
-        kwargs["timeout_seconds"] = timeout_seconds or max(kwargs["timeout_seconds"],
-                                                              kwargs["timeout_seconds"] * (size // 50) ** 2)
+        kwargs["timeout_seconds"] = timeout_seconds or HELDOUT_TIMEOUT[task]
     elif task == "online_bin_packing":
         if split != "eval":
             try:
@@ -51,8 +59,7 @@ def heldout_task(task, split, workers, timeout_seconds=None):
                 raise ValueError("unsupported OBP held-out size/capacity")
             kwargs["dataset_specs"] = [{"n_instances": 5, "n_items": items,
                                         "capacities": [capacity]}]
-        if timeout_seconds is not None:
-            kwargs["timeout_seconds"] = timeout_seconds
+        kwargs["timeout_seconds"] = timeout_seconds or HELDOUT_TIMEOUT[task]
     else:
         raise ValueError(f"unknown task: {task}")
     cls = {"tsp_construct": TSPEvaluation, "vrptw_construct": VRPTWEvaluation,
