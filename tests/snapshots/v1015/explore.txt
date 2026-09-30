@@ -20,17 +20,18 @@ def score(x):
     return x + 2
 ```
 
-[Earlier Ideas on This Line of Development]
-Oldest first. Scores are measured; each idea is the intent stated when that version was written.
-Start · score 1 · Idea: Add 1 to the input.
-Step 1 · Refine · score 1 → 2 (improved) · Idea: Add 2 to the input.
+[Reference Ideas from the Search Archive]
+These are separate evaluated algorithms, not a formation history. Scores are measured; each Idea is the intent stated when its program was written.
+Reference 1 · Score 3 · Idea: Add 3 to the input.
+
+[Search Best]
 Best score found so far in this search: 3.
 
 [Your Task: Explore]
 Find a materially different way to solve this task better than the current algorithm.
 - First identify the main limitation of the current approach: information it ignores, decisions it systematically gets wrong, or situations it cannot represent.
 - Then change the core of the algorithm to remove that limitation: what it computes from the inputs, how it evaluates a choice before committing to it, or how it turns signals into a decision. Tuning parameters or making a small local edit is not enough.
-- You may keep useful parts of the current program or start from scratch, but do not simply restate an idea listed above.
+- Use the reference ideas to find or combine different decision principles. You may keep useful parts of the current program or start from scratch; develop your own complete algorithm rather than merely restating a reference idea.
 - The new algorithm must be complete and competitive on its own, and must stay within the time limit.
 
 [Output Format]

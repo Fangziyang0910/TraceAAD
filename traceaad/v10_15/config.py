@@ -9,7 +9,6 @@ class Config:
     roots: int = 8
     init_attempt_limit: int = 16
     history_depth: int = 8
-    history_tokens: int = 3000
     root_tokens: int = 8000
     max_input_tokens: int = 24320
     output_tokens: int = 8192
@@ -19,7 +18,7 @@ class Config:
 
     def __post_init__(self):
         for name in ("budget", "roots", "init_attempt_limit", "history_depth",
-                     "history_tokens", "root_tokens", "max_input_tokens",
+                     "root_tokens", "max_input_tokens",
                      "output_tokens", "final_candidates"):
             value = getattr(self, name)
             if type(value) is not int or value < 1:

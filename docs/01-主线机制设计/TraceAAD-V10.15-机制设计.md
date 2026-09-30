@@ -1,5 +1,9 @@
 # TraceAAD V10.15 机制设计
 
+2026-09-30 调整：Refine 与 Crossover 所展示的历史步骤全部使用完整代码 diff，取消历史单独的 3,000 token 限额与 60 行截断，仅按总输入预算裁剪最旧步骤；删除独立初始化中“函数可以做不止一个公式的计算”的提示。此前运行使用旧协议，已有结果不回写为新协议。
+
+同日进一步调整：Refine 保持上述协议；Explore 用最多 4 张档案参考的 Idea 与分数替代本谱系思路历史；Crossover 展示主程序与参考程序各最近最多 4 步的完整 diff。多参考的思想触发与双侧历史的收益仍需独立检验。
+
 ## 0. 版本身份
 
 V10.15 是一个独立版本，不是 V10.14 的后代，版本号只作标识。它把 V9.7、V9.14、V9.16、V9.19、V10.11、V10.13 和 V10.14 中有证据支持的部分重新组合成一个简单、完整的机制。它只复用 V10.14 的工程组件：解析、评价器封装、候选记账和独立选择集。
@@ -80,15 +84,16 @@ V10.15 是一个独立版本，不是 V10.14 的后代，版本号只作标识�
 | 不做续段、不保护新方向 | V9.14 / V9.16 | E2-B' 随机干预；V9.16 续段未产出最终最好程序 | 强 |
 | 选父只看质量，不加信用项 | V9.14 / V9.16 | V9.10、V9.15、V9.19 的过程诊断 | 中 |
 | 质量 Boltzmann 抽样，ESS=0.1N | V9.16（V9.19/V9.20 同） | 采用这一规则的 V9.16、V9.19 都在五任务综合排名的前三名中；尚未与 ESS=8 做配对比较 | 中 |
-| 历史中的 Change 字段（由代码 diff 计算） | V9.7 | V9.7 在 CVRP 上居前；V9.16 诊断把"更丰富的实际改动历史"列为候选解释 | 中 |
+| 代码实际改动进入历史 | V9.7 的 Change 字段，呈现方式改写 | V9.7 在 CVRP 上居前；新版每步直接给完整 diff，呈现方式尚无独立对照 | 原来源中，新呈现方式弱 |
 | Refine / Explore 指令骨架 | V9.14 | TSP 至少两路的关键骨架明确由 V9.14 的 Explore 引入（评价 24、676） | 中 |
 | Crossover 与动作配比 0.45/0.30/0.25 | V9.19 | V9.19 旧版 Crossover 严格改善率 17.5%，四类算子中最高，OP 三路的最好程序都直接来自它 | 中 |
 | "改动必须能改变决策"提示 | V10.14 Tune 指引 + OBP 分析 | V10.7 在 OBP 上有 341/365 次 Refine 与父代同分 | 中 |
 | 混合初始化 | V10.13 初始化对照 | CVRP 上较好，其余任务不差 | 中 |
 | 独立选择集 | V10.14 | 训练前沿相对选择集系统性高估 | 中 |
 | 代码规范化视图、要求不写注释 | V10.11 / V9.19 | 注释会误导（强结果分析）；也让 diff 和上下文膨胀 | 弱–中 |
-| 最近一步显示完整 diff | 新增 | 第一性原理：护栏需要知道最近动了哪里 | 弱 |
-| "函数可以做不止一个公式的计算"提示 | 强结果形成路径 | TSP 突破来自在选点函数内部求解剩余路径 | 弱 |
+| 展示的每一步历史均给完整 diff | 新增改写 | 避免首尾行摘要遗漏结构改动；是否提高质量尚待检验 | 弱 |
+| Explore 用多参考 Idea 与分数替代轨迹 | V10.11 rand_ctx，抽样方式改写 | CVRP 与部分装箱设置有正信号；未单独识别 Explore 效应，代码差异只是思想多样性的代理 | 弱–中 |
+| Crossover 两侧各 4 步形成历史 | 新增改写 | 让模型同时理解主程序结构与参考机制的形成；未与单侧历史独立对照 | 弱 |
 | Crossover 参考用代码差异代替行为距离 | V9.19 改写 | BehaveSim 已退役 | 弱 |
 | 失败后一次付费修复 | V10.10 / V9.19 | 无对照 | 弱 |
 
@@ -162,6 +167,16 @@ ESS(β) = 1 / Σ_a p_β(a)²
 
 这对应 V9.19 的"质量分位与行为距离分位都不低于中位数"，其中行为距离换成了代码差异，另外排除同一谱系，保证参考来自另一分支。参考的整体分数常常低于主程序，这是预期内的。
 
+**Explore 的多参考选择**：
+
+1. 从有效档案排除当前程序、相同代码、空 Idea 和与当前 Idea 相同的候选。Idea 先合并空白、截取显示的 300 字符、忽略大小写后比较。
+2. 优先使用与当前程序没有祖先或后代关系的候选；这类候选为空时才放宽谱系条件。
+3. 相同规范代码或相同显示 Idea 只保留一个代表，优先质量较高、同分较早者。不设质量中位数门槛：较低分程序也可以提供参考思想。
+4. 贪心选择最多 4 个参考。每次选与当前程序及所有已选参考的最大 token Jaccard 相似度最低者，避免只挑出多个彼此相似的参考；并列时优先质量较高者，再用参考随机数流抽取。
+5. 有几个合格参考就展示几个，不为凑满 4 个重复材料。没有参考时仍可根据当前代码执行 Explore。
+
+这保证代码与显示 Idea 不重复，但不保证语义、行为或算法机制真正不同。Idea 卡用于启发新计算，不作为已验证机制解释；参考选择统计与实际展示 id 分别记录。
+
 ### 3.7 评价、失败与修复
 
 - 候选状态分为：`delivery_failed`（没有可用代码或被截断）、`invalid_source`（语法错误或接口不符）、`duplicate`、`copied_reference`、`known_failure`、`runtime_error`、`invalid_output`、`timeout`、`valid`。
@@ -193,22 +208,23 @@ ESS(β) = 1 / Σ_a p_β(a)²
 | Task + Evaluation | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Target Function | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Current Algorithm（规范代码 + 分数） | | ✓ | ✓ | ✓ | |
-| 形成历史（≤8 步，最近一步给 diff） | | ✓ | | | |
-| 思路列表（≤8 步，只有 Idea 与分数） | | | ✓ | | |
-| 最近改动（≤3 步，只有摘要） | | | | ✓ | |
+| 形成历史（≤8 步，每步完整 diff） | | ✓ | | | |
+| 档案参考思路（≤4 个，Idea 与分数） | | | ✓ | | |
+| 主程序形成历史（≤4 步，每步完整 diff） | | | | ✓ | |
 | Reference Algorithm | | | | ✓ | |
+| 参考程序形成历史（≤4 步，每步完整 diff） | | | | ✓ | |
 | 已有根 | 第 5–8 个根 | | | | |
 | 全局最好分数 | | | ✓ | | |
 | Failed Program + Error | | | | | ✓ |
 | 动作指令 + Output Format | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-刻意不给的：同父已试、搜索统计、行为探针、档案卡、证据解读规则，以及训练实例的规模和数量（避免模型针对训练规模做特化）。
+刻意不给的：同父已试、搜索统计、行为探针、证据解读规则，以及训练实例的规模和数量（避免模型针对训练规模做特化）。Explore 不给谱系轨迹与参考完整代码；Refine 不加跨分支思路卡。
 
 ### 4.2 形成路径
 
 - 当前节点 `a_k` 的形成路径是 `a_0 (根) → a_1 → … → a_k`，每一步称为一条边。
-- 显示最近 `min(k, 8)` 条边，从旧到新排列。
-- 若 `k ≤ 8`，在最前面加一行 Start，给出根的分数和 Idea。若 `k > 8`，写明"路径共 k 步，显示最近 8 步"，让模型知道谱系深度。
+- Refine 显示最近 `min(k, 8)` 条边；Crossover 的主程序与参考程序分别显示最近 `min(k, 4)` 条边，各自从旧到新排列。
+- 若显示范围包含根，在最前面加一行 Start，给出根的分数和 Idea；否则写明路径总步数与实际展示步数，让模型知道谱系深度。参考区块明确标注 reference algorithm。
 - Crossover 产生的边标为 `Crossover with an algorithm scoring <参考分数>`。
 
 ### 4.3 每条边的呈现
@@ -216,8 +232,7 @@ ESS(β) = 1 / Σ_a p_β(a)²
 ````text
 Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse | same score>)
   Idea: <当时的 Idea，≤300 字符>
-  Change: <改动摘要>                         ← 除最近一步外
-  Code diff (previous → current):            ← 仅最近一步
+  Code diff (previous → current):            ← 每一步都展示完整 diff
   ```diff
   <unified diff>
   ```
@@ -225,21 +240,20 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
 
 - **分数：** 原任务单位，6 位有效数字。
 - **判定：** 容差 `1e-9 · max(1, |父代分数|)`，并按任务方向判断 improved / worse / same score。
-- **Change 摘要**（沿用 V9.7 格式，≤400 字符）：
-  - 若两份规范代码只在数值常量上不同（把数值常量全部掩码后 AST 相同），写 `numeric constants only, in <函数>: 0.15 → 0.12; 3 → 4`。数值对按源码位置排序，最多列 4 对。
-  - 否则写 `+A/−R lines in <改动的顶层函数，最多 4 个>; removed: <第一行> | <最后一行>; added: <第一行> | <最后一行>`，每行最多 110 字符。
-- **最近一步的 diff：** 在规范形式上计算，上下文 2 行，最多 60 行，超出部分写 `… (N more diff lines not shown)`。
+- **每一步的 diff：** 在规范形式上计算 unified diff，上下文 2 行，保留所有变化块和所有增删行，不按行数截断。这里的“完整”指完整的改动，不重复展示整份旧程序。
+- 不再用 Change 摘要代替代码变化；模型可以直接阅读数值调整与结构改动。Idea 仍只是当时意图，分数变化不构成某一组件的因果证明。
 
 ### 4.4 Token 预算与裁剪
 
-- 输入上限 24,320 token（按服务端 tokenizer 精确计数），输出上限 8,192 token。
-- 形成历史区块单独限 3,000 token，初始化时的已有根区块限 8,000 token。
+- 总上下文为 32,768 token。输入上限 24,320 token（按服务端 tokenizer 精确计数），输出上限 8,192 token，另留 256 token 余量。
+- 形成历史不设单独 token 限额；初始化时的已有根区块限 8,000 token。
 - 超限时按以下顺序裁剪：
-  1. 从最旧的一步开始删历史，至少保留 1 步；
-  2. 最近一步的 diff 改为摘要；
-  3. Crossover 删去主程序的最近改动区块；
-  4. Crossover 仍然超限时，改为 Refine 并记录 `crossover_context_fallback`；
-  5. 最小提示（任务、目标函数、当前程序、指令、输出格式）仍然超限时，把该节点标为 `too_long`，退出父代抽样，重新抽父代。这一步不计预算。
+  1. Refine 从最旧的一步开始删除整个历史步骤，至少保留最近 1 步的完整 diff；根节点没有改动历史。若仍超限，将该节点标为 `too_long`，重新抽父代，不计候选预算。
+  2. Crossover 每次从仍有多于 1 步的两侧历史中，选择 token 较多的一侧删除最旧整个步骤；两侧有历史时各至少保留最近 1 步完整 diff，根节点显示无历史说明。
+  3. 两侧最短历史加完整代码仍超限时，改为 Refine 并记录 `crossover_context_fallback`；再按 Refine 规则处理。
+  4. Explore 从最后选中的参考卡开始删除，必要时可删完全部卡；当前程序、任务、指令与输出格式仍超限时按 `too_long` 处理。
+
+历史裁剪只删除整个步骤，不截断 diff，也不将 diff 转换为摘要。
 
 ---
 
@@ -249,10 +263,10 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
 
 - **短。** 只保留任务、目标函数、程序、历史、指令和输出格式。V9.14 的固定指令与格式文本约 650 字符；V10.14 仅证据解读规则一项就约 900 字符，加上改写范围、Idea 要求、交付格式和 JSON 证据，固定文本超过 2,000 字符。而 V9.14 的 TSP held-out 在各版本中最好。
 - **用方括号小节标题（V9 风格），不用 JSON。** 模型读的是自然文本。
-- **事实和意图分开标注：** Score 是实测值，Change 和 diff 由代码计算，Idea 是当时的意图。
+- **事实和意图分开标注：** Score 是实测值，Code diff 由代码计算，Idea 是当时的意图。
 - **指令写"做什么"，用正面表述。** 每个动作只有 4–5 条要点，每条都对应一条证据。
 - **不写让模型怀疑历史的规则，也不塞诊断量。**
-- **所有提示保持同一套词汇：** Score、Idea、Change、Step、Current Algorithm。
+- **所有提示保持同一套词汇：** Score、Idea、Code diff、Step、Current Algorithm。
 - **用英文，与此前各版本一致。**
 
 以下模板中 `{…}` 为占位符。区块之间空一行。
@@ -326,7 +340,6 @@ Score: {score}
 [Your Task: Design an Initial Algorithm]
 Design one complete, competitive algorithm for this task.
 - Base it on a clear decision principle and implement that principle carefully.
-- Use what the inputs make available. The function may compute more than a single formula, for example derive intermediate quantities or examine the consequences of a choice, as long as the evaluation stays within the time limit.
 - Do not return a placeholder or a trivial baseline.
 ```
 
@@ -355,7 +368,7 @@ Design one complete, competitive algorithm whose core decision principle differs
 
 设计说明：
 - 第二条要点让模型先找出已有根的共性。初始化对照发现，OBP 独立生成的根在 112 对中有 98 对行为零距，"代码不同"并不等于"思路不同"。
-- "may compute more than a single formula"放宽的是设计空间，并不指定答案。它对构造类任务意味着可以前瞻，对 ACO 意味着可以构造更丰富的边特征。
+- 输入、输出和评价时限已定义合法设计空间，不再额外提示内部可以进行复杂计算。强结果使用前瞻或局部搜索，不能证明这句提示有效。
 
 ### 5.4 Refine
 
@@ -365,14 +378,17 @@ Design one complete, competitive algorithm whose core decision principle differs
 
 ````text
 [How the Current Algorithm Was Formed]
-These are the most recent steps on the path that produced the current algorithm, oldest first. "Change" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
+These are the most recent steps on the path that produced the current algorithm, oldest first. "Code diff" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
 
 Start · initial algorithm · score {root_score}
   Idea: {root_idea}
 
 Step 1 · Refine · score {a} → {b} (improved)
   Idea: {idea}
-  Change: {change_summary}
+  Code diff (previous → current):
+```diff
+{unified_diff_step_1}
+```
 
 Step 2 (latest: produced the current algorithm) · Explore · score {b} → {c} (improved)
   Idea: {idea}
@@ -418,21 +434,21 @@ Improve the current algorithm with one focused change.
 
 ### 5.5 Explore
 
-区块顺序：Task → Evaluation → Target Function → Current Algorithm → Earlier Ideas → Your Task → Output Format。`{what}` = `the new algorithm`。
+区块顺序：Task → Evaluation → Target Function → Current Algorithm → Reference Ideas → Search Best → Your Task → Output Format。`{what}` = `the new algorithm`。
 
 **思路区块**
 
 ```text
-[Earlier Ideas on This Line of Development]
-Oldest first. Scores are measured; each idea is the intent stated when that version was written.
-Start · score {root_score} · Idea: {root_idea}
-Step 1 · Refine · score {a} → {b} (improved) · Idea: {idea}
-Step 2 · Explore · score {b} → {c} (improved) · Idea: {idea}
+[Reference Ideas from the Search Archive]
+These are separate evaluated algorithms, not a formation history. Scores are measured; each Idea is the intent stated when its program was written.
+Reference 1 · Score {ref_score} · Idea: {ref_idea}
+Reference 2 · Score {ref_score} · Idea: {ref_idea}
 
+[Search Best]
 Best score found so far in this search: {best_score}.
 ```
 
-根节点时，前两行改为 `The current algorithm is an initial design.` 和 `Idea: {root_idea}`。
+无合格参考时省略 Reference Ideas 区块，保留 Search Best；根节点与其他节点采用相同的参考规则。
 
 **指令**
 
@@ -441,28 +457,28 @@ Best score found so far in this search: {best_score}.
 Find a materially different way to solve this task better than the current algorithm.
 - First identify the main limitation of the current approach: information it ignores, decisions it systematically gets wrong, or situations it cannot represent.
 - Then change the core of the algorithm to remove that limitation: what it computes from the inputs, how it evaluates a choice before committing to it, or how it turns signals into a decision. Tuning parameters or making a small local edit is not enough.
-- You may keep useful parts of the current program or start from scratch, but do not simply restate an idea listed above.
+- Use the reference ideas to find or combine different decision principles. You may keep useful parts of the current program or start from scratch; develop your own complete algorithm rather than merely restating a reference idea.
 - The new algorithm must be complete and competitive on its own, and must stay within the time limit.
 ```
 
 设计说明：
 - **给当前程序：** 沿用 V9 的做法。V9.14 的 Explore 看得到当前代码，TSP 至少两路的关键骨架明确由它引入。V10.14 改为独立上下文的 Pivot 后，TSP 训练前沿均值为 6.19（V9.14 为 5.78）。这不能单独归因于 Pivot，但也没有证据支持独立上下文更好。
-- **只给思路、不给 diff：** 历史对 Explore 的作用是避免换汤不换药，不是当护栏。
+- **多参考替代本谱系历史：** 借鉴 V10.11 rand_ctx，给不同来源的 Idea 与实测分数，允许关键词触发已有知识或重组思想。当前抽样额外使用代码差异代理，不能保证真正的思想多样性。
 - **第 1 条先诊断局限：** 沿用 V10.11 Pivot 指令里有效的部分。
 - **第 2 条的三个方向覆盖三类任务的骨架变化：** 构造类的前瞻、ACO 的边特征、OBP 的打分组合。
 - **给全局最好分数：** 让模型知道"有竞争力"的标准。Refine 不给，以免诱发过大的改写。
 
 ### 5.6 Crossover
 
-区块顺序：Task → Evaluation → Target Function → Current Algorithm → Recent Changes → Reference Algorithm → Your Task → Output Format。`{what}` = `the mechanism you transplanted and how it is integrated`。
+区块顺序：Task → Evaluation → Target Function → Current Algorithm → How the Current Algorithm Was Formed → Reference Algorithm → How the Reference Algorithm Was Formed → Your Task → Output Format。`{what}` = `the mechanism you transplanted and how it is integrated`。
 
-**最近改动区块**：同 5.4 的历史区块，但标题换成 `[Recent Changes to the Current Algorithm]`，最多 3 步，全部用 Change 摘要，不给 diff。
+**两侧历史区块**：主程序采用 5.4 的历史格式，最多 4 步。参考程序采用同一格式，标题为 `[How the Reference Algorithm Was Formed]`，文字明确指向 reference algorithm，最多 4 步。每步给动作、Idea、父子分数变化与完整 diff；参考为根节点时明确说明没有形成历史。
 
 **参考区块**
 
 ````text
 [Reference Algorithm]
-A different algorithm from another branch of this search.
+A different evaluated algorithm from the search archive.
 Score: {ref_score}
 Idea: {ref_idea}
 ```python
@@ -475,7 +491,7 @@ Idea: {ref_idea}
 ```text
 [Your Task: Crossover]
 Improve the current algorithm by transplanting one mechanism from the reference algorithm.
-- Compare the two programs and find one computation in the reference that the current algorithm lacks and that addresses one of its weaknesses, for example an additional signal, a feasibility or look-ahead check, or a different way of combining terms.
+- Compare the two programs and their formation histories, and find one computation in the reference that the current algorithm lacks and that addresses one of its weaknesses, for example an additional signal, a feasibility or look-ahead check, or a different way of combining terms.
 - Integrate that mechanism into the current algorithm and adapt it so that it works with the existing parts. Keep the current algorithm's framework and its working components.
 - The reference may score lower overall and still contain a useful mechanism.
 - Do not copy the reference or return a program that is essentially one of the two inputs. The transplanted mechanism must be able to change the current algorithm's decisions.
@@ -530,7 +546,7 @@ Fix the program so that it runs correctly, while keeping its intended design.
 
 ### 5.9 渲染示例（TSP，Refine）
 
-下面是用原型渲染出的完整提示。代码与分数是示意用的，但格式、换行、规范化和 Change/diff 都由实现规则真实生成。
+下面按当前实现离线渲染完整提示。各步代码与分数均为示意，不作为实验数据；每一步显示完整 diff。实际运行的 token 数由服务端 tokenizer 精确计数。
 
 ````text
 [Task]
@@ -610,18 +626,78 @@ def select_next_node(current_node, destination_node, unvisited_nodes, distance_m
 ```
 
 [How the Current Algorithm Was Formed]
-These are the most recent steps on the path that produced the current algorithm, oldest first. "Change" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
+These are the most recent steps on the path that produced the current algorithm, oldest first. "Code diff" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
 
 Start · initial algorithm · score 6.7665
   Idea: Nearest neighbour, lightly penalising nodes far from the destination.
 
 Step 1 · Refine · score 6.7665 → 6.1525 (improved)
   Idea: Subtract a regret term so nodes that will be expensive to reach later are taken now.
-  Change: +6/−2 lines in select_next_node; removed: `back = distance_matrix[unvisited_nodes, destination_node]` | `score = d + 0.1 * back`; added: `if len(unvisited_nodes) <= 2:` | `score = d - 0.3 * regret`
+  Code diff (previous → current):
+```diff
+@@ -2,6 +2,11 @@
+
+ def select_next_node(current_node, destination_node, unvisited_nodes, distance_matrix):
++    if len(unvisited_nodes) <= 2:
++        return int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
+     d = distance_matrix[current_node, unvisited_nodes]
+-    back = distance_matrix[unvisited_nodes, destination_node]
+-    score = d + 0.1 * back
++    pair = distance_matrix[np.ix_(unvisited_nodes, unvisited_nodes)].copy()
++    np.fill_diagonal(pair, np.inf)
++    nearest = np.partition(pair, 1, axis=1)[:, :2]
++    regret = nearest[:, 1] - nearest[:, 0]
++    score = d - 0.3 * regret
+     return int(unvisited_nodes[np.argmin(score)])
+```
 
 Step 2 · Explore · score 6.1525 → 6.0324 (improved)
   Idea: Build a greedy path over the remaining nodes, improve it with 2-opt, and move to its first node.
-  Change: +26/−7 lines in _greedy_path, _two_opt, select_next_node; removed: `d = distance_matrix[current_node, unvisited_nodes]` | `return int(unvisited_nodes[np.argmin(score)])`; added: `def _greedy_path(start, nodes, dm):` | `return int(path[0])`
+  Code diff (previous → current):
+```diff
+@@ -1,12 +1,34 @@
+ import numpy as np
++
++def _greedy_path(start, nodes, dm):
++    path, rest = ([], list(nodes))
++    cur = start
++    while rest:
++        j = min(rest, key=lambda x: dm[cur, x])
++        path.append(j)
++        rest.remove(j)
++        cur = j
++    return path
++
++def _two_opt(path, start, end, dm, sweeps=3):
++    route = [start] + path + [end]
++    for _ in range(sweeps):
++        improved = False
++        for i in range(1, len(route) - 2):
++            for j in range(i + 1, len(route) - 1):
++                delta = dm[route[i - 1], route[j]] + dm[route[i], route[j + 1]] - dm[route[i - 1], route[i]] - dm[route[j], route[j + 1]]
++                if delta < -1e-12:
++                    route[i:j + 1] = route[i:j + 1][::-1]
++                    improved = True
++        if not improved:
++            break
++    return route[1:-1]
+
+ def select_next_node(current_node, destination_node, unvisited_nodes, distance_matrix):
+     if len(unvisited_nodes) <= 2:
+         return int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
+-    d = distance_matrix[current_node, unvisited_nodes]
+-    pair = distance_matrix[np.ix_(unvisited_nodes, unvisited_nodes)].copy()
+-    np.fill_diagonal(pair, np.inf)
+-    nearest = np.partition(pair, 1, axis=1)[:, :2]
+-    regret = nearest[:, 1] - nearest[:, 0]
+-    score = d - 0.3 * regret
+-    return int(unvisited_nodes[np.argmin(score)])
++    start = int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
++    rest = [x for x in unvisited_nodes if x != start]
++    path = [start] + _greedy_path(start, rest, distance_matrix)
++    path = _two_opt(path, current_node, destination_node, distance_matrix)
++    return int(path[0])
+```
 
 Step 3 (latest: produced the current algorithm) · Refine · score 6.0324 → 5.8654 (improved)
   Idea: Start the remaining-path construction from the three nearest candidates and keep the shortest 2-opt route.
@@ -634,10 +710,12 @@ Step 3 (latest: produced the current algorithm) · Refine · score 6.0324 → 5.
 +def _two_opt(path, start, end, dm, sweeps=6):
      route = [start] + path + [end]
      for _ in range(sweeps):
-@@ -28,5 +28,14 @@
+@@ -28,7 +28,14 @@
      if len(unvisited_nodes) <= 2:
          return int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
--    path = _greedy_path(current_node, unvisited_nodes, distance_matrix)
+-    start = int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
+-    rest = [x for x in unvisited_nodes if x != start]
+-    path = [start] + _greedy_path(start, rest, distance_matrix)
 -    path = _two_opt(path, current_node, destination_node, distance_matrix)
 +    k = min(8, len(unvisited_nodes))
 +    near = unvisited_nodes[np.argsort(distance_matrix[current_node, unvisited_nodes])[:k]]
@@ -671,8 +749,6 @@ Code:
 Write no comments or docstrings in the code, and nothing after the code block.
 ````
 
-这份提示约 6.8k 字符（约 1.8k token）。原型中其余动作的规模：Explore 约 5.0k 字符，Crossover 约 6.7k，参考初始化约 3.3k，修复约 4.1k，都远低于输入上限。规范化会带来一些外观变化，如 `1e9` 变成 `1000000000.0`、多出一些括号，但不改变语义。
-
 ---
 
 ## 6. 完整流程
@@ -693,7 +769,8 @@ while attempts < B:
     act ← Draw({Refine: .45, Explore: .30, Crossover: .25})
     ref ← PickReference(a) if act = Crossover else None
     if act = Crossover and ref is None: act ← Refine            # log crossover_fallback
-    prompt ← BuildPrompt(act, a, ref)                           # trims per §4.4; may mark a too_long and resample
+    refs ← PickExploreReferences(a, max=4) if act = Explore else []
+    prompt ← BuildPrompt(act, a, ref, refs)                     # Crossover: histories ≤4 steps each; trims per §4.4
     cand ← Generate(prompt); attempts += 1
     Process(cand, parent=a, action=act, reference=ref)
 
@@ -726,9 +803,9 @@ evaluate finalists on the selection set; best_program ← argmax selection score
 | 根 | 8 个有效且互不相同；前 4 个独立生成，后 4 个参考已有根；初始化尝试上限 16 |
 | 选父 | 质量 Boltzmann，ESS 目标 `min(N, max(2, 0.1N))`；三个动作共用 |
 | 动作 | Refine 0.45 / Explore 0.30 / Crossover 0.25 |
-| Refine 历史 | 最近 ≤8 条边；最近一步给 diff（≤60 行），其余给 Change 摘要；区块 ≤3,000 token |
-| Explore 思路列表 | 最近 ≤8 条边的 Idea 与分数，加全局最好分数 |
-| Crossover | 主程序最近 ≤3 条边的摘要；参考要求质量 ≥ 中位数、非同谱系、代码相似度 ≤ 候选中位数，均匀抽取 |
+| Refine 历史 | 最近 ≤8 条边；每一步给完整 diff；只按总输入上限从最旧步骤开始裁剪 |
+| Explore 参考 | 最多 4 个档案 Idea 与分数；优先非祖先/后代、显示 Idea 与代码去重，再按代码差异贪心选择；加全局最好分数，不给谱系轨迹 |
+| Crossover | 主程序和参考程序各最近 ≤4 条边的完整 diff；参考选择仍要求质量 ≥ 中位数、优先非祖先/后代、代码相似度 ≤ 候选中位数，均匀抽取 |
 | Idea 显示 | ≤300 字符；原文全保存 |
 | 判定容差 | `1e-9 · max(1, |父代分数|)` |
 | 修复 | 每个失败候选最多 1 次，计入预算 |
@@ -745,7 +822,7 @@ evaluate finalists on the selection set; best_program ← argmax selection score
 
 - 精确的 prompt、原始响应、`finish_reason`、输入/输出 token、耗时；
 - 父代 id、动作、参考 id、β、ESS、父代被抽中的概率；
-- 本次显示的历史边 id，以及是否发生过裁剪、怎样裁剪；
+- 本次显示的主程序历史边 id、参考程序历史边 id、Explore 参考个体 id，以及是否发生过裁剪、怎样裁剪；
 - 解析出的 Idea（原文与显示文本）、原始代码、规范代码、`key`；
 - 状态、错误信息、训练分数，是否为修复、修复的对象。
 
@@ -775,12 +852,16 @@ evaluate finalists on the selection set; best_program ← argmax selection score
 | 增长项、延迟信用、Thompson、延续价值 | V9.8–V9.10、V9.15、V9.20 | 轨迹当指南针，见 1.3 |
 | 行为距离调度、行为探针 | V9.19、V9.20、V10.14 | 距离预测不了收益；BehaveSim 已退役 |
 | 同父已试进入上下文 | V10.13、V10.14 | V9.7 配对中没有增益，CVRP 反而下降 |
-| 给所有算子加档案卡或 Idea 参考 | V10.12、V11.0 | V10.12 让 TSP/VRPTW 退步并触发预设门槛；只给 Idea 带不进具体计算 |
+| 给所有算子统一加档案卡 | V10.12、V11.0 | V10.12 在保留轨迹的同时给所有算子追加两张卡，TSP/VRPTW 退步并触发预设门槛；V11.0 同时改分配与上下文，不能单独识别参考效果。这些结果不排除仅给 Explore/Crossover 提供参考，也不证明 Idea 无法触发有用计算 |
 | 独立上下文 Pivot | V10.14 | V9 的 Explore 看得到当前程序，TSP 关键骨架至少两路明确由它产生 |
 | Tune 作为独立算子 | V10.9–V10.14 | 没有独立证据；并入 Refine 的第 4 条要点 |
 | 证据解读规则、搜索统计、JSON 证据 | V10.14 | 前者削弱护栏，后两者让提示膨胀 |
 | 局部编辑（search/replace）交付 | V10.13、V10.14 | 失配会损失合法候选；完整程序更稳 |
 | AST 语法组共享计数、rank+count 选父 | V10.14 | 选父只看质量；AST 只用于去重 |
+
+上下文选择仍有未解决的问题。原协议的“主程序最近 3 步、参考无历史”与新协议“两侧各 4 步”都没有独立收益对照；主程序历史用于保留结构，参考历史可能帮助理解可迁移机制，两者都不能仅凭历史分数变化判断组件的因果贡献。当前协议采用后者，历史实验结果仍按各自原协议解释。
+
+V10.11 `rand_ctx` 曾以最多 8 张无顺序的 Idea+fitness 档案卡替代形成历史，Fuse 另保留完整 donor。历史实现按质量排名 softmax 无放回抽取，未保证行为或机制多样性。[三重复结果](../02-实验结果/03-辅助与分支版本结果.md)显示 CVRP 与部分装箱设置较好、TSP/VRPTW 较差；这是整个上下文方案的结果，不能单独归因于某个算子。短 Idea 或关键词可能触发模型已有知识并生成新的计算；这种语义触发机制与直接移植参考代码都值得保留为竞争解释，需检查实际生成和固定条件对照，不应由成功案例或文本复制率直接断言。
 
 ---
 
@@ -792,15 +873,17 @@ evaluate finalists on the selection set; best_program ← argmax selection score
 - 可以复制并冻结 V10.14 的这些工程函数：`_delivery`、`extract_idea`、`complete_template_dependencies`、`validate_source`、评价器封装、选择集评价。
 - 新增模块：
   - `canonical.py`：规范化、key、token 相似度；
-  - `history.py`：路径、Change 摘要、数值对、diff；
-  - `selection.py`：ESS 求解、参考选择；
+  - `history.py`：路径、完整 diff；旧 Change 与数值对辅助函数保留，但不进入生成提示；
+  - `selection.py`：ESS 求解、Crossover 单参考选择、Explore 多参考选择；
   - `prompts.py`：本文 §5 的模板逐字实现；
   - `traceaad.py`：§6 的主循环。
 - 单元测试至少覆盖：
   - ESS 求解（含全同分、顶部并列、N=1）；
   - 规范化和 key（注释、docstring、格式差异得到同一 key）；
   - 数值改动的识别与排序；
-  - Change 摘要与 diff 截断；
+  - 多步完整 diff、超过 60 行的 diff 与超过 3,000 token 的历史保留；
+  - Explore 参考去重与谱系筛选、没有轨迹的参考卡提示、实际展示 id 的记录；
+  - Crossover 两侧各 4 步历史、独立的边 id 与超限时的双侧裁剪；
   - 各动作提示的快照（逐字对比 §5 的模板）；
   - 裁剪顺序；
   - 预算记账（重复、已知失败、修复都计入）；

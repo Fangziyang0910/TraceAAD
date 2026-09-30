@@ -19,7 +19,7 @@ from .config import Config
 from .delivery import DeliveryError, SourceError, extract_idea, parse_response
 from .evaluation import SeededEvaluation, fingerprint, protocol_identity
 from .prompts import ContextTooLong, PromptBuilder, idea_view
-from .selection import choose_reference, sample_parent
+from .selection import choose_explore_references, choose_reference, sample_parent
 from .state import Facts
 
 
@@ -225,6 +225,8 @@ class TraceAADV1015:
                   "reference_id": reference["id"] if reference else None,
                   "repair_of": repair_of, "repaired": repair_of is not None,
                   "selection": selection, "history_edge_ids": request["history_edge_ids"],
+                  "reference_history_edge_ids": request["reference_history_edge_ids"],
+                  "explore_reference_ids": request["explore_reference_ids"],
                   "trims": request["trims"], "status": None, "idea": idea,
                   "idea_display": idea_view(idea), "raw_code": None, "completed_code": None,
                   "code": None,
@@ -329,15 +331,20 @@ class TraceAADV1015:
         sampled = self.action_rng.choices(["Refine", "Explore", "Crossover"], [.45, .30, .25])[0]
         action = sampled
         reference, reference_selection = None, None
+        explore_references, explore_reference_selection = [], None
         flags = []
         if action == "Crossover":
             reference, reference_selection = choose_reference(parent, self.archive, self.reference_rng)
             if reference is None:
                 action = "Refine"
                 flags.append("crossover_fallback")
+        elif action == "Explore":
+            explore_references, explore_reference_selection = choose_explore_references(
+                parent, self.archive, self.reference_rng)
         best_score = max(self.archive.values(), key=lambda n: n["fitness"])["score"]
         try:
-            request = self.prompts.build(action, parent, reference=reference, best_score=best_score)
+            request = self.prompts.build(action, parent, reference=reference,
+                                         references=explore_references, best_score=best_score)
         except ContextTooLong:
             self.too_long.add(parent["id"])
             self._save()
@@ -351,6 +358,7 @@ class TraceAADV1015:
         request["reference_id"] = reference["id"] if reference else None
         request["selection"] = selection
         request["reference_selection"] = reference_selection
+        request["explore_reference_selection"] = explore_reference_selection
         self._attempt(request, parent=parent, action=request["action"], reference=reference,
                       selection=selection)
 

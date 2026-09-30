@@ -20,18 +20,24 @@ def score(x):
     return x + 2
 ```
 
-[Recent Changes to the Current Algorithm]
-These are the most recent steps on the path that produced the current algorithm, oldest first. "Change" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
+[How the Current Algorithm Was Formed]
+These are the most recent steps on the path that produced the current algorithm, oldest first. "Code diff" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
 
 Start · initial algorithm · score 1
   Idea: Add 1 to the input.
 
 Step 1 (latest: produced the current algorithm) · Refine · score 1 → 2 (improved)
   Idea: Add 2 to the input.
-  Change: numeric constants only, in score: 1 → 2
+  Code diff (previous → current):
+```diff
+@@ -1,2 +1,2 @@
+ def score(x):
+-    return x + 1
++    return x + 2
+```
 
 [Reference Algorithm]
-A different algorithm from another branch of this search.
+A different evaluated algorithm from the search archive.
 Score: 3
 Idea: Add 3 to the input.
 ```python
@@ -39,9 +45,13 @@ def score(x):
     return x + 3
 ```
 
+[How the Reference Algorithm Was Formed]
+The reference algorithm is an initial design; no changes have been recorded yet.
+Idea: Add 3 to the input.
+
 [Your Task: Crossover]
 Improve the current algorithm by transplanting one mechanism from the reference algorithm.
-- Compare the two programs and find one computation in the reference that the current algorithm lacks and that addresses one of its weaknesses, for example an additional signal, a feasibility or look-ahead check, or a different way of combining terms.
+- Compare the two programs and their formation histories, and find one computation in the reference that the current algorithm lacks and that addresses one of its weaknesses, for example an additional signal, a feasibility or look-ahead check, or a different way of combining terms.
 - Integrate that mechanism into the current algorithm and adapt it so that it works with the existing parts. Keep the current algorithm's framework and its working components.
 - The reference may score lower overall and still contain a useful mechanism.
 - Do not copy the reference or return a program that is essentially one of the two inputs. The transplanted mechanism must be able to change the current algorithm's decisions.

@@ -2,6 +2,10 @@
 
 The frozen mechanism is specified in [the design document](../../docs/01-主线机制设计/TraceAAD-V10.15-机制设计.md). Search uses the quality-only ESS distribution and immediately admits each valid unique candidate. The formation path is shown only in generation prompts.
 
+The 2026-09-30 prompt revision shows complete diffs for every displayed Refine/Crossover history step. History has no separate token or diff-line cap; whole oldest steps are removed only when the full prompt exceeds 24,320 input tokens, reserving 8,192 output tokens within the 32K context. The independent initialization prompt no longer contains the “more than a single formula” instruction. Use a new run name for this revision: saved runs retain their original protocol and cannot resume after source/config changes.
+
+Explore now replaces its lineage ideas with up to four archive Idea+score cards, selected for distinct visible ideas and code diversity, preferring candidates with no ancestor/descendant relationship to the parent. Code diversity is a proxy for different ideas. Crossover displays up to four complete history diffs for each of the current and reference programs. If the full prompt is too long, the longer history loses its oldest step while each non-root side retains its latest step; if this still does not fit, Crossover falls back to Refine. Request and attempt records separately identify displayed Explore references and reference-program history edges.
+
 ```bash
 uv run python -m experiments.traceaad_v10_15.run --task tsp_construct --run-name trial_1 --budget 1000 --dry-run
 uv run python -m experiments.traceaad_v10_15.run --task tsp_construct --run-name trial_1 --budget 1000

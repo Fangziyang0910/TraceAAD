@@ -16,7 +16,6 @@ Keep the function name, arguments and return contract exactly as shown. The prog
 [Your Task: Design an Initial Algorithm]
 Design one complete, competitive algorithm for this task.
 - Base it on a clear decision principle and implement that principle carefully.
-- Use what the inputs make available. The function may compute more than a single formula, for example derive intermediate quantities or examine the consequences of a choice, as long as the evaluation stays within the time limit.
 - Do not return a placeholder or a trivial baseline.
 
 [Output Format]

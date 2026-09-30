@@ -3,7 +3,7 @@
 import math
 import statistics
 
-from .canonical import similarity
+from .canonical import similarity, token_set
 
 
 def probabilities(nodes):
@@ -81,3 +81,45 @@ def choose_reference(parent, archive, rng):
     return picked, {"relaxed_lineage": not bool(unrelated), "eligible": len(pool),
                     "diverse": len(diverse), "similarity": scores[picked["id"]],
                     "similarity_median": cutoff}
+
+
+def choose_explore_references(parent, archive, rng, count=4):
+    """Select distinct idea cards using code diversity as a fallible proxy."""
+    def normalize(idea):
+        return " ".join((idea or "").split())[:300].casefold()
+    parent_idea = normalize(parent.get("idea"))
+    ancestry = ancestor_ids(parent, archive)
+    eligible = [n for n in archive.values() if n["id"] != parent["id"] and
+                n["key"] != parent["key"] and normalize(n.get("idea")) and
+                normalize(n.get("idea")) != parent_idea]
+    unrelated = [n for n in eligible if n["id"] not in ancestry and
+                 parent["id"] not in ancestor_ids(n, archive)]
+    pool = unrelated or eligible
+    # Prefer the best representative of each identical visible idea or program.
+    ideas, keys, unique = set(), set(), []
+    for node in sorted(pool, key=lambda n: (-n["fitness"], n["id"])):
+        idea = normalize(node["idea"])
+        if idea not in ideas and node["key"] not in keys:
+            ideas.add(idea)
+            keys.add(node["key"])
+            unique.append(node)
+    tokens = {n["id"]: token_set(n["code"]) for n in [parent, *unique]}
+
+    def overlap(left, right):
+        a, b = tokens[left["id"]], tokens[right["id"]]
+        return len(a & b) / len(a | b) if a or b else 1.0
+
+    chosen, similarities = [], []
+    while unique and len(chosen) < count:
+        scores = {n["id"]: max(overlap(n, other)
+                                for other in [parent, *chosen]) for n in unique}
+        minimum = min(scores.values())
+        diverse = [n for n in unique if scores[n["id"]] == minimum]
+        quality = max(n["fitness"] for n in diverse)
+        picked = rng.choice([n for n in diverse if n["fitness"] == quality])
+        chosen.append(picked)
+        similarities.append(scores[picked["id"]])
+        unique.remove(picked)
+    return chosen, {"relaxed_lineage": bool(eligible) and not bool(unrelated),
+                    "eligible": len(pool), "selected_ids": [n["id"] for n in chosen],
+                    "maximum_similarities": similarities}

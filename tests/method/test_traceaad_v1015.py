@@ -12,7 +12,7 @@ from traceaad.v10_15.canonical import canonical, key
 from traceaad.v10_15.delivery import DeliveryError, SourceError, parse_response
 from traceaad.v10_15.history import change_summary, code_diff
 from traceaad.v10_15.prompts import PromptBuilder
-from traceaad.v10_15.selection import choose_reference, probabilities
+from traceaad.v10_15.selection import choose_explore_references, choose_reference, probabilities
 
 
 class SelectionEvaluation(TinyEvaluation):
@@ -52,7 +52,7 @@ def test_ess_and_top_ties():
     assert probabilities(tied)[1] == math.inf
 
 
-def test_numeric_change_and_diff_truncation():
+def test_numeric_change_and_complete_diff():
     a = 'def score(x):\n    return x + 0.15 + 3\n'
     b = 'def score(x):\n    return x + 0.12 + 4\n'
     assert change_summary(a, b) == 'numeric constants only, in score: 0.15 → 0.12; 3 → 4'
@@ -62,7 +62,12 @@ def test_numeric_change_and_diff_truncation():
                           'def score(x):\n return x + 2\n') == 'numeric constants only, in score: -1 → 2'
     structural = 'def score(x):\n    y = x + 1\n    return y\n'
     assert '+2/−1 lines in score' in change_summary(a, structural)
-    assert 'more diff lines not shown' in code_diff(a, structural, max_lines=2)
+    assert '+    return y' in code_diff(a, structural)
+    long_code = 'def score(x):\n' + ''.join(f'    x += {i}\n' for i in range(100)) + '    return x\n'
+    diff = code_diff(a, long_code)
+    assert len(diff.splitlines()) > 60
+    assert '+    x += 99' in diff and '+    return x' in diff
+    assert 'more diff lines not shown' not in diff
 
 
 def test_delivery_strict_finish_and_single_repair_payload():
@@ -204,6 +209,46 @@ def test_reference_excludes_ancestor_and_descendant_then_relaxes():
     picked, info = choose_reference(nodes[2], {k: v for k, v in nodes.items() if k != 4},
                                     random.Random(0))
     assert picked['id'] == 3 and info['relaxed_lineage']
+
+
+def test_explore_references_exclude_lineage_and_duplicate_visible_ideas():
+    from tests.method.test_traceaad_v1015_prompts import node
+
+    root = node(1)
+    parent = node(2, parent=root)
+    descendant = node(3, parent=parent)
+    others = [node(i) for i in range(4, 10)]
+    others[0]['idea'] = 'Use capacity slack.'
+    others[1]['idea'] = '  USE  capacity slack. '
+    others[2]['idea'] = ''
+    others[3]['idea'] = parent['idea']
+    others[4]['code'] = 'def score(x):\n    return min(abs(x), 5)\n'
+    archive = {n['id']: n for n in [root, parent, descendant, *others]}
+    references, info = choose_explore_references(parent, archive, random.Random(7))
+    assert not info['relaxed_lineage']
+    assert {n['id'] for n in references} == {5, 8, 9}
+    assert references[0]['id'] == 8
+    again, _ = choose_explore_references(parent, archive, random.Random(7))
+    assert [n['id'] for n in references] == [n['id'] for n in again]
+    lineage = {n['id']: n for n in [root, parent, descendant]}
+    relaxed, info = choose_explore_references(parent, lineage, random.Random(7))
+    assert relaxed and info['relaxed_lineage']
+
+
+def test_search_explore_displays_and_records_archive_references(tmp_path):
+    m = method(tmp_path, *(response(i) for i in range(1, 10)), budget=9)
+    for _ in range(8):
+        m._roots()
+    m.phase = 'search'
+    m.action_rng.choices = lambda *args, **kwargs: ['Explore']
+    m._search()
+    request = m.facts.tables['request'][9]
+    attempt = m.facts.tables['attempt'][9]
+    assert len(request['explore_reference_ids']) == 4
+    assert request['parent_id'] not in request['explore_reference_ids']
+    assert attempt['explore_reference_ids'] == request['explore_reference_ids']
+    assert request['history_edge_ids'] == [] and 'Earlier Ideas' not in request['prompt']
+    assert request['explore_reference_selection']['selected_ids'] == request['explore_reference_ids']
 
 
 def test_distinct_selection_protocol_is_required(tmp_path):

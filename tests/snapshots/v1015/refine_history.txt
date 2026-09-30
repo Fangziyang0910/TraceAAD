@@ -21,7 +21,7 @@ def score(x):
 ```
 
 [How the Current Algorithm Was Formed]
-These are the most recent steps on the path that produced the current algorithm, oldest first. "Change" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
+These are the most recent steps on the path that produced the current algorithm, oldest first. "Code diff" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
 
 Start · initial algorithm · score 1
   Idea: Add 1 to the input.

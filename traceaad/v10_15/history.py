@@ -107,10 +107,8 @@ def change_summary(before, after):
             f"removed: {ends(removed)}; added: {ends(added)}")[:400]
 
 
-def code_diff(before, after, max_lines=60):
+def code_diff(before, after):
     lines = list(difflib.unified_diff(before.splitlines(), after.splitlines(), n=2, lineterm=""))[2:]
-    if len(lines) > max_lines:
-        return "\n".join(lines[:max_lines] + [f"… ({len(lines) - max_lines} more diff lines not shown)"])
     return "\n".join(lines)
 
 

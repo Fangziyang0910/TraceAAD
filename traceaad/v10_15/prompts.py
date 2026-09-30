@@ -1,6 +1,6 @@
 """V10.15's compact English prompts and deterministic context trimming."""
 
-from .history import change_summary, code_diff, path, score_text, verdict
+from .history import code_diff, path, score_text, verdict
 
 
 SCORES = {
@@ -14,7 +14,6 @@ SCORES = {
 INITIAL = """[Your Task: Design an Initial Algorithm]
 Design one complete, competitive algorithm for this task.
 - Base it on a clear decision principle and implement that principle carefully.
-- Use what the inputs make available. The function may compute more than a single formula, for example derive intermediate quantities or examine the consequences of a choice, as long as the evaluation stays within the time limit.
 - Do not return a placeholder or a trivial baseline."""
 
 ANOTHER_INITIAL = """[Your Task: Design Another Initial Algorithm]
@@ -42,12 +41,12 @@ EXPLORE = """[Your Task: Explore]
 Find a materially different way to solve this task better than the current algorithm.
 - First identify the main limitation of the current approach: information it ignores, decisions it systematically gets wrong, or situations it cannot represent.
 - Then change the core of the algorithm to remove that limitation: what it computes from the inputs, how it evaluates a choice before committing to it, or how it turns signals into a decision. Tuning parameters or making a small local edit is not enough.
-- You may keep useful parts of the current program or start from scratch, but do not simply restate an idea listed above.
+- Use the reference ideas to find or combine different decision principles. You may keep useful parts of the current program or start from scratch; develop your own complete algorithm rather than merely restating a reference idea.
 - The new algorithm must be complete and competitive on its own, and must stay within the time limit."""
 
 CROSSOVER = """[Your Task: Crossover]
 Improve the current algorithm by transplanting one mechanism from the reference algorithm.
-- Compare the two programs and find one computation in the reference that the current algorithm lacks and that addresses one of its weaknesses, for example an additional signal, a feasibility or look-ahead check, or a different way of combining terms.
+- Compare the two programs and their formation histories, and find one computation in the reference that the current algorithm lacks and that addresses one of its weaknesses, for example an additional signal, a feasibility or look-ahead check, or a different way of combining terms.
 - Integrate that mechanism into the current algorithm and adapt it so that it works with the existing parts. Keep the current algorithm's framework and its working components.
 - The reference may score lower overall and still contain a useful mechanism.
 - Do not copy the reference or return a program that is essentially one of the two inputs. The transplanted mechanism must be able to change the current algorithm's decisions."""
@@ -59,7 +58,7 @@ Fix the program so that it runs correctly, while keeping its intended design.
 - If the output was invalid, make sure the function returns exactly what the target function's contract requires."""
 
 FORMATION_INTRO = ('These are the most recent steps on the path that produced the current algorithm, oldest first. '
-                   '"Change" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.')
+                   '"Code diff" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.')
 
 
 class ContextTooLong(ValueError):
@@ -116,43 +115,40 @@ class PromptBuilder:
         size = self.count(prompt)
         return {"prompt": prompt, "input_tokens": size, "action": action,
                 "history_edge_ids": list(edge_ids), "trims": list(trims),
+                "reference_history_edge_ids": [], "explore_reference_ids": [],
                 "token_count_mode": getattr(self.llm, "prompt_token_count_mode", "serving_tokenizer")}
 
     def _current(self, node):
         return f"[Current Algorithm]\nScore: {score_text(node['score'])}\n```python\n{node['code'].rstrip()}\n```"
 
-    def _edge(self, parent, child, index, *, latest=False, use_diff=False):
+    def _edge(self, parent, child, index, *, latest=False, subject="current"):
         action = child["action"]
         if action == "Crossover" and child.get("reference_id") is not None:
             reference = self.archive[child["reference_id"]]
             action += f" with an algorithm scoring {score_text(reference['score'])}"
         heading = f"Step {index}"
         if latest:
-            heading += " (latest: produced the current algorithm)"
+            heading += f" (latest: produced the {subject} algorithm)"
         heading += (f" · {action} · score {score_text(parent['score'])} → "
                     f"{score_text(child['score'])} ({verdict(parent['score'], child['score'], self.higher_is_better)})")
         result = heading + f"\n  Idea: {idea_view(child['idea'])}"
-        if use_diff:
-            result += f"\n  Code diff (previous → current):\n```diff\n{code_diff(parent['code'], child['code'])}\n```"
-        else:
-            result += f"\n  Change: {change_summary(parent['code'], child['code'])}"
+        result += f"\n  Code diff (previous → current):\n```diff\n{code_diff(parent['code'], child['code'])}\n```"
         return result
 
-    def _formation(self, sequence, count, *, diff=True, title="How the Current Algorithm Was Formed"):
+    def _formation(self, sequence, count, *, title="How the Current Algorithm Was Formed", subject="current"):
         root = sequence[0]
         if len(sequence) == 1:
-            return (f"[{title}]\nThe current algorithm is an initial design; no changes have been recorded yet.\n"
+            return (f"[{title}]\nThe {subject} algorithm is an initial design; no changes have been recorded yet.\n"
                     f"Idea: {idea_view(root['idea'])}"), []
         start = max(1, len(sequence) - count)
-        lines = [f"[{title}]", FORMATION_INTRO]
+        lines = [f"[{title}]", FORMATION_INTRO.replace("current algorithm", f"{subject} algorithm")]
         if start == 1:
             lines.append(f"Start · initial algorithm · score {score_text(root['score'])}\n  Idea: {idea_view(root['idea'])}")
         else:
             lines.append(f"The path has {len(sequence)-1} steps; showing the most recent {len(sequence)-start} steps.")
         for index in range(start, len(sequence)):
             lines.append(self._edge(sequence[index-1], sequence[index], index,
-                                    latest=index == len(sequence)-1,
-                                    use_diff=diff and index == len(sequence)-1))
+                                    latest=index == len(sequence)-1, subject=subject))
         return lines[0] + "\n" + lines[1] + "\n\n" + "\n\n".join(lines[2:]), [n["id"] for n in sequence[start:]]
 
     def initial(self, roots):
@@ -178,76 +174,73 @@ class PromptBuilder:
             raise ContextTooLong("initial prompt exceeds context with one required root")
         return result
 
-    def _ideas(self, sequence, count, best_score):
-        if len(sequence) == 1:
-            lines = ["The current algorithm is an initial design.", f"Idea: {idea_view(sequence[0]['idea'])}"]
-        else:
-            start = max(1, len(sequence) - count)
-            lines = ["Oldest first. Scores are measured; each idea is the intent stated when that version was written."]
-            if start == 1:
-                root = sequence[0]
-                lines.append(f"Start · score {score_text(root['score'])} · Idea: {idea_view(root['idea'])}")
-            for index in range(start, len(sequence)):
-                parent, child = sequence[index-1:index+1]
-                lines.append(f"Step {index} · {child['action']} · score {score_text(parent['score'])} → "
-                             f"{score_text(child['score'])} ({verdict(parent['score'], child['score'], self.higher_is_better)}) "
-                             f"· Idea: {idea_view(child['idea'])}")
-        lines.append(f"Best score found so far in this search: {score_text(best_score)}.")
-        return "[Earlier Ideas on This Line of Development]\n" + "\n".join(lines)
+    def _reference_ideas(self, references, best_score):
+        sections = []
+        if references:
+            lines = ["[Reference Ideas from the Search Archive]",
+                     "These are separate evaluated algorithms, not a formation history. "
+                     "Scores are measured; each Idea is the intent stated when its program was written."]
+            lines.extend(f"Reference {i} · Score {score_text(n['score'])} · Idea: {idea_view(n['idea'])}"
+                         for i, n in enumerate(references, 1))
+            sections.append("\n".join(lines))
+        sections.append(f"[Search Best]\nBest score found so far in this search: {score_text(best_score)}.")
+        return self._render(sections)
 
-    def build(self, action, parent, *, reference=None, best_score=None):
+    def build(self, action, parent, *, reference=None, references=(), best_score=None):
         if action not in {"Refine", "Explore", "Crossover"}:
             raise ValueError(action)
         sequence = path(parent, self.archive)
         trims = []
         current = self._current(parent)
         if action == "Refine":
-            count, diff = min(8, len(sequence)-1), True
+            count = min(self.config.history_depth, len(sequence)-1)
             while True:
-                history, ids = self._formation(sequence, count, diff=diff)
+                history, ids = self._formation(sequence, count)
                 sections = self.common + [current, history, REFINE_ROOT if len(sequence) == 1 else REFINE,
                                           output_format("the change you made")]
                 result = self._result(sections, "Refine", ids, trims)
-                if (result["input_tokens"] <= self.config.max_input_tokens and
-                        self.block_count(history) <= self.config.history_tokens):
+                if result["input_tokens"] <= self.config.max_input_tokens:
                     return result
                 if count > 1:
                     count -= 1
                     trims.append("oldest_history")
-                elif diff and count:
-                    diff = False
-                    trims.append("latest_diff_to_summary")
                 else:
-                    raise ContextTooLong("minimum Refine prompt exceeds context")
+                    raise ContextTooLong("Refine prompt with required latest history exceeds context")
         if action == "Explore":
-            count = min(8, len(sequence)-1)
+            shown = list(references[:4])
             while True:
-                ideas = self._ideas(sequence, count, best_score)
+                ideas = self._reference_ideas(shown, best_score)
                 sections = self.common + [current, ideas, EXPLORE, output_format("the new algorithm")]
-                result = self._result(sections, "Explore", [n["id"] for n in sequence[max(1, len(sequence)-count):]], trims)
+                result = self._result(sections, "Explore", trims=trims)
+                result["explore_reference_ids"] = [n["id"] for n in shown]
                 if result["input_tokens"] <= self.config.max_input_tokens:
                     return result
-                if count <= 1:
+                if not shown:
                     raise ContextTooLong("minimum Explore prompt exceeds context")
-                count -= 1
-                trims.append("oldest_idea")
+                trims.append(f"explore_reference:{shown.pop()['id']}")
         if reference is None:
             raise ValueError("Crossover requires a reference")
-        recent, ids = self._formation(sequence, min(3, len(sequence)-1), diff=False,
-                                      title="Recent Changes to the Current Algorithm")
-        ref_section = (f"[Reference Algorithm]\nA different algorithm from another branch of this search.\n"
+        ref_section = (f"[Reference Algorithm]\nA different evaluated algorithm from the search archive.\n"
                        f"Score: {score_text(reference['score'])}\nIdea: {idea_view(reference['idea'])}\n"
                        f"```python\n{reference['code'].rstrip()}\n```")
-        sections = self.common + [current, recent, ref_section, CROSSOVER,
-                                  output_format("the mechanism you transplanted and how it is integrated")]
-        result = self._result(sections, "Crossover", ids, trims)
-        if result["input_tokens"] <= self.config.max_input_tokens:
-            return result
-        sections.remove(recent)
-        trims.append("recent_changes")
-        result = self._result(sections, "Crossover", (), trims)
-        if result["input_tokens"] <= self.config.max_input_tokens:
-            return result
+        reference_sequence = path(reference, self.archive)
+        counts = [min(4, len(sequence)-1), min(4, len(reference_sequence)-1)]
+        while True:
+            recent, ids = self._formation(sequence, counts[0])
+            ref_history, ref_ids = self._formation(reference_sequence, counts[1],
+                                                  title="How the Reference Algorithm Was Formed", subject="reference")
+            sections = self.common + [current, recent, ref_section, ref_history, CROSSOVER,
+                                      output_format("the mechanism you transplanted and how it is integrated")]
+            result = self._result(sections, "Crossover", ids, trims)
+            result["reference_history_edge_ids"] = ref_ids
+            if result["input_tokens"] <= self.config.max_input_tokens:
+                return result
+            candidates = [i for i, count in enumerate(counts) if count > 1]
+            if not candidates:
+                break
+            side = max(candidates, key=lambda i: self.block_count([recent, ref_history][i]))
+            counts[side] -= 1
+            trims.append("oldest_history" if side == 0 else "oldest_reference_history")
         fallback = self.build("Refine", parent)
         fallback["trims"] = trims + ["crossover_context_fallback"] + fallback["trims"]
         return fallback
