@@ -42,6 +42,8 @@ def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     add_common_run_args(parser, default_output_tokens=8192)
     parser.add_argument("--evaluation-seeds", type=int, nargs="+", default=[730241])
+    parser.add_argument("--experiment", default="traceaad_v10_15",
+                        help="results directory under experiments_result (one per protocol batch series)")
     parser.add_argument("--dry-run", action="store_true")
     return parser
 
@@ -60,7 +62,9 @@ def main(argv=None):
             "selection": "val_50" if args.task in {"cvrp_aco", "op_aco"} else {"seed": SELECTION_SEED},
             "test": "separate heldout.py after selection"}, indent=2))
         return
-    root = RESULTS_ROOT / "traceaad_v10_15"
+    if not args.experiment.replace("_", "").isalnum():
+        raise ValueError("experiment must be alphanumeric with underscores")
+    root = RESULTS_ROOT / args.experiment
     if args.run_name:
         existing = root / args.task / args.run_name
         if existing.is_dir() and any(existing.iterdir()) and not (existing / "search.jsonl").exists():
