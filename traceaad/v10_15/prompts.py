@@ -51,29 +51,36 @@ def idea_view(idea):
     return " ".join((idea or "").split())[:IDEA_DISPLAY_CHARS]
 
 
-# What each operator's Analysis decides before any code is written.
+# What an operator's Analysis decides before any code is written. Operators
+# that modify a given algorithm risk reproducing a known program, and a brief
+# targeted diagnosis prevents that; operators asked for a new algorithm
+# already carry that pressure, and an Analysis only added cost there.
 ANALYSIS = {
-    "Init": "what makes this task hard, and how your algorithm will handle it",
     "Refine": "what limits the current algorithm, and what change should improve it",
-    "Explore": "what limits the current algorithm, and what different idea should do better",
     "Crossover": "what the reference algorithm does well that the current algorithm lacks, and how to combine them",
     "Repair": "what caused the failure, and how to fix it",
+    "Init": None,
+    "Explore": None,
 }
 
 
 def output_format(action):
-    # With thinking disabled, text before the code is the model's only chance
-    # to decide what to build. A brief targeted Analysis (discarded) followed
-    # by a one-to-two-sentence Design beat a 100-200-word Design at the same
-    # cost on paired Qwen Refine contexts (duplicates 25% -> 5%, parents
-    # improved 50% -> 65%); free-length analysis and native thinking cost 3-30x
-    # as many tokens and did worse. The Design's length had no measurable effect
-    # on later operators, so it stays short.
-    return ("[Output Format]\nReply in this order:\n"
-            f"Analysis: <a few sentences: {ANALYSIS[action]}. It will not be shown again>\n"
-            "Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>\n"
-            "Code:\n```python\n<the complete program>\n```\n"
-            "Write no comments or docstrings in the code, and nothing after the code block.")
+    # Paired Qwen tests (docs/03-机制探索与验证/2026-10-01-写代码前的决策与Design格式.md):
+    # on Refine a few-sentence targeted Analysis cut duplicates from 25% to 5%
+    # at the cost of a 170-word Design; on Crossover it gave the best rank; on
+    # Explore a Design alone ranked best at under half the tokens. Longer or
+    # free-form analysis and native thinking did worse, and the kept Design's
+    # length had no measurable effect, so it stays at one or two sentences.
+    lines = ["[Output Format]"]
+    if ANALYSIS[action]:
+        lines += ["Reply in this order:",
+                  f"Analysis: <a few sentences: {ANALYSIS[action]}. It will not be shown again>"]
+    else:
+        lines.append("Reply with a Design followed by one Python code block:")
+    lines += ["Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>",
+              "Code:\n```python\n<the complete program>\n```",
+              "Write no comments or docstrings in the code, and nothing after the code block."]
+    return "\n".join(lines)
 
 
 class PromptBuilder:

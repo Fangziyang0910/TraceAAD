@@ -33,8 +33,7 @@ Write a new algorithm that you expect to outperform the current one, built on a 
 The reference designs show other approaches found in this search; draw on them as inspiration.
 
 [Output Format]
-Reply in this order:
-Analysis: <a few sentences: what limits the current algorithm, and what different idea should do better. It will not be shown again>
+Reply with a Design followed by one Python code block:
 Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>
 Code:
 ```python

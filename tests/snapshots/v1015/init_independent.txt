@@ -18,8 +18,7 @@ Keep the function name, arguments and return contract exactly as shown. The prog
 Design a complete algorithm for this task that you expect to score well, built on a clear core idea.
 
 [Output Format]
-Reply in this order:
-Analysis: <a few sentences: what makes this task hard, and how your algorithm will handle it. It will not be shown again>
+Reply with a Design followed by one Python code block:
 Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>
 Code:
 ```python
