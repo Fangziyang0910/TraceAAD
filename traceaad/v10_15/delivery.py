@@ -21,7 +21,8 @@ class DeliveryError(ValueError):
 
 BLOCK = re.compile(r"```(?:python|py)?[ \t]*\n(.*?)\n[ \t]*```", re.S | re.I)
 OPENER = re.compile(r"```(?:python|py)?[ \t]*\n", re.I)
-IDEA = re.compile(r"(?im)^[ \t]*Idea[ \t]*:[ \t]*")
+# The algorithm description is labelled "Design"; "Idea" and "Thought" (EoH) are accepted too.
+IDEA = re.compile(r"(?im)^[ \t]*(?:Design|Idea|Thought)[ \t]*:[ \t]*")
 CODE = re.compile(r"(?im)^[ \t]*Code[ \t]*:[ \t]*$")
 
 
@@ -30,9 +31,16 @@ def target_name(template):
 
 
 def extract_idea(text):
-    label = IDEA.search(text)
-    if not label:
+    """The text after the last Idea label, up to a following code block or Code label.
+
+    The Idea follows the code (it describes what was implemented); earlier
+    Reasoning is working notes and never becomes the Idea. The last label also
+    finds an Idea written before the code in older replies.
+    """
+    labels = list(IDEA.finditer(text))
+    if not labels:
         return ""
+    label = labels[-1]
     block = BLOCK.search(text, label.end()) or OPENER.search(text, label.end())
     stop = block.start() if block else len(text)
     code_label = CODE.search(text, label.end(), stop)

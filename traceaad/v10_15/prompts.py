@@ -29,7 +29,7 @@ Write an improved version of the current algorithm that keeps its core idea."""
 
 EXPLORE = """[Your Task: Explore]
 Write a new algorithm that you expect to outperform the current one, built on a different core idea.
-The reference ideas show other approaches found in this search; draw on them as inspiration."""
+The reference designs show other approaches found in this search; draw on them as inspiration."""
 
 CROSSOVER = """[Your Task: Crossover]
 Write an improved version of the current algorithm by combining it with the reference algorithm: bring in what the reference does well that the current algorithm lacks, and keep the current algorithm's strengths."""
@@ -38,7 +38,7 @@ REPAIR = """[Your Task: Repair]
 The program failed during evaluation. Fix it so that it runs correctly within the time limit, keeping the algorithm it was meant to implement."""
 
 FORMATION_INTRO = ("The steps that produced the current algorithm, oldest first. Each step shows the score change, "
-                   "the Idea of the algorithm it produced, and the code diff from the previous version.")
+                   "the Design of the algorithm it produced, and the code diff from the previous version.")
 
 IDEA_DISPLAY_CHARS = 2400  # about 400 words: room for a full description, guard against run-ons
 
@@ -52,10 +52,15 @@ def idea_view(idea):
 
 
 def output_format():
-    return ("[Output Format]\nReply with an Idea followed by one Python code block:\n"
-            "Idea: <a description of the complete algorithm in your code: its core idea, the key quantities "
-            "it computes, and how they are combined into each decision; as long as it needs to be, "
-            "at most about 250 words>\n"
+    # A Design first lets the model settle the algorithm before coding; asking
+    # for the final design only keeps it from becoming a scratchpad. In a
+    # paired test this matched a Design written after the code on validity and
+    # improvement, with fewer output tokens and no missing Designs.
+    return ("[Output Format]\nReply with a Design followed by one Python code block:\n"
+            "Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: "
+            "its core idea, the key quantities it computes, and how they are combined into each decision. "
+            "State only the final design; leave out deliberation, alternatives, formulas and comparisons "
+            "with earlier versions>\n"
             "Code:\n```python\n<the complete program>\n```\n"
             "Write no comments or docstrings in the code, and nothing after the code block.")
 
@@ -116,7 +121,7 @@ class PromptBuilder:
             heading += f" (latest: produced the {subject} algorithm)"
         heading += (f" · {action} · score {score_text(parent['score'])} → "
                     f"{score_text(child['score'])} ({verdict(parent['score'], child['score'], self.higher_is_better)})")
-        result = heading + f"\n  Idea: {idea_view(child['idea'])}"
+        result = heading + f"\n  Design: {idea_view(child['idea'])}"
         result += f"\n  Code diff (previous → current):\n```diff\n{code_diff(parent['code'], child['code'])}\n```"
         return result
 
@@ -124,11 +129,11 @@ class PromptBuilder:
         root = sequence[0]
         if len(sequence) == 1:
             return (f"[{title}]\nThe {subject} algorithm is an initial design; no changes have been recorded yet.\n"
-                    f"Idea: {idea_view(root['idea'])}"), []
+                    f"Design: {idea_view(root['idea'])}"), []
         start = max(1, len(sequence) - count)
         lines = [f"[{title}]", FORMATION_INTRO.replace("current algorithm", f"{subject} algorithm")]
         if start == 1:
-            lines.append(f"Start · initial algorithm · score {score_text(root['score'])}\n  Idea: {idea_view(root['idea'])}")
+            lines.append(f"Start · initial algorithm · score {score_text(root['score'])}\n  Design: {idea_view(root['idea'])}")
         else:
             lines.append(f"The path has {len(sequence)-1} steps; showing the most recent {len(sequence)-start} steps.")
         for index in range(start, len(sequence)):
@@ -142,7 +147,7 @@ class PromptBuilder:
         shown = list(roots) if len(roots) >= 4 else []
 
         def root_section():
-            entries = [f"Algorithm {i} · Score {score_text(n['score'])} · Idea: {idea_view(n['idea'])}\n"
+            entries = [f"Algorithm {i} · Score {score_text(n['score'])} · Design: {idea_view(n['idea'])}\n"
                        f"```python\n{n['code'].rstrip()}\n```" for i, n in enumerate(shown, 1)]
             return "[Algorithms Designed So Far]\n" + "\n\n".join(entries)
 
@@ -162,9 +167,9 @@ class PromptBuilder:
     def _reference_ideas(self, references, best_score):
         sections = []
         if references:
-            lines = ["[Reference Ideas from This Search]",
-                     "Other evaluated algorithms, each with its score and Idea."]
-            lines.extend(f"Reference {i} · Score {score_text(n['score'])} · Idea: {idea_view(n['idea'])}"
+            lines = ["[Reference Designs from This Search]",
+                     "Other evaluated algorithms, each with its score and Design."]
+            lines.extend(f"Reference {i} · Score {score_text(n['score'])} · Design: {idea_view(n['idea'])}"
                          for i, n in enumerate(references, 1))
             sections.append("\n".join(lines))
         sections.append(f"[Search Best]\nBest score found so far in this search: {score_text(best_score)}.")
@@ -205,7 +210,7 @@ class PromptBuilder:
         if reference is None:
             raise ValueError("Crossover requires a reference")
         ref_section = (f"[Reference Algorithm]\nAnother evaluated algorithm from this search.\n"
-                       f"Score: {score_text(reference['score'])}\nIdea: {idea_view(reference['idea'])}\n"
+                       f"Score: {score_text(reference['score'])}\nDesign: {idea_view(reference['idea'])}\n"
                        f"```python\n{reference['code'].rstrip()}\n```")
         reference_sequence = path(reference, self.archive)
         counts = [min(4, len(sequence)-1), min(4, len(reference_sequence)-1)]
@@ -230,7 +235,7 @@ class PromptBuilder:
         return fallback
 
     def repair(self, failed_code, idea, error_text, *, parent=None):
-        failed = f"[Failed Program]\nIdea: {idea_view(idea)}\n```python\n{failed_code.rstrip()}\n```"
+        failed = f"[Failed Program]\nDesign: {idea_view(idea)}\n```python\n{failed_code.rstrip()}\n```"
         sections = self.common + [failed, f"[Error]\n{error_text}", REPAIR, output_format()]
         result = self._result(sections, "Repair")
         if result["input_tokens"] > self.config.max_input_tokens:

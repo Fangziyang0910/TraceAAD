@@ -23,14 +23,14 @@ def score(x):
 
 [How the Current Algorithm Was Formed]
 The current algorithm is an initial design; no changes have been recorded yet.
-Idea: Add 1 to the input.
+Design: Add 1 to the input.
 
 [Your Task: Refine]
 Write an improved version of the current algorithm that keeps its core idea.
 
 [Output Format]
-Reply with an Idea followed by one Python code block:
-Idea: <a description of the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision; as long as it needs to be, at most about 250 words>
+Reply with a Design followed by one Python code block:
+Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: its core idea, the key quantities it computes, and how they are combined into each decision. State only the final design; leave out deliberation, alternatives, formulas and comparisons with earlier versions>
 Code:
 ```python
 <the complete program>

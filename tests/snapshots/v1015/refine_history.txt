@@ -22,13 +22,13 @@ def score(x):
 ```
 
 [How the Current Algorithm Was Formed]
-The steps that produced the current algorithm, oldest first. Each step shows the score change, the Idea of the algorithm it produced, and the code diff from the previous version.
+The steps that produced the current algorithm, oldest first. Each step shows the score change, the Design of the algorithm it produced, and the code diff from the previous version.
 
 Start · initial algorithm · score 1
-  Idea: Add 1 to the input.
+  Design: Add 1 to the input.
 
 Step 1 (latest: produced the current algorithm) · Refine · score 1 → 2 (improved)
-  Idea: Add 2 to the input.
+  Design: Add 2 to the input.
   Code diff (previous → current):
 ```diff
 @@ -1,2 +1,2 @@
@@ -42,8 +42,8 @@ Write an improved version of the current algorithm that keeps its core idea.
 Use the formation history as evidence of what has and has not helped along this line of development.
 
 [Output Format]
-Reply with an Idea followed by one Python code block:
-Idea: <a description of the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision; as long as it needs to be, at most about 250 words>
+Reply with a Design followed by one Python code block:
+Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: its core idea, the key quantities it computes, and how they are combined into each decision. State only the final design; leave out deliberation, alternatives, formulas and comparisons with earlier versions>
 Code:
 ```python
 <the complete program>

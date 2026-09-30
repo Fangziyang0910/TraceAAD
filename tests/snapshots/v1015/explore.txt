@@ -21,20 +21,20 @@ def score(x):
     return x + 2
 ```
 
-[Reference Ideas from This Search]
-Other evaluated algorithms, each with its score and Idea.
-Reference 1 · Score 3 · Idea: Add 3 to the input.
+[Reference Designs from This Search]
+Other evaluated algorithms, each with its score and Design.
+Reference 1 · Score 3 · Design: Add 3 to the input.
 
 [Search Best]
 Best score found so far in this search: 3.
 
 [Your Task: Explore]
 Write a new algorithm that you expect to outperform the current one, built on a different core idea.
-The reference ideas show other approaches found in this search; draw on them as inspiration.
+The reference designs show other approaches found in this search; draw on them as inspiration.
 
 [Output Format]
-Reply with an Idea followed by one Python code block:
-Idea: <a description of the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision; as long as it needs to be, at most about 250 words>
+Reply with a Design followed by one Python code block:
+Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: its core idea, the key quantities it computes, and how they are combined into each decision. State only the final design; leave out deliberation, alternatives, formulas and comparisons with earlier versions>
 Code:
 ```python
 <the complete program>

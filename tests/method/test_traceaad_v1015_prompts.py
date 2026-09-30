@@ -112,7 +112,7 @@ def test_explore_uses_reference_ideas_without_lineage_or_reference_code():
     request = builder.build("Explore", parent, references=references, best_score=6)
     assert request["explore_reference_ids"] == [3, 4, 5, 6]
     assert request["history_edge_ids"] == request["reference_history_edge_ids"] == []
-    assert "Reference 4 · Score 6 · Idea: Add 6" in request["prompt"]
+    assert "Reference 4 · Score 6 · Design: Add 6" in request["prompt"]
     assert "Earlier Ideas" not in request["prompt"] and "Step 1" not in request["prompt"]
     assert "return x + 3" not in request["prompt"]
     assert request["prompt"].count("```python") == 3

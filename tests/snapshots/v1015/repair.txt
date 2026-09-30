@@ -15,7 +15,7 @@ def score(x):
 Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses.
 
 [Failed Program]
-Idea: Fix the signature.
+Design: Fix the signature.
 ```python
 def score(x)
  return x
@@ -28,8 +28,8 @@ SyntaxError: expected ':'
 The program failed during evaluation. Fix it so that it runs correctly within the time limit, keeping the algorithm it was meant to implement.
 
 [Output Format]
-Reply with an Idea followed by one Python code block:
-Idea: <a description of the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision; as long as it needs to be, at most about 250 words>
+Reply with a Design followed by one Python code block:
+Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: its core idea, the key quantities it computes, and how they are combined into each decision. State only the final design; leave out deliberation, alternatives, formulas and comparisons with earlier versions>
 Code:
 ```python
 <the complete program>

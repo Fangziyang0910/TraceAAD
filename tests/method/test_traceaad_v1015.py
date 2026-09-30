@@ -125,6 +125,21 @@ def test_delivery_strict_finish_and_single_repair_payload():
     assert meta['block_indices'] == [1]
 
 
+def test_design_label_and_earlier_labels_parse():
+    template = TinyEvaluation().template_program
+    reply = ("Design: Add two to the input.\nThe sum is returned.\n"
+             "Code:\n```python\ndef score(x):\n    return x + 2\n```")
+    code, design, _ = parse_response(reply, 'stop', template)
+    assert 'return x + 2' in code and design == 'Add two to the input.\nThe sum is returned.'
+    for label in ('Idea', 'Thought'):
+        assert parse_response(f'{label}: add three\nCode:\n```python\ndef score(x):\n    return x + 3\n```',
+                              'stop', template)[1] == 'add three'
+    # A description after the code wins over earlier notes.
+    notes = ("Idea: add one\nCode:\n```python\ndef score(x):\n    return x + 2\n```\n"
+             "Design: The algorithm adds two.")
+    assert parse_response(notes, 'stop', template)[1] == 'The algorithm adds two.'
+
+
 def test_template_import_completion_retains_submitted_source():
     from benchmarks.tsp_construct.template import template_program
 
@@ -195,7 +210,7 @@ def test_initialization_cap_includes_repair_generations(tmp_path):
 
 def test_too_long_parent_is_removed_without_spending_budget(tmp_path):
     m = TraceAADV1015(evaluation=TinyEvaluation(), llm=TokenLLM(response(1)),
-                       run_dir=tmp_path, config=Config(budget=2, max_input_tokens=250))
+                       run_dir=tmp_path, config=Config(budget=2, max_input_tokens=275))
     m._roots()
     assert m.attempts == 1
     m.phase = 'search'

@@ -271,9 +271,16 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
 - **历史是证据。** 形成历史用于说明这条开发线上哪些改动有帮助、哪些没有，而不是下一步的待办清单。
 - **用方括号小节标题，英文，短。** 事实（Score、Code diff）与作者陈述（Idea）分开标注。
 
-### 5.2 Idea 的定义
+### 5.2 Design（原 Idea）的定义
 
-Idea 描述**所给代码中的完整算法**，而不是"这次改了什么"：它的核心思想、计算的关键量，以及这些量如何组合成每一步决策，按需要写，最多约 250 个英文词（约 300 token）；简单算法不必为长度而展开。每一步的改动由 Code diff 呈现，Idea 负责说明结果算法是什么，因此历史、Explore 参考卡、Crossover 参考与修复提示中的 Idea 都能独立说明一个算法。所有算子使用同一输出格式；提示中显示 Idea 时合并空白、最多 2,400 字符，不再截断到 300 字符。首批与 V10.15-2 的 Idea 为一句话描述改动。
+Design 描述**所给代码中的完整算法**，而不是"这次改了什么"：它的核心思想、计算的关键量，以及这些量如何组合成每一步决策，约 100–200 个英文词的平实文字，只写最终设计，不写推敲过程、备选方案、公式和与旧版本的比较。每一步的改动由 Code diff 呈现，Design 负责说明结果算法是什么，因此历史、Explore 参考卡、Crossover 参考与修复提示中的 Design 都能独立说明一个算法。所有算子使用同一输出格式：先写 Design，再写代码。提示中显示时合并空白、最多 2,400 字符。内部字段仍名为 `idea`；解析接受 Design、Idea、Thought 三种标签，取最后一个。
+
+**为什么这样定：**
+
+- 首批与 V10.15-2 的 Idea 是一句话描述改动，无法独立说明算法。
+- V10.15-3 最初要求在代码前写 150–250 词的 Idea：关闭 thinking 时模型把它当作草稿本，168 条中 43% 含 "Actually/Wait/Let's" 等自我修正，73% 超过 250 词（最长 1,696 词），79% 含 LaTeX 推导，并保留被放弃的方案，与代码不一致。该批在 681 次尝试时停止。
+- 增加一个不保留的 Reasoning 区块后，Reasoning 本身写 700–1,300 词，输出 token 中位数升至 1,700–2,800；Idea 放在代码之后时，OP 有 4/9 回复缺少 Idea。
+- 不设 Reasoning 的配对测试（TSP、OBP 各 12 个最近一步变差的 Refine 父代，外加 6 次 CVRP 初始化，同一采样配置）：Design 在前与在后均无草稿用语、无缺失，Refine 的改进（12/24 对 13/24）、撤回与重复相当；Design 在前的输出 token 中位数更低（599 对 634），7/30 含少量公式（在后为 1/30）。选择 Design 在前：模型可先定设计再写代码，也不会遗漏说明。
 
 ### 5.3 公共片段与各算子指令
 
@@ -287,8 +294,8 @@ The whole evaluation must finish within {timeout} seconds, so keep the computati
 Returning a previously evaluated candidate consumes an attempt without another evaluation.
 
 [Output Format]
-Reply with an Idea followed by one Python code block:
-Idea: <a description of the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision; as long as it needs to be, at most about 250 words>
+Reply with a Design followed by one Python code block:
+Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: its core idea, the key quantities it computes, and how they are combined into each decision. State only the final design; leave out deliberation, alternatives, formulas and comparisons with earlier versions>
 Code:
 ```python
 <the complete program>
@@ -299,13 +306,13 @@ Write no comments or docstrings in the code, and nothing after the code block.
 | 算子 | 上下文区块 | 任务指令 |
 |---|---|---|
 | 初始化（前 4 个根） | — | Design a complete algorithm for this task that you expect to score well, built on a clear core idea. |
-| 初始化（第 5–8 个根） | 已有根的代码、分数与 Idea | Design a complete algorithm for this task that you expect to score well, built on a core idea different from those of the algorithms above. |
-| Refine | 当前算法；形成历史（≤8 步，每步分数变化、Idea、完整 diff） | Write an improved version of the current algorithm that keeps its core idea. Use the formation history as evidence of what has and has not helped along this line of development.（根节点无历史时只有第一句） |
-| Explore | 当前算法；≤4 张参考 Idea 卡；全局最好分数 | Write a new algorithm that you expect to outperform the current one, built on a different core idea. The reference ideas show other approaches found in this search; draw on them as inspiration. |
+| 初始化（第 5–8 个根） | 已有根的代码、分数与 Design | Design a complete algorithm for this task that you expect to score well, built on a core idea different from those of the algorithms above. |
+| Refine | 当前算法；形成历史（≤8 步，每步分数变化、Design、完整 diff） | Write an improved version of the current algorithm that keeps its core idea. Use the formation history as evidence of what has and has not helped along this line of development.（根节点无历史时只有第一句） |
+| Explore | 当前算法；≤4 张参考 Design 卡；全局最好分数 | Write a new algorithm that you expect to outperform the current one, built on a different core idea. The reference designs show other approaches found in this search; draw on them as inspiration. |
 | Crossover | 当前算法及其历史（≤4 步）；参考算法及其历史（≤4 步） | Write an improved version of the current algorithm by combining it with the reference algorithm: bring in what the reference does well that the current algorithm lacks, and keep the current algorithm's strengths. |
-| 修复 | 失败程序（Idea 与代码）；错误信息 | The program failed during evaluation. Fix it so that it runs correctly within the time limit, keeping the algorithm it was meant to implement. |
+| 修复 | 失败程序（Design 与代码）；错误信息 | The program failed during evaluation. Fix it so that it runs correctly within the time limit, keeping the algorithm it was meant to implement. |
 
-历史引导语：The steps that produced the current algorithm, oldest first. Each step shows the score change, the Idea of the algorithm it produced, and the code diff from the previous version.
+历史引导语：The steps that produced the current algorithm, oldest first. Each step shows the score change, the Design of the algorithm it produced, and the code diff from the previous version.
 
 ### 5.4 逐字文本
 
