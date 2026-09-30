@@ -10,7 +10,7 @@ from benchmarks.online_bin_packing import OBPEvaluation
 from benchmarks.op_aco import OPACOEvaluation
 from benchmarks.tsp_construct import TSPEvaluation
 from benchmarks.vrptw_construct import VRPTWEvaluation
-from experiments.infra.base import RESULTS_ROOT, use_cpu_timeout, write_run_config
+from experiments.infra.base import RESULTS_ROOT, write_run_config
 from experiments.infra.runner import add_common_run_args, setup_experiment_run
 from traceaad.v10_15 import Config, TraceAADV1015
 
@@ -20,12 +20,6 @@ TRAIN_TIMEOUT = {"online_bin_packing": 30, "vrptw_construct": 30}
 
 
 def selection_task(task, search):
-    """Selection is timed like the search it follows."""
-    selection = _selection_task(task, search)
-    return use_cpu_timeout(selection) if getattr(search, "timeout_mode", "wall") == "cpu" else selection
-
-
-def _selection_task(task, search):
     if task in {"op_aco", "cvrp_aco"}:
         cls = OPACOEvaluation if task == "op_aco" else CVRPACOEvaluation
         selection = cls(split="val_50", timeout_seconds=search.timeout_seconds,

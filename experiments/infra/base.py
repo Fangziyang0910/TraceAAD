@@ -222,27 +222,8 @@ def build_llm_client(
     )
 
 
-def use_cpu_timeout(evaluation: Any) -> Any:
-    """Time evaluations by CPU seconds of the evaluation's process group.
-
-    Wall-clock limits stretch with host load: under ~20 concurrent searches,
-    two thirds of the TSP programs that timed out finished well within the
-    limit when re-run on an idle host. The CPU budget is timeout_seconds per
-    worker, so an ACO evaluation with 4 workers may use 4x timeout CPU seconds.
-    """
-    evaluation.timeout_mode = "cpu"
-    evaluation.cpu_parallelism = max(1, int(getattr(evaluation, "n_workers", 1) or 1))
-    return evaluation
-
-
 def build_task(task: TaskName, eval_workers: int | None) -> tuple[Any, dict[str, Any]]:
     """Construct the training evaluation for a task (identical across methods)."""
-    evaluation, config = _build_task(task, eval_workers)
-    use_cpu_timeout(evaluation)
-    return evaluation, {**config, "timeout_mode": "cpu"}
-
-
-def _build_task(task: TaskName, eval_workers: int | None) -> tuple[Any, dict[str, Any]]:
     if task == "tsp_construct":
         kwargs = get_generated_task_kwargs(task, "train")
         return TSPEvaluation(**kwargs), {"split": "train", **kwargs}

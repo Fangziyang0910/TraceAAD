@@ -67,9 +67,6 @@ class SeededEvaluation(Evaluation):
                          safe_evaluate=inner.safe_evaluate,
                          daemon_eval_process=inner.daemon_eval_process, fork_proc=inner.fork_proc)
         self.inner = inner
-        # SecureEvaluator reads the timing policy from this wrapper.
-        self.timeout_mode = getattr(inner, "timeout_mode", "wall")
-        self.cpu_parallelism = getattr(inner, "cpu_parallelism", None)
 
     def evaluate_program(self, program_str, callable_func, *, seed=730241, source=None):
         py_state, np_state = random.getstate(), np.random.get_state()

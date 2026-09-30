@@ -13,16 +13,11 @@ from benchmarks.op_aco import OPACOEvaluation
 from benchmarks.tsp_construct import TSPEvaluation
 from benchmarks.vrptw_construct import VRPTWEvaluation
 from core import SecureEvaluator
-from experiments.infra.base import use_cpu_timeout
 from traceaad.v10_13.storage import write_json
 from traceaad.v10_15.evaluation import SeededEvaluation, protocol_identity
 
 
 def heldout_task(task, split, workers, timeout_seconds=None):
-    return use_cpu_timeout(_heldout_task(task, split, workers, timeout_seconds))
-
-
-def _heldout_task(task, split, workers, timeout_seconds=None):
     if timeout_seconds is not None and (not math.isfinite(timeout_seconds) or timeout_seconds <= 0):
         raise ValueError("timeout_seconds must be finite and positive")
     if workers < 1:

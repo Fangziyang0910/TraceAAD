@@ -56,21 +56,7 @@ class InvalidEvaluationResult(Exception):
     """
 
 
-TimeoutMode = Literal['wall', 'cpu']
-# CPU-mode safety net for programs that block or sleep instead of computing.
-CPU_MODE_WALL_FACTOR = 4.0
-_POLL_SECONDS = 0.2
-_SINGLE_THREAD_ENV = ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS',
-                      'NUMEXPR_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS')
-
-
 class Evaluation(ABC):
-    # 'wall' (historical) limits elapsed time, which stretches with host load.
-    # 'cpu' limits the CPU time of the evaluation's whole process group to
-    # timeout_seconds * cpu_parallelism, so the verdict does not depend on how
-    # many other searches share the machine.
-    timeout_mode: TimeoutMode = 'wall'
-
     def __init__(
             self,
             template_program: str | Program,
@@ -172,42 +158,9 @@ def _descendant_pids(pid: int) -> list[int]:
     return found
 
 
-def _group_cpu_seconds(pgid: int) -> float | None:
-    """CPU time (user+system, including reaped children) of a process group."""
-    proc = Path("/proc")
-    if not proc.is_dir():
-        return None
-    ticks = os.sysconf("SC_CLK_TCK")
-    total = 0
-    for entry in proc.iterdir():
-        if not entry.name.isdigit():
-            continue
-        try:
-            stat = (entry / "stat").read_text()
-        except OSError:
-            continue
-        fields = stat[stat.rfind(")") + 2:].split()
-        # fields[2] = pgrp; [11..14] = utime, stime, cutime, cstime
-        if len(fields) > 14 and int(fields[2]) == pgid:
-            total += sum(int(value) for value in fields[11:15])
-    return total / ticks
-
-
 def _own_cpu_seconds() -> float:
     usage = [resource.getrusage(who) for who in (resource.RUSAGE_SELF, resource.RUSAGE_CHILDREN)]
     return sum(u.ru_utime + u.ru_stime for u in usage)
-
-
-def _limit_threads() -> None:
-    """One BLAS/OpenMP thread in processes spawned by the evaluation (ACO workers).
-
-    The evaluation process itself is forked, so its BLAS pool follows the
-    parent; experiment entry points set these variables before importing
-    numpy (see ``experiments/__init__.py``). Resizing an inherited pool here
-    with threadpoolctl instead spins up idle threads that burn CPU time.
-    """
-    for name in _SINGLE_THREAD_ENV:
-        os.environ[name] = "1"
 
 
 def _signal_pid(pid: int, sig: int) -> None:
@@ -274,45 +227,18 @@ class SecureEvaluator:
     def evaluate_program(self, program: str | Program, **kwargs):
         return self.evaluate_program_with_details(program, **kwargs).result
 
-    def _cpu_budget(self) -> float | None:
-        timeout = self._evaluator.timeout_seconds
-        if timeout is None:
-            return None
-        parallelism = getattr(self._evaluator, 'cpu_parallelism', None) or 1
-        return float(timeout) * max(1, int(parallelism))
-
-    def _wait(self, process, result_queue) -> EvaluationOutcome:
+    def _wait(self, result_queue) -> EvaluationOutcome:
         timeout = self._evaluator.timeout_seconds
         if timeout is None:
             return result_queue.get()
-        if getattr(self._evaluator, 'timeout_mode', 'wall') != 'cpu':
-            try:
-                return result_queue.get(timeout=timeout)
-            except queue.Empty:
-                return self._timeout(f'evaluation exceeded {timeout}s')
-        budget = self._cpu_budget()
-        deadline = time.monotonic() + budget * CPU_MODE_WALL_FACTOR
-        used = 0.0
-        while True:
-            try:
-                return result_queue.get(timeout=_POLL_SECONDS)
-            except queue.Empty:
-                pass
-            measured = _group_cpu_seconds(process.pid) if process.pid else None
-            used = max(used, measured or 0.0)
-            if used > budget:
-                return self._timeout(f'evaluation exceeded {budget:g} CPU seconds', used)
-            if time.monotonic() > deadline:
-                return self._timeout(
-                    f'evaluation exceeded the {budget * CPU_MODE_WALL_FACTOR:g}s wall-clock '
-                    f'safety limit after {used:.1f} CPU seconds', used)
-
-    def _timeout(self, message: str, cpu_seconds: float | None = None) -> EvaluationOutcome:
-        if self._debug_mode:
-            print(f'DEBUG: {message}.')
-        return EvaluationOutcome(result=None, failure_kind='timeout',
-                                 error_type='TimeoutError', error=message,
-                                 cpu_seconds=cpu_seconds)
+        try:
+            return result_queue.get(timeout=timeout)
+        except queue.Empty:
+            if self._debug_mode:
+                print(f'DEBUG: the evaluation time exceeds {timeout}s.')
+            return EvaluationOutcome(result=None, failure_kind='timeout',
+                                     error_type='TimeoutError',
+                                     error=f'evaluation exceeded {timeout}s')
 
     def evaluate_program_with_details(
             self, program: str | Program, **kwargs
@@ -335,7 +261,7 @@ class SecureEvaluator:
                 )
                 process.start()
                 try:
-                    outcome = self._wait(process, result_queue)
+                    outcome = self._wait(result_queue)
                 finally:
                     _stop_eval_process(process)
                 return outcome
@@ -380,8 +306,6 @@ class SecureEvaluator:
             **kwargs,
     ) -> None:
         _enter_eval_session()
-        if getattr(self._evaluator, 'timeout_mode', 'wall') == 'cpu':
-            _limit_threads()
         outcome = self._evaluate_with_details(program_str, function_name, **kwargs)
         result_queue.put(replace(outcome, cpu_seconds=_own_cpu_seconds()))
 

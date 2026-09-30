@@ -1,9 +1,9 @@
 """Experiment entry points.
 
-Evaluations are limited by CPU seconds (see ``core.evaluate``), so numpy's
-BLAS/OpenMP pools stay single-threaded: CPU time then measures one core's
-work, and concurrent searches do not oversubscribe the host. This must run
-before numpy is imported, which ``python -m experiments....`` guarantees.
+numpy's BLAS/OpenMP pools stay single-threaded: evaluations run in their own
+processes and many searches share one host, so per-process thread pools
+would only oversubscribe the CPUs. This must run before numpy is imported,
+which ``python -m experiments....`` guarantees.
 """
 
 import os

@@ -1,7 +1,6 @@
 import time
 
 from core import Evaluation, SecureEvaluator
-from experiments.infra.base import build_task, use_cpu_timeout
 
 
 class Spin(Evaluation):
@@ -17,28 +16,11 @@ def evaluate(evaluation, body):
     return SecureEvaluator(evaluation).evaluate_program_with_details(program)
 
 
-def test_cpu_mode_limits_computation_not_waiting():
-    busy = use_cpu_timeout(Spin(0.5))
-    outcome = evaluate(busy, "    end = time.process_time() + 5\n    while time.process_time() < end: pass")
-    assert outcome.failure_kind == "timeout" and "CPU seconds" in outcome.error
-    assert 0.5 <= outcome.cpu_seconds < 2
-    # Waiting costs no CPU: under the wall clock it would time out, here it finishes.
-    started = time.monotonic()
-    outcome = evaluate(use_cpu_timeout(Spin(0.5)), "    time.sleep(1)")
-    assert outcome.result == 1.0 and outcome.cpu_seconds < 0.5
-    assert time.monotonic() - started >= 1
-    assert evaluate(Spin(0.5), "    time.sleep(1)").failure_kind == "timeout"
-    # A blocked program still stops at the wall-clock safety limit (4x budget).
-    outcome = evaluate(use_cpu_timeout(Spin(0.25)), "    time.sleep(30)")
-    assert outcome.failure_kind == "timeout" and "wall-clock safety limit" in outcome.error
-
-
-def test_training_tasks_are_cpu_timed_with_worker_budget():
-    evaluation, config = build_task("cvrp_aco", 4)
-    assert evaluation.timeout_mode == "cpu" and evaluation.cpu_parallelism == 4
-    assert config["timeout_mode"] == "cpu"
-    evaluation, _ = build_task("tsp_construct", 4)
-    assert evaluation.timeout_mode == "cpu" and evaluation.cpu_parallelism == 1
+def test_timeout_is_wall_clock_and_cpu_time_is_recorded():
+    outcome = evaluate(Spin(0.5), "    time.sleep(2)")
+    assert outcome.failure_kind == "timeout" and outcome.error == "evaluation exceeded 0.5s"
+    outcome = evaluate(Spin(5), "    end = time.process_time() + 0.3\n    while time.process_time() < end: pass")
+    assert outcome.result == 1.0 and 0.3 <= outcome.cpu_seconds < 2
 
 
 def test_obp_program_state_does_not_leak_across_instances():
