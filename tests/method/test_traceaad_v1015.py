@@ -275,6 +275,31 @@ def test_explore_references_exclude_lineage_and_duplicate_visible_ideas():
     assert relaxed and info['relaxed_lineage']
 
 
+def test_score_classes_absorb_floating_point_noise_without_chaining():
+    nodes = [{'id': 1, 'fitness': 14.704000000000002}, {'id': 2, 'fitness': 14.703999999999999},
+             {'id': 3, 'fitness': 14.7}, {'id': 4, 'fitness': 14.704000000000002 - 5e-9}]
+    classes = score_classes(nodes)
+    assert [[n['id'] for n in c] for c in classes] == [[1, 2, 4], [3]]
+    assert probabilities([c[0]['fitness'] for c in classes])[0] == [0.5, 0.5]
+    # 1e-9-relative steps must not chain distinct scores into one class.
+    ladder = [{'id': i, 'fitness': 1.0 + i * 6e-10} for i in range(5)]
+    assert len(score_classes(ladder)) >= 2
+
+
+def test_explore_references_compare_whole_ideas():
+    from tests.method.test_traceaad_v1015_prompts import node
+
+    parent = node(1)
+    shared = 'Construct routes greedily from the depot and score every feasible customer. ' * 5
+    a, b = node(2), node(3)
+    a['idea'] = shared + 'Rank customers by regret insertion cost.'
+    b['idea'] = shared + 'Rank customers by a capacity shadow price.'
+    b['code'] = 'def score(x):\n    return abs(x) - 3\n'
+    archive = {n['id']: n for n in (parent, a, b)}
+    references, _ = choose_explore_references(parent, archive, random.Random(0))
+    assert {n['id'] for n in references} == {2, 3}
+
+
 def test_explore_references_take_one_card_per_score_class():
     from tests.method.test_traceaad_v1015_prompts import node
 

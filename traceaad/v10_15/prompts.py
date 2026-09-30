@@ -53,8 +53,9 @@ def idea_view(idea):
 
 def output_format():
     return ("[Output Format]\nReply with an Idea followed by one Python code block:\n"
-            "Idea: <about 150-250 words describing the complete algorithm in your code: its core idea, "
-            "the key quantities it computes, and how they are combined into each decision>\n"
+            "Idea: <a description of the complete algorithm in your code: its core idea, the key quantities "
+            "it computes, and how they are combined into each decision; as long as it needs to be, "
+            "at most about 250 words>\n"
             "Code:\n```python\n<the complete program>\n```\n"
             "Write no comments or docstrings in the code, and nothing after the code block.")
 
@@ -79,7 +80,7 @@ class PromptBuilder:
             "[Evaluation]\nEach candidate program is run on a fixed set of training instances.\n"
             f"Score: {meaning}. {'Higher' if higher else 'Lower'} is better.\n"
             f"The whole evaluation must finish within {timeout} seconds, so keep the computation efficient.\n"
-            "Every program shown below has already been evaluated; reproducing one of them earns nothing.",
+            "Returning a previously evaluated candidate consumes an attempt without another evaluation.",
             "[Target Function]\n```python\n" + str(evaluation.template_program).strip() +
             "\n```\nKeep the function name, arguments and return contract exactly as shown. "
             "The program must be self-contained: include every import, constant and helper it uses.",

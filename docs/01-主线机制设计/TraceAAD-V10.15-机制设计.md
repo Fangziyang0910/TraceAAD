@@ -135,7 +135,7 @@ V10.15 是一个独立版本，不是 V10.14 的后代，版本号只作标识�
 
 ### 3.4 父代选择
 
-在单一训练种子、确定性评价下，训练分完全相同的程序几乎总是行为等价。把训练分相同的可选节点归为一个**分数类**；这是行为等价的近似，离散目标上行为不同的程序也可能恰好同分而被合并。令 K 为分数类数，`q_k` 为第 k 类的最大化方向训练质量（最小化任务取 `q = −score`）：
+在单一训练种子、确定性评价下，训练分完全相同的程序几乎总是行为等价。把训练分相同的可选节点归为一个**分数类**。"相同"按判定容差 `1e-9 · max(1, |a|, |b|)` 比较：同一行为按不同顺序求均值时末位会不同（OP：14.704000000000002 与 14.703999999999999）；每个节点与当前类中最好的成员比较，接近的分数不会串联合并。这是行为等价的近似，离散目标上行为不同的程序也可能恰好同分而被合并。令 K 为分数类数，`q_k` 为第 k 类的最大化方向训练质量（最小化任务取 `q = −score`）：
 
 ```
 p_β(k) = exp(β · (q_k − q_max)) / Σ_j exp(β · (q_j − q_max))
@@ -174,7 +174,7 @@ ESS(β) = 1 / Σ_k p_β(k)²
 
 1. 从有效档案排除当前程序、相同代码、空 Idea 和与当前 Idea 相同的候选。Idea 先合并空白、截取显示的 300 字符、忽略大小写后比较。
 2. 优先使用与当前程序没有祖先或后代关系的候选；这类候选为空时才放宽谱系条件。
-3. 相同规范代码、相同显示 Idea 或相同训练分数（同一分数类）只保留一个代表，优先质量较高、同分较早者。不设质量中位数门槛：较低分程序也可以提供参考思想。
+3. 相同规范代码、相同 Idea（全文合并空白、忽略大小写后比较）或同一分数类只保留一个代表，优先质量较高、同分较早者。不设质量中位数门槛：较低分程序也可以提供参考思想。
 4. 贪心选择最多 4 个参考。每次选与当前程序及所有已选参考的最大 token Jaccard 相似度最低者，避免只挑出多个彼此相似的参考；并列时优先质量较高者，再用参考随机数流抽取。
 5. 有几个合格参考就展示几个，不为凑满 4 个重复材料。没有参考时仍可根据当前代码执行 Explore。
 
@@ -265,14 +265,15 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
 ### 5.1 写法原则（2026-09-30 重写）
 
 - **从元提示出发。** 所有算子只提一个要求：利用提示中的信息，写出预期得分更高的算法。算子之间只在"依据哪些信息、离当前算法多远"上表达偏好：Refine 保留当前算法的核心思想加以改进，Explore 以不同的核心思想另起，Crossover 把参考算法中当前算法所缺的长处融合进来。
-- **只陈述事实与目标，不写具体技巧。** 删除了"改动必须影响决策""单调变换无效""可重新标定参数"等规则：它们把设计者对某些失败的猜测写成操作指南，既不通用，也会被模型当作待办事项。首批实验中，Refine 提示里"correct or undo a recent change that made it worse"一句使模型在父代最近一步变差时原样撤回该步，产生与祖父节点相同的重复程序（V10.15-2 前 25% 预算中 307 次，其中 82% 撤回的是变差的一步）。
-- **公共事实：** 提示中出现的程序都已评价过，复现其中任何一个不会得分。这是搜索规则本身，对撤回、复制参考和原样返回同样适用，不针对某一种失败单独立禁令。
+- **只陈述事实与目标，不写具体技巧。** 删除了"改动必须影响决策""单调变换无效""可重新标定参数"等规则：它们把设计者对某些失败的猜测写成操作指南，既不通用，也会被模型当作待办事项。V10.15-2 前 25% 预算中，Refine 有 307 次生成与祖父节点相同的程序，其中 82% 撤回的是使分数变差的一步，模型的 Idea 多数直接写 "revert"；旧提示中恰有 "correct or undo a recent change that made it worse"。在相同父代与历史下只替换提示的对照中（从 V10.15-2 档案抽取最近一步变差的 45 个父代，同一采样配置），撤回从 19 次降到 2 次；TSP 与 OBP 的 32 个父代上，有效新程序从 11 个增至 28 个，超过父代的从 9 个增至 17 个。样本较小，只支持"这句指令是主要诱因"，不排除模型也会自主回退。
+- **公共事实：** Returning a previously evaluated candidate consumes an attempt without another evaluation. 这是搜索规则本身，对撤回、复制参考和原样返回同样适用，不针对某一种失败单独立禁令。
+- **算子范围调整：** Refine 从"一个聚焦的改动"放宽为"保留核心思想的改进版本"，Crossover 从"移植一个机制"放宽为"融合参考算法的长处"，允许一次改动多个部分。这给模型更大的设计空间，代价是分数变化更难归因到单处改动。
 - **历史是证据。** 形成历史用于说明这条开发线上哪些改动有帮助、哪些没有，而不是下一步的待办清单。
 - **用方括号小节标题，英文，短。** 事实（Score、Code diff）与作者陈述（Idea）分开标注。
 
 ### 5.2 Idea 的定义
 
-Idea 描述**所给代码中的完整算法**，而不是"这次改了什么"：它的核心思想、计算的关键量，以及这些量如何组合成每一步决策，约 150–250 个英文词（200–300 token）。每一步的改动由 Code diff 呈现，Idea 负责说明结果算法是什么，因此历史、Explore 参考卡、Crossover 参考与修复提示中的 Idea 都能独立说明一个算法。所有算子使用同一输出格式；提示中显示 Idea 时合并空白、最多 2,400 字符，不再截断到 300 字符。首批与 V10.15-2 的 Idea 为一句话描述改动。
+Idea 描述**所给代码中的完整算法**，而不是"这次改了什么"：它的核心思想、计算的关键量，以及这些量如何组合成每一步决策，按需要写，最多约 250 个英文词（约 300 token）；简单算法不必为长度而展开。每一步的改动由 Code diff 呈现，Idea 负责说明结果算法是什么，因此历史、Explore 参考卡、Crossover 参考与修复提示中的 Idea 都能独立说明一个算法。所有算子使用同一输出格式；提示中显示 Idea 时合并空白、最多 2,400 字符，不再截断到 300 字符。首批与 V10.15-2 的 Idea 为一句话描述改动。
 
 ### 5.3 公共片段与各算子指令
 
@@ -283,11 +284,11 @@ Idea 描述**所给代码中的完整算法**，而不是"这次改了什么"：
 Each candidate program is run on a fixed set of training instances.
 Score: {score_meaning}. {Lower|Higher} is better.
 The whole evaluation must finish within {timeout} seconds, so keep the computation efficient.
-Every program shown below has already been evaluated; reproducing one of them earns nothing.
+Returning a previously evaluated candidate consumes an attempt without another evaluation.
 
 [Output Format]
 Reply with an Idea followed by one Python code block:
-Idea: <about 150-250 words describing the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision>
+Idea: <a description of the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision; as long as it needs to be, at most about 250 words>
 Code:
 ```python
 <the complete program>

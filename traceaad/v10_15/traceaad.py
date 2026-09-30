@@ -19,7 +19,7 @@ from .config import Config
 from .delivery import DeliveryError, SourceError, extract_idea, parse_response
 from .evaluation import SeededEvaluation, fingerprint, protocol_identity
 from .prompts import ContextTooLong, PromptBuilder, idea_view
-from .selection import choose_explore_references, choose_reference, sample_parent, score_classes
+from .selection import choose_explore_references, choose_reference, same_score, sample_parent, score_classes
 from .state import Facts
 
 
@@ -277,7 +277,7 @@ class TraceAADV1015:
                             "repaired": repair_of is not None, "attempt_id": aid}
                     self.facts.add("node", node)
                     record.update(status="valid", score=score, fitness=fitness, node_id=aid,
-                                  same_as_parent=parent is not None and fitness == parent["fitness"])
+                                  same_as_parent=parent is not None and same_score(fitness, parent["fitness"]))
         self.facts.add("attempt", record)
         self.facts._append({"kind": "candidate", "candidate_id": aid, "budget_used": aid,
                             "status": record["status"], "fitness": record["fitness"],

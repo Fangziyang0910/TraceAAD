@@ -5,7 +5,7 @@ Return a numeric score.
 Each candidate program is run on a fixed set of training instances.
 Score: the task fitness. Higher is better.
 The whole evaluation must finish within 20 seconds, so keep the computation efficient.
-Every program shown below has already been evaluated; reproducing one of them earns nothing.
+Returning a previously evaluated candidate consumes an attempt without another evaluation.
 
 [Target Function]
 ```python
@@ -44,7 +44,7 @@ Design a complete algorithm for this task that you expect to score well, built o
 
 [Output Format]
 Reply with an Idea followed by one Python code block:
-Idea: <about 150-250 words describing the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision>
+Idea: <a description of the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision; as long as it needs to be, at most about 250 words>
 Code:
 ```python
 <the complete program>

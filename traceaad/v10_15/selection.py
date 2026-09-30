@@ -18,12 +18,28 @@ from .canonical import similarity, token_set
 TARGET_ESS = 8.0
 
 
+def same_score(a, b):
+    """Equal training fitness up to floating-point noise (the verdict tolerance).
+
+    Identical behaviour can differ in the last bits when a mean is summed in a
+    different order (OP: 14.704000000000002 vs 14.703999999999999).
+    """
+    return abs(a - b) <= 1e-9 * max(1.0, abs(a), abs(b))
+
+
 def score_classes(nodes):
-    """Group nodes by exact training fitness, best class first, members by id."""
-    groups = {}
-    for node in nodes:
-        groups.setdefault(float(node["fitness"]), []).append(node)
-    return [sorted(groups[q], key=lambda n: n["id"]) for q in sorted(groups, reverse=True)]
+    """Group nodes by training fitness up to floating-point noise.
+
+    Best class first, members by id. Each node is compared with the best
+    member of the open class, so near-equal values never chain into one class.
+    """
+    classes = []
+    for node in sorted(nodes, key=lambda n: (-float(n["fitness"]), n["id"])):
+        if classes and same_score(classes[-1][0]["fitness"], node["fitness"]):
+            classes[-1].append(node)
+        else:
+            classes.append([node])
+    return [sorted(members, key=lambda n: n["id"]) for members in classes]
 
 
 def probabilities(values):
@@ -109,7 +125,7 @@ def choose_reference(parent, archive, rng):
 def choose_explore_references(parent, archive, rng, count=4):
     """Select distinct idea cards using code diversity as a fallible proxy."""
     def normalize(idea):
-        return " ".join((idea or "").split())[:300].casefold()
+        return " ".join((idea or "").split()).casefold()
     parent_idea = normalize(parent.get("idea"))
     ancestry = ancestor_ids(parent, archive)
     eligible = [n for n in archive.values() if n["id"] != parent["id"] and
@@ -121,13 +137,14 @@ def choose_explore_references(parent, archive, rng, count=4):
     # Prefer the best representative of each identical visible idea, program
     # or score class: equal training fitness marks equivalent behaviour, so
     # reworded variants of one algorithm would fill several cards.
-    ideas, keys, scores, unique = set(), set(), set(), []
+    score_class = {n["id"]: i for i, members in enumerate(score_classes(pool)) for n in members}
+    ideas, keys, classes, unique = set(), set(), set(), []
     for node in sorted(pool, key=lambda n: (-n["fitness"], n["id"])):
         idea = normalize(node["idea"])
-        if idea not in ideas and node["key"] not in keys and node["fitness"] not in scores:
+        if idea not in ideas and node["key"] not in keys and score_class[node["id"]] not in classes:
             ideas.add(idea)
             keys.add(node["key"])
-            scores.add(node["fitness"])
+            classes.add(score_class[node["id"]])
             unique.append(node)
     tokens = {n["id"]: token_set(n["code"]) for n in [parent, *unique]}
 
