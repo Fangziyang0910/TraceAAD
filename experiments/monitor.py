@@ -6,14 +6,19 @@ import argparse
 from collections import Counter
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import gzip
+import hashlib
 import json
 from pathlib import Path
+from threading import Lock
 import time
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from experiments.infra.artifacts import pick_best_sample
 from experiments.infra.monitor_history import TrainingHistory
+from experiments.infra.monitor_results import (
+    SCALES, TEST_SCALES, batch_result_files, load_batch_heldout, load_selection, rep_of)
 from experiments.infra.monitor_timing import batch_timing, search_timing
 from traceaad.v10_13.storage import JOURNAL_NAME, RunStorage, read_journal
 
@@ -37,6 +42,44 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _stamp(path: Path):
+    try:
+        stat = path.stat()
+        return (stat.st_size, stat.st_mtime_ns)
+    except OSError:
+        return None
+
+
+def _compact_curve(points, cap: int = 200):
+    """Thin a run-best curve for list payloads, keeping endpoints and records."""
+    if not isinstance(points, list) or len(points) <= cap:
+        return points
+    keep: set[int] = {0, len(points) - 1}
+    for index, point in enumerate(points):
+        if isinstance(point, dict) and point.get("kind") in {"initial", "breakthrough"}:
+            keep.add(index)
+    step = len(points) / cap
+    cursor = 0.0
+    while cursor < len(points):
+        keep.add(round(cursor))
+        cursor += step
+    return [points[index] for index in sorted(keep)]
+
+
+LIST_POINT_FIELDS = ("evaluation", "fitness", "value", "kind", "gain", "candidate", "operator")
+
+
+def _list_curve(points):
+    """Overview curves carry only what the sparkline and its tooltip need."""
+    return [{key: point.get(key) for key in LIST_POINT_FIELDS if point.get(key) is not None}
+            for point in (_compact_curve(points) or []) if isinstance(point, dict)]
+
+
+def _json_bytes(payload: Any):
+    return None if payload is None else json.dumps(
+        payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
 
 
 def _last_candidate(path: Path) -> dict[str, Any]:
@@ -87,6 +130,10 @@ def _search_events(run_dir: Path):
     if journal.exists():
         with journal.open(encoding="utf-8") as handle:
             for line in handle:
+                # Request/call/state lines carry prompts and RNG blobs and are
+                # irrelevant here; skip them before the JSON decode.
+                if line.startswith(('{"kind":"request"', '{"kind":"call"', '{"kind":"state"')):
+                    continue
                 record = json.loads(line)
                 if "source" in record:
                     source = record["source"]
@@ -331,16 +378,48 @@ class ResultsMonitor:
         except OSError:
             return False
 
+    def _journal_newer_than_summary(self, run_dir: Path) -> bool:
+        """True when the journal kept growing after the summary was written."""
+        journal, summary = run_dir / JOURNAL_NAME, run_dir / "logs" / "run_summary.json"
+        try:
+            return journal.stat().st_mtime_ns > summary.stat().st_mtime_ns
+        except OSError:
+            return False
+
     def batches(self) -> list[dict[str, str]]:
-        names = []
+        entries = []
         for directory in self.results_root.iterdir():
             if directory.is_dir() and any(directory.glob("*/*/run_config.json")):
-                names.append(directory.name)
-        names.sort(reverse=True)
-        if self.default_experiment in names:
-            names.remove(self.default_experiment)
-            names.insert(0, self.default_experiment)
-        return [{"id": name, "label": name} for name in names]
+                entries.append((self._latest_activity(directory), directory.name))
+        entries.sort(reverse=True)
+        return [{"id": name, "label": name} for _, name in entries]
+
+    @staticmethod
+    def _latest_activity(directory: Path) -> float:
+        latest = 0.0
+        for journal in directory.glob("*/*/search.jsonl"):
+            try:
+                latest = max(latest, journal.stat().st_mtime)
+            except OSError:
+                pass
+        return latest
+
+    def state_signature(self, experiment: str | None):
+        """Cheap change-detection stamp for a batch: run journal/summary stats."""
+        experiment = experiment or next((item["id"] for item in self.batches()), None)
+        stamps = []
+        if experiment:
+            for config_path in sorted((self.results_root / experiment).glob("*/*/run_config.json")):
+                run_dir = config_path.parent
+                stamps.append((run_dir.name,
+                               _stamp(run_dir / JOURNAL_NAME),
+                               _stamp(run_dir / "logs" / "run_summary.json")))
+        return (experiment, tuple(stamps))
+
+    def run_signature(self, experiment: str, task: str, name: str):
+        run_dir = self.results_root / experiment / task / name
+        return (experiment, task, name, _stamp(run_dir / JOURNAL_NAME),
+                _stamp(run_dir / "logs" / "run_summary.json"))
 
     def _runs(self, experiment: str):
         if experiment not in {item["id"] for item in self.batches()}:
@@ -352,13 +431,20 @@ class ResultsMonitor:
             config = _read_json(config_path)
             summary = _read_json(run_dir / "logs/run_summary.json")
             raw_status = summary.get("status")
+            journal_hot = self._journal_is_hot(run_dir)
             if raw_status == "finished":
                 status = "finished"
             elif raw_status == "running":
                 status = "running"
             elif raw_status == "unknown":
                 status = "unknown"
-            elif not raw_status and self._journal_is_hot(run_dir):
+            elif journal_hot and (
+                not raw_status
+                or (raw_status == "service_unavailable" and self._journal_newer_than_summary(run_dir))
+            ):
+                # A hot journal with no summary yet (summary written at
+                # completion), or one that kept growing past a service-pause
+                # summary: the run is live.
                 status = "running"
             else:
                 status = "blocked" if raw_status else "queued"
@@ -367,10 +453,11 @@ class ResultsMonitor:
             if not isinstance(best, dict):
                 best = {}
             score = best.get("fitness", summary.get("best_score"))
+            selection = best.get("selection_fitness")
             budget = summary.get("budget", summary.get("budget_slots", params.get("budget", params.get("max_sample_nums", 0))))
             used = summary.get("budget_used", summary.get("budget_slots", summary.get("num_samples", summary.get("evaluator_call_count", 0))))
             nodes = summary.get("num_nodes", summary.get("n_algorithms", summary.get("evaluate_success_program_num", 0)))
-            if raw_status == "unknown" or (not raw_status and status == "running"):
+            if raw_status == "unknown" or (status == "running" and journal_hot):
                 used, nodes = self._recorded_progress(run_dir)
             task = config.get("task", run_dir.parent.name)
             if task not in TASKS:
@@ -382,8 +469,10 @@ class ResultsMonitor:
                 "status": status, "raw_status": raw_status, "budget": int(budget or 0),
                 "budget_used": int(used or 0), "valid_nodes": int(nodes or 0),
                 "best_fitness": score, "best_value": _objective(score, task),
+                "selection_fitness": selection, "selection_value": _objective(selection, task),
                 "updated_at": summary.get("finished_at"), "run_dir": run_dir,
-                "curve": _search_trend(run_dir, task)[0],
+                "selection_info": load_selection(run_dir),
+                "curve": _list_curve(_search_trend(run_dir, task)[0]),
                 "x_label": "候选尝试" if native_v1014 else "已记录序号",
             }
             row["timing"] = search_timing(row, summary, _history(run_dir, task).timing_snapshot(),
@@ -420,6 +509,79 @@ class ResultsMonitor:
             "tasks": groups,
         }
 
+    # ---------- cross-batch comparison ----------
+
+    def cohorts(self):
+        """Comparable result sets: one per batch, or one per held-out variant."""
+        items = []
+        for batch in self.batches():
+            variants = load_batch_heldout(self.results_root / batch["id"])
+            names = sorted(variants) or [""]
+            for variant in names:
+                tasks = sorted(variants.get(variant, {}))
+                items.append({
+                    "id": f"{batch['id']}::{variant}" if variant else batch["id"],
+                    "batch": batch["id"], "variant": variant,
+                    "label": f"{batch['id']} · {variant}" if variant and len(names) > 1 else batch["id"],
+                    "heldout_tasks": tasks,
+                })
+        return items
+
+    def compare_signature(self, cohort_ids):
+        batches = sorted({cohort.split("::")[0] for cohort in cohort_ids})
+        return tuple((batch, self.state_signature(batch),
+                      tuple((str(path), _stamp(path)) for path in batch_result_files(self.results_root / batch)))
+                     for batch in batches)
+
+    def _task_rows(self, batch: str):
+        if batch == "traceaad_v10_13":
+            return [row for group in self.v1013.overview().get("tasks", []) for row in group["runs"]]
+        return self._runs(batch)
+
+    def compare(self, cohort_ids):
+        known = {item["id"]: item for item in self.cohorts()}
+        chosen = [known[cohort] for cohort in cohort_ids if cohort in known]
+        rows_by_batch = {item["batch"]: self._task_rows(item["batch"]) for item in chosen}
+        heldout_by_batch = {item["batch"]: load_batch_heldout(self.results_root / item["batch"]) for item in chosen}
+        tasks = []
+        for task, meta in TASKS.items():
+            entries = []
+            for item in chosen:
+                heldout = heldout_by_batch[item["batch"]].get(item["variant"], {}).get(task, {})
+                named = heldout.get("runs", {})
+                rows = [row for row in rows_by_batch[item["batch"]] if row["task"] == task]
+                if named:
+                    rows = [row for row in rows if row["name"] in named]
+                elif item["variant"]:
+                    rows = [row for row in rows if item["variant"] in row["name"]]
+                runs = []
+                for row in rows:
+                    selection = row.get("selection_info") or {}
+                    runs.append({
+                        "name": row["name"], "rep": row.get("repeat") or rep_of(row["name"]),
+                        "status": row.get("status"),
+                        # the final program's training score (selected node for V10.14+)
+                        "train": row.get("best_fitness") if row.get("status") == "finished"
+                        else (row.get("curve") or [{}])[-1].get("fitness", row.get("best_fitness")),
+                        "selection": selection.get("fitness", row.get("selection_fitness")),
+                        "ties": selection.get("ties"), "finalists": selection.get("finalists"),
+                        "heldout": {str(k): v for k, v in named.get(row["name"], {}).items()},
+                    })
+                present = {run["name"] for run in runs}
+                for name, scores in named.items():  # held-out results whose run dir is gone
+                    if name not in present:
+                        runs.append({"name": name, "rep": rep_of(name), "status": None, "train": None,
+                                     "selection": None, "heldout": {str(k): v for k, v in scores.items()}})
+                if runs:
+                    runs.sort(key=lambda run: (run["rep"] is None, run["rep"] or 0, run["name"]))
+                    entries.append({"id": item["id"], "source": heldout.get("source"), "runs": runs})
+            if entries:
+                tasks.append({"key": task, **meta, "cohorts": entries, "scales": [
+                    {"key": str(scale), "label": str(scale), "test": scale in TEST_SCALES[task]}
+                    for scale in SCALES[task]]})
+        return {"cohorts": [{k: item[k] for k in ("id", "label", "batch", "variant")} for item in chosen],
+                "tasks": tasks}
+
     def run_detail(self, experiment: str, task: str, name: str):
         if experiment == "traceaad_v10_13":
             return self.v1013.run_detail(self.v1013.default_batch or "", task, name)
@@ -430,6 +592,15 @@ class ResultsMonitor:
         run_dir = row["run_dir"]
         summary = _read_json(run_dir / "logs/run_summary.json")
         best = summary.get("best")
+        curve, recent, operators, outcomes = _search_trend(run_dir, task)
+        if not isinstance(best, dict) or not isinstance(best.get("code"), str):
+            # Live V10.15 runs: the incumbent's node line is indexed by the
+            # incremental history, so fetch just that line.
+            record = next((point for point in reversed(curve)
+                           if point.get("kind") in {"initial", "breakthrough"}), None)
+            node = _history(run_dir, task).node(record["candidate"]) if record else None
+            if node and isinstance(node.get("code"), str):
+                best = node
         if not isinstance(best, dict) or not isinstance(best.get("code"), str):
             try:
                 sample, _ = pick_best_sample(run_dir, allow_incomplete=True)
@@ -448,7 +619,6 @@ class ResultsMonitor:
                                 and isinstance(node.get("fitness"), (int, float))
                                 and (best is None or node["fitness"] > best["fitness"])):
                             best = node
-        curve, recent, operators, outcomes = _search_trend(run_dir, task)
         return {
             **{key: value for key, value in row.items() if key != "run_dir"},
             "task_meta": TASKS[task], "curve": curve, "operators": operators,
@@ -457,13 +627,41 @@ class ResultsMonitor:
                 "id": best.get("id", best.get("node_id")),
                 "fitness": best.get("fitness"),
                 "value": _objective(best.get("fitness"), task),
-                "operator": best.get("operator"), "idea": best.get("idea") or "",
+                "operator": best.get("operator") or best.get("action"), "idea": best.get("idea") or "",
                 "code": best.get("code") or "",
             },
         }
 
 
+class ResponseCache:
+    """Serialized-JSON cache keyed by request, validated by a cheap signature.
+
+    Concurrent requests for the same key share one build instead of each
+    re-parsing the same journals.
+    """
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._store: dict[Any, tuple[Any, bytes]] = {}
+        self._key_locks: dict[Any, Lock] = {}
+
+    def get_or_build(self, key, signature, builder):
+        with self._lock:
+            key_lock = self._key_locks.setdefault(key, Lock())
+        with key_lock:
+            with self._lock:
+                hit = self._store.get(key)
+                if hit is not None and hit[0] == signature:
+                    return hit[1], True
+            body = builder()
+            with self._lock:
+                self._store[key] = (signature, body)
+            return body, False
+
+
 def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler]:
+    cache = ResponseCache()
+
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
@@ -473,13 +671,32 @@ def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler
             if parsed.path == "/api/batches":
                 return self._send_json({"batches": monitor.batches()})
             if parsed.path == "/api/state":
-                return self._send_json(monitor.overview(params.get("batch", [None])[0]))
+                batch = params.get("batch", [None])[0]
+                signature = monitor.state_signature(batch)
+                body, _ = cache.get_or_build(
+                    ("state", batch), signature,
+                    lambda: _json_bytes(monitor.overview(batch)))
+                return self._send_body(body, signature)
+            if parsed.path == "/api/cohorts":
+                return self._send_json({"cohorts": monitor.cohorts()})
+            if parsed.path == "/api/compare":
+                cohorts = [c for c in params.get("cohorts", [""])[0].split(",") if c][:12]
+                signature = monitor.compare_signature(cohorts)
+                body, _ = cache.get_or_build(
+                    ("compare", tuple(cohorts)), signature,
+                    lambda: _json_bytes(monitor.compare(cohorts)))
+                return self._send_body(body, signature)
             if parsed.path == "/api/run":
                 batch = params.get("batch", [""])[0]
                 task = params.get("task", [""])[0]
                 name = params.get("name", [""])[0]
-                detail = monitor.run_detail(batch, task, name)
-                return self._send_json(detail) if detail else self.send_error(404, "Run not found")
+                signature = monitor.run_signature(batch, task, name)
+                body, _ = cache.get_or_build(
+                    ("run", batch, task, name), signature,
+                    lambda: _json_bytes(monitor.run_detail(batch, task, name)))
+                if body is None:
+                    return self.send_error(404, "Run not found")
+                return self._send_body(body, signature)
             self.send_error(404, "Endpoint not found")
 
         def _serve_html(self) -> None:
@@ -494,13 +711,33 @@ def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler
             self.wfile.write(body)
 
         def _send_json(self, payload: Any) -> None:
-            body = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
+            self._send_body(_json_bytes(payload), None)
+
+        def _send_body(self, body: bytes, signature) -> None:
+            etag = None
+            if signature is not None:
+                etag = '"' + hashlib.sha1(repr(signature).encode("utf-8")).hexdigest()[:20] + '"'
+                if self.headers.get("If-None-Match") == etag:
+                    self.send_response(304)
+                    self.send_header("ETag", etag)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+            headers = {"Content-Type": "application/json; charset=utf-8",
+                       # Stored but always revalidated: conditional polls get 304.
+                       "Cache-Control": "private, max-age=0" if etag else "no-store"}
+            if etag:
+                headers["ETag"] = etag
+            payload = body
+            if len(body) > 1024 and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+                payload = gzip.compress(body, 5)
+                headers["Content-Encoding"] = "gzip"
             self.send_response(200)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(body)))
+            for key, value in headers.items():
+                self.send_header(key, value)
+            self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
-            self.wfile.write(body)
+            self.wfile.write(payload)
 
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
             pass

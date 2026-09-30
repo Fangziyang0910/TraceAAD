@@ -26,11 +26,14 @@ def search_timing(run, summary, snapshot=None, *, unit="预算单位", now=None)
               "eta_seconds": None, "eta_at": None, "state": "unavailable"}
 
     matched = snapshot.get("completed") == used
+    # A live run's checkpoint may trail its candidate count by a step; its
+    # elapsed/completed_at pair is still self-consistent, so keep using it.
+    use_snapshot = matched or (status == "running" and snapshot.get("completed_at") is not None)
     start = timestamp(snapshot.get("started_at") or summary.get("started_at"))
-    last = timestamp(snapshot.get("completed_at")) if matched else None
+    last = timestamp(snapshot.get("completed_at")) if use_snapshot else None
     if last is None:
         last = timestamp(summary.get("finished_at") or run.get("updated_at"))
-    elapsed = snapshot.get("elapsed") if matched else None
+    elapsed = snapshot.get("elapsed") if use_snapshot else None
     if not isinstance(elapsed, (int, float)) or not math.isfinite(elapsed) or elapsed <= 0:
         elapsed = last - start if start is not None and last is not None else None
     else:

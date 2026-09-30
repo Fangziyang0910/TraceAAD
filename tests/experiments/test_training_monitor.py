@@ -299,6 +299,8 @@ def test_overview_exposes_same_curve_as_detail_with_candidate_axis(tmp_path):
     monitor = ResultsMonitor(tmp_path)
     row = monitor.overview("traceaad_v10_14")["tasks"][0]["runs"][0]
     detail = monitor.run_detail("traceaad_v10_14", "op_aco", "rep1")
-    assert row["curve"] == detail["curve"]
+    # The overview carries a slim projection of the detail curve.
+    fields = ("evaluation", "fitness", "value", "kind", "gain", "candidate", "operator")
+    assert row["curve"] == [{k: p[k] for k in fields if p.get(k) is not None} for p in detail["curve"]]
     assert row["x_label"] == detail["x_label"] == "候选尝试"
     assert row["curve"][-1]["gain"] == 2
