@@ -114,7 +114,7 @@ def build_method(spec: RunSpec, log_dir: Path) -> ReEvo:
         model=spec.model,
         no_proxy=spec.no_proxy,
         max_tokens=spec.output_tokens,
-        temperature=1.0,
+        temperature=1.0,  # ReEvo's paper setting; other controls follow the shared profile
     )
     return ReEvo(
         llm=llm,
@@ -154,7 +154,7 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                     "init_pop_size=30, mutation_rate=0.5, temperature=1; "
                     "initialization uses temperature+0.3"
                 ),
-            }),
+            }, llm_options={"temperature": 1.0}),
     )
 
 
