@@ -130,23 +130,31 @@ BACKEND_MARKERS: dict[BackendName, tuple[str, ...]] = {
     "local": ("127.0.0.1:8001",),
 }
 
-# Qwen3.8-27B official thinking-mode sampling, sent identically by every
-# backend so served-side defaults never differ across sources.
-SAMPLING_TEMPERATURE = 1.0
-SAMPLING_TOP_P = 0.95
-SAMPLING_TOP_K = 20
-# Every other sampling control is sent explicitly as well. Left unset, vLLM
-# fills them from the model's generation_config.json and llama.cpp from its
-# CLI defaults, so the "same" request could sample differently per server.
-# vLLM reads repetition_penalty and llama.cpp repeat_penalty; each ignores
-# the other's name.
-SAMPLING_NEUTRAL: dict[str, float] = {
-    "min_p": 0.0,
-    "presence_penalty": 0.0,
-    "frequency_penalty": 0.0,
-    "repetition_penalty": 1.0,
-    "repeat_penalty": 1.0,
+# Qwen3.8-27B's official sampling settings per mode (model card). Every
+# control is sent explicitly: left unset, vLLM fills it from the model's
+# generation_config.json and llama.cpp from its CLI defaults, so the "same"
+# request could sample differently per server. vLLM reads
+# repetition_penalty and llama.cpp repeat_penalty; each ignores the other.
+# Searches run with thinking disabled, so the non-thinking profile is the
+# default. Until 2026-09-30 all runs used the thinking profile (temperature
+# 1.0, top_p 0.95, no presence penalty) with thinking disabled.
+SAMPLING_PROFILES: dict[bool, dict[str, float]] = {
+    False: {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0,
+            "presence_penalty": 1.5, "frequency_penalty": 0.0,
+            "repetition_penalty": 1.0, "repeat_penalty": 1.0},
+    True: {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0,
+           "presence_penalty": 0.0, "frequency_penalty": 0.0,
+           "repetition_penalty": 1.0, "repeat_penalty": 1.0},
 }
+_EXPLICIT = ("temperature", "top_p", "top_k")
+
+
+def sampling_controls(enable_thinking: bool, **overrides: float | None) -> dict[str, float]:
+    """The mode's profile with any method-specified temperature/top_p/top_k."""
+    controls = dict(SAMPLING_PROFILES[bool(enable_thinking)])
+    controls.update({k: v for k, v in overrides.items() if v is not None})
+    return controls
+
 
 LLM_TIMEOUT_SECONDS = 600
 # Local ACO parallelism only; seeded scores do not depend on this count.
@@ -190,16 +198,16 @@ def build_llm_client(
     model: str,
     no_proxy: str,
     max_tokens: int,
-    temperature: float = SAMPLING_TEMPERATURE,
-    top_p: float | None = SAMPLING_TOP_P,
-    top_k: int | None = SAMPLING_TOP_K,
+    temperature: float | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
     enable_thinking: bool = False,
     chars_per_token: float | None = None,
 ) -> OpenAIAPI:
     set_no_proxy(no_proxy)
-    extra_body = dict(SAMPLING_NEUTRAL)
-    if top_k is not None:
-        extra_body["top_k"] = top_k
+    controls = sampling_controls(enable_thinking, temperature=temperature, top_p=top_p, top_k=top_k)
+    temperature, top_p = controls.pop("temperature"), controls.pop("top_p")
+    extra_body = controls
     return OpenAIAPI(
         base_url=base_url,
         api_key=resolve_llm_api_key(base_url=base_url),
@@ -271,27 +279,26 @@ def llm_payload(
     model: str,
     no_proxy: str,
     max_tokens: int,
-    temperature: float = SAMPLING_TEMPERATURE,
-    top_p: float | None = SAMPLING_TOP_P,
-    top_k: int | None = SAMPLING_TOP_K,
+    temperature: float | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
     enable_thinking: bool = False,
     chars_per_token: float | None = None,
 ) -> dict[str, Any]:
+    controls = sampling_controls(enable_thinking, temperature=temperature, top_p=top_p, top_k=top_k)
     payload: dict[str, Any] = {
         "base_url": base_url,
         "model": model,
         "timeout": LLM_TIMEOUT_SECONDS,
         "max_tokens": max_tokens,
-        "temperature": temperature,
+        "temperature": controls["temperature"],
+        "top_p": controls["top_p"],
+        "top_k": controls["top_k"],
         "enable_thinking": enable_thinking,
-        "sampling_neutral": dict(SAMPLING_NEUTRAL),
+        "sampling": controls,
         "no_proxy": no_proxy,
         "api_key_configured": resolve_llm_api_key(base_url=base_url) != "EMPTY",
     }
-    if top_p is not None:
-        payload["top_p"] = top_p
-    if top_k is not None:
-        payload["top_k"] = top_k
     if chars_per_token is not None:
         payload["chars_per_token"] = chars_per_token
     return payload

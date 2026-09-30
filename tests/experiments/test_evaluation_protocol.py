@@ -68,12 +68,24 @@ def test_vrptw_template_states_the_depot_rule():
     assert "already at the depot" in task_description
 
 
-def test_every_backend_receives_explicit_sampling_controls():
-    from experiments.infra.base import SAMPLING_NEUTRAL, build_llm_client
+def test_every_backend_receives_the_full_non_thinking_profile():
+    from experiments.infra.base import SAMPLING_PROFILES, build_llm_client, llm_payload
 
     client = build_llm_client(base_url="http://127.0.0.1:1/v1", model="m", no_proxy="127.0.0.1",
                               max_tokens=16)
     body = client._merged_extra_body(None)
-    assert body["top_k"] == 20
-    assert {k: body[k] for k in SAMPLING_NEUTRAL} == SAMPLING_NEUTRAL
+    assert (client.temperature, client.top_p) == (0.7, 0.8)
+    profile = SAMPLING_PROFILES[False]
+    assert {k: body[k] for k in profile if k not in ("temperature", "top_p")} == {
+        k: v for k, v in profile.items() if k not in ("temperature", "top_p")}
+    assert body["presence_penalty"] == 1.5 and body["top_k"] == 20
     assert body["chat_template_kwargs"]["enable_thinking"] is False
+    # A method may fix its own temperature; the rest of the profile still applies.
+    client = build_llm_client(base_url="http://127.0.0.1:1/v1", model="m", no_proxy="127.0.0.1",
+                              max_tokens=16, temperature=1.0)
+    assert client.temperature == 1.0 and client.top_p == 0.8
+    record = llm_payload(base_url="http://127.0.0.1:1/v1", model="m", no_proxy="x", max_tokens=16)
+    assert record["temperature"] == 0.7 and record["sampling"] == profile
+    thinking = llm_payload(base_url="http://127.0.0.1:1/v1", model="m", no_proxy="x", max_tokens=16,
+                           enable_thinking=True)
+    assert thinking["sampling"]["temperature"] == 1.0 and thinking["sampling"]["presence_penalty"] == 0.0
