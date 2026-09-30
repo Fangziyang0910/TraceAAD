@@ -51,16 +51,27 @@ def idea_view(idea):
     return " ".join((idea or "").split())[:IDEA_DISPLAY_CHARS]
 
 
-def output_format():
-    # A Design first lets the model settle the algorithm before coding; asking
-    # for the final design only keeps it from becoming a scratchpad. In a
-    # paired test this matched a Design written after the code on validity and
-    # improvement, with fewer output tokens and no missing Designs.
-    return ("[Output Format]\nReply with a Design followed by one Python code block:\n"
-            "Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: "
-            "its core idea, the key quantities it computes, and how they are combined into each decision. "
-            "State only the final design; leave out deliberation, alternatives, formulas and comparisons "
-            "with earlier versions>\n"
+# What each operator's Analysis decides before any code is written.
+ANALYSIS = {
+    "Init": "what makes this task hard, and how your algorithm will handle it",
+    "Refine": "what limits the current algorithm, and what change should improve it",
+    "Explore": "what limits the current algorithm, and what different idea should do better",
+    "Crossover": "what the reference algorithm does well that the current algorithm lacks, and how to combine them",
+    "Repair": "what caused the failure, and how to fix it",
+}
+
+
+def output_format(action):
+    # With thinking disabled, text before the code is the model's only chance
+    # to decide what to build. A brief targeted Analysis (discarded) followed
+    # by a one-to-two-sentence Design beat a 100-200-word Design at the same
+    # cost on paired Qwen Refine contexts (duplicates 25% -> 5%, parents
+    # improved 50% -> 65%); free-length analysis and native thinking cost 3-30x
+    # as many tokens and did worse. The Design's length had no measurable effect
+    # on later operators, so it stays short.
+    return ("[Output Format]\nReply in this order:\n"
+            f"Analysis: <a few sentences: {ANALYSIS[action]}. It will not be shown again>\n"
+            "Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>\n"
             "Code:\n```python\n<the complete program>\n```\n"
             "Write no comments or docstrings in the code, and nothing after the code block.")
 
@@ -155,7 +166,7 @@ class PromptBuilder:
             while len(shown) > 1 and self.block_count(root_section()) > self.config.root_tokens:
                 trims.append(f"root:{shown.pop(0)['id']}")
             sections.append(root_section())
-        sections.extend([ANOTHER_INITIAL if shown else INITIAL, output_format()])
+        sections.extend([ANOTHER_INITIAL if shown else INITIAL, output_format("Init")])
         while shown and len(shown) > 1 and self.count(self._render(sections)) > self.config.max_input_tokens:
             trims.append(f"root:{shown.pop(0)['id']}")
             sections[3] = root_section()
@@ -186,7 +197,7 @@ class PromptBuilder:
             while True:
                 history, ids = self._formation(sequence, count)
                 sections = self.common + [current, history, REFINE_ROOT if len(sequence) == 1 else REFINE,
-                                          output_format()]
+                                          output_format("Refine")]
                 result = self._result(sections, "Refine", ids, trims)
                 if result["input_tokens"] <= self.config.max_input_tokens:
                     return result
@@ -199,7 +210,7 @@ class PromptBuilder:
             shown = list(references[:4])
             while True:
                 ideas = self._reference_ideas(shown, best_score)
-                sections = self.common + [current, ideas, EXPLORE, output_format()]
+                sections = self.common + [current, ideas, EXPLORE, output_format("Explore")]
                 result = self._result(sections, "Explore", trims=trims)
                 result["explore_reference_ids"] = [n["id"] for n in shown]
                 if result["input_tokens"] <= self.config.max_input_tokens:
@@ -219,7 +230,7 @@ class PromptBuilder:
             ref_history, ref_ids = self._formation(reference_sequence, counts[1],
                                                   title="How the Reference Algorithm Was Formed", subject="reference")
             sections = self.common + [current, recent, ref_section, ref_history, CROSSOVER,
-                                      output_format()]
+                                      output_format("Crossover")]
             result = self._result(sections, "Crossover", ids, trims)
             result["reference_history_edge_ids"] = ref_ids
             if result["input_tokens"] <= self.config.max_input_tokens:
@@ -236,7 +247,7 @@ class PromptBuilder:
 
     def repair(self, failed_code, idea, error_text, *, parent=None):
         failed = f"[Failed Program]\nDesign: {idea_view(idea)}\n```python\n{failed_code.rstrip()}\n```"
-        sections = self.common + [failed, f"[Error]\n{error_text}", REPAIR, output_format()]
+        sections = self.common + [failed, f"[Error]\n{error_text}", REPAIR, output_format("Repair")]
         result = self._result(sections, "Repair")
         if result["input_tokens"] > self.config.max_input_tokens:
             raise ContextTooLong("repair prompt exceeds context")

@@ -125,6 +125,15 @@ def test_delivery_strict_finish_and_single_repair_payload():
     assert meta['block_indices'] == [1]
 
 
+def test_analysis_is_discarded_and_the_design_is_kept():
+    template = TinyEvaluation().template_program
+    reply = ("Analysis: The current rule ignores the input sign.\nDesign: maybe add one? No.\n"
+             "Design: Add two to the input.\n"
+             "Code:\n```python\ndef score(x):\n    return x + 2\n```")
+    code, design, _ = parse_response(reply, 'stop', template)
+    assert 'return x + 2' in code and design == 'Add two to the input.'
+
+
 def test_design_label_and_earlier_labels_parse():
     template = TinyEvaluation().template_program
     reply = ("Design: Add two to the input.\nThe sum is returned.\n"
@@ -210,7 +219,7 @@ def test_initialization_cap_includes_repair_generations(tmp_path):
 
 def test_too_long_parent_is_removed_without_spending_budget(tmp_path):
     m = TraceAADV1015(evaluation=TinyEvaluation(), llm=TokenLLM(response(1)),
-                       run_dir=tmp_path, config=Config(budget=2, max_input_tokens=275))
+                       run_dir=tmp_path, config=Config(budget=2, max_input_tokens=255))
     m._roots()
     assert m.attempts == 1
     m.phase = 'search'

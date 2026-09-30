@@ -42,8 +42,9 @@ Write an improved version of the current algorithm that keeps its core idea.
 Use the formation history as evidence of what has and has not helped along this line of development.
 
 [Output Format]
-Reply with a Design followed by one Python code block:
-Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: its core idea, the key quantities it computes, and how they are combined into each decision. State only the final design; leave out deliberation, alternatives, formulas and comparisons with earlier versions>
+Reply in this order:
+Analysis: <a few sentences: what limits the current algorithm, and what change should improve it. It will not be shown again>
+Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>
 Code:
 ```python
 <the complete program>

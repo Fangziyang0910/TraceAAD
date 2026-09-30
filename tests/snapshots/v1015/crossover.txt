@@ -54,8 +54,9 @@ Design: Add 3 to the input.
 Write an improved version of the current algorithm by combining it with the reference algorithm: bring in what the reference does well that the current algorithm lacks, and keep the current algorithm's strengths.
 
 [Output Format]
-Reply with a Design followed by one Python code block:
-Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: its core idea, the key quantities it computes, and how they are combined into each decision. State only the final design; leave out deliberation, alternatives, formulas and comparisons with earlier versions>
+Reply in this order:
+Analysis: <a few sentences: what the reference algorithm does well that the current algorithm lacks, and how to combine them. It will not be shown again>
+Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>
 Code:
 ```python
 <the complete program>

@@ -18,8 +18,9 @@ Keep the function name, arguments and return contract exactly as shown. The prog
 Design a complete algorithm for this task that you expect to score well, built on a clear core idea.
 
 [Output Format]
-Reply with a Design followed by one Python code block:
-Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: its core idea, the key quantities it computes, and how they are combined into each decision. State only the final design; leave out deliberation, alternatives, formulas and comparisons with earlier versions>
+Reply in this order:
+Analysis: <a few sentences: what makes this task hard, and how your algorithm will handle it. It will not be shown again>
+Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>
 Code:
 ```python
 <the complete program>

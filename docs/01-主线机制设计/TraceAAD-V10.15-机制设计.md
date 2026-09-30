@@ -271,16 +271,37 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
 - **历史是证据。** 形成历史用于说明这条开发线上哪些改动有帮助、哪些没有，而不是下一步的待办清单。
 - **用方括号小节标题，英文，短。** 事实（Score、Code diff）与作者陈述（Idea）分开标注。
 
-### 5.2 Design（原 Idea）的定义
+### 5.2 生成前的分析与 Design
 
-Design 描述**所给代码中的完整算法**，而不是"这次改了什么"：它的核心思想、计算的关键量，以及这些量如何组合成每一步决策，约 100–200 个英文词的平实文字，只写最终设计，不写推敲过程、备选方案、公式和与旧版本的比较。每一步的改动由 Code diff 呈现，Design 负责说明结果算法是什么，因此历史、Explore 参考卡、Crossover 参考与修复提示中的 Design 都能独立说明一个算法。所有算子使用同一输出格式：先写 Design，再写代码。提示中显示时合并空白、最多 2,400 字符。内部字段仍名为 `idea`；解析接受 Design、Idea、Thought 三种标签，取最后一个。
+每次回复依次为 **Analysis → Design → Code**：
 
-**为什么这样定：**
+- **Analysis**（几句话，不保存、不再展示）：写代码前的决策。各算子要回答的问题只在内容上不同，都是"诊断 + 决定"：
+  - 初始化：what makes this task hard, and how your algorithm will handle it
+  - Refine：what limits the current algorithm, and what change should improve it
+  - Explore：what limits the current algorithm, and what different idea should do better
+  - Crossover：what the reference algorithm does well that the current algorithm lacks, and how to combine them
+  - 修复：what caused the failure, and how to fix it
+- **Design**（一两句话，最多 60 词）：所实现算法的核心思想。它进入历史、Explore 参考卡、Crossover 参考与修复提示；每一步的改动由 Code diff 呈现。内部字段仍名为 `idea`；解析接受 Design、Idea、Thought 标签并取最后一个，Analysis 不会进入 Design。
 
-- 首批与 V10.15-2 的 Idea 是一句话描述改动，无法独立说明算法。
-- V10.15-3 最初要求在代码前写 150–250 词的 Idea：关闭 thinking 时模型把它当作草稿本，168 条中 43% 含 "Actually/Wait/Let's" 等自我修正，73% 超过 250 词（最长 1,696 词），79% 含 LaTeX 推导，并保留被放弃的方案，与代码不一致。该批在 681 次尝试时停止。
-- 增加一个不保留的 Reasoning 区块后，Reasoning 本身写 700–1,300 词，输出 token 中位数升至 1,700–2,800；Idea 放在代码之后时，OP 有 4/9 回复缺少 Idea。
-- 不设 Reasoning 的配对测试（TSP、OBP 各 12 个最近一步变差的 Refine 父代，外加 6 次 CVRP 初始化，同一采样配置）：Design 在前与在后均无草稿用语、无缺失，Refine 的改进（12/24 对 13/24）、撤回与重复相当；Design 在前的输出 token 中位数更低（599 对 634），7/30 含少量公式（在后为 1/30）。选择 Design 在前：模型可先定设计再写代码，也不会遗漏说明。
+**依据（2026-09-30 至 10-01）：**
+
+1. **说明的长度对效果没有可测影响。** DeepSeek v4.1 flash、thinking 关闭：Refine 的 90 个配对上下文 × 7 种格式中，短（约 34 词）、中（约 128 词）、长（约 256 词）两两胜率 46–48%，改进率差异均不显著，输出 token 为 462/596/786；Explore 的 50 个配对上下文中，参考卡长度（约 31/149/327 词）对结果无影响。
+2. **说明放在代码前可减少重复。** 同一实验中，说明在代码前的撤回与重复为 12–23%，在代码后为 28–39%；有效程序的质量相近。
+3. **写代码前的思考才是关键。** 在实际使用的 Qwen 上，V10.15-3（代码前写约 316 词、带自我修正的 Idea）与 V10.15-4（约 170 词的简洁 Design）除说明格式外完全相同；按同一 run 的前 681 次尝试，重复率 3.2% 对 10.9%，有效率 93.1% 对 84.6%。
+4. **简短、有针对性的分析最划算。** Qwen 上 60 个 Refine 配对上下文（TSP、OBP、VRPTW 各 20）比较 6 种格式：
+
+| 格式 | 有效 | 撤回/重复 | 超过父代 | 输出 token | 耗时 | 组内平均名次 |
+|---|---|---|---|---|---|---|
+| 约 170 词的简洁 Design | 75% | 25% | 50% | 594 | 18 s | 3.31 |
+| 约 240 词的 Idea（V10.15-3） | 97% | 3% | 57% | 739 | 38 s | 2.85 |
+| **简短 Analysis + ≤60 词 Design** | **95%** | **5%** | **65%** | **609** | **18 s** | **2.51** |
+| 不限长度 Analysis + ≤60 词 Design | 82% | 17% | 62% | 1,632 | 64 s | 2.97 |
+| 只写代码 | 85% | 13% | 50% | 389 | 11 s | 3.48 |
+| 原生 thinking + 简洁 Design | 0%（21 次均在 16,384 token 处截断） | — | 0% | 16,384 | 528 s | 5.69 |
+
+配对比较中，简短 Analysis 对简洁 Design 的胜率为 62%（95% CI 51–72%），超过父代的比例高 15 个百分点（2–28）；对只写代码胜率 69%（58–80%）；不限长度的分析对简短分析胜率只有 41%。有用的是针对当前决策的简短诊断，而不是思考量；原生 thinking 在此设置下无法收束。
+
+**解释与边界：** 关闭 thinking 时，代码之前的文字是模型唯一的决策机会；把"用于本次决策的工作记忆"（Analysis，丢弃）与"留给后续算子的存档"（Design，短）分开，各自取最低有效成本。EoH 在代码前要求一句话的 thought，其收益可能同样主要来自先做决策；EoH 原文把收益归于思想与代码的"多视角表示"，未分离这两种作用。仅 Refine 的分析措辞经过配对检验，其余算子按同一结构类推；DeepSeek 与 Qwen 的结论在"长说明是否减少重复"上不同，说明该效应依赖模型。
 
 ### 5.3 公共片段与各算子指令
 
@@ -294,8 +315,9 @@ The whole evaluation must finish within {timeout} seconds, so keep the computati
 Returning a previously evaluated candidate consumes an attempt without another evaluation.
 
 [Output Format]
-Reply with a Design followed by one Python code block:
-Design: <the design of the algorithm you will implement, in about 100-200 words of plain prose: its core idea, the key quantities it computes, and how they are combined into each decision. State only the final design; leave out deliberation, alternatives, formulas and comparisons with earlier versions>
+Reply in this order:
+Analysis: <a few sentences: {按算子，见 §5.2}. It will not be shown again>
+Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>
 Code:
 ```python
 <the complete program>
