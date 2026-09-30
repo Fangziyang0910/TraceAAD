@@ -5,6 +5,7 @@ Return a numeric score.
 Each candidate program is run on a fixed set of training instances.
 Score: the task fitness. Higher is better.
 The whole evaluation must finish within 20 seconds, so keep the computation efficient.
+Every program shown below has already been evaluated; reproducing one of them earns nothing.
 
 [Target Function]
 ```python
@@ -20,23 +21,20 @@ def score(x):
     return x + 2
 ```
 
-[Reference Ideas from the Search Archive]
-These are separate evaluated algorithms, not a formation history. Scores are measured; each Idea is the intent stated when its program was written.
+[Reference Ideas from This Search]
+Other evaluated algorithms, each with its score and Idea.
 Reference 1 · Score 3 · Idea: Add 3 to the input.
 
 [Search Best]
 Best score found so far in this search: 3.
 
 [Your Task: Explore]
-Find a materially different way to solve this task better than the current algorithm.
-- First identify the main limitation of the current approach: information it ignores, decisions it systematically gets wrong, or situations it cannot represent.
-- Then change the core of the algorithm to remove that limitation: what it computes from the inputs, how it evaluates a choice before committing to it, or how it turns signals into a decision. Tuning parameters or making a small local edit is not enough.
-- Use the reference ideas to find or combine different decision principles. You may keep useful parts of the current program or start from scratch; develop your own complete algorithm rather than merely restating a reference idea.
-- The new algorithm must be complete and competitive on its own, and must stay within the time limit.
+Write a new algorithm that you expect to outperform the current one, built on a different core idea.
+The reference ideas show other approaches found in this search; draw on them as inspiration.
 
 [Output Format]
-Reply with exactly one Idea line followed by one Python code block:
-Idea: <one sentence, at most 300 characters, describing the new algorithm>
+Reply with an Idea followed by one Python code block:
+Idea: <about 150-250 words describing the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision>
 Code:
 ```python
 <the complete program>

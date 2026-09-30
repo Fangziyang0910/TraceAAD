@@ -11,54 +11,36 @@ SCORES = {
     "vrptw_construct": ("the average total travel distance of the constructed routes", False),
 }
 
-INITIAL = """[Your Task: Design an Initial Algorithm]
-Design one complete, competitive algorithm for this task.
-- Base it on a clear decision principle and implement that principle carefully.
-- Do not return a placeholder or a trivial baseline."""
+# Every operator asks for the same thing: a better algorithm, written from the
+# information shown. Operators differ only in which information they build on
+# and how far the result may move from the current algorithm.
+INITIAL = """[Your Task: Design an Algorithm]
+Design a complete algorithm for this task that you expect to score well, built on a clear core idea."""
 
-ANOTHER_INITIAL = """[Your Task: Design Another Initial Algorithm]
-Design one complete, competitive algorithm whose core decision principle differs from every algorithm above.
-- Notice what the algorithms above have in common, and build yours on a different principle or on information they do not use.
-- You may reuse a helpful detail, but the main idea must be different.
-- Do not return a placeholder or a trivial baseline."""
+ANOTHER_INITIAL = """[Your Task: Design a Different Algorithm]
+Design a complete algorithm for this task that you expect to score well, built on a core idea different from those of the algorithms above."""
 
 REFINE = """[Your Task: Refine]
-Improve the current algorithm with one focused change.
-- Build on what the history shows is working: parts introduced by improving steps are probably doing useful work, so keep them unless your change needs to alter them.
-- Let the recent steps guide the next one: push further in a direction that improved the score, or correct or undo a recent change that made it worse.
-- The change must be able to alter the decisions the function makes. Rescaling all scores, or applying the same monotone transform to them, leaves the chosen option unchanged.
-- If the structure is sound, recalibrating a few influential parameters is a valid focused change.
-- Prefer replacing or simplifying logic over stacking new layers, and leave unrelated parts of the program unchanged."""
+Write an improved version of the current algorithm that keeps its core idea.
+Use the formation history as evidence of what has and has not helped along this line of development."""
 
 REFINE_ROOT = """[Your Task: Refine]
-Improve the current algorithm with one focused change.
-- Identify the part of the algorithm that most limits the quality of its decisions, and improve that part.
-- The change must be able to alter the decisions the function makes. Rescaling all scores, or applying the same monotone transform to them, leaves the chosen option unchanged.
-- If the structure is sound, recalibrating a few influential parameters is a valid focused change.
-- Prefer replacing or simplifying logic over stacking new layers, and leave unrelated parts of the program unchanged."""
+Write an improved version of the current algorithm that keeps its core idea."""
 
 EXPLORE = """[Your Task: Explore]
-Find a materially different way to solve this task better than the current algorithm.
-- First identify the main limitation of the current approach: information it ignores, decisions it systematically gets wrong, or situations it cannot represent.
-- Then change the core of the algorithm to remove that limitation: what it computes from the inputs, how it evaluates a choice before committing to it, or how it turns signals into a decision. Tuning parameters or making a small local edit is not enough.
-- Use the reference ideas to find or combine different decision principles. You may keep useful parts of the current program or start from scratch; develop your own complete algorithm rather than merely restating a reference idea.
-- The new algorithm must be complete and competitive on its own, and must stay within the time limit."""
+Write a new algorithm that you expect to outperform the current one, built on a different core idea.
+The reference ideas show other approaches found in this search; draw on them as inspiration."""
 
 CROSSOVER = """[Your Task: Crossover]
-Improve the current algorithm by transplanting one mechanism from the reference algorithm.
-- Compare the two programs and their formation histories, and find one computation in the reference that the current algorithm lacks and that addresses one of its weaknesses, for example an additional signal, a feasibility or look-ahead check, or a different way of combining terms.
-- Integrate that mechanism into the current algorithm and adapt it so that it works with the existing parts. Keep the current algorithm's framework and its working components.
-- The reference may score lower overall and still contain a useful mechanism.
-- Do not copy the reference or return a program that is essentially one of the two inputs. The transplanted mechanism must be able to change the current algorithm's decisions."""
+Write an improved version of the current algorithm by combining it with the reference algorithm: bring in what the reference does well that the current algorithm lacks, and keep the current algorithm's strengths."""
 
 REPAIR = """[Your Task: Repair]
-Fix the program so that it runs correctly, while keeping its intended design.
-- Change only what is needed to remove the failure.
-- If the evaluation timed out, reduce the cost of the most expensive computation instead of dropping the idea.
-- If the output was invalid, make sure the function returns exactly what the target function's contract requires."""
+The program failed during evaluation. Fix it so that it runs correctly within the time limit, keeping the algorithm it was meant to implement."""
 
-FORMATION_INTRO = ('These are the most recent steps on the path that produced the current algorithm, oldest first. '
-                   '"Code diff" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.')
+FORMATION_INTRO = ("The steps that produced the current algorithm, oldest first. Each step shows the score change, "
+                   "the Idea of the algorithm it produced, and the code diff from the previous version.")
+
+IDEA_DISPLAY_CHARS = 2400  # about 400 words: room for a full description, guard against run-ons
 
 
 class ContextTooLong(ValueError):
@@ -66,12 +48,13 @@ class ContextTooLong(ValueError):
 
 
 def idea_view(idea):
-    return " ".join((idea or "").split())[:300]
+    return " ".join((idea or "").split())[:IDEA_DISPLAY_CHARS]
 
 
-def output_format(what):
-    return ("[Output Format]\nReply with exactly one Idea line followed by one Python code block:\n"
-            f"Idea: <one sentence, at most 300 characters, describing {what}>\n"
+def output_format():
+    return ("[Output Format]\nReply with an Idea followed by one Python code block:\n"
+            "Idea: <about 150-250 words describing the complete algorithm in your code: its core idea, "
+            "the key quantities it computes, and how they are combined into each decision>\n"
             "Code:\n```python\n<the complete program>\n```\n"
             "Write no comments or docstrings in the code, and nothing after the code block.")
 
@@ -95,7 +78,8 @@ class PromptBuilder:
             "[Task]\n" + description,
             "[Evaluation]\nEach candidate program is run on a fixed set of training instances.\n"
             f"Score: {meaning}. {'Higher' if higher else 'Lower'} is better.\n"
-            f"The whole evaluation must finish within {timeout} seconds, so keep the computation efficient.",
+            f"The whole evaluation must finish within {timeout} seconds, so keep the computation efficient.\n"
+            "Every program shown below has already been evaluated; reproducing one of them earns nothing.",
             "[Target Function]\n```python\n" + str(evaluation.template_program).strip() +
             "\n```\nKeep the function name, arguments and return contract exactly as shown. "
             "The program must be self-contained: include every import, constant and helper it uses.",
@@ -165,7 +149,7 @@ class PromptBuilder:
             while len(shown) > 1 and self.block_count(root_section()) > self.config.root_tokens:
                 trims.append(f"root:{shown.pop(0)['id']}")
             sections.append(root_section())
-        sections.extend([ANOTHER_INITIAL if shown else INITIAL, output_format("the algorithm")])
+        sections.extend([ANOTHER_INITIAL if shown else INITIAL, output_format()])
         while shown and len(shown) > 1 and self.count(self._render(sections)) > self.config.max_input_tokens:
             trims.append(f"root:{shown.pop(0)['id']}")
             sections[3] = root_section()
@@ -177,9 +161,8 @@ class PromptBuilder:
     def _reference_ideas(self, references, best_score):
         sections = []
         if references:
-            lines = ["[Reference Ideas from the Search Archive]",
-                     "These are separate evaluated algorithms, not a formation history. "
-                     "Scores are measured; each Idea is the intent stated when its program was written."]
+            lines = ["[Reference Ideas from This Search]",
+                     "Other evaluated algorithms, each with its score and Idea."]
             lines.extend(f"Reference {i} · Score {score_text(n['score'])} · Idea: {idea_view(n['idea'])}"
                          for i, n in enumerate(references, 1))
             sections.append("\n".join(lines))
@@ -197,7 +180,7 @@ class PromptBuilder:
             while True:
                 history, ids = self._formation(sequence, count)
                 sections = self.common + [current, history, REFINE_ROOT if len(sequence) == 1 else REFINE,
-                                          output_format("the change you made")]
+                                          output_format()]
                 result = self._result(sections, "Refine", ids, trims)
                 if result["input_tokens"] <= self.config.max_input_tokens:
                     return result
@@ -210,7 +193,7 @@ class PromptBuilder:
             shown = list(references[:4])
             while True:
                 ideas = self._reference_ideas(shown, best_score)
-                sections = self.common + [current, ideas, EXPLORE, output_format("the new algorithm")]
+                sections = self.common + [current, ideas, EXPLORE, output_format()]
                 result = self._result(sections, "Explore", trims=trims)
                 result["explore_reference_ids"] = [n["id"] for n in shown]
                 if result["input_tokens"] <= self.config.max_input_tokens:
@@ -220,7 +203,7 @@ class PromptBuilder:
                 trims.append(f"explore_reference:{shown.pop()['id']}")
         if reference is None:
             raise ValueError("Crossover requires a reference")
-        ref_section = (f"[Reference Algorithm]\nA different evaluated algorithm from the search archive.\n"
+        ref_section = (f"[Reference Algorithm]\nAnother evaluated algorithm from this search.\n"
                        f"Score: {score_text(reference['score'])}\nIdea: {idea_view(reference['idea'])}\n"
                        f"```python\n{reference['code'].rstrip()}\n```")
         reference_sequence = path(reference, self.archive)
@@ -230,7 +213,7 @@ class PromptBuilder:
             ref_history, ref_ids = self._formation(reference_sequence, counts[1],
                                                   title="How the Reference Algorithm Was Formed", subject="reference")
             sections = self.common + [current, recent, ref_section, ref_history, CROSSOVER,
-                                      output_format("the mechanism you transplanted and how it is integrated")]
+                                      output_format()]
             result = self._result(sections, "Crossover", ids, trims)
             result["reference_history_edge_ids"] = ref_ids
             if result["input_tokens"] <= self.config.max_input_tokens:
@@ -246,12 +229,8 @@ class PromptBuilder:
         return fallback
 
     def repair(self, failed_code, idea, error_text, *, parent=None):
-        if parent is None:
-            intro = "This program was written as an initial algorithm, but it failed during evaluation."
-        else:
-            intro = f"This program was written to improve an algorithm with score {score_text(parent['score'])}, but it failed during evaluation."
-        failed = f"[Failed Program]\n{intro}\nIdea: {idea_view(idea)}\n```python\n{failed_code.rstrip()}\n```"
-        sections = self.common + [failed, f"[Error]\n{error_text}", REPAIR, output_format("the fix")]
+        failed = f"[Failed Program]\nIdea: {idea_view(idea)}\n```python\n{failed_code.rstrip()}\n```"
+        sections = self.common + [failed, f"[Error]\n{error_text}", REPAIR, output_format()]
         result = self._result(sections, "Repair")
         if result["input_tokens"] > self.config.max_input_tokens:
             raise ContextTooLong("repair prompt exceeds context")

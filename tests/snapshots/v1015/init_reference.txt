@@ -5,6 +5,7 @@ Return a numeric score.
 Each candidate program is run on a fixed set of training instances.
 Score: the task fitness. Higher is better.
 The whole evaluation must finish within 20 seconds, so keep the computation efficient.
+Every program shown below has already been evaluated; reproducing one of them earns nothing.
 
 [Target Function]
 ```python
@@ -38,15 +39,12 @@ def score(x):
     return x + 4
 ```
 
-[Your Task: Design Another Initial Algorithm]
-Design one complete, competitive algorithm whose core decision principle differs from every algorithm above.
-- Notice what the algorithms above have in common, and build yours on a different principle or on information they do not use.
-- You may reuse a helpful detail, but the main idea must be different.
-- Do not return a placeholder or a trivial baseline.
+[Your Task: Design a Different Algorithm]
+Design a complete algorithm for this task that you expect to score well, built on a core idea different from those of the algorithms above.
 
 [Output Format]
-Reply with exactly one Idea line followed by one Python code block:
-Idea: <one sentence, at most 300 characters, describing the algorithm>
+Reply with an Idea followed by one Python code block:
+Idea: <about 150-250 words describing the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision>
 Code:
 ```python
 <the complete program>

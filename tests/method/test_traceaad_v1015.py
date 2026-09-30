@@ -195,7 +195,7 @@ def test_initialization_cap_includes_repair_generations(tmp_path):
 
 def test_too_long_parent_is_removed_without_spending_budget(tmp_path):
     m = TraceAADV1015(evaluation=TinyEvaluation(), llm=TokenLLM(response(1)),
-                       run_dir=tmp_path, config=Config(budget=2, max_input_tokens=280))
+                       run_dir=tmp_path, config=Config(budget=2, max_input_tokens=250))
     m._roots()
     assert m.attempts == 1
     m.phase = 'search'

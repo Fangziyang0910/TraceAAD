@@ -234,7 +234,7 @@ ESS(β) = 1 / Σ_k p_β(k)²
 
 ````text
 Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse | same score>)
-  Idea: <当时的 Idea，≤300 字符>
+  Idea: <该步产生的算法的 Idea，最多 2,400 字符>
   Code diff (previous → current):            ← 每一步都展示完整 diff
   ```diff
   <unified diff>
@@ -244,7 +244,7 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
 - **分数：** 原任务单位，6 位有效数字。
 - **判定：** 容差 `1e-9 · max(1, |父代分数|)`，并按任务方向判断 improved / worse / same score。
 - **每一步的 diff：** 在规范形式上计算 unified diff，上下文 2 行，保留所有变化块和所有增删行，不按行数截断。这里的“完整”指完整的改动，不重复展示整份旧程序。
-- 不再用 Change 摘要代替代码变化；模型可以直接阅读数值调整与结构改动。Idea 仍只是当时意图，分数变化不构成某一组件的因果证明。
+- 不再用 Change 摘要代替代码变化；模型可以直接阅读数值调整与结构改动。Idea 描述该步产生的完整算法（§5.2），是作者的陈述；分数变化不构成某一组件的因果证明。
 
 ### 4.4 Token 预算与裁剪
 
@@ -262,60 +262,32 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
 
 ## 5. 提示词
 
-### 5.1 写法原则
+### 5.1 写法原则（2026-09-30 重写）
 
-- **短。** 只保留任务、目标函数、程序、历史、指令和输出格式。V9.14 的固定指令与格式文本约 650 字符；V10.14 仅证据解读规则一项就约 900 字符，加上改写范围、Idea 要求、交付格式和 JSON 证据，固定文本超过 2,000 字符。而 V9.14 的 TSP held-out 在各版本中最好。
-- **用方括号小节标题（V9 风格），不用 JSON。** 模型读的是自然文本。
-- **事实和意图分开标注：** Score 是实测值，Code diff 由代码计算，Idea 是当时的意图。
-- **指令写"做什么"，用正面表述。** 每个动作只有 4–5 条要点，每条都对应一条证据。
-- **不写让模型怀疑历史的规则，也不塞诊断量。**
-- **所有提示保持同一套词汇：** Score、Idea、Code diff、Step、Current Algorithm。
-- **用英文，与此前各版本一致。**
+- **从元提示出发。** 所有算子只提一个要求：利用提示中的信息，写出预期得分更高的算法。算子之间只在"依据哪些信息、离当前算法多远"上表达偏好：Refine 保留当前算法的核心思想加以改进，Explore 以不同的核心思想另起，Crossover 把参考算法中当前算法所缺的长处融合进来。
+- **只陈述事实与目标，不写具体技巧。** 删除了"改动必须影响决策""单调变换无效""可重新标定参数"等规则：它们把设计者对某些失败的猜测写成操作指南，既不通用，也会被模型当作待办事项。首批实验中，Refine 提示里"correct or undo a recent change that made it worse"一句使模型在父代最近一步变差时原样撤回该步，产生与祖父节点相同的重复程序（V10.15-2 前 25% 预算中 307 次，其中 82% 撤回的是变差的一步）。
+- **公共事实：** 提示中出现的程序都已评价过，复现其中任何一个不会得分。这是搜索规则本身，对撤回、复制参考和原样返回同样适用，不针对某一种失败单独立禁令。
+- **历史是证据。** 形成历史用于说明这条开发线上哪些改动有帮助、哪些没有，而不是下一步的待办清单。
+- **用方括号小节标题，英文，短。** 事实（Score、Code diff）与作者陈述（Idea）分开标注。
 
-以下模板中 `{…}` 为占位符。区块之间空一行。
+### 5.2 Idea 的定义
 
-### 5.2 公共片段
+Idea 描述**所给代码中的完整算法**，而不是"这次改了什么"：它的核心思想、计算的关键量，以及这些量如何组合成每一步决策，约 150–250 个英文词（200–300 token）。每一步的改动由 Code diff 呈现，Idea 负责说明结果算法是什么，因此历史、Explore 参考卡、Crossover 参考与修复提示中的 Idea 都能独立说明一个算法。所有算子使用同一输出格式；提示中显示 Idea 时合并空白、最多 2,400 字符，不再截断到 300 字符。首批与 V10.15-2 的 Idea 为一句话描述改动。
 
-**Task 与 Evaluation**
+### 5.3 公共片段与各算子指令
 
-```text
-[Task]
-{task_description}
+公共区块依次为 `[Task]`（任务描述与 design notes）、`[Evaluation]`、`[Target Function]`；其后是各算子的上下文区块、任务指令和输出格式。
 
-{design_notes}                                   ← 仅当任务定义了它（目前只有 OP）
-
+````text
 [Evaluation]
 Each candidate program is run on a fixed set of training instances.
 Score: {score_meaning}. {Lower|Higher} is better.
 The whole evaluation must finish within {timeout} seconds, so keep the computation efficient.
-```
+Every program shown below has already been evaluated; reproducing one of them earns nothing.
 
-| 任务 | score_meaning | 方向 | 训练评价 timeout |
-|---|---|---|---|
-| tsp_construct | the average length of the constructed tours | Lower | 20 |
-| cvrp_aco | the average total length of the best routes found by the ant colony | Lower | 120 |
-| op_aco | the average total prize of the best tours found by the ant colony | Higher | 60 |
-| online_bin_packing | the average number of bins used | Lower | 30 |
-| vrptw_construct | the average total travel distance of the constructed routes | Lower | 30 |
-
-`task_description`、`design_notes` 和 `template_program` 取自冻结的任务契约，原文不改。当前 TSP、OP 定义了 `design_notes`。给出时限，是因为超时属于失败，这是模型设计时需要知道的事实。
-
-**Target Function**
-
-````text
-[Target Function]
-```python
-{template_program}
-```
-Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses.
-````
-
-**Output Format**（`{what}` 按动作替换，见各节）
-
-````text
 [Output Format]
-Reply with exactly one Idea line followed by one Python code block:
-Idea: <one sentence, at most 300 characters, describing {what}>
+Reply with an Idea followed by one Python code block:
+Idea: <about 150-250 words describing the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision>
 Code:
 ```python
 <the complete program>
@@ -323,221 +295,22 @@ Code:
 Write no comments or docstrings in the code, and nothing after the code block.
 ````
 
-**Current Algorithm**
+| 算子 | 上下文区块 | 任务指令 |
+|---|---|---|
+| 初始化（前 4 个根） | — | Design a complete algorithm for this task that you expect to score well, built on a clear core idea. |
+| 初始化（第 5–8 个根） | 已有根的代码、分数与 Idea | Design a complete algorithm for this task that you expect to score well, built on a core idea different from those of the algorithms above. |
+| Refine | 当前算法；形成历史（≤8 步，每步分数变化、Idea、完整 diff） | Write an improved version of the current algorithm that keeps its core idea. Use the formation history as evidence of what has and has not helped along this line of development.（根节点无历史时只有第一句） |
+| Explore | 当前算法；≤4 张参考 Idea 卡；全局最好分数 | Write a new algorithm that you expect to outperform the current one, built on a different core idea. The reference ideas show other approaches found in this search; draw on them as inspiration. |
+| Crossover | 当前算法及其历史（≤4 步）；参考算法及其历史（≤4 步） | Write an improved version of the current algorithm by combining it with the reference algorithm: bring in what the reference does well that the current algorithm lacks, and keep the current algorithm's strengths. |
+| 修复 | 失败程序（Idea 与代码）；错误信息 | The program failed during evaluation. Fix it so that it runs correctly within the time limit, keeping the algorithm it was meant to implement. |
 
-````text
-[Current Algorithm]
-Score: {score}
-```python
-{canonical_code}
-```
-````
+历史引导语：The steps that produced the current algorithm, oldest first. Each step shows the score change, the Idea of the algorithm it produced, and the code diff from the previous version.
 
-当前程序的 Idea 不在这里重复，它在历史的最近一步里；根节点的 Idea 在历史或思路列表的 Start 行里。
+### 5.4 逐字文本
 
-### 5.3 初始化
+实际发送给模型的完整提示以测试快照为准：`tests/snapshots/v1015/` 下的 `init_independent`、`init_reference`、`refine_root`、`refine_history`、`explore`、`crossover`、`repair`，由 `tests/method/test_traceaad_v1015_prompts.py` 逐字比对。
 
-**独立根（第 1–4 个）**，`{what}` = `the algorithm`：
-
-```text
-[Your Task: Design an Initial Algorithm]
-Design one complete, competitive algorithm for this task.
-- Base it on a clear decision principle and implement that principle carefully.
-- Do not return a placeholder or a trivial baseline.
-```
-
-**参考根（第 5–8 个）**，在 Target Function 之后插入已有根：
-
-````text
-[Algorithms Designed So Far]
-Algorithm 1 · Score {score} · Idea: {idea}
-```python
-{canonical_code}
-```
-
-Algorithm 2 · Score {score} · Idea: {idea}
-```python
-{canonical_code}
-```
-````
-
-````text
-[Your Task: Design Another Initial Algorithm]
-Design one complete, competitive algorithm whose core decision principle differs from every algorithm above.
-- Notice what the algorithms above have in common, and build yours on a different principle or on information they do not use.
-- You may reuse a helpful detail, but the main idea must be different.
-- Do not return a placeholder or a trivial baseline.
-````
-
-设计说明：
-- 第二条要点让模型先找出已有根的共性。初始化对照发现，OBP 独立生成的根在 112 对中有 98 对行为零距，"代码不同"并不等于"思路不同"。
-- 输入、输出和评价时限已定义合法设计空间，不再额外提示内部可以进行复杂计算。强结果使用前瞻或局部搜索，不能证明这句提示有效。
-
-### 5.4 Refine
-
-区块顺序：Task → Evaluation → Target Function → Current Algorithm → How the Current Algorithm Was Formed → Your Task → Output Format。`{what}` = `the change you made`。
-
-**历史区块**
-
-````text
-[How the Current Algorithm Was Formed]
-These are the most recent steps on the path that produced the current algorithm, oldest first. "Code diff" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
-
-Start · initial algorithm · score {root_score}
-  Idea: {root_idea}
-
-Step 1 · Refine · score {a} → {b} (improved)
-  Idea: {idea}
-  Code diff (previous → current):
-```diff
-{unified_diff_step_1}
-```
-
-Step 2 (latest: produced the current algorithm) · Explore · score {b} → {c} (improved)
-  Idea: {idea}
-  Code diff (previous → current):
-```diff
-{unified_diff}
-```
-````
-
-根节点没有历史时，这一区块改为：
-
-```text
-[How the Current Algorithm Was Formed]
-The current algorithm is an initial design; no changes have been recorded yet.
-Idea: {root_idea}
-```
-
-**指令（有历史时）**
-
-```text
-[Your Task: Refine]
-Improve the current algorithm with one focused change.
-- Build on what the history shows is working: parts introduced by improving steps are probably doing useful work, so keep them unless your change needs to alter them.
-- Let the recent steps guide the next one: push further in a direction that improved the score, or correct or undo a recent change that made it worse.
-- The change must be able to alter the decisions the function makes. Rescaling all scores, or applying the same monotone transform to them, leaves the chosen option unchanged.
-- If the structure is sound, recalibrating a few influential parameters is a valid focused change.
-- Prefer replacing or simplifying logic over stacking new layers, and leave unrelated parts of the program unchanged.
-```
-
-**指令（根节点）**：把前两条要点换成一条：
-
-```text
-- Identify the part of the algorithm that most limits the quality of its decisions, and improve that part.
-```
-
-逐条说明：
-- **"one focused change"：** V9.7/V9.14 原句的精神。小步修改才能让护栏生效、让改进累积。
-- **第 1 条：** 护栏本身。说"probably"而不是"must"，既让历史起约束作用，又不禁止必要的重写。
-- **第 2 条：** 让模型读历史的方向，而不只是看历史。"correct or undo"覆盖了路径上那些被保留下来的退步边：V9.14 一条含 90 个节点的 TSP 最好链中，有 39 条边相对父代退步。
-- **第 3 条：** 针对"改了但没改变决策"。V10.7 在 OBP 上有 341/365 次 Refine 与父代同分。对 ACO 任务，这一条同样适用于采样概率。
-- **第 4 条：** 把 Tune 并进 Refine。CVRP 最后几次改进和 CALM 在 OBP 上的收益都是保结构的常数调整。
-- **第 5 条：** 控制程序膨胀。W36 记录过 CVRP 程序膨胀导致上下文超限。
-
-### 5.5 Explore
-
-区块顺序：Task → Evaluation → Target Function → Current Algorithm → Reference Ideas → Search Best → Your Task → Output Format。`{what}` = `the new algorithm`。
-
-**思路区块**
-
-```text
-[Reference Ideas from the Search Archive]
-These are separate evaluated algorithms, not a formation history. Scores are measured; each Idea is the intent stated when its program was written.
-Reference 1 · Score {ref_score} · Idea: {ref_idea}
-Reference 2 · Score {ref_score} · Idea: {ref_idea}
-
-[Search Best]
-Best score found so far in this search: {best_score}.
-```
-
-无合格参考时省略 Reference Ideas 区块，保留 Search Best；根节点与其他节点采用相同的参考规则。
-
-**指令**
-
-```text
-[Your Task: Explore]
-Find a materially different way to solve this task better than the current algorithm.
-- First identify the main limitation of the current approach: information it ignores, decisions it systematically gets wrong, or situations it cannot represent.
-- Then change the core of the algorithm to remove that limitation: what it computes from the inputs, how it evaluates a choice before committing to it, or how it turns signals into a decision. Tuning parameters or making a small local edit is not enough.
-- Use the reference ideas to find or combine different decision principles. You may keep useful parts of the current program or start from scratch; develop your own complete algorithm rather than merely restating a reference idea.
-- The new algorithm must be complete and competitive on its own, and must stay within the time limit.
-```
-
-设计说明：
-- **给当前程序：** 沿用 V9 的做法。V9.14 的 Explore 看得到当前代码，TSP 至少两路的关键骨架明确由它引入。V10.14 改为独立上下文的 Pivot 后，TSP 训练前沿均值为 6.19（V9.14 为 5.78）。这不能单独归因于 Pivot，但也没有证据支持独立上下文更好。
-- **多参考替代本谱系历史：** 借鉴 V10.11 rand_ctx，给不同来源的 Idea 与实测分数，允许关键词触发已有知识或重组思想。当前抽样额外使用代码差异代理，不能保证真正的思想多样性。
-- **第 1 条先诊断局限：** 沿用 V10.11 Pivot 指令里有效的部分。
-- **第 2 条的三个方向覆盖三类任务的骨架变化：** 构造类的前瞻、ACO 的边特征、OBP 的打分组合。
-- **给全局最好分数：** 让模型知道"有竞争力"的标准。Refine 不给，以免诱发过大的改写。
-
-### 5.6 Crossover
-
-区块顺序：Task → Evaluation → Target Function → Current Algorithm → How the Current Algorithm Was Formed → Reference Algorithm → How the Reference Algorithm Was Formed → Your Task → Output Format。`{what}` = `the mechanism you transplanted and how it is integrated`。
-
-**两侧历史区块**：主程序采用 5.4 的历史格式，最多 4 步。参考程序采用同一格式，标题为 `[How the Reference Algorithm Was Formed]`，文字明确指向 reference algorithm，最多 4 步。每步给动作、Idea、父子分数变化与完整 diff；参考为根节点时明确说明没有形成历史。
-
-**参考区块**
-
-````text
-[Reference Algorithm]
-A different evaluated algorithm from the search archive.
-Score: {ref_score}
-Idea: {ref_idea}
-```python
-{ref_canonical_code}
-```
-````
-
-**指令**
-
-```text
-[Your Task: Crossover]
-Improve the current algorithm by transplanting one mechanism from the reference algorithm.
-- Compare the two programs and their formation histories, and find one computation in the reference that the current algorithm lacks and that addresses one of its weaknesses, for example an additional signal, a feasibility or look-ahead check, or a different way of combining terms.
-- Integrate that mechanism into the current algorithm and adapt it so that it works with the existing parts. Keep the current algorithm's framework and its working components.
-- The reference may score lower overall and still contain a useful mechanism.
-- Do not copy the reference or return a program that is essentially one of the two inputs. The transplanted mechanism must be able to change the current algorithm's decisions.
-```
-
-设计说明：
-- **"one mechanism"加"keep the framework"：** 让交叉成为保留主干的迁移，而不是两份程序的拼接。VRPTW 的前瞻模拟和 OP 的奖赏/距离组合都是这样迁入的。
-- **第 3 条：** V9.19 旧版中，参考优于主程序的比例除 OBP 外只有 10.7–17.8%，交叉却仍有最高的改善率。明说这一点，模型才不会因为参考分数低而忽略它。
-- **第 4 条针对复制：** V10.8 中有 353/3400 个 Fuse 与 donor 完全相同，其中 254 个复制的是更差的 donor。复制结果也会被 `copied_reference` 拦下并统计。
-
-### 5.7 修复
-
-区块顺序：Task → Evaluation → Target Function → Failed Program → Error → Your Task → Output Format。`{what}` = `the fix`。
-
-````text
-[Failed Program]
-This program was written to improve an algorithm with score {parent_score}, but it failed during evaluation.
-Idea: {idea}
-```python
-{failed_code}
-```
-
-[Error]
-{error_text}
-
-[Your Task: Repair]
-Fix the program so that it runs correctly, while keeping its intended design.
-- Change only what is needed to remove the failure.
-- If the evaluation timed out, reduce the cost of the most expensive computation instead of dropping the idea.
-- If the output was invalid, make sure the function returns exactly what the target function's contract requires.
-````
-
-- 初始化失败时，第一句改为 `This program was written as an initial algorithm, but it failed during evaluation.`
-- `failed_code`：能解析就用规范形式，否则用原始代码。
-- `error_text`：
-  - `invalid_source`：写 `The program could not be used: {原因}`，如 SyntaxError 及行号、缺少目标函数、签名被改动。
-  - `runtime_error`：traceback 的最后 15 行，最多 1500 字符。
-  - `invalid_output`：评价器给出的原因。
-  - `timeout`：写 `The evaluation did not finish within {timeout} seconds.`
-
-修复提示不给历史和参考，只给修复所需的信息。
-
-### 5.8 输出解析
+### 5.5 输出解析
 
 沿用 V10.14 `edits.py` 中已经验证过的交付规则：
 1. `finish_reason` 必须是 `stop`，截断的响应记为 `delivery_failed`。
@@ -547,212 +320,6 @@ Fix the program so that it runs correctly, while keeping its intended design.
 5. 补全模板要求的 import（`complete_template_dependencies`），再检查语法和接口（`validate_source`）。
 6. 规范化，计算 `key`。
 
-### 5.9 渲染示例（TSP，Refine）
-
-下面按当前实现离线渲染完整提示。各步代码与分数均为示意，不作为实验数据；每一步显示完整 diff。实际运行的 token 数由服务端 tokenizer 精确计数。
-
-````text
-[Task]
-The Traveling Salesman Problem asks for a shortest tour that visits each node once and returns to the start. Instances are generated from node coordinates, but the constructive heuristic does not receive coordinates. At each step it receives the current node id, the destination/start node id, an array of unvisited candidate node ids, and the pairwise distance matrix, and must return the id of the next node to visit. Help me design a novel algorithm to select the next node in each step.
-
-[Evaluation]
-Each candidate program is run on a fixed set of training instances.
-Score: the average length of the constructed tours. Lower is better.
-The whole evaluation must finish within 20 seconds, so keep the computation efficient.
-
-[Target Function]
-```python
-import numpy as np
-def select_next_node(current_node: int, destination_node: int, unvisited_nodes: np.ndarray, distance_matrix: np.ndarray) -> int:
-    """
-    Design a novel algorithm to select the next node in each step.
-
-    Args:
-    current_node: ID of the current node.
-    destination_node: ID of the destination node.
-    unvisited_nodes: Array of IDs of unvisited nodes.
-    distance_matrix: Distance matrix of nodes.
-
-    Return:
-    ID of the next node to visit.
-    """
-    next_node = unvisited_nodes[0]
-
-    return next_node
-```
-Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses.
-
-[Current Algorithm]
-Score: 5.8654
-```python
-import numpy as np
-
-def _greedy_path(start, nodes, dm):
-    path, rest = ([], list(nodes))
-    cur = start
-    while rest:
-        j = min(rest, key=lambda x: dm[cur, x])
-        path.append(j)
-        rest.remove(j)
-        cur = j
-    return path
-
-def _two_opt(path, start, end, dm, sweeps=6):
-    route = [start] + path + [end]
-    for _ in range(sweeps):
-        improved = False
-        for i in range(1, len(route) - 2):
-            for j in range(i + 1, len(route) - 1):
-                delta = dm[route[i - 1], route[j]] + dm[route[i], route[j + 1]] - dm[route[i - 1], route[i]] - dm[route[j], route[j + 1]]
-                if delta < -1e-12:
-                    route[i:j + 1] = route[i:j + 1][::-1]
-                    improved = True
-        if not improved:
-            break
-    return route[1:-1]
-
-def select_next_node(current_node, destination_node, unvisited_nodes, distance_matrix):
-    if len(unvisited_nodes) <= 2:
-        return int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
-    k = min(8, len(unvisited_nodes))
-    near = unvisited_nodes[np.argsort(distance_matrix[current_node, unvisited_nodes])[:k]]
-    best, best_len = (None, np.inf)
-    for s in near[:3]:
-        rest = [x for x in unvisited_nodes if x != s]
-        p = [int(s)] + _greedy_path(int(s), rest, distance_matrix)
-        p = _two_opt(p, current_node, destination_node, distance_matrix)
-        L = distance_matrix[current_node, p[0]] + sum((distance_matrix[a, b] for a, b in zip(p, p[1:]))) + distance_matrix[p[-1], destination_node]
-        if L < best_len:
-            best, best_len = (p, L)
-    path = best
-    return int(path[0])
-```
-
-[How the Current Algorithm Was Formed]
-These are the most recent steps on the path that produced the current algorithm, oldest first. "Code diff" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
-
-Start · initial algorithm · score 6.7665
-  Idea: Nearest neighbour, lightly penalising nodes far from the destination.
-
-Step 1 · Refine · score 6.7665 → 6.1525 (improved)
-  Idea: Subtract a regret term so nodes that will be expensive to reach later are taken now.
-  Code diff (previous → current):
-```diff
-@@ -2,6 +2,11 @@
-
- def select_next_node(current_node, destination_node, unvisited_nodes, distance_matrix):
-+    if len(unvisited_nodes) <= 2:
-+        return int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
-     d = distance_matrix[current_node, unvisited_nodes]
--    back = distance_matrix[unvisited_nodes, destination_node]
--    score = d + 0.1 * back
-+    pair = distance_matrix[np.ix_(unvisited_nodes, unvisited_nodes)].copy()
-+    np.fill_diagonal(pair, np.inf)
-+    nearest = np.partition(pair, 1, axis=1)[:, :2]
-+    regret = nearest[:, 1] - nearest[:, 0]
-+    score = d - 0.3 * regret
-     return int(unvisited_nodes[np.argmin(score)])
-```
-
-Step 2 · Explore · score 6.1525 → 6.0324 (improved)
-  Idea: Build a greedy path over the remaining nodes, improve it with 2-opt, and move to its first node.
-  Code diff (previous → current):
-```diff
-@@ -1,12 +1,34 @@
- import numpy as np
-+
-+def _greedy_path(start, nodes, dm):
-+    path, rest = ([], list(nodes))
-+    cur = start
-+    while rest:
-+        j = min(rest, key=lambda x: dm[cur, x])
-+        path.append(j)
-+        rest.remove(j)
-+        cur = j
-+    return path
-+
-+def _two_opt(path, start, end, dm, sweeps=3):
-+    route = [start] + path + [end]
-+    for _ in range(sweeps):
-+        improved = False
-+        for i in range(1, len(route) - 2):
-+            for j in range(i + 1, len(route) - 1):
-+                delta = dm[route[i - 1], route[j]] + dm[route[i], route[j + 1]] - dm[route[i - 1], route[i]] - dm[route[j], route[j + 1]]
-+                if delta < -1e-12:
-+                    route[i:j + 1] = route[i:j + 1][::-1]
-+                    improved = True
-+        if not improved:
-+            break
-+    return route[1:-1]
-
- def select_next_node(current_node, destination_node, unvisited_nodes, distance_matrix):
-     if len(unvisited_nodes) <= 2:
-         return int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
--    d = distance_matrix[current_node, unvisited_nodes]
--    pair = distance_matrix[np.ix_(unvisited_nodes, unvisited_nodes)].copy()
--    np.fill_diagonal(pair, np.inf)
--    nearest = np.partition(pair, 1, axis=1)[:, :2]
--    regret = nearest[:, 1] - nearest[:, 0]
--    score = d - 0.3 * regret
--    return int(unvisited_nodes[np.argmin(score)])
-+    start = int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
-+    rest = [x for x in unvisited_nodes if x != start]
-+    path = [start] + _greedy_path(start, rest, distance_matrix)
-+    path = _two_opt(path, current_node, destination_node, distance_matrix)
-+    return int(path[0])
-```
-
-Step 3 (latest: produced the current algorithm) · Refine · score 6.0324 → 5.8654 (improved)
-  Idea: Start the remaining-path construction from the three nearest candidates and keep the shortest 2-opt route.
-  Code diff (previous → current):
-```diff
-@@ -11,5 +11,5 @@
-     return path
-
--def _two_opt(path, start, end, dm, sweeps=3):
-+def _two_opt(path, start, end, dm, sweeps=6):
-     route = [start] + path + [end]
-     for _ in range(sweeps):
-@@ -28,7 +28,14 @@
-     if len(unvisited_nodes) <= 2:
-         return int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
--    start = int(unvisited_nodes[np.argmin(distance_matrix[current_node, unvisited_nodes])])
--    rest = [x for x in unvisited_nodes if x != start]
--    path = [start] + _greedy_path(start, rest, distance_matrix)
--    path = _two_opt(path, current_node, destination_node, distance_matrix)
-+    k = min(8, len(unvisited_nodes))
-+    near = unvisited_nodes[np.argsort(distance_matrix[current_node, unvisited_nodes])[:k]]
-+    best, best_len = (None, np.inf)
-+    for s in near[:3]:
-+        rest = [x for x in unvisited_nodes if x != s]
-+        p = [int(s)] + _greedy_path(int(s), rest, distance_matrix)
-+        p = _two_opt(p, current_node, destination_node, distance_matrix)
-+        L = distance_matrix[current_node, p[0]] + sum((distance_matrix[a, b] for a, b in zip(p, p[1:]))) + distance_matrix[p[-1], destination_node]
-+        if L < best_len:
-+            best, best_len = (p, L)
-+    path = best
-     return int(path[0])
-```
-
-[Your Task: Refine]
-Improve the current algorithm with one focused change.
-- Build on what the history shows is working: parts introduced by improving steps are probably doing useful work, so keep them unless your change needs to alter them.
-- Let the recent steps guide the next one: push further in a direction that improved the score, or correct or undo a recent change that made it worse.
-- The change must be able to alter the decisions the function makes. Rescaling all scores, or applying the same monotone transform to them, leaves the chosen option unchanged.
-- If the structure is sound, recalibrating a few influential parameters is a valid focused change.
-- Prefer replacing or simplifying logic over stacking new layers, and leave unrelated parts of the program unchanged.
-
-[Output Format]
-Reply with exactly one Idea line followed by one Python code block:
-Idea: <one sentence, at most 300 characters, describing the change you made>
-Code:
-```python
-<the complete program>
-```
-Write no comments or docstrings in the code, and nothing after the code block.
-````
-
----
 
 ## 6. 完整流程
 
@@ -809,7 +376,7 @@ evaluate finalists on the selection set; best_program ← argmax selection score
 | Refine 历史 | 最近 ≤8 条边；每一步给完整 diff；只按总输入上限从最旧步骤开始裁剪 |
 | Explore 参考 | 最多 4 个档案 Idea 与分数；优先非祖先/后代、显示 Idea 与代码去重，再按代码差异贪心选择；加全局最好分数，不给谱系轨迹 |
 | Crossover | 主程序和参考程序各最近 ≤4 条边的完整 diff；参考选择仍要求质量 ≥ 中位数、优先非祖先/后代、代码相似度 ≤ 候选中位数，均匀抽取 |
-| Idea 显示 | ≤300 字符；原文全保存 |
+| Idea | 描述完整算法，约 150–250 词；显示最多 2,400 字符，原文全保存 |
 | 判定容差 | `1e-9 · max(1, |父代分数|)` |
 | 修复 | 每个失败候选最多 1 次，计入预算 |
 | 模型 | Qwen3.8-27B AWQ；thinking 关闭；官方非 thinking 采样 temperature 0.7、top_p 0.8、top_k 20、min_p 0、presence_penalty 1.5、repetition_penalty 1.0，全部显式发送 |
@@ -926,7 +493,7 @@ V10.11 `rand_ctx` 曾以最多 8 张无顺序的 Idea+fitness 档案卡替代形
 | 完整代码因缺少结尾围栏被拒 | 69 次 `delivery_failed`，模型以 `stop` 结束、代码完整，只缺结尾的 ``` | 交付规则过严 |
 | 以"比父代好"衡量 Explore 失真 | 按父代比较，Explore 的改进率比 Refine 低约 7 倍；按刷新训练前沿，只低约 2.5 倍（4.8 对 12.1 次/千次），并贡献了 157 次刷新中的 24 次 | 父代按质量挑选，Explore 的子代离开父代骨架，天然难以超过父代 |
 
-**搜索机制：** 父代与 finalist 按分数类分配（§3.4、§3.8），Explore 参考卡按分数类去重（§3.6），放宽缺少结尾围栏的交付（§5.8），并补充诊断（§8.1）。
+**搜索机制：** 父代与 finalist 按分数类分配（§3.4、§3.8），Explore 参考卡按分数类去重（§3.6），放宽缺少结尾围栏的交付（§5.5），并补充诊断（§8.1）。
 
 **评测协议（对所有方法生效，不算 V10.15 的机制贡献）：**
 
@@ -966,6 +533,6 @@ V10.11 `rand_ctx` 曾以最多 8 张无顺序的 Idea+fitness 档案卡替代形
 
 - 聊天模板渲染和分词完全相同，上下文均为 32768；
 - 客户端此前只发送 temperature、top_p、top_k，其余采样参数由两种服务各自取默认值，现已全部显式发送；
-- 同一个 TSP 提示各采样 40 次，local 有 11 次代码块未闭合，server3 为 0 次。关闭 MTP 后 local 仍有 4/18，而且真实 logprob 显示，模型在最后一行代码后直接给结束符 0.06–0.99 的概率，远程同一位置约为 0.0003。因此差异来自量化后的模型数值（GGUF 权重，可能还有 KV 量化），而不是投机解码。§5.8 的放宽规则消除了它对交付的主要影响，但两种服务的输出分布并不相同；正式实验应只使用同一种权重和服务。
+- 同一个 TSP 提示各采样 40 次，local 有 11 次代码块未闭合，server3 为 0 次。关闭 MTP 后 local 仍有 4/18，而且真实 logprob 显示，模型在最后一行代码后直接给结束符 0.06–0.99 的概率，远程同一位置约为 0.0003。因此差异来自量化后的模型数值（GGUF 权重，可能还有 KV 量化），而不是投机解码。§5.5 的放宽规则消除了它对交付的主要影响，但两种服务的输出分布并不相同；正式实验应只使用同一种权重和服务。
 
 **验证计划：** TSP、OBP 各 2 路小规模运行，记录超时率与运行时的主机负载，检查有效率与交付失败率在新采样下是否变差、父代分配 ESS 是否稳定在约 8、finalist 是否不再全部并列；通过后再做五任务正式实验。本次同时改动了提示词（文首）、分配机制、评测协议和采样参数，正式结果只能评价整体，不能归因到单项。

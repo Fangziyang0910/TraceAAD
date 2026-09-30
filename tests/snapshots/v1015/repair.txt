@@ -5,6 +5,7 @@ Return a numeric score.
 Each candidate program is run on a fixed set of training instances.
 Score: the task fitness. Higher is better.
 The whole evaluation must finish within 20 seconds, so keep the computation efficient.
+Every program shown below has already been evaluated; reproducing one of them earns nothing.
 
 [Target Function]
 ```python
@@ -14,7 +15,6 @@ def score(x):
 Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses.
 
 [Failed Program]
-This program was written to improve an algorithm with score 1, but it failed during evaluation.
 Idea: Fix the signature.
 ```python
 def score(x)
@@ -25,14 +25,11 @@ def score(x)
 SyntaxError: expected ':'
 
 [Your Task: Repair]
-Fix the program so that it runs correctly, while keeping its intended design.
-- Change only what is needed to remove the failure.
-- If the evaluation timed out, reduce the cost of the most expensive computation instead of dropping the idea.
-- If the output was invalid, make sure the function returns exactly what the target function's contract requires.
+The program failed during evaluation. Fix it so that it runs correctly within the time limit, keeping the algorithm it was meant to implement.
 
 [Output Format]
-Reply with exactly one Idea line followed by one Python code block:
-Idea: <one sentence, at most 300 characters, describing the fix>
+Reply with an Idea followed by one Python code block:
+Idea: <about 150-250 words describing the complete algorithm in your code: its core idea, the key quantities it computes, and how they are combined into each decision>
 Code:
 ```python
 <the complete program>
