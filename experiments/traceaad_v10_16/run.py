@@ -1,4 +1,4 @@
-"""Run V10.15 with one paid candidate per completed model generation."""
+"""Run V10.16 with one paid candidate per completed model generation."""
 
 import argparse
 from dataclasses import asdict
@@ -12,7 +12,7 @@ from benchmarks.tsp_construct import TSPEvaluation
 from benchmarks.vrptw_construct import VRPTWEvaluation
 from experiments.infra.base import RESULTS_ROOT, use_cpu_timeout, write_run_config
 from experiments.infra.runner import add_common_run_args, setup_experiment_run
-from traceaad.v10_15 import Config, TraceAADV1015
+from traceaad.v10_16 import Config, TraceAADV1016
 
 
 SELECTION_SEED = 20260927
@@ -53,23 +53,23 @@ def build_parser():
 def main(argv=None):
     args = build_parser().parse_args(argv)
     if args.thinking or args.approx_chars_per_token is not None:
-        raise ValueError("V10.15 requires thinking disabled and exact serving token counts")
+        raise ValueError("V10.16 requires thinking disabled and exact serving token counts")
     if args.repeat is not None and args.seed != args.repeat - 1:
         raise ValueError("run seed must equal repeat - 1")
     config = Config(budget=args.budget, output_tokens=args.output_tokens,
                     evaluation_seeds=tuple(args.evaluation_seeds), seed=args.seed)
     if args.dry_run:
-        print(json.dumps({"method": "v1015", "task": args.task, "config": asdict(config),
+        print(json.dumps({"method": "v1016", "task": args.task, "config": asdict(config),
             "search_timeout": TRAIN_TIMEOUT.get(args.task, 20 if args.task == "tsp_construct" else 120 if args.task == "cvrp_aco" else 60),
             "selection": "val_50" if args.task in {"cvrp_aco", "op_aco"} else {"seed": SELECTION_SEED},
             "test": "separate heldout.py after selection"}, indent=2))
         return
-    root = RESULTS_ROOT / "traceaad_v10_15"
+    root = RESULTS_ROOT / "traceaad_v10_16"
     if args.run_name:
         existing = root / args.task / args.run_name
         if existing.is_dir() and any(existing.iterdir()) and not (existing / "search.jsonl").exists():
             raise ValueError(f"refusing to overwrite a non-resumable run directory: {existing}")
-    ctx = setup_experiment_run(args, method="v1015", results_root=root,
+    ctx = setup_experiment_run(args, method="v1016", results_root=root,
         resume_file="search.jsonl", method_params=asdict(config),
         budget_basis="Completed model-generated candidates including initialization, failures, duplicates and repair.")
     try:
@@ -83,10 +83,10 @@ def main(argv=None):
             saved["task_eval"]["timeout_seconds"] = ctx.evaluation.timeout_seconds
             if not ctx.resumed:
                 write_run_config(ctx.run_dir, saved)
-        method = TraceAADV1015(evaluation=ctx.evaluation, llm=ctx.llm, run_dir=ctx.run_dir,
+        method = TraceAADV1016(evaluation=ctx.evaluation, llm=ctx.llm, run_dir=ctx.run_dir,
                                config=config, task=args.task,
                                selection_evaluation=selection_task(args.task, ctx.evaluation))
-        ctx.run(method.run, ["V10.15: quality allocation; formation history in generation only"])
+        ctx.run(method.run, ["V10.16: score-class quality allocation; formation history in generation only"])
     finally:
         ctx.llm.close()
 

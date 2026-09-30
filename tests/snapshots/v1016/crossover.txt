@@ -1,0 +1,56 @@
+[Task]
+Return a numeric score.
+
+[Evaluation]
+Each candidate program is run on a fixed set of training instances.
+Score: the task fitness. Higher is better.
+The whole evaluation must finish within 20 seconds, so keep the computation efficient.
+
+[Target Function]
+```python
+def score(x):
+    pass
+```
+Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses.
+
+[Current Algorithm]
+Score: 2
+```python
+def score(x):
+    return x + 2
+```
+
+[Recent Changes to the Current Algorithm]
+These are the most recent steps on the path that produced the current algorithm, oldest first. "Change" is computed from the code; "Idea" is what was intended at the time and may not match the code exactly. Scores are measured.
+
+Start · initial algorithm · score 1
+  Idea: Add 1 to the input.
+
+Step 1 (latest: produced the current algorithm) · Refine · score 1 → 2 (improved)
+  Idea: Add 2 to the input.
+  Change: numeric constants only, in score: 1 → 2
+
+[Reference Algorithm]
+A different algorithm from another branch of this search.
+Score: 3
+Idea: Add 3 to the input.
+```python
+def score(x):
+    return x + 3
+```
+
+[Your Task: Crossover]
+Improve the current algorithm by transplanting one mechanism from the reference algorithm.
+- Compare the two programs and find one computation in the reference that the current algorithm lacks and that addresses one of its weaknesses, for example an additional signal, a feasibility or look-ahead check, or a different way of combining terms.
+- Integrate that mechanism into the current algorithm and adapt it so that it works with the existing parts. Keep the current algorithm's framework and its working components.
+- The reference may score lower overall and still contain a useful mechanism.
+- Do not copy the reference or return a program that is essentially one of the two inputs. The transplanted mechanism must be able to change the current algorithm's decisions.
+
+[Output Format]
+Reply with exactly one Idea line followed by one Python code block:
+Idea: <one sentence, at most 300 characters, describing the mechanism you transplanted and how it is integrated>
+Code:
+```python
+<the complete program>
+```
+Write no comments or docstrings in the code, and nothing after the code block.
