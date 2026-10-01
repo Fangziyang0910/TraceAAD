@@ -2,20 +2,19 @@
 Return a numeric score.
 
 [Evaluation]
-Each candidate program is run on a fixed set of training instances.
+Each program is evaluated on a fixed set of training instances.
 Score: the task fitness. Higher is better.
-The whole evaluation must finish within 20 seconds, so keep the computation efficient.
-Returning a previously evaluated candidate consumes an attempt without another evaluation.
+The whole evaluation must finish within 20 seconds.
 
 [Target Function]
 ```python
 def score(x):
     pass
 ```
-Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses.
+Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses. Within the time limit, the function may perform any computation on its inputs.
 
 [Current Algorithm]
-Score: 1
+Score: 1 · Evaluation time: about 1.5 s
 ```python
 def score(x):
     return x + 1
@@ -26,11 +25,11 @@ The current algorithm is an initial design; no changes have been recorded yet.
 Design: Add 1 to the input.
 
 [Your Task: Refine]
-Write an improved version of the current algorithm that keeps its core idea.
+Continue developing the current algorithm: write a version that scores better than it.
 
 [Output Format]
 Reply in this order:
-Analysis: <a few sentences: what limits the current algorithm, and what change should improve it. It will not be shown again>
+Analysis: <a few sentences: what limits this line of development so far, and what change should take it past every version. It will not be shown again>
 Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>
 Code:
 ```python

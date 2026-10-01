@@ -2,38 +2,33 @@
 Return a numeric score.
 
 [Evaluation]
-Each candidate program is run on a fixed set of training instances.
+Each program is evaluated on a fixed set of training instances.
 Score: the task fitness. Higher is better.
-The whole evaluation must finish within 20 seconds, so keep the computation efficient.
-Returning a previously evaluated candidate consumes an attempt without another evaluation.
+The whole evaluation must finish within 20 seconds.
 
 [Target Function]
 ```python
 def score(x):
     pass
 ```
-Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses.
+Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses. Within the time limit, the function may perform any computation on its inputs.
 
 [Current Algorithm]
-Score: 2
+Score: 2 · Evaluation time: about 1.5 s
 ```python
 def score(x):
     return x + 2
 ```
 
-[Reference Designs from This Search]
-Other evaluated algorithms, each with its score and Design.
-Reference 1 · Score 3 · Design: Add 3 to the input.
-
 [Search Best]
 Best score found so far in this search: 3.
 
 [Your Task: Explore]
-Write a new algorithm that you expect to outperform the current one, built on a different core idea.
-The reference designs show other approaches found in this search; draw on them as inspiration.
+Write an algorithm that scores better than the best found so far by changing how the current algorithm makes its decisions, not by tuning it.
 
 [Output Format]
-Reply with a Design followed by one Python code block:
+Reply in this order:
+Analysis: <a few sentences: what the current algorithm cannot capture, and what different computation should capture it. It will not be shown again>
 Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>
 Code:
 ```python

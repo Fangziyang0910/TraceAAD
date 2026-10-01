@@ -15,6 +15,7 @@ class Config:
     final_candidates: int = 5
     evaluation_seeds: tuple[int, ...] = (730241,)
     seed: int = 0
+    explore_cards: int = 0  # archive Design cards shown to Explore (0 = none)
 
     def __post_init__(self):
         for name in ("budget", "roots", "init_attempt_limit", "history_depth",
@@ -25,6 +26,8 @@ class Config:
                 raise ValueError(f"{name} must be a positive integer")
         if self.roots != 8 or self.init_attempt_limit != 16 or self.history_depth != 8:
             raise ValueError("V10.15 fixes 8 roots, 16 initialization attempts and 8 history steps")
+        if type(self.explore_cards) is not int or not 0 <= self.explore_cards <= 4:
+            raise ValueError("explore_cards must be an integer from 0 to 4")
         if self.final_candidates != 5:
             raise ValueError("V10.15 selects from five training finalists")
         if not self.evaluation_seeds or len(set(self.evaluation_seeds)) != len(self.evaluation_seeds):

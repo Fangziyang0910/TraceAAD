@@ -15,30 +15,38 @@ SCORES = {
 # information shown. Operators differ only in which information they build on
 # and how far the result may move from the current algorithm.
 INITIAL = """[Your Task: Design an Algorithm]
-Design a complete algorithm for this task that you expect to score well, built on a clear core idea."""
+Write an algorithm for this task that scores as well as possible, built on a clear core idea."""
 
 ANOTHER_INITIAL = """[Your Task: Design a Different Algorithm]
-Design a complete algorithm for this task that you expect to score well, built on a core idea different from those of the algorithms above."""
+Write an algorithm built on a core idea different from those of the algorithms above that scores better than all of them."""
 
+# Every operator aims past everything the prompt shows, not just past the
+# current algorithm: an earlier version is then never an answer, whichever way
+# the latest step went.
 REFINE = """[Your Task: Refine]
-Write an improved version of the current algorithm that keeps its core idea.
-Use the formation history as evidence of what has and has not helped along this line of development."""
+Continue this line of development: write an algorithm that scores better than every version shown above."""
 
 REFINE_ROOT = """[Your Task: Refine]
-Write an improved version of the current algorithm that keeps its core idea."""
+Continue developing the current algorithm: write a version that scores better than it."""
 
+# Explore changes how the current algorithm decides and aims past the search
+# best; it does not start over. A fixed-parent paired test on TSP
+# (docs/03-机制探索与验证/2026-10-01-V10.15-5-正式实验诊断.md §4) found that
+# "write a new algorithm with a different core idea" never beat the run's best.
 EXPLORE = """[Your Task: Explore]
-Write a new algorithm that you expect to outperform the current one, built on a different core idea.
-The reference designs show other approaches found in this search; draw on them as inspiration."""
+Write an algorithm that scores better than the best found so far by changing how the current algorithm makes its decisions, not by tuning it."""
+
+EXPLORE_CARDS = EXPLORE + "\nThe reference designs show other approaches found in this search; draw on them as inspiration."
 
 CROSSOVER = """[Your Task: Crossover]
-Write an improved version of the current algorithm by combining it with the reference algorithm: bring in what the reference does well that the current algorithm lacks, and keep the current algorithm's strengths."""
+Combine the two lines of development: write an algorithm that scores better than every version shown above, bringing into the current algorithm what the reference algorithm does well."""
 
 REPAIR = """[Your Task: Repair]
 The program failed during evaluation. Fix it so that it runs correctly within the time limit, keeping the algorithm it was meant to implement."""
 
-FORMATION_INTRO = ("The steps that produced the current algorithm, oldest first. Each step shows the score change, "
-                   "the Design of the algorithm it produced, and the code diff from the previous version.")
+FORMATION_INTRO = ("The steps that produced the current algorithm, oldest first. Every version shown has been evaluated: "
+                   "each step gives the score change, the Design of the version it produced, and the code diff "
+                   "from the previous version.")
 
 IDEA_DISPLAY_CHARS = 2400  # about 400 words: room for a full description, guard against run-ons
 
@@ -56,11 +64,11 @@ def idea_view(idea):
 # targeted diagnosis prevents that; operators asked for a new algorithm
 # already carry that pressure, and an Analysis only added cost there.
 ANALYSIS = {
-    "Refine": "what limits the current algorithm, and what change should improve it",
+    "Refine": "what limits this line of development so far, and what change should take it past every version",
     "Crossover": "what the reference algorithm does well that the current algorithm lacks, and how to combine them",
     "Repair": "what caused the failure, and how to fix it",
+    "Explore": "what the current algorithm cannot capture, and what different computation should capture it",
     "Init": None,
-    "Explore": None,
 }
 
 
@@ -68,7 +76,9 @@ def output_format(action):
     # Paired Qwen tests (docs/03-机制探索与验证/2026-10-01-写代码前的决策与Design格式.md):
     # on Refine a few-sentence targeted Analysis cut duplicates from 25% to 5%
     # at the cost of a 170-word Design; on Crossover it gave the best rank; on
-    # Explore a Design alone ranked best at under half the tokens. Longer or
+    # Explore a Design alone ranked best at under half the tokens (on random
+    # parents and by rank; the structural Explore of the diagnosis study adds an
+    # Analysis because it asks for a rewrite of the current program). Longer or
     # free-form analysis and native thinking did worse, and the kept Design's
     # length had no measurable effect, so it stays at one or two sentences.
     lines = ["[Output Format]"]
@@ -100,13 +110,13 @@ class PromptBuilder:
                    else "an unspecified number of")
         self.common = [
             "[Task]\n" + description,
-            "[Evaluation]\nEach candidate program is run on a fixed set of training instances.\n"
+            "[Evaluation]\nEach program is evaluated on a fixed set of training instances.\n"
             f"Score: {meaning}. {'Higher' if higher else 'Lower'} is better.\n"
-            f"The whole evaluation must finish within {timeout} seconds, so keep the computation efficient.\n"
-            "Returning a previously evaluated candidate consumes an attempt without another evaluation.",
+            f"The whole evaluation must finish within {timeout} seconds.",
             "[Target Function]\n```python\n" + str(evaluation.template_program).strip() +
             "\n```\nKeep the function name, arguments and return contract exactly as shown. "
-            "The program must be self-contained: include every import, constant and helper it uses.",
+            "The program must be self-contained: include every import, constant and helper it uses. "
+            "Within the time limit, the function may perform any computation on its inputs.",
         ]
 
     def count(self, text):
@@ -126,8 +136,16 @@ class PromptBuilder:
                 "reference_history_edge_ids": [], "explore_reference_ids": [],
                 "token_count_mode": getattr(self.llm, "prompt_token_count_mode", "serving_tokenizer")}
 
+    @staticmethod
+    def _measured(node):
+        # Evaluation time is a property of each shown program, like its score,
+        # so the model can judge how much more computation fits the limit.
+        seconds = node.get("eval_seconds")
+        text = f"Score: {score_text(node['score'])}"
+        return text + (f" · Evaluation time: about {max(seconds, 0.1):.1f} s" if seconds else "")
+
     def _current(self, node):
-        return f"[Current Algorithm]\nScore: {score_text(node['score'])}\n```python\n{node['code'].rstrip()}\n```"
+        return f"[Current Algorithm]\n{self._measured(node)}\n```python\n{node['code'].rstrip()}\n```"
 
     def _edge(self, parent, child, index, *, latest=False, subject="current"):
         action = child["action"]
@@ -165,7 +183,7 @@ class PromptBuilder:
         shown = list(roots) if len(roots) >= 4 else []
 
         def root_section():
-            entries = [f"Algorithm {i} · Score {score_text(n['score'])} · Design: {idea_view(n['idea'])}\n"
+            entries = [f"Algorithm {i} · {self._measured(n)} · Design: {idea_view(n['idea'])}\n"
                        f"```python\n{n['code'].rstrip()}\n```" for i, n in enumerate(shown, 1)]
             return "[Algorithms Designed So Far]\n" + "\n\n".join(entries)
 
@@ -204,7 +222,7 @@ class PromptBuilder:
             while True:
                 history, ids = self._formation(sequence, count)
                 sections = self.common + [current, history, REFINE_ROOT if len(sequence) == 1 else REFINE,
-                                          output_format("Refine")]
+                                                   output_format("Refine")]
                 result = self._result(sections, "Refine", ids, trims)
                 if result["input_tokens"] <= self.config.max_input_tokens:
                     return result
@@ -214,10 +232,11 @@ class PromptBuilder:
                 else:
                     raise ContextTooLong("Refine prompt with required latest history exceeds context")
         if action == "Explore":
-            shown = list(references[:4])
+            shown = list(references[:self.config.explore_cards])
             while True:
                 ideas = self._reference_ideas(shown, best_score)
-                sections = self.common + [current, ideas, EXPLORE, output_format("Explore")]
+                sections = self.common + [current, ideas, EXPLORE_CARDS if shown else EXPLORE,
+                                                   output_format("Explore")]
                 result = self._result(sections, "Explore", trims=trims)
                 result["explore_reference_ids"] = [n["id"] for n in shown]
                 if result["input_tokens"] <= self.config.max_input_tokens:
@@ -228,7 +247,7 @@ class PromptBuilder:
         if reference is None:
             raise ValueError("Crossover requires a reference")
         ref_section = (f"[Reference Algorithm]\nAnother evaluated algorithm from this search.\n"
-                       f"Score: {score_text(reference['score'])}\nDesign: {idea_view(reference['idea'])}\n"
+                       f"{self._measured(reference)}\nDesign: {idea_view(reference['idea'])}\n"
                        f"```python\n{reference['code'].rstrip()}\n```")
         reference_sequence = path(reference, self.archive)
         counts = [min(4, len(sequence)-1), min(4, len(reference_sequence)-1)]
@@ -237,7 +256,7 @@ class PromptBuilder:
             ref_history, ref_ids = self._formation(reference_sequence, counts[1],
                                                   title="How the Reference Algorithm Was Formed", subject="reference")
             sections = self.common + [current, recent, ref_section, ref_history, CROSSOVER,
-                                      output_format("Crossover")]
+                                               output_format("Crossover")]
             result = self._result(sections, "Crossover", ids, trims)
             result["reference_history_edge_ids"] = ref_ids
             if result["input_tokens"] <= self.config.max_input_tokens:

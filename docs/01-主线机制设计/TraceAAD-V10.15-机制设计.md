@@ -6,6 +6,8 @@
 
 首批正式实验（`batch_20260930`）结束后再调整（§10.3）：父代与 finalist 按训练分数类分配，目标 ESS 固定为 8；Explore 参考卡每个分数类至多一张；接受缺少结尾围栏的完整代码块；OBP 按实例隔离，VRPTW 写明 depot 规则，采样改为官方非 thinking 配置。
 
+2026-10-01 调整（V10.15-5 诊断后，§10.4，按 §5.1 的元逻辑重写全部提示）：每个算子的目标都是超过它所看到的全部已评价算法——Refine 超过本开发线上展示的所有版本，Crossover 超过两条开发线上展示的所有版本，Explore 超过全局最好且改变决策方式而非调参；Explore 默认不展示档案参考卡（`explore_cards=0`）；`[Evaluation]` 只写评价方式、分数方向与时限，每个展示的算法与分数一起标注其评价耗时；接口说明写明“在时限内函数可以对输入做任何计算”；删除 “keep the computation efficient” 与 “Returning a previously evaluated candidate…” 两条规则。V10.15-5 及之前的结果使用旧提示，不回写。
+
 ## 0. 版本身份
 
 V10.15 是一个独立版本，不是 V10.14 的后代，版本号只作标识。它把 V9.7、V9.14、V9.16、V9.19、V10.11、V10.13 和 V10.14 中有证据支持的部分重新组合成一个简单、完整的机制。它只复用 V10.14 的工程组件：解析、评价器封装、候选记账和独立选择集。
@@ -212,7 +214,7 @@ ESS(β) = 1 / Σ_k p_β(k)²
 | Target Function | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Current Algorithm（规范代码 + 分数） | | ✓ | ✓ | ✓ | |
 | 形成历史（≤8 步，每步完整 diff） | | ✓ | | | |
-| 档案参考思路（≤4 个，Idea 与分数） | | | ✓ | | |
+| 档案参考思路（≤4 个，Idea 与分数；默认关闭，`explore_cards`） | | | 可选 | | |
 | 主程序形成历史（≤4 步，每步完整 diff） | | | | ✓ | |
 | Reference Algorithm | | | | ✓ | |
 | 参考程序形成历史（≤4 步，每步完整 diff） | | | | ✓ | |
@@ -221,7 +223,7 @@ ESS(β) = 1 / Σ_k p_β(k)²
 | Failed Program + Error | | | | | ✓ |
 | 动作指令 + Output Format | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-刻意不给的：同父已试、搜索统计、行为探针、证据解读规则，以及训练实例的规模和数量（避免模型针对训练规模做特化）。Explore 不给谱系轨迹与参考完整代码；Refine 不加跨分支思路卡。
+刻意不给的：同父已试、搜索统计、行为探针、证据解读规则，以及训练实例的规模和数量（避免模型针对训练规模做特化）。Explore 不给谱系轨迹与参考完整代码，默认也不给参考卡；Refine 不加跨分支思路卡。[Evaluation] 中的“当前算法耗时”来自该节点自己的搜索评价记录（`eval_seconds`），没有记录时省略。
 
 ### 4.2 形成路径
 
@@ -264,11 +266,12 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
 
 ### 5.1 写法原则（2026-09-30 重写）
 
-- **从元提示出发。** 所有算子只提一个要求：利用提示中的信息，写出预期得分更高的算法。算子之间只在"依据哪些信息、离当前算法多远"上表达偏好：Refine 保留当前算法的核心思想加以改进，Explore 以不同的核心思想另起，Crossover 把参考算法中当前算法所缺的长处融合进来。
+- **从元提示出发（2026-10-01 修订）。** 每个算子只做一件事：根据看到的已评价算法，写出比它们都好的算法。算子之间只在两点上不同：看到哪些材料，从哪里出发。Refine 看本开发线的形成历史，目标是超过其中所有版本；Crossover 看两条开发线，目标是超过两条线上的所有版本；Explore 看当前算法与全局最好，目标是超过全局最好，并改变决策方式而不是调参。目标不再锚在“当前算法”上：锚在当前时，最近一步变差后最直接的答案就是退回上一版（V10.15-5 中这类 Refine 撤回 21%）；锚在“所有展示过的版本”上，任何展示过的版本都不是答案，无需另立禁令。
+- **事实挂在它所描述的对象上。** 分数与评价耗时一起标在每个展示的算法上；`[Evaluation]` 只写所有算法共用的评价方式、分数方向与时限；接口说明只写契约与“在时限内函数可以对输入做任何计算”这一事实，不点名任何技巧。
 - **只陈述事实与目标，不写具体技巧。** 删除了"改动必须影响决策""单调变换无效""可重新标定参数"等规则：它们把设计者对某些失败的猜测写成操作指南，既不通用，也会被模型当作待办事项。V10.15-2 前 25% 预算中，Refine 有 307 次生成与祖父节点相同的程序，其中 82% 撤回的是使分数变差的一步，模型的 Idea 多数直接写 "revert"；旧提示中恰有 "correct or undo a recent change that made it worse"。在相同父代与历史下只替换提示的对照中（从 V10.15-2 档案抽取最近一步变差的 45 个父代，同一采样配置），撤回从 19 次降到 2 次；TSP 与 OBP 的 32 个父代上，有效新程序从 11 个增至 28 个，超过父代的从 9 个增至 17 个。样本较小，只支持"这句指令是主要诱因"，不排除模型也会自主回退。
-- **公共事实：** Returning a previously evaluated candidate consumes an attempt without another evaluation. 这是搜索规则本身，对撤回、复制参考和原样返回同样适用，不针对某一种失败单独立禁令。
-- **算子范围调整：** Refine 从"一个聚焦的改动"放宽为"保留核心思想的改进版本"，Crossover 从"移植一个机制"放宽为"融合参考算法的长处"，允许一次改动多个部分。这给模型更大的设计空间，代价是分数变化更难归因到单处改动。
-- **历史是证据。** 形成历史用于说明这条开发线上哪些改动有帮助、哪些没有，而不是下一步的待办清单。
+- **规则只保留输出契约。** 原公共事实 “Returning a previously evaluated candidate consumes an attempt without another evaluation.” 已删除：目标改为超过所有展示过的版本后，它对展示过的版本是多余的，对未展示的档案程序模型又无从回避。
+- **算子范围调整：** Refine 从"一个聚焦的改动"放宽为继续这条开发线的改进（2026-10-01 起不再要求“保留核心思想”，由“Continue this line of development”表达），Crossover 从"移植一个机制"放宽为"融合参考算法的长处"，允许一次改动多个部分。这给模型更大的设计空间，代价是分数变化更难归因到单处改动。
+- **历史说明开发线到过哪里。** 引导语写明展示的每个版本都已评价、各有分数，目标再要求超过其中全部；不再另写“把历史当作证据”的使用说明。
 - **用方括号小节标题，英文，短。** 事实（Score、Code diff）与作者陈述（Idea）分开标注。
 
 ### 5.2 生成前的分析与 Design
@@ -277,10 +280,11 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
 
 | 算子 | 回复格式 |
 |---|---|
-| Refine | Analysis: a few sentences: what limits the current algorithm, and what change should improve it → Design → Code |
+| Refine | Analysis: a few sentences: what limits this line of development so far, and what change should take it past every version → Design → Code |
 | Crossover | Analysis: a few sentences: what the reference algorithm does well that the current algorithm lacks, and how to combine them → Design → Code |
 | 修复 | Analysis: a few sentences: what caused the failure, and how to fix it → Design → Code |
-| Explore、初始化 | Design → Code |
+| Explore | Analysis: a few sentences: what the current algorithm cannot capture, and what different computation should capture it → Design → Code |
+| 初始化 | Design → Code |
 
 - **Analysis** 不保存、不再展示，是本次生成的决策。
 - **Design**：one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement。它进入历史、Explore 参考卡、Crossover 参考与修复提示；每一步的改动由 Code diff 呈现。内部字段仍名为 `idea`；解析接受 Design、Idea、Thought 标签并取最后一个，Analysis 不会进入 Design。
@@ -293,10 +297,16 @@ Step i · <Action> · score <父代分数> → <子代分数> (<improved | worse
 
 ````text
 [Evaluation]
-Each candidate program is run on a fixed set of training instances.
+Each program is evaluated on a fixed set of training instances.
 Score: {score_meaning}. {Lower|Higher} is better.
-The whole evaluation must finish within {timeout} seconds, so keep the computation efficient.
-Returning a previously evaluated candidate consumes an attempt without another evaluation.
+The whole evaluation must finish within {timeout} seconds.
+
+[Target Function]
+<模板>
+Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses. Within the time limit, the function may perform any computation on its inputs.
+
+[Current Algorithm]
+Score: {score}[ · Evaluation time: about {t} s]      ← 参考算法、初始化已有根同样标注
 
 [Output Format]
 Reply in this order:                                  ← 无 Analysis 的算子：Reply with a Design followed by one Python code block:
@@ -311,14 +321,14 @@ Write no comments or docstrings in the code, and nothing after the code block.
 
 | 算子 | 上下文区块 | 任务指令 |
 |---|---|---|
-| 初始化（前 4 个根） | — | Design a complete algorithm for this task that you expect to score well, built on a clear core idea. |
-| 初始化（第 5–8 个根） | 已有根的代码、分数与 Design | Design a complete algorithm for this task that you expect to score well, built on a core idea different from those of the algorithms above. |
-| Refine | 当前算法；形成历史（≤8 步，每步分数变化、Design、完整 diff） | Write an improved version of the current algorithm that keeps its core idea. Use the formation history as evidence of what has and has not helped along this line of development.（根节点无历史时只有第一句） |
-| Explore | 当前算法；≤4 张参考 Design 卡；全局最好分数 | Write a new algorithm that you expect to outperform the current one, built on a different core idea. The reference designs show other approaches found in this search; draw on them as inspiration. |
-| Crossover | 当前算法及其历史（≤4 步）；参考算法及其历史（≤4 步） | Write an improved version of the current algorithm by combining it with the reference algorithm: bring in what the reference does well that the current algorithm lacks, and keep the current algorithm's strengths. |
+| 初始化（前 4 个根） | — | Write an algorithm for this task that scores as well as possible, built on a clear core idea. |
+| 初始化（第 5–8 个根） | 已有根的代码、分数、耗时与 Design | Write an algorithm built on a core idea different from those of the algorithms above that scores better than all of them. |
+| Refine | 当前算法；形成历史（≤8 步，每步分数变化、Design、完整 diff） | Continue this line of development: write an algorithm that scores better than every version shown above.（根节点无历史时：Continue developing the current algorithm: write a version that scores better than it.） |
+| Explore | 当前算法；全局最好分数（`explore_cards>0` 时另加参考 Design 卡） | Write an algorithm that scores better than the best found so far by changing how the current algorithm makes its decisions, not by tuning it. |
+| Crossover | 当前算法及其历史（≤4 步）；参考算法及其历史（≤4 步） | Combine the two lines of development: write an algorithm that scores better than every version shown above, bringing into the current algorithm what the reference algorithm does well. |
 | 修复 | 失败程序（Design 与代码）；错误信息 | The program failed during evaluation. Fix it so that it runs correctly within the time limit, keeping the algorithm it was meant to implement. |
 
-历史引导语：The steps that produced the current algorithm, oldest first. Each step shows the score change, the Design of the algorithm it produced, and the code diff from the previous version.
+历史引导语：The steps that produced the current algorithm, oldest first. Every version shown has been evaluated: each step gives the score change, the Design of the version it produced, and the code diff from the previous version.
 
 ### 5.4 逐字文本
 
@@ -388,7 +398,7 @@ evaluate finalists on the selection set; best_program ← argmax selection score
 | 选父 | 分数类上的质量 Boltzmann，ESS 目标 `min(K, 8)`，类内均匀；三个动作共用 |
 | 动作 | Refine 0.45 / Explore 0.30 / Crossover 0.25 |
 | Refine 历史 | 最近 ≤8 条边；每一步给完整 diff；只按总输入上限从最旧步骤开始裁剪 |
-| Explore 参考 | 最多 4 个档案 Idea 与分数；优先非祖先/后代、显示 Idea 与代码去重，再按代码差异贪心选择；加全局最好分数，不给谱系轨迹 |
+| Explore 参考 | 默认 0 个（`explore_cards`，上限 4）；启用时最多 4 个档案 Idea 与分数；优先非祖先/后代、显示 Idea 与代码去重，再按代码差异贪心选择；加全局最好分数，不给谱系轨迹 |
 | Crossover | 主程序和参考程序各最近 ≤4 条边的完整 diff；参考选择仍要求质量 ≥ 中位数、优先非祖先/后代、代码相似度 ≤ 候选中位数，均匀抽取 |
 | Idea | 描述完整算法，约 150–250 词；显示最多 2,400 字符，原文全保存 |
 | 判定容差 | `1e-9 · max(1, |父代分数|)` |
@@ -550,3 +560,20 @@ V10.11 `rand_ctx` 曾以最多 8 张无顺序的 Idea+fitness 档案卡替代形
 - 同一个 TSP 提示各采样 40 次，local 有 11 次代码块未闭合，server3 为 0 次。关闭 MTP 后 local 仍有 4/18，而且真实 logprob 显示，模型在最后一行代码后直接给结束符 0.06–0.99 的概率，远程同一位置约为 0.0003。因此差异来自量化后的模型数值（GGUF 权重，可能还有 KV 量化），而不是投机解码。§5.5 的放宽规则消除了它对交付的主要影响，但两种服务的输出分布并不相同；正式实验应只使用同一种权重和服务。
 
 **验证计划：** TSP、OBP 各 2 路小规模运行，记录超时率与运行时的主机负载，检查有效率与交付失败率在新采样下是否变差、父代分配 ESS 是否稳定在约 8、finalist 是否不再全部并列；通过后再做五任务正式实验。本次同时改动了提示词（文首）、分配机制、评测协议和采样参数，正式结果只能评价整体，不能归因到单项。
+
+
+### 10.4 V10.15-5 诊断后的提示调整（2026-10-01）
+
+依据与全部数字见[V10.15-5 正式实验诊断](../03-机制探索与验证/2026-10-01-V10.15-5-正式实验诊断.md)。
+
+| 调整 | 原因 |
+|---|---|
+| Explore 指令改为“超过全局最好、改变当前算法如何决策而非调参”，加简短 Analysis | 在 TSP 平台期父代上，“写一个核心思想不同的新算法”超过该路全局最好 0/80，结构重写 + 计算余量说明 4/80（配对差 +5.0 个百分点，95% CI [+1.2, +10.0]）；V10.15 首批 TSP 的大跳跃都来自这类 Explore。对照中的指令还列出了“忽略的信息、从未评估后果的选择”等具体方向，现行版本按“只写目标”的原则删去了这些方向，只保留在 Analysis 的问题里（what the current algorithm cannot capture）；删去后的效果没有单独检验 |
+| 默认不展示参考卡 | 对照中去掉参考卡的几种写法都不比有卡的差；卡片无质量门槛，会带入 8–36 分的低分思想；去卡与结构重写在对照中是同时改变的，二者的单独作用没有分离，因此保留 `explore_cards` 以便单独检验 |
+| 去掉 “keep the computation efficient”；每个展示的算法标注评价耗时 | 构造类任务的强结果需要在选点函数内部做模拟与局部搜索；该句压低计算量。对照中的措辞多一句“更多计算是可以承受的”，现行版本只陈述耗时事实，是否同样有效尚需检验 |
+| 接口说明写明“在时限内函数可以对输入做任何计算”，删除初始化中“检验选择的后果”的技巧提示 | 前者是接口允许的计算范围这一事实，对所有算子成立；后者点名了一种技巧 |
+| 删除 “Returning a previously evaluated candidate…” | 见 §5.1：目标改为超过所有展示过的版本后，这条规则多余 |
+
+| 算子目标改为“超过展示过的所有版本” | 上下文只说明轨迹的含义（每个展示的版本都已评价、各有分数），指令只要求超过其中所有版本：Refine 超过本开发线上展示的所有版本，Crossover 超过两条开发线上展示的所有版本，Explore 超过全局最好。原写法把目标锚在“当前算法”上（“an improved version of the current algorithm”，Analysis 问“what limits the current algorithm”），最近一步变差时，相对当前的最好答案就是退回上一版：V10.15-5 中这类 Refine 有 21% 原样撤回（608/2842），Analysis 几乎都写“当前版本比上一步退步……改回去”。按新目标，任何展示过的版本都不满足要求，无需再写针对撤回的规则 |
+
+未采纳：提高温度（对照中无增益）、只在最近一步变差时加“上一版已评价过”的补丁（被目标层面的修改取代）。这些修改只经过单次生成的固定父代对照，完整搜索与 held-out 尚未检验；新的 Refine 与 Crossover 目标措辞没有单独的对照。

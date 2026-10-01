@@ -2,27 +2,26 @@
 Return a numeric score.
 
 [Evaluation]
-Each candidate program is run on a fixed set of training instances.
+Each program is evaluated on a fixed set of training instances.
 Score: the task fitness. Higher is better.
-The whole evaluation must finish within 20 seconds, so keep the computation efficient.
-Returning a previously evaluated candidate consumes an attempt without another evaluation.
+The whole evaluation must finish within 20 seconds.
 
 [Target Function]
 ```python
 def score(x):
     pass
 ```
-Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses.
+Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses. Within the time limit, the function may perform any computation on its inputs.
 
 [Current Algorithm]
-Score: 2
+Score: 2 · Evaluation time: about 1.5 s
 ```python
 def score(x):
     return x + 2
 ```
 
 [How the Current Algorithm Was Formed]
-The steps that produced the current algorithm, oldest first. Each step shows the score change, the Design of the algorithm it produced, and the code diff from the previous version.
+The steps that produced the current algorithm, oldest first. Every version shown has been evaluated: each step gives the score change, the Design of the version it produced, and the code diff from the previous version.
 
 Start · initial algorithm · score 1
   Design: Add 1 to the input.
@@ -38,12 +37,11 @@ Step 1 (latest: produced the current algorithm) · Refine · score 1 → 2 (impr
 ```
 
 [Your Task: Refine]
-Write an improved version of the current algorithm that keeps its core idea.
-Use the formation history as evidence of what has and has not helped along this line of development.
+Continue this line of development: write an algorithm that scores better than every version shown above.
 
 [Output Format]
 Reply in this order:
-Analysis: <a few sentences: what limits the current algorithm, and what change should improve it. It will not be shown again>
+Analysis: <a few sentences: what limits this line of development so far, and what change should take it past every version. It will not be shown again>
 Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>
 Code:
 ```python

@@ -2,45 +2,44 @@
 Return a numeric score.
 
 [Evaluation]
-Each candidate program is run on a fixed set of training instances.
+Each program is evaluated on a fixed set of training instances.
 Score: the task fitness. Higher is better.
-The whole evaluation must finish within 20 seconds, so keep the computation efficient.
-Returning a previously evaluated candidate consumes an attempt without another evaluation.
+The whole evaluation must finish within 20 seconds.
 
 [Target Function]
 ```python
 def score(x):
     pass
 ```
-Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses.
+Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses. Within the time limit, the function may perform any computation on its inputs.
 
 [Algorithms Designed So Far]
-Algorithm 1 · Score 1 · Design: Add 1 to the input.
+Algorithm 1 · Score: 1 · Evaluation time: about 1.5 s · Design: Add 1 to the input.
 ```python
 def score(x):
     return x + 1
 ```
 
-Algorithm 2 · Score 2 · Design: Add 2 to the input.
+Algorithm 2 · Score: 2 · Evaluation time: about 1.5 s · Design: Add 2 to the input.
 ```python
 def score(x):
     return x + 2
 ```
 
-Algorithm 3 · Score 3 · Design: Add 3 to the input.
+Algorithm 3 · Score: 3 · Evaluation time: about 1.5 s · Design: Add 3 to the input.
 ```python
 def score(x):
     return x + 3
 ```
 
-Algorithm 4 · Score 4 · Design: Add 4 to the input.
+Algorithm 4 · Score: 4 · Evaluation time: about 1.5 s · Design: Add 4 to the input.
 ```python
 def score(x):
     return x + 4
 ```
 
 [Your Task: Design a Different Algorithm]
-Design a complete algorithm for this task that you expect to score well, built on a core idea different from those of the algorithms above.
+Write an algorithm built on a core idea different from those of the algorithms above that scores better than all of them.
 
 [Output Format]
 Reply with a Design followed by one Python code block:

@@ -274,7 +274,8 @@ class TraceAADV1015:
                             "score": score, "parent_id": parent["id"] if parent else None,
                             "action": action, "reference_id": reference["id"] if reference else None,
                             "idea": idea, "depth": parent["depth"] + 1 if parent else 0,
-                            "repaired": repair_of is not None, "attempt_id": aid}
+                            "repaired": repair_of is not None, "attempt_id": aid,
+                            "eval_seconds": self.facts.tables["evaluation"][eval_ids[-1]]["seconds"]}
                     self.facts.add("node", node)
                     record.update(status="valid", score=score, fitness=fitness, node_id=aid,
                                   same_as_parent=parent is not None and same_score(fitness, parent["fitness"]))
@@ -340,9 +341,9 @@ class TraceAADV1015:
             if reference is None:
                 action = "Refine"
                 flags.append("crossover_fallback")
-        elif action == "Explore":
+        elif action == "Explore" and self.config.explore_cards:
             explore_references, explore_reference_selection = choose_explore_references(
-                parent, self.archive, self.reference_rng)
+                parent, self.archive, self.reference_rng, self.config.explore_cards)
         best_score = max(self.archive.values(), key=lambda n: n["fitness"])["score"]
         try:
             request = self.prompts.build(action, parent, reference=reference,

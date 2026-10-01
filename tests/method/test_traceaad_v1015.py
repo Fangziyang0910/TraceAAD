@@ -25,12 +25,12 @@ class SelectionEvaluation(TinyEvaluation):
         return callable_func(1) + self.offset
 
 
-def method(tmp_path, *answers, budget=10, selection=False):
+def method(tmp_path, *answers, budget=10, selection=False, **config):
     return TraceAADV1015(
         evaluation=TinyEvaluation(),
         selection_evaluation=SelectionEvaluation(100) if selection else None,
         llm=TokenLLM(*answers), run_dir=tmp_path,
-        config=Config(budget=budget))
+        config=Config(budget=budget, **config))
 
 
 def test_canonical_identity_discards_comments_docs_and_formatting():
@@ -340,7 +340,7 @@ def test_explore_references_take_one_card_per_score_class():
 
 
 def test_search_explore_displays_and_records_archive_references(tmp_path):
-    m = method(tmp_path, *(response(i) for i in range(1, 10)), budget=9)
+    m = method(tmp_path, *(response(i) for i in range(1, 10)), budget=9, explore_cards=4)
     for _ in range(8):
         m._roots()
     m.phase = 'search'
