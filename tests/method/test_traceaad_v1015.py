@@ -270,9 +270,10 @@ def test_reference_pool_is_every_other_program_at_or_above_the_median():
         3: {'id': 3, 'parent_id': 2, 'key': '3', 'code': 'def score(x): return x+2', 'fitness': 3},
         4: {'id': 4, 'parent_id': None, 'key': '4', 'code': 'def score(x): return x*2', 'fitness': 4},
     }
-    # Parent links carry no meaning here: the child 3 is as eligible as 4.
-    picks = {choose_reference(nodes[2], nodes, random.Random(seed))[0]['id'] for seed in range(40)}
-    assert picks <= {3, 4} and 3 in picks
+    # Parent links carry no meaning here: the child 3 is in the pool with 4,
+    # and the draw keeps the half whose code differs more from the parent.
+    picked, info = choose_reference(nodes[2], nodes, random.Random(0))
+    assert info['eligible'] == 2 and info['diverse'] == 1 and picked['id'] == 4
     picked, info = choose_reference(nodes[2], {k: v for k, v in nodes.items() if k != 4},
                                     random.Random(0))
     assert picked['id'] == 3 and info['eligible'] == 1
