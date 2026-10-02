@@ -10,7 +10,7 @@ def path(node, archive):
     while items[-1]["parent_id"] is not None:
         parent = archive[items[-1]["parent_id"]]
         if parent["id"] in seen:
-            raise ValueError("cyclic lineage")
+            raise ValueError("cyclic formation path")
         items.append(parent)
         seen.add(parent["id"])
     return list(reversed(items))

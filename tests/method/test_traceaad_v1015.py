@@ -13,7 +13,7 @@ from traceaad.v10_15.delivery import DeliveryError, SourceError, parse_response
 from traceaad.v10_15.history import change_summary, code_diff
 from traceaad.v10_15.prompts import PromptBuilder
 from traceaad.v10_15.selection import (choose_explore_references, choose_reference, probabilities,
-                                      sample_parent, score_classes)
+                                      sample_parent)
 
 
 class SelectionEvaluation(TinyEvaluation):
@@ -41,27 +41,30 @@ def test_canonical_identity_discards_comments_docs_and_formatting():
     assert canonical('class C:\n "doc"\n') == 'class C:\n    pass\n'
 
 
-def test_parent_distribution_is_over_score_classes_with_fixed_ess():
+def test_parent_distribution_is_over_programs_with_fixed_ess():
     p, beta, ess, target = probabilities([float(q) for q in range(20)])
     assert beta > 0 and sum(p) == pytest.approx(1)
     assert target == 8 and ess == pytest.approx(8)
     assert probabilities([1.0]) == ([1.0], 0.0, 1.0, 1.0)
-    # Few classes: ESS cannot exceed the class count, so sampling is uniform.
+    # Few programs: ESS cannot exceed the program count, so sampling is uniform.
     assert probabilities([0.0, 1.0, 2.0])[0] == [1/3] * 3
-    # 200 rewrites tied at the top form one class: the tie gets one class's share,
-    # and runners-up keep theirs instead of dropping to zero (V10.15's tie mode).
-    nodes = [{'id': i, 'fitness': 2.0} for i in range(200)] + [
-        {'id': 200 + i, 'fitness': float(i) / 10} for i in range(3)]
-    classes = score_classes(nodes)
-    assert [len(c) for c in classes] == [200, 1, 1, 1]
-    assert [m[0]['id'] for m in classes] == [0, 202, 201, 200]
-    draws = [sample_parent(nodes, random.Random(seed))[1] for seed in range(400)]
-    top_share = sum(d['class_size'] == 200 for d in draws) / len(draws)
-    assert 0.25 < top_share < 0.5
-    assert all(d['classes'] == 4 and d['eligible'] == 203 for d in draws)
+    # Every program is its own candidate; programs with equal scores get equal weight.
+    nodes = [{'id': i, 'fitness': 2.0} for i in range(5)] + [
+        {'id': 5 + i, 'fitness': float(i) / 10} for i in range(10)]
+    p, beta, ess, _ = probabilities([n['fitness'] for n in nodes])
+    assert beta > 0 and ess == pytest.approx(8)
+    assert p[:5] == pytest.approx([p[0]] * 5) and all(q < p[0] for q in p[5:])
+    draws = [sample_parent(nodes, random.Random(seed)) for seed in range(200)]
+    assert all(info['eligible'] == 15 for _, info in draws)
+    assert len({node['id'] for node, _ in draws}) > 5
+    # More programs tied at the top than the target ESS: the limit is uniform over
+    # them, without overflowing the temperature search.
+    tied = [2.0] * 10 + [1.0, 0.0]
+    p, beta, ess, _ = probabilities(tied)
+    assert beta is None and ess == 10 and p == [0.1] * 10 + [0.0, 0.0]
 
 
-def test_finalists_are_one_per_score_class(tmp_path):
+def test_finalists_are_the_best_programs(tmp_path):
     answers = [response(v) for v in (1, 2, 3, 4, 5, 6, 7, 8)]
     answers += [f"Idea: same\n```python\ndef score(x):\n    return {v}  # variant\n    pass\n```"
                 for v in ('8.0', '4 + 4', '16 / 2')]
@@ -69,12 +72,11 @@ def test_finalists_are_one_per_score_class(tmp_path):
     m.run()
     fitness = {n['id']: n['fitness'] for n in m.archive.values()}
     assert sorted(fitness.values()).count(8) == 4
-    assert m.finalists == [8, 7, 6, 5, 4]
-    assert len({fitness[i] for i in m.finalists}) == 5
+    assert m.finalists == [8, 9, 10, 11, 7]
     same = [a for a in m.facts.tables['attempt'].values() if a.get('same_as_parent')]
     assert all(m.archive[a['parent_id']]['fitness'] == a['fitness'] for a in same)
     diagnostics = json.loads((tmp_path / 'diagnostics.json').read_text())
-    assert diagnostics['score_classes'] == 8 and diagnostics['top_class_size'] == 4
+    assert 'score_classes' not in diagnostics
     assert diagnostics['new_frontiers_by_action']['Init'] == 8
 
 
@@ -245,14 +247,14 @@ def test_service_retry_does_not_spend_candidate_budget(tmp_path):
     assert result['service_failures'] == 1
 
 
-def test_reference_lineage_filter_and_copy_status(tmp_path):
+def test_reference_choice_and_copy_status(tmp_path):
     m = method(tmp_path, *(response(i) for i in range(1, 9)), response(2), budget=9)
     for _ in range(8):
         m._roots()
     assert m.phase == 'roots'
     parent = m.archive[8]
     reference, info = choose_reference(parent, m.archive, m.reference_rng)
-    assert reference is not None and not info['relaxed_lineage']
+    assert reference is not None and reference['id'] != parent['id'] and info['eligible'] > 0
     # Submit the exact chosen reference, independent of its sampled ID.
     m.llm.responses = iter([f"Idea: copy\n```python\n{reference['code']}```"])
     request = m.prompts.build('Crossover', parent, reference=reference)
@@ -261,53 +263,43 @@ def test_reference_lineage_filter_and_copy_status(tmp_path):
     assert len(m.archive) == 8 and m.evaluation_calls == 8
 
 
-def test_reference_excludes_ancestor_and_descendant_then_relaxes():
+def test_reference_pool_is_every_other_program_at_or_above_the_median():
     nodes = {
         1: {'id': 1, 'parent_id': None, 'key': '1', 'code': 'def score(x): return x', 'fitness': 1},
         2: {'id': 2, 'parent_id': 1, 'key': '2', 'code': 'def score(x): return x+1', 'fitness': 2},
         3: {'id': 3, 'parent_id': 2, 'key': '3', 'code': 'def score(x): return x+2', 'fitness': 3},
         4: {'id': 4, 'parent_id': None, 'key': '4', 'code': 'def score(x): return x*2', 'fitness': 4},
     }
-    picked, info = choose_reference(nodes[2], nodes, random.Random(0))
-    assert picked['id'] == 4 and not info['relaxed_lineage']
+    # Parent links carry no meaning here: the child 3 is as eligible as 4.
+    picks = {choose_reference(nodes[2], nodes, random.Random(seed))[0]['id'] for seed in range(40)}
+    assert picks <= {3, 4} and 3 in picks
     picked, info = choose_reference(nodes[2], {k: v for k, v in nodes.items() if k != 4},
                                     random.Random(0))
-    assert picked['id'] == 3 and info['relaxed_lineage']
+    assert picked['id'] == 3 and info['eligible'] == 1
+    assert choose_reference(nodes[1], {1: nodes[1]}, random.Random(0)) == (None, {'eligible': 0})
 
 
-def test_explore_references_exclude_lineage_and_duplicate_visible_ideas():
+def test_explore_references_skip_duplicate_visible_ideas():
     from tests.method.test_traceaad_v1015_prompts import node
 
     root = node(1)
     parent = node(2, parent=root)
-    descendant = node(3, parent=parent)
+    child = node(3, parent=parent)
     others = [node(i) for i in range(4, 10)]
     others[0]['idea'] = 'Use capacity slack.'
     others[1]['idea'] = '  USE  capacity slack. '
     others[2]['idea'] = ''
     others[3]['idea'] = parent['idea']
     others[4]['code'] = 'def score(x):\n    return min(abs(x), 5)\n'
-    archive = {n['id']: n for n in [root, parent, descendant, *others]}
+    archive = {n['id']: n for n in [root, parent, child, *others]}
     references, info = choose_explore_references(parent, archive, random.Random(7))
-    assert not info['relaxed_lineage']
-    assert {n['id'] for n in references} == {5, 8, 9}
-    assert references[0]['id'] == 8
+    ids = [n['id'] for n in references]
+    assert len(ids) == 4 and len(set(ids)) == 4
+    assert ids[0] == 8  # the least similar code is chosen first
+    assert not {2, 4, 6, 7} & set(ids)  # parent, lower-scored reworded idea, empty idea, parent's idea
     again, _ = choose_explore_references(parent, archive, random.Random(7))
-    assert [n['id'] for n in references] == [n['id'] for n in again]
-    lineage = {n['id']: n for n in [root, parent, descendant]}
-    relaxed, info = choose_explore_references(parent, lineage, random.Random(7))
-    assert relaxed and info['relaxed_lineage']
-
-
-def test_score_classes_absorb_floating_point_noise_without_chaining():
-    nodes = [{'id': 1, 'fitness': 14.704000000000002}, {'id': 2, 'fitness': 14.703999999999999},
-             {'id': 3, 'fitness': 14.7}, {'id': 4, 'fitness': 14.704000000000002 - 5e-9}]
-    classes = score_classes(nodes)
-    assert [[n['id'] for n in c] for c in classes] == [[1, 2, 4], [3]]
-    assert probabilities([c[0]['fitness'] for c in classes])[0] == [0.5, 0.5]
-    # 1e-9-relative steps must not chain distinct scores into one class.
-    ladder = [{'id': i, 'fitness': 1.0 + i * 6e-10} for i in range(5)]
-    assert len(score_classes(ladder)) >= 2
+    assert ids == [n['id'] for n in again]
+    assert info['eligible'] == 6
 
 
 def test_explore_references_compare_whole_ideas():
@@ -324,7 +316,7 @@ def test_explore_references_compare_whole_ideas():
     assert {n['id'] for n in references} == {2, 3}
 
 
-def test_explore_references_take_one_card_per_score_class():
+def test_explore_references_keep_programs_with_equal_scores():
     from tests.method.test_traceaad_v1015_prompts import node
 
     parent = node(1)
@@ -332,11 +324,11 @@ def test_explore_references_take_one_card_per_score_class():
     for i, other in enumerate(others):
         other['idea'] = f'Distinct idea {i}.'
         other['code'] = f'def score(x):\n    return x + {i} * {i}\n'
-    others[1]['fitness'] = others[2]['fitness'] = 42.0  # reworded, same behaviour
+    others[1]['fitness'] = others[2]['fitness'] = 42.0  # an equal score is not the same algorithm
     archive = {n['id']: n for n in [parent, *others]}
     references, _ = choose_explore_references(parent, archive, random.Random(0))
-    assert len(references) == 3
-    assert [n['fitness'] for n in references].count(42.0) == 1
+    assert len(references) == 4
+    assert [n['fitness'] for n in references].count(42.0) == 2
 
 
 def test_search_explore_displays_and_records_archive_references(tmp_path):

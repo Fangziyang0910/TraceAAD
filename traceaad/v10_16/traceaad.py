@@ -1,4 +1,12 @@
-"""Immediate quality competition; formation paths affect generation only."""
+"""The population is the search's experience: programs and the generation events between them.
+
+A program is identified by its normalized code and is evaluated once; failed
+programs are programs too. Every model generation is an event that starts from
+a program (or from nothing, at initialization) and ends in a program that is
+new or already known, or in no program at all. Starting points are chosen by
+training quality weighted by the experience of each program, and every
+generation sees the measured outcomes around its starting point.
+"""
 
 from dataclasses import asdict
 from collections import Counter
@@ -20,8 +28,11 @@ from .delivery import DeliveryError, SourceError, extract_idea, parse_response
 from .evaluation import SeededEvaluation, fingerprint, protocol_identity
 from .history import verdict
 from .prompts import ContextTooLong, PromptBuilder, idea_view
-from .selection import choose_explore_references, choose_reference, sample_parent
+from .selection import OPERATORS, better, choose_reference, sample_parent
 from .state import Facts
+
+FAILURES = ("invalid_source", "runtime_error", "invalid_output", "timeout")
+TRIED_OUT = 15  # attempts without improvement after which a program almost never improves (diagnostics)
 
 
 def now():
@@ -39,8 +50,23 @@ def _service_error(exc):
             any(word in type(exc).__name__.lower() for word in ("connection", "timeout", "ratelimit")))
 
 
-class TraceAADV1015:
-    METHOD = "v1015"
+def clean_traceback(text):
+    """Drop the frames of the call counter, which wraps the candidate during evaluation."""
+    lines, kept, skip = (text or "").splitlines(), [], False
+    for index, line in enumerate(lines):
+        if skip:
+            skip = False
+            continue
+        following = lines[index + 1] if index + 1 < len(lines) else ""
+        if line.lstrip().startswith("File ") and ("probe.py" in line or "_traceaad_probe_" in following):
+            skip = True
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
+class TraceAADV1016:
+    METHOD = "v1016"
 
     def __init__(self, *, evaluation, llm, run_dir, config=None, task=None,
                  selection_evaluation=None):
@@ -48,17 +74,26 @@ class TraceAADV1015:
         if (getattr(llm, "chars_per_token", None) is not None or
                 not callable(getattr(llm, "count_prompt_tokens", None)) or
                 not callable(getattr(llm, "count_tokens", None))):
-            raise ValueError("V10.15 requires the serving tokenizer, not character estimates")
+            raise ValueError("V10.16 requires the serving tokenizer, not character estimates")
         self.llm, self.task = llm, task
         self.template = str(evaluation.template_program)
         self.facts = Facts(run_dir)
         self.run_dir = Path(run_dir)
-        self.archive = self.facts.tables["node"]
-        self.prompts = PromptBuilder(llm, task, evaluation, self.archive, self.config)
+        self.archive = self.facts.tables["node"]  # valid programs: the candidate starting points
+        self.attempts_table = self.facts.tables["attempt"]
+        self.programs = {}  # every program, valid or failed, by id
+        self.key_index = {}  # normalized code key -> program id
+        for node in self.archive.values():
+            self.programs[node["id"]] = node
+            self.key_index[node["key"]] = node["id"]
+        for attempt in self.attempts_table.values():
+            if attempt["status"] in FAILURES and attempt.get("program_id") == attempt["id"]:
+                self._add_failed(attempt)
+        self.prompts = PromptBuilder(llm, task, evaluation, self.programs, self.attempts_table, self.config)
         self.protocol, self.environment = protocol_identity(evaluation, self.config.evaluation_seeds, "search")
-        self.evaluator = SecureEvaluator(SeededEvaluation(evaluation))
-        self.selection_evaluator = None
-        self.selection_protocol = None
+        self.seeded = SeededEvaluation(evaluation)
+        self.evaluator = SecureEvaluator(self.seeded)
+        self.selection_seeded = self.selection_evaluator = self.selection_protocol = None
         if selection_evaluation is not None:
             if str(selection_evaluation.template_program) != self.template:
                 raise ValueError("selection evaluator has a different task interface")
@@ -70,10 +105,11 @@ class TraceAADV1015:
                     search_data is not None and selection_data is not None and
                     fingerprint(search_data) == fingerprint(selection_data)):
                 raise ValueError("selection evaluation must use a distinct frozen dataset/protocol")
-            self.selection_evaluator = SecureEvaluator(SeededEvaluation(selection_evaluation))
-        self.parent_rng = random.Random(f"v10.15:{self.config.seed}:parent")
-        self.action_rng = random.Random(f"v10.15:{self.config.seed}:action")
-        self.reference_rng = random.Random(f"v10.15:{self.config.seed}:reference")
+            self.selection_seeded = SeededEvaluation(selection_evaluation)
+            self.selection_evaluator = SecureEvaluator(self.selection_seeded)
+        self.parent_rng = random.Random(f"v10.16:{self.config.seed}:parent")
+        self.action_rng = random.Random(f"v10.16:{self.config.seed}:action")
+        self.reference_rng = random.Random(f"v10.16:{self.config.seed}:reference")
         self.phase = "roots"
         self.attempts = 0
         self.init_attempts = 0
@@ -82,7 +118,6 @@ class TraceAADV1015:
         self.output_tokens = 0
         self.evaluation_calls = 0
         self.service_failures = 0
-        self.failed_keys = set()
         self.too_long = set()
         self.finalists = []
         self.selection_results = []
@@ -107,12 +142,14 @@ class TraceAADV1015:
         if self.facts.state:
             self._restore(self.facts.state)
 
+    # ---------- state ----------
+
     def _state(self):
         return {"identity": self.identity, "phase": self.phase, "attempts": self.attempts,
                 "init_attempts": self.init_attempts, "model_calls": self.model_calls,
                 "input_tokens": self.input_tokens, "output_tokens": self.output_tokens,
                 "evaluation_calls": self.evaluation_calls, "service_failures": self.service_failures,
-                "failed_keys": sorted(self.failed_keys), "too_long": sorted(self.too_long),
+                "too_long": sorted(self.too_long),
                 "finalists": self.finalists, "selection_results": self.selection_results,
                 "pending": self.pending, "started_at": self.started_at,
                 "elapsed": self.elapsed + time.monotonic() - self._clock,
@@ -131,14 +168,30 @@ class TraceAADV1015:
                      "output_tokens", "evaluation_calls", "service_failures", "finalists",
                      "selection_results", "started_at", "elapsed"):
             setattr(self, name, state[name])
-        self.failed_keys = set(state["failed_keys"])
         self.too_long = set(state["too_long"])
         for name in ("parent", "action", "reference"):
             getattr(self, name + "_rng").setstate(_tuple_tree(state["rng"][name]))
         self._clock = time.monotonic()
 
+    def _add_failed(self, attempt):
+        """A failed program, rebuilt from the attempt that first produced its code."""
+        parent = self.programs.get(attempt["parent_id"])
+        program = {"id": attempt["id"], "key": attempt["key"], "code": attempt["code"],
+                   "parent_id": attempt["parent_id"], "action": attempt["executed_action"],
+                   "reference_id": attempt["reference_id"], "idea": attempt["idea"],
+                   "depth": parent["depth"] + 1 if parent else 0,
+                   "repaired": attempt["repair_of"] is not None, "valid": False,
+                   "failure": {"kind": attempt["status"], "error": attempt["error"],
+                               "seconds": attempt.get("seconds"), "calls": attempt.get("calls"),
+                               "function_seconds": attempt.get("function_seconds")}}
+        self.programs[program["id"]] = program
+        self.key_index[program["key"]] = program["id"]
+        return program
+
+    # ---------- model and evaluator ----------
+
     def _generate(self, request):
-        """Service errors are logged and retried without creating candidate attempts."""
+        """Service errors are logged and retried without creating attempts."""
         failures = 0
         while True:
             rid = self.model_calls + 1
@@ -180,16 +233,25 @@ class TraceAADV1015:
             time.sleep(min(2 ** failures, 8))
 
     def _evaluate(self, code, source_key, *, role="search"):
-        evaluator = self.evaluator if role == "search" else self.selection_evaluator
+        """Mean score over seeds, with the calls and time measured inside the function.
+
+        On failure the measurement of the failed seed is returned: for a
+        timeout it says how far the evaluation got before the limit.
+        """
+        seeded, evaluator = ((self.seeded, self.evaluator) if role == "search"
+                             else (self.selection_seeded, self.selection_evaluator))
         protocol = self.protocol if role == "search" else self.selection_protocol
-        values, ids = [], []
+        values, ids, seconds, calls, inside = [], [], 0.0, 0, 0.0
         previous_pending = self.pending
         for seed in self.config.evaluation_seeds:
             eid = len(self.facts.tables["evaluation"]) + 1
             self.pending = {"kind": "evaluation", "id": eid, "role": role, "key": source_key}
             self._save()
             started = time.monotonic()
+            seeded.reset()
             result = evaluator.evaluate_program_with_details(self.template, source=code, seed=seed)
+            measured = seeded.measured()
+            elapsed = time.monotonic() - started
             self.evaluation_calls += 1
             value = result.result
             valid = (isinstance(value, dict) and type(value.get("score")) in (int, float)
@@ -198,17 +260,25 @@ class TraceAADV1015:
                 "protocol": protocol, "seed": seed, "valid": valid,
                 "score": value["score"] if valid else None, "failure_kind": result.failure_kind,
                 "error_type": result.error_type, "error": result.error,
-                "traceback": result.traceback, "seconds": time.monotonic() - started,
-                "cpu_seconds": result.cpu_seconds})
+                "traceback": result.traceback, "seconds": elapsed,
+                "cpu_seconds": result.cpu_seconds, **measured})
             self.pending = previous_pending
             self._save()
             ids.append(eid)
             if not valid:
                 kind = ("timeout" if result.failure_kind == "timeout" else
                         "invalid_output" if result.failure_kind == "invalid_result" else "runtime_error")
-                return None, ids, kind, result.traceback or result.error or result.failure_kind or "invalid evaluation"
+                error = clean_traceback(result.traceback or result.error or result.failure_kind or "invalid evaluation")
+                return None, ids, kind, error, {"seconds": elapsed, **measured}
             values.append(float(value["score"]))
-        return statistics.fmean(values), ids, None, None
+            seconds += elapsed
+            calls += measured["calls"]
+            inside += measured["function_seconds"]
+        n = len(self.config.evaluation_seeds)
+        return statistics.fmean(values), ids, None, None, {
+            "seconds": seconds / n, "calls": round(calls / n), "function_seconds": inside / n}
+
+    # ---------- one generation event ----------
 
     def _attempt(self, request, *, parent=None, action="Init", reference=None,
                  selection=None, repair_of=None):
@@ -222,105 +292,129 @@ class TraceAADV1015:
         response = details.get("content", "")
         finish = details.get("finish_reason")
         idea = extract_idea(response) if isinstance(response, str) else ""
+        executed = request["action"]
         record = {"id": aid, "request_id": rid, "parent_id": parent["id"] if parent else None,
-                  "action": action, "executed_action": request["action"],
+                  "action": action, "executed_action": executed,
                   "reference_id": reference["id"] if reference else None,
                   "repair_of": repair_of, "repaired": repair_of is not None,
                   "selection": selection, "history_edge_ids": request["history_edge_ids"],
                   "reference_history_edge_ids": request["reference_history_edge_ids"],
-                  "explore_reference_ids": request["explore_reference_ids"],
+                  "attempt_ids_shown": request.get("attempt_ids", []),
+                  "progress_ids_shown": request.get("progress_ids", []),
                   "trims": request["trims"], "status": None, "idea": idea,
                   "idea_display": idea_view(idea), "raw_code": None, "completed_code": None,
-                  "code": None,
-                  "key": None, "score": None, "fitness": None,
-                  "evaluation_ids": [], "error": None, "created_at": now()}
-        failed_code = None
+                  "code": None, "key": None, "program_id": None, "new_program": False,
+                  "score": None, "fitness": None, "seconds": None, "calls": None,
+                  "function_seconds": None, "evaluation_ids": [], "error": None, "created_at": now()}
+        normal = None
         try:
             code, idea, delivery = parse_response(response, finish, self.template)
             record["delivery"] = delivery
         except DeliveryError as exc:
             record.update(status="delivery_failed", error=str(exc))
         except SourceError as exc:
-            failed_code = exc.code
+            # An unusable program is still a program: it can be repaired, and
+            # its code identifies it when the same text comes back.
+            shown = exc.code or exc.submitted_code or ""
+            try:
+                normal = canonical(shown)
+            except (SyntaxError, ValueError):
+                normal = shown.rstrip() + "\n"
             record.update(status="invalid_source", error=str(exc), raw_code=exc.submitted_code,
-                          completed_code=failed_code)
+                          completed_code=exc.code, code=normal, key=key(normal))
         else:
-            record["idea"] = idea
-            record["idea_display"] = idea_view(idea)
-            record["raw_code"] = delivery["submitted_code"]
-            record["completed_code"] = code
+            record["idea"], record["idea_display"] = idea, idea_view(idea)
+            record["raw_code"], record["completed_code"] = delivery["submitted_code"], code
             normal = canonical(code)
-            source_key = key(normal)
-            record["code"], record["key"] = normal, source_key
-            valid = {node["key"] for node in self.archive.values()}
-            if reference is not None and source_key == reference["key"]:
+            record["code"], record["key"] = normal, key(normal)
+        if record["key"] is not None and record["key"] in self.key_index:
+            # Identical code has a known result: the event links to the known program.
+            known = self.programs[self.key_index[record["key"]]]
+            record["program_id"] = known["id"]
+            if reference is not None and known["id"] == reference["id"]:
                 record["status"] = "copied_reference"
-            elif source_key in valid:
+            elif known["valid"]:
                 record["status"] = "duplicate"
-            elif source_key in self.failed_keys:
-                record["status"] = "known_failure"
             else:
-                if source_key not in self.facts.tables["artifact"]:
-                    self.facts.add("artifact", {"id": source_key, "code": normal,
-                                                "environment": self.environment})
-                fitness, eval_ids, failure, error = self._evaluate(normal, source_key)
-                record["evaluation_ids"] = eval_ids
-                if failure:
-                    record.update(status=failure, error=error)
-                    self.failed_keys.add(source_key)
-                    failed_code = normal
-                else:
-                    score = fitness if self.prompts.higher_is_better else -fitness
-                    node = {"id": aid, "key": source_key, "code": normal, "fitness": fitness,
-                            "score": score, "parent_id": parent["id"] if parent else None,
-                            "action": action, "reference_id": reference["id"] if reference else None,
-                            "idea": idea, "depth": parent["depth"] + 1 if parent else 0,
-                            "repaired": repair_of is not None, "attempt_id": aid,
-                            "eval_seconds": self.facts.tables["evaluation"][eval_ids[-1]]["seconds"]}
-                    self.facts.add("node", node)
-                    record.update(status="valid", score=score, fitness=fitness, node_id=aid,
-                                  same_as_parent=parent is not None and
-                                  verdict(parent["fitness"], fitness, True) == "same score")
+                record["status"] = "known_failure"
+            record["error"] = None
+        elif record["status"] == "invalid_source":
+            record.update(program_id=aid, new_program=True)
+        elif record["key"] is not None:
+            if record["key"] not in self.facts.tables["artifact"]:
+                self.facts.add("artifact", {"id": record["key"], "code": normal, "environment": self.environment})
+            fitness, eval_ids, failure, error, measured = self._evaluate(normal, record["key"])
+            record.update(evaluation_ids=eval_ids, program_id=aid, new_program=True, **measured)
+            if failure:
+                record.update(status=failure, error=error)
+            else:
+                score = fitness if self.prompts.higher_is_better else -fitness
+                node = {"id": aid, "key": record["key"], "code": normal, "fitness": fitness,
+                        "score": score, "parent_id": parent["id"] if parent else None,
+                        "action": executed, "reference_id": reference["id"] if reference else None,
+                        "idea": idea, "depth": parent["depth"] + 1 if parent else 0,
+                        "repaired": repair_of is not None, "valid": True,
+                        "eval_seconds": measured["seconds"], "calls": measured["calls"],
+                        "function_seconds": measured["function_seconds"], "attempt_id": aid}
+                self.facts.add("node", node)
+                self.programs[aid] = node
+                self.key_index[node["key"]] = aid
+                record.update(status="valid", score=score, fitness=fitness,
+                              same_as_parent=bool(parent and parent.get("valid")) and
+                              verdict(parent["fitness"], fitness, True) == "same score")
         self.facts.add("attempt", record)
+        failed = self._add_failed(record) if record["status"] in FAILURES and record["new_program"] else None
         self.facts._append({"kind": "candidate", "candidate_id": aid, "budget_used": aid,
                             "status": record["status"], "fitness": record["fitness"],
                             "evaluation_id": self.evaluation_calls})
         self.pending = None
         self._save()
-        if (record["status"] in {"invalid_source", "runtime_error", "invalid_output", "timeout"}
-                and repair_of is None and self.attempts < self.config.budget
+        if (failed is not None and repair_of is None and self.attempts < self.config.budget
                 and (self.phase != "roots" or self.init_attempts < self.config.init_attempt_limit)):
-            if record["status"] == "timeout":
-                error_text = f"The evaluation did not finish within {self.prompts.evaluation.timeout_seconds:g} seconds."
-            elif record["status"] == "invalid_source":
-                error_text = f"The program could not be used: {record['error']}"
-            elif record["status"] == "runtime_error":
-                error_text = "\n".join((record["error"] or "").splitlines()[-15:])[-1500:]
-            else:
-                error_text = record["error"] or "Invalid output"
             try:
-                shown_code = failed_code or record["raw_code"] or ""
-                try:
-                    shown_code = canonical(shown_code)
-                except SyntaxError:
-                    pass
-                repair_request = self.prompts.repair(shown_code,
-                                                     idea, error_text, parent=parent)
+                repair_request = self.prompts.repair(failed, self._error_text(failed))
             except ContextTooLong:
-                return self.archive.get(aid)
-            return self._attempt(repair_request, parent=parent, action=action,
-                                 reference=reference, selection=selection, repair_of=aid)
-        return self.archive.get(aid)
+                return None
+            return self._attempt(repair_request, parent=failed, action="Repair", selection=selection,
+                                 repair_of=aid)
+        return self.archive.get(record["program_id"]) if record["status"] == "valid" else None
+
+    def _error_text(self, failed):
+        failure = failed["failure"]
+        if failure["kind"] == "timeout":
+            text = "The evaluation " + self.prompts.failure(failed) + "."
+            source = self.programs.get(failed["parent_id"])
+            if source is not None and source.get("valid") and source.get("calls") is not None:
+                text += (f" The algorithm it was developed from completes the evaluation with {source['calls']} "
+                         f"calls in about {max(source.get('eval_seconds') or 0.0, 0.1):.1f} s, "
+                         f"about {source.get('function_seconds') or 0.0:.1f} s inside the function.")
+            return text
+        if failure["kind"] == "invalid_source":
+            return f"The program could not be used: {failure['error']}"
+        if failure["kind"] == "runtime_error":
+            return "\n".join((failure["error"] or "").splitlines()[-15:])[-1500:]
+        return failure["error"] or "Invalid output"
+
+    # ---------- phases ----------
+
+    def _is_root(self, node):
+        """An initial algorithm: no valid program precedes it on its formation path
+        (a repaired initial program starts from its failed first version)."""
+        parent = self.programs.get(node["parent_id"])
+        while parent is not None:
+            if parent["valid"]:
+                return False
+            parent = self.programs.get(parent["parent_id"])
+        return True
 
     def _roots(self):
-        roots = [node for node in self.archive.values() if node["parent_id"] is None]
+        roots = [node for node in self.archive.values() if self._is_root(node)]
         if (len(roots) >= self.config.roots or
                 self.init_attempts >= self.config.init_attempt_limit or self.attempts >= self.config.budget):
             self.phase = "search" if roots else "no_valid_root"
             self._save()
             return
-        request = self.prompts.initial(roots)
-        self._attempt(request)
+        self._attempt(self.prompts.initial(roots))
 
     def _search(self):
         if self.attempts >= self.config.budget:
@@ -332,24 +426,18 @@ class TraceAADV1015:
             self.phase = "freeze"
             self._save()
             return
-        parent, selection = sample_parent(eligible, self.parent_rng)
-        sampled = self.action_rng.choices(["Refine", "Explore", "Crossover"], [.45, .30, .25])[0]
+        parent, selection = sample_parent(eligible, self.attempts_table, self.programs, self.parent_rng)
+        sampled = self.action_rng.choices(list(OPERATORS), [.45, .30, .25])[0]
         action = sampled
         reference, reference_selection = None, None
-        explore_references, explore_reference_selection = [], None
         flags = []
         if action == "Crossover":
             reference, reference_selection = choose_reference(parent, self.archive, self.reference_rng)
             if reference is None:
                 action = "Refine"
                 flags.append("crossover_fallback")
-        elif action == "Explore" and self.config.explore_cards:
-            explore_references, explore_reference_selection = choose_explore_references(
-                parent, self.archive, self.reference_rng, self.config.explore_cards)
-        best_score = max(self.archive.values(), key=lambda n: n["fitness"])["score"]
         try:
-            request = self.prompts.build(action, parent, reference=reference,
-                                         references=explore_references, best_score=best_score)
+            request = self.prompts.build(action, parent, reference=reference)
         except ContextTooLong:
             self.too_long.add(parent["id"])
             self._save()
@@ -357,19 +445,17 @@ class TraceAADV1015:
         if request["action"] == "Refine" and action == "Crossover":
             reference = None
             flags.append("crossover_context_fallback")
-        request["sampled_action"] = sampled
-        request["fallbacks"] = flags
-        request["parent_id"] = parent["id"]
-        request["reference_id"] = reference["id"] if reference else None
-        request["selection"] = selection
-        request["reference_selection"] = reference_selection
-        request["explore_reference_selection"] = explore_reference_selection
+        request.update(sampled_action=sampled, fallbacks=flags, parent_id=parent["id"],
+                       reference_id=reference["id"] if reference else None, selection=selection,
+                       reference_selection=reference_selection)
         self._attempt(request, parent=parent, action=request["action"], reference=reference,
                       selection=selection)
 
+    def _ranking(self):
+        return [n["id"] for n in sorted(self.archive.values(), key=lambda n: (-n["fitness"], n["id"]))]
+
     def _freeze(self):
-        ranked = sorted(self.archive.values(), key=lambda n: (-n["fitness"], n["id"]))
-        self.finalists = [n["id"] for n in ranked[:self.config.final_candidates]]
+        self.finalists = self._ranking()[:self.config.final_candidates]
         write_json(self.run_dir / "finalists.json", {
             "protocol": self.protocol, "selection_protocol": self.selection_protocol,
             "frozen_at": now(), "candidates": [self.archive[i] for i in self.finalists]})
@@ -377,13 +463,20 @@ class TraceAADV1015:
         self._save()
 
     def _select(self):
+        """Evaluate finalists on the selection set; a finalist that fails there is
+        replaced by the next program in the training ranking, up to as many
+        replacements as there are finalists."""
         if len(self.selection_results) < len(self.finalists):
             node = self.archive[self.finalists[len(self.selection_results)]]
             self.pending = {"kind": "selection_candidate", "node_id": node["id"]}
             self._save()
-            fitness, ids, failure, error = self._evaluate(node["code"], node["key"], role="selection")
-            self.selection_results.append({"node_id": node["id"], "fitness": fitness,
-                                           "evaluation_ids": ids, "failure": failure, "error": error})
+            fitness, ids, failure, error, measured = self._evaluate(node["code"], node["key"], role="selection")
+            self.selection_results.append({"node_id": node["id"], "fitness": fitness, "evaluation_ids": ids,
+                                           "failure": failure, "error": error, **measured})
+            if failure and len(self.finalists) < 2 * self.config.final_candidates:
+                remaining = [i for i in self._ranking() if i not in self.finalists]
+                if remaining:
+                    self.finalists.append(remaining[0])
             self.pending = None
             self._save()
             return
@@ -396,9 +489,11 @@ class TraceAADV1015:
             (self.run_dir / "best_program.py").write_text(node["code"], encoding="utf-8")
             write_json(self.run_dir / "selection.json", {
                 "selection_protocol": self.selection_protocol, "results": self.selection_results,
-                "selected_node": node["id"], "selected_key": node["key"]})
+                "finalists": self.finalists, "selected_node": node["id"], "selected_key": node["key"]})
             self.phase = "finished"
         self._save()
+
+    # ---------- reporting ----------
 
     def _summary(self, status, error=None):
         best = None
@@ -415,7 +510,8 @@ class TraceAADV1015:
         summary = {"status": status, "phase": self.phase, "method": self.METHOD,
                    "budget": self.config.budget, "budget_used": self.attempts,
                    "init_attempts": self.init_attempts, "num_nodes": len(self.archive),
-                   "num_roots": sum(n["parent_id"] is None for n in self.archive.values()),
+                   "num_failed_programs": sum(not p["valid"] for p in self.programs.values()),
+                   "num_roots": sum(self._is_root(n) for n in self.archive.values()),
                    "model_calls": self.model_calls, "evaluation_calls": self.evaluation_calls,
                    "search_evaluations": sum(e["role"] == "search" for e in self.facts.tables["evaluation"].values()),
                    "selection_evaluations": sum(e["role"] == "selection" for e in self.facts.tables["evaluation"].values()),
@@ -429,59 +525,63 @@ class TraceAADV1015:
         return summary
 
     def _diagnostics(self):
-        attempts = list(self.facts.tables["attempt"].values())
+        attempts = sorted(self.attempts_table.values(), key=lambda a: a["id"])
         counts = dict(Counter(a["status"] for a in attempts))
+        repairs = {a["repair_of"]: a for a in attempts if a["repair_of"] is not None}
         actions = {}
-        # A repair is its own generation: it is counted as Repair, not as the
-        # action whose failed program it fixed.
-        for name in ("Refine", "Explore", "Crossover", "Repair"):
-            proposed = [a for a in attempts if a["action"] != "Init" and
-                        (a["repair_of"] is not None if name == "Repair" else
-                         a["repair_of"] is None and a["action"] == name)]
-            new = [a for a in proposed if a["status"] == "valid" and a["parent_id"] is not None]
-            improved = same = worse = 0
-            for attempt in new:
-                parent = self.archive[attempt["parent_id"]]
-                delta = attempt["fitness"] - parent["fitness"]
-                tolerance = 1e-9 * max(1.0, abs(parent["score"]))
-                if delta > tolerance:
-                    improved += 1
-                elif delta < -tolerance:
-                    worse += 1
-                else:
-                    same += 1
-            actions[name] = {"attempts": len(proposed), "valid": len(new),
-                             "improved": improved, "worse": worse, "same_score": same,
-                             "improvement_per_attempt": improved / len(proposed) if proposed else None,
-                             "improvement_per_valid": improved / len(new) if new else None}
-        repaired = [a for a in attempts if a["repair_of"] is not None]
-        best = max(self.archive.values(), key=lambda n: (n["fitness"], -n["id"])) if self.archive else None
-        # Improvement over the parent penalises Explore, whose children leave a
-        # quality-selected parent's skeleton; new training frontiers do not.
-        frontier = -math.inf
-        frontiers = Counter()
+        for name in (*OPERATORS, "Repair"):
+            proposed = [a for a in attempts if a["executed_action"] == name]
+            new = [a for a in proposed if a["status"] == "valid"]
+            started = [(a, self.programs.get(a["parent_id"])) for a in new]
+            improved = sum(1 for a, p in started if p is not None and p["valid"] and better(a["fitness"], p["fitness"]))
+            actions[name] = {"attempts": len(proposed), "new_valid": len(new), "improved_over_start": improved,
+                             "improvement_per_attempt": improved / len(proposed) if proposed else None}
+        frontier, frontiers = -math.inf, Counter()
+        explore_late = 0
         for node in sorted(self.archive.values(), key=lambda n: n["id"]):
             if node["fitness"] > frontier:
-                frontiers[node["action"] + (" (repaired)" if node["repaired"] else "")] += 1
+                frontiers[node["action"]] += 1
+                explore_late += node["action"] == "Explore" and node["id"] > 300
             frontier = max(frontier, node["fitness"])
+        # How much of the budget went to programs that had already been tried
+        # many times without improving (the waste experience should remove).
+        tried, improved, on_tried_out = Counter(), Counter(), 0
+        operator_attempts = [a for a in attempts if a["repair_of"] is None and a["action"] in OPERATORS]
+        for a in operator_attempts:
+            source = self.programs.get(a["parent_id"])
+            if source is None or not source["valid"]:
+                continue
+            on_tried_out += tried[source["id"]] >= TRIED_OUT and improved[source["id"]] == 0
+            tried[source["id"]] += 1
+            final = repairs.get(a["id"], a)
+            result = self.programs.get(final.get("program_id"))
+            if final["status"] == "valid" and result is not None and better(result["fitness"], source["fitness"]):
+                improved[source["id"]] += 1
+        quarters = []
+        for q in range(4):
+            group = [a for a in operator_attempts
+                     if q * self.config.budget // 4 < a["id"] <= (q + 1) * self.config.budget // 4]
+            quarters.append({"attempts": len(group),
+                             "timeout": sum(a["status"] == "timeout" for a in group) / len(group) if group else None,
+                             "error": sum(a["status"] in {"runtime_error", "invalid_output", "invalid_source"}
+                                          for a in group) / len(group) if group else None})
         search = [e for e in self.facts.tables["evaluation"].values() if e["role"] == "search"]
         cpu = sorted(e["cpu_seconds"] for e in search
                      if e["valid"] and isinstance(e.get("cpu_seconds"), (int, float)))
-        ordered = sorted(self.archive.values(), key=lambda n: n["id"])
-        quartiles = [ordered[i * len(ordered) // 4:(i + 1) * len(ordered) // 4]
-                     for i in range(4)]
+        best = max(self.archive.values(), key=lambda n: (n["fitness"], -n["id"])) if self.archive else None
         return {"status_counts": counts, "actions": actions,
-                "repair_success": sum(a["status"] == "valid" for a in repaired),
-                "repair_attempts": len(repaired),
+                "repair_success": sum(a["status"] == "valid" for a in repairs.values()),
+                "repair_attempts": len(repairs),
                 "crossover_copy_rate": counts.get("copied_reference", 0) / actions["Crossover"]["attempts"]
                 if actions["Crossover"]["attempts"] else None,
-                "explore_new_frontiers": frontiers["Explore"],
                 "new_frontiers_by_action": dict(frontiers),
+                "explore_new_frontiers_after_300": explore_late,
+                "attempts_on_tried_out_programs": on_tried_out / len(operator_attempts) if operator_attempts else None,
+                "failure_rates_by_quarter": quarters,
+                "failed_programs": sum(not p["valid"] for p in self.programs.values()),
                 "valid_cpu_seconds": {"median": cpu[len(cpu) // 2], "p95": cpu[int(len(cpu) * .95)],
                                       "max": cpu[-1]} if cpu else None,
                 "best_training_depth": best["depth"] if best else None,
-                "mean_code_chars_by_node_quartile": [statistics.fmean(len(n["code"]) for n in group)
-                                                     if group else None for group in quartiles],
                 "too_long_nodes": len(self.too_long)}
 
     def run(self):

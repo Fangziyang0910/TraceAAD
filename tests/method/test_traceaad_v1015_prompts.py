@@ -105,7 +105,7 @@ def test_large_history_keeps_all_changed_lines_at_each_step():
         assert 'more diff lines not shown' not in request["prompt"]
 
 
-def test_explore_uses_reference_ideas_without_lineage_or_reference_code():
+def test_explore_uses_reference_ideas_without_history_or_reference_code():
     root = node(1)
     parent = node(2, parent=root)
     references = [node(i) for i in range(3, 7)]
