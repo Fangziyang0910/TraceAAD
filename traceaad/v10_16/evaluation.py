@@ -7,6 +7,7 @@ import json
 import multiprocessing
 import random
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -79,20 +80,28 @@ class SeededEvaluation(Evaluation):
         self.inner = inner
         self.calls = multiprocessing.RawValue("q", 0)
         self.function_seconds = multiprocessing.RawValue("d", 0.0)
+        self.call_started = multiprocessing.RawValue("d", 0.0)
 
     def reset(self):
         self.calls.value = 0
         self.function_seconds.value = 0.0
+        self.call_started.value = 0.0
 
-    def measured(self):
-        return {"calls": int(self.calls.value), "function_seconds": float(self.function_seconds.value)}
+    def measured(self, until=None):
+        """Completed calls and time inside the function; a call still running
+        (the evaluation was stopped inside it) counts its time up to ``until``."""
+        inside = float(self.function_seconds.value)
+        started = float(self.call_started.value)
+        if started:
+            inside += max(0.0, (until if until is not None else time.monotonic()) - started)
+        return {"calls": int(self.calls.value), "function_seconds": inside, "call_running": bool(started)}
 
     def evaluate_program(self, program_str, callable_func, *, seed=730241, source=None):
         py_state, np_state = random.getstate(), np.random.get_state()
         try:
             program_str = source if source is not None else program_str
             program_str = probe.instrument(program_str, callable_func.__name__)
-            probe.arm(self.calls, self.function_seconds)
+            probe.arm(self.calls, self.function_seconds, self.call_started)
             random.seed(seed)
             np.random.seed(seed)
             namespace = {}
@@ -111,6 +120,6 @@ class SeededEvaluation(Evaluation):
                 raise InvalidEvaluationResult("task returned no finite score")
             return {"score": float(score)}
         finally:
-            probe.arm(None, None)
+            probe.arm(None, None, None)
             random.setstate(py_state)
             np.random.set_state(np_state)

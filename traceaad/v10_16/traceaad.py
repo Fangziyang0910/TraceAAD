@@ -183,7 +183,8 @@ class TraceAADV1016:
                    "repaired": attempt["repair_of"] is not None, "valid": False,
                    "failure": {"kind": attempt["status"], "error": attempt["error"],
                                "seconds": attempt.get("seconds"), "calls": attempt.get("calls"),
-                               "function_seconds": attempt.get("function_seconds")}}
+                               "function_seconds": attempt.get("function_seconds"),
+                               "call_running": attempt.get("call_running", False)}}
         self.programs[program["id"]] = program
         self.key_index[program["key"]] = program["id"]
         return program
@@ -250,8 +251,13 @@ class TraceAADV1016:
             started = time.monotonic()
             seeded.reset()
             result = evaluator.evaluate_program_with_details(self.template, source=code, seed=seed)
-            measured = seeded.measured()
             elapsed = time.monotonic() - started
+            measured = seeded.measured(until=started + elapsed)
+            if result.failure_kind == "timeout" and evaluator._evaluator.timeout_seconds is not None:
+                # The evaluation process is stopped after the limit; time inside
+                # a running call ends at the limit, not when stopping finished.
+                measured["function_seconds"] = min(measured["function_seconds"],
+                                                   float(evaluator._evaluator.timeout_seconds))
             self.evaluation_calls += 1
             value = result.result
             valid = (isinstance(value, dict) and type(value.get("score")) in (int, float)
@@ -270,6 +276,7 @@ class TraceAADV1016:
                         "invalid_output" if result.failure_kind == "invalid_result" else "runtime_error")
                 error = clean_traceback(result.traceback or result.error or result.failure_kind or "invalid evaluation")
                 return None, ids, kind, error, {"seconds": elapsed, **measured}
+            measured.pop("call_running")
             values.append(float(value["score"]))
             seconds += elapsed
             calls += measured["calls"]

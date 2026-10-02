@@ -4,22 +4,25 @@ The evaluation process is forked from the search process, so counters held
 in shared memory remain readable after a timeout kills the evaluation: a
 timeout becomes a measurement (how far the evaluation got), not only a verdict.
 Only outermost calls are counted, so recursion and helper calls through the
-target name neither inflate the count nor double the time.
+target name neither inflate the count nor double the time. The start of the
+call in progress is shared as well, so a timeout inside one call is told
+apart from many calls that together run out of time.
 """
 
 import time
 
 _calls = None
 _seconds = None
+_started = None
 _depth = 0
 
 MODULE = __name__
 
 
-def arm(calls, seconds):
+def arm(calls, seconds, started):
     """Install the shared counters inside the evaluation process."""
-    global _calls, _seconds, _depth
-    _calls, _seconds, _depth = calls, seconds, 0
+    global _calls, _seconds, _started, _depth
+    _calls, _seconds, _started, _depth = calls, seconds, started, 0
 
 
 def call(function, args, kwargs):
@@ -27,12 +30,14 @@ def call(function, args, kwargs):
     if _calls is None or _depth:
         return function(*args, **kwargs)
     _depth = 1
-    start = time.perf_counter()
+    start = time.monotonic()  # system-wide clock: the search process reads it too
+    _started.value = start
     try:
         return function(*args, **kwargs)
     finally:
-        _seconds.value += time.perf_counter() - start
+        _seconds.value += time.monotonic() - start
         _calls.value += 1
+        _started.value = 0.0
         _depth = 0
 
 

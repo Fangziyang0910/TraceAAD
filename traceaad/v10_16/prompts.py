@@ -153,9 +153,16 @@ class PromptBuilder:
         failure = program["failure"]
         kind = failure["kind"]
         if kind == "timeout":
-            limit = format(self.timeout, "g") if self.timeout is not None else "the"
-            calls = self._calls(failure.get("calls"), failure.get("function_seconds") or 0.0)
-            return f"stopped at the {limit} s time limit" + (f" after {calls}" if calls else "")
+            limit = (f"the {format(self.timeout, 'g')} s time limit" if self.timeout is not None
+                     else "the time limit")
+            calls, inside = failure.get("calls"), failure.get("function_seconds") or 0.0
+            if calls is None:
+                return f"stopped at {limit}"
+            if failure.get("call_running"):
+                return (f"stopped at {limit} inside call {calls + 1} to the function, "
+                        f"after {calls} completed call{'' if calls == 1 else 's'} "
+                        f"(about {inside:.1f} s inside the function in total)")
+            return f"stopped at {limit} after {self._calls(calls, inside)}"
         if kind == "invalid_source":
             return "the program could not be used: " + short_error(failure.get("error"))
         if kind == "invalid_output":

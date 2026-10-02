@@ -2,6 +2,7 @@
 
 import json
 import random
+import time
 
 import pytest
 
@@ -64,6 +65,23 @@ def test_evaluation_counts_outermost_calls_also_when_the_program_is_executed_aga
     outcome = SecureEvaluator(again).evaluate_program_with_details(
         Reexecuting().template_program, source="def score(x):\n    return x\n", seed=1)
     assert outcome.result == {"score": 3.0} and again.measured()["calls"] == 3
+
+
+def test_a_call_still_running_at_the_limit_is_measured_and_stated(tmp_path):
+    seeded = SeededEvaluation(TinyEvaluation())
+    seeded.reset()
+    seeded.calls.value = 29
+    seeded.call_started.value = time.monotonic() - 2.0
+    measured = seeded.measured()
+    assert measured["calls"] == 29 and measured["call_running"] and measured["function_seconds"] >= 2.0
+    prompts = method(tmp_path, budget=1).prompts
+    prompts.timeout = 30
+    stuck = {"failure": {"kind": "timeout", "calls": 29, "function_seconds": 29.9, "call_running": True}}
+    slow = {"failure": {"kind": "timeout", "calls": 5923, "function_seconds": 29.9, "call_running": False}}
+    assert prompts.failure(stuck) == ("stopped at the 30 s time limit inside call 30 to the function, "
+                                      "after 29 completed calls (about 29.9 s inside the function in total)")
+    assert prompts.failure(slow) == ("stopped at the 30 s time limit after 5923 calls to the function, "
+                                     "about 29.9 s inside it")
 
 
 def test_tracebacks_drop_the_call_counter_frames():
