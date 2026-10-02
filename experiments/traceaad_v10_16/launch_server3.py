@@ -76,7 +76,9 @@ def main(argv=None):
         return
     if manifest_path.exists():
         raise SystemExit("batch already exists")
-    if _process_cmdlines():
+    # Held-out evaluators never call a model; other experiment clients must be inspected first.
+    others = _process_cmdlines()
+    if [c for c in others if "experiments.infra.evaluate" not in c]:
         raise SystemExit("existing experiment clients must be inspected first")
     for item in plan:
         if Path(item["run_dir"]).exists() or is_session_alive(item["session"]):
@@ -99,6 +101,8 @@ def main(argv=None):
                 "implementation_files": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                                          for p in files},
                 "compare_with": "traceaad_v10_15_6/batch_20261002_server3_v1015_6.json",
+                "concurrent_jobs_at_launch": others,
+                "load_average_at_launch": list(__import__("os").getloadavg()),
                 "heldout": "separate after independent selection", "plan": plan}
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     write_json_atomic(manifest_path, manifest)
