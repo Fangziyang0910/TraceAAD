@@ -8,4 +8,4 @@ uv run python -m experiments.traceaad_v10_16.run --task tsp_construct --run-name
 uv run python -m experiments.traceaad_v10_16.heldout --run-dir experiments_result/traceaad_v10_16/tsp_construct/trial_1
 ```
 
-Training, selection and held-out limits, splits and the batch launcher are the same as for [V10.15](../traceaad_v10_15/README.md). Run the method tests (`tests/method/test_traceaad_v1016.py`) and a short smoke run before a formal batch.
+Training, selection and held-out limits and splits are the same as for [V10.15](../traceaad_v10_15/README.md). `launch_server3.py --batch <name> [--launch]` starts the 15-run server3 batch arranged like V10.15-6 (five tasks x three repeats, seeds 0-2, two Qwen services). Run the method tests (`tests/method/test_traceaad_v1016.py`) and a short smoke run before a formal batch.
