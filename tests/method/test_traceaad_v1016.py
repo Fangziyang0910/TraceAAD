@@ -159,16 +159,22 @@ def test_events_link_duplicates_failures_and_repairs(tmp_path):
     assert repair["repair_of"] == 10 and repair["parent_id"] == 10 and repair["executed_action"] == "Repair"
     repaired = m.archive[11]
     assert repaired["parent_id"] == 10 and repaired["fitness"] == 20 and repaired["calls"] == 1
-    # The formation path keeps the failed version and the repair made from it.
-    prompt = m.prompts.build("Refine", repaired)["prompt"]
-    assert "Refine · score 8 → failed: runtime error: ValueError: boom" in prompt
-    assert "Repair · failed version → score 20" in prompt
+    # The formation path folds the failed first version into its repaired step:
+    # the failure and its line are stated, the diff goes to the repaired version.
+    request = m.prompts.build("Refine", repaired)
+    prompt = request["prompt"]
+    assert "Step 1 (latest: produced the current algorithm) · Refine, then Repair · score 8 → score 20 (improved)" in prompt
+    assert "First version failed: runtime error: ValueError: boom at `raise ValueError('boom')`" in prompt
+    assert "+    return 20" in prompt and "raise ValueError" not in prompt.split("Code diff")[1]
+    assert request["history_edge_ids"] == [11]
+    assert m.programs[10]["failure"]["line"] == "raise ValueError('boom')"
     # The next generation from root 8 sees what was already tried there.
     request = m.prompts.build("Refine", parent)
     assert request["attempt_ids"] == [9, 10]
     assert "2 attempts started from the current algorithm; 1 produced a new algorithm scoring better than it." in request["prompt"]
     assert "the same code as an algorithm already evaluated in this search (score 3)" in request["prompt"]
-    assert "failed: runtime error: ValueError: boom; repaired: score 20 (improved)" in request["prompt"]
+    assert ("failed: runtime error: ValueError: boom at `raise ValueError('boom')`; repaired: score 20 (improved)"
+            in request["prompt"])
     assert "1 call to the function, under 0.1 s inside it" in m.prompts.measured(repaired)
     tried, improved = experience(m.attempts_table, m.programs)
     assert tried[8] == 2 and improved[8] == 1
@@ -187,7 +193,16 @@ def test_known_failure_links_to_the_failed_program_without_evaluation(tmp_path):
     assert m.attempts_table[11]["status"] == "known_failure" and m.evaluation_calls == calls
     prompt = m.prompts.build("Refine", parent)["prompt"]
     assert "the repair returned the same failing program" in prompt
-    assert "the same code as a program that already failed (runtime error: ValueError: boom)" in prompt
+    assert ("the same code as a program that already failed (runtime error: ValueError: boom at "
+            "`raise ValueError('boom')`)") in prompt
+
+
+def test_progress_credits_a_repaired_program_to_the_generation_it_repaired(tmp_path):
+    m = method(tmp_path, *(response(i) for i in range(1, 9)), BOOM, response(20), budget=12)
+    roots(m)
+    m._attempt(m.prompts.build("Refine", m.archive[8]), parent=m.archive[8], action="Refine")
+    prompt = m.prompts.build("Explore", m.archive[2])["prompt"]
+    assert "Attempt 9 · Refine, then Repair from an algorithm scoring 8 → 20 (previous best 8)" in prompt
 
 
 def test_explore_sees_how_the_search_best_improved(tmp_path):

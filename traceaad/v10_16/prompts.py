@@ -5,7 +5,7 @@ one goal sentence (docs/03-机制探索与验证/2026-10-01-V10.15-5-正式实�
 V10.16 adds the experience the search has gathered, not only the programs it
 kept: the attempts that started from the current algorithm with their measured
 outcomes (failures and reproductions included), the improvements of the search
-best for Explore, failed versions and repairs on a formation path, and the call
+best for Explore, failed first versions folded into their repaired steps, and the call
 count and time inside the function for every evaluation.
 """
 
@@ -48,7 +48,8 @@ The program failed during evaluation. Fix it so that it runs correctly within th
 
 FORMATION_INTRO = ("The steps that produced the current algorithm, oldest first. Every version shown has been evaluated: "
                    "each step gives its outcome, the Design of the version it produced, and the code diff "
-                   "from the previous version. A failed version is followed by the repair made from it.")
+                   "from the previous version. When the first version of a step failed and was repaired, "
+                   "the step states the failure and shows the change to the repaired version.")
 
 IDEA_DISPLAY_CHARS = 2400
 ERROR_DISPLAY_CHARS = 240
@@ -169,51 +170,72 @@ class PromptBuilder:
             return f"stopped at {limit} after {self._calls(calls, inside)}"
         if kind == "invalid_source":
             return "the program could not be used: " + short_error(failure.get("error"))
+        where = f" at `{failure['line']}`" if failure.get("line") else ""
         if kind == "invalid_output":
-            return "invalid output: " + short_error(failure.get("error"))
-        return "runtime error: " + short_error(failure.get("error"))
+            return "invalid output: " + short_error(failure.get("error")) + where
+        return "runtime error: " + short_error(failure.get("error")) + where
 
     def _current(self, node):
         return f"[Current Algorithm]\n{self.measured(node)}\n```python\n{node['code'].rstrip()}\n```"
 
     # ---------- formation path ----------
 
-    def _edge(self, parent, child, index, *, latest=False, subject="current"):
-        action = child["action"]
-        if action == "Crossover" and child.get("reference_id") is not None:
-            action += f" with an algorithm scoring {score_text(self.programs[child['reference_id']]['score'])}"
+    @staticmethod
+    def steps(sequence):
+        """The valid versions on a formation path, each with the failed first version
+        its step produced before the repair (None when the step did not fail).
+
+        A failed version is folded into the repair made from it: what was tried
+        and how it failed is experience, but its code is not a version to build on.
+        """
+        steps, failed = [], None
+        for program in sequence:
+            if program["valid"]:
+                steps.append((program, failed))
+                failed = None
+            else:
+                failed = program
+        return steps
+
+    def _edge(self, parent, child, failed, index, *, latest=False, subject="current"):
+        event = failed or child  # the generation that started from ``parent``
+        action = event["action"]
+        if action == "Crossover" and event.get("reference_id") is not None:
+            action += f" with an algorithm scoring {score_text(self.programs[event['reference_id']]['score'])}"
+        if failed is not None:
+            action += ", then Repair"
         heading = f"Step {index}"
         if latest:
             heading += f" (latest: produced the {subject} algorithm)"
-        start = f"score {score_text(parent['score'])}" if parent["valid"] else "failed version"
-        if child["valid"]:
-            end = f"score {score_text(child['score'])}"
-            if parent["valid"]:
-                end += f" ({verdict(parent['score'], child['score'], self.higher_is_better)})"
-            if child.get("eval_seconds"):
-                end += f", evaluation time about {max(child['eval_seconds'], 0.1):.1f} s"
-        else:
-            end = "failed: " + self.failure(child)
-        result = f"{heading} · {action} · {start} → {end}\n  Design: {idea_view(child['idea'])}"
+        end = (f"score {score_text(child['score'])} "
+               f"({verdict(parent['score'], child['score'], self.higher_is_better)})")
+        if child.get("eval_seconds"):
+            end += f", evaluation time about {max(child['eval_seconds'], 0.1):.1f} s"
+        result = f"{heading} · {action} · score {score_text(parent['score'])} → {end}"
+        if failed is not None:
+            result += f"\n  First version failed: {self.failure(failed)}"
+        result += f"\n  Design: {idea_view(child['idea'])}"
         result += f"\n  Code diff (previous → current):\n```diff\n{code_diff(parent['code'], child['code'])}\n```"
         return result
 
     def _formation(self, sequence, count, *, title="How the Current Algorithm Was Formed", subject="current"):
-        root = sequence[0]
-        if len(sequence) == 1:
-            return (f"[{title}]\nThe {subject} algorithm is an initial design; no changes have been recorded yet.\n"
-                    f"Design: {idea_view(root['idea'])}"), []
-        start = max(1, len(sequence) - count)
+        steps = self.steps(sequence)
+        root, root_failed = steps[0]
+        failed_note = f" (its first version failed: {self.failure(root_failed)})" if root_failed else ""
+        if len(steps) == 1:
+            return (f"[{title}]\nThe {subject} algorithm is an initial design{failed_note}; no changes have been "
+                    f"recorded yet.\nDesign: {idea_view(root['idea'])}"), []
+        start = max(1, len(steps) - count)
         lines = [f"[{title}]", FORMATION_INTRO.replace("current algorithm", f"{subject} algorithm")]
         if start == 1:
-            outcome = (f"score {score_text(root['score'])}" if root["valid"] else "failed: " + self.failure(root))
-            lines.append(f"Start · initial algorithm · {outcome}\n  Design: {idea_view(root['idea'])}")
+            lines.append(f"Start · initial algorithm · score {score_text(root['score'])}{failed_note}\n"
+                         f"  Design: {idea_view(root['idea'])}")
         else:
-            lines.append(f"The path has {len(sequence)-1} steps; showing the most recent {len(sequence)-start} steps.")
-        for index in range(start, len(sequence)):
-            lines.append(self._edge(sequence[index-1], sequence[index], index,
-                                    latest=index == len(sequence)-1, subject=subject))
-        return lines[0] + "\n" + lines[1] + "\n\n" + "\n\n".join(lines[2:]), [n["id"] for n in sequence[start:]]
+            lines.append(f"The path has {len(steps)-1} steps; showing the most recent {len(steps)-start} steps.")
+        for index in range(start, len(steps)):
+            lines.append(self._edge(steps[index-1][0], steps[index][0], steps[index][1], index,
+                                    latest=index == len(steps)-1, subject=subject))
+        return lines[0] + "\n" + lines[1] + "\n\n" + "\n\n".join(lines[2:]), [p["id"] for p, _ in steps[start:]]
 
     # ---------- experience around the current algorithm ----------
 
@@ -308,13 +330,17 @@ class PromptBuilder:
                         f"; the most recent {len(listed)} of {len(steps)} are listed.") + "\n\n")
             entries = []
             for previous, program in listed:
+                # A repaired program is credited to the generation it repaired.
+                event, action = program, program["action"]
                 source = self.programs.get(program["parent_id"])
-                origin = ("as an initial algorithm" if source is None else
-                          f"from an algorithm scoring {score_text(source['score'])}" if source["valid"]
-                          else "from a failed version")
+                if source is not None and not source["valid"]:
+                    event, action = source, source["action"] + ", then Repair"
+                    source = self.programs.get(source["parent_id"])
+                origin = ("as an initial algorithm" if source is None
+                          else f"from an algorithm scoring {score_text(source['score'])}")
                 timing = (f" · evaluation time about {max(program['eval_seconds'], 0.1):.1f} s"
                           if program.get("eval_seconds") else "")
-                entries.append(f"Attempt {program['id']} · {program['action']} {origin} → "
+                entries.append(f"Attempt {event['id']} · {action} {origin} → "
                                f"{score_text(program['score'])} (previous best {score_text(previous['score'])})"
                                f"{timing}\n  Design: {idea_view(program['idea'])}")
             text += "\n\n".join(entries) + "\n\n"
@@ -355,12 +381,13 @@ class PromptBuilder:
         current = self._current(parent)
         trims = []
         shown = min(self.config.attempts_shown, len(attempts))
+        depth = len(self.steps(sequence)) - 1
         if action == "Refine":
-            count = min(self.config.history_depth, len(sequence) - 1)
+            count = min(self.config.history_depth, depth)
             while True:
                 history, ids = self._formation(sequence, count)
                 tried, tried_ids = self._attempts_section(parent, attempts, shown, sequence_ids)
-                sections = self.common + [current, history, tried, REFINE_ROOT if len(sequence) == 1 else REFINE,
+                sections = self.common + [current, history, tried, REFINE_ROOT if depth == 0 else REFINE,
                                           output_format("Refine")]
                 result = self._result(sections, "Refine", ids, trims)
                 result["attempt_ids"] = tried_ids
@@ -398,7 +425,7 @@ class PromptBuilder:
                        f"{self.measured(reference)}\nDesign: {idea_view(reference['idea'])}\n"
                        f"```python\n{reference['code'].rstrip()}\n```")
         reference_sequence = path(reference, self.programs)
-        counts = [min(4, len(sequence) - 1), min(4, len(reference_sequence) - 1)]
+        counts = [min(4, depth), min(4, len(self.steps(reference_sequence)) - 1)]
         while True:
             recent, ids = self._formation(sequence, counts[0])
             ref_history, ref_ids = self._formation(reference_sequence, counts[1],

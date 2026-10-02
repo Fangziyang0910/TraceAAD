@@ -16,6 +16,7 @@ import json
 import math
 from pathlib import Path
 import random
+import re
 import statistics
 import time
 
@@ -63,6 +64,17 @@ def clean_traceback(text):
             continue
         kept.append(line)
     return "\n".join(kept)
+
+
+def failing_line(error, code):
+    """The program line where a runtime error was raised: the innermost frame in the program.
+
+    The evaluated text is the program followed by the call counter, so frames
+    past the program's last line belong to the counter.
+    """
+    lines = (code or "").splitlines()
+    numbers = [int(n) for n in re.findall(r'File "<string>", line (\d+)', error or "") if 0 < int(n) <= len(lines)]
+    return lines[numbers[-1] - 1].strip()[:160] if numbers else None
 
 
 class TraceAADV1016:
@@ -184,7 +196,9 @@ class TraceAADV1016:
                    "failure": {"kind": attempt["status"], "error": attempt["error"],
                                "seconds": attempt.get("seconds"), "calls": attempt.get("calls"),
                                "function_seconds": attempt.get("function_seconds"),
-                               "call_running": attempt.get("call_running", False)}}
+                               "call_running": attempt.get("call_running", False),
+                               "line": failing_line(attempt["error"], attempt["code"])
+                               if attempt["status"] in ("runtime_error", "invalid_output") else None}}
         self.programs[program["id"]] = program
         self.key_index[program["key"]] = program["id"]
         return program
