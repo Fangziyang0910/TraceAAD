@@ -169,7 +169,7 @@ def test_events_link_duplicates_failures_and_repairs(tmp_path):
     assert "2 attempts started from the current algorithm; 1 produced a new algorithm scoring better than it." in request["prompt"]
     assert "the same code as an algorithm already evaluated in this search (score 3)" in request["prompt"]
     assert "failed: runtime error: ValueError: boom; repaired: score 20 (improved)" in request["prompt"]
-    assert "1 call to the function" in m.prompts.measured(repaired)
+    assert "1 call to the function, under 0.1 s inside it" in m.prompts.measured(repaired)
     tried, improved = experience(m.attempts_table, m.programs)
     assert tried[8] == 2 and improved[8] == 1
 

@@ -394,7 +394,7 @@ class TraceAADV1016:
             if source is not None and source.get("valid") and source.get("calls") is not None:
                 text += (f" The algorithm it was developed from completes the evaluation with {source['calls']} "
                          f"calls in about {max(source.get('eval_seconds') or 0.0, 0.1):.1f} s, "
-                         f"about {source.get('function_seconds') or 0.0:.1f} s inside the function.")
+                         f"{self.prompts._seconds(source.get('function_seconds') or 0.0)} inside the function.")
             return text
         if failure["kind"] == "invalid_source":
             return f"The program could not be used: {failure['error']}"

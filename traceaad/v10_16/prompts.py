@@ -134,8 +134,12 @@ class PromptBuilder:
                 "token_count_mode": getattr(self.llm, "prompt_token_count_mode", "serving_tokenizer")}
 
     @staticmethod
-    def _calls(calls, seconds):
-        return (f"{calls} call{'' if calls == 1 else 's'} to the function, about {max(seconds, 0.0):.1f} s inside it"
+    def _seconds(seconds):
+        return "under 0.1 s" if seconds < 0.05 else f"about {seconds:.1f} s"
+
+    @classmethod
+    def _calls(cls, calls, seconds):
+        return (f"{calls} call{'' if calls == 1 else 's'} to the function, {cls._seconds(seconds)} inside it"
                 if calls is not None else "")
 
     def measured(self, program):
@@ -161,7 +165,7 @@ class PromptBuilder:
             if failure.get("call_running"):
                 return (f"stopped at {limit} inside call {calls + 1} to the function, "
                         f"after {calls} completed call{'' if calls == 1 else 's'} "
-                        f"(about {inside:.1f} s inside the function in total)")
+                        f"({self._seconds(inside)} inside the function in total)")
             return f"stopped at {limit} after {self._calls(calls, inside)}"
         if kind == "invalid_source":
             return "the program could not be used: " + short_error(failure.get("error"))
