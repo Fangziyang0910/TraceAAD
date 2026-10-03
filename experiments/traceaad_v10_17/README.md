@@ -1,0 +1,11 @@
+# TraceAAD V10.17
+
+The mechanism is specified in [the design document](../../docs/01-搜索方法/提出后的短程改写.md). The search records each program by normalized code and each generation attempt with its inputs and measured outcome, including failures. Duplicates, known failures and repairs are events linked to programs; only identical code counts as a duplicate. Parents are drawn by training quality times a smoothed improvement rate, `(k + 3r) / (n + 3)` over the attempts started from it. Refine, Explore and Crossover see the attempts that started from the current algorithm with their measured outcomes; Explore also sees how the search best improved. V10.17 changes two things. As in V9.16, a random eighth of the new Explore programs get three further Refine steps (about 10% of generations; operator shares stay 45:30:25), but each step starts from the best program that exploration has reached. Refine and Crossover goals name what the step does for the given program (keep the current algorithm's core idea and score better than it), with shown versions stated as already evaluated instead of a ranking to beat; Explore and initialization goals are unchanged. Every Explore proposal is recorded as an exploration; a prompt block listing them exists but is off (`explorations_shown = 0`). Every evaluation records the calls to the target function and the time inside it, also when it times out. A finalist that fails on the selection set is replaced by the next program in the training ranking (at most five replacements).
+
+```bash
+uv run python -m experiments.traceaad_v10_17.run --task tsp_construct --run-name trial_1 --budget 1000 --dry-run
+uv run python -m experiments.traceaad_v10_17.run --task tsp_construct --run-name trial_1 --budget 1000
+uv run python -m experiments.traceaad_v10_17.heldout --run-dir experiments_result/traceaad_v10_17/tsp_construct/trial_1
+```
+
+Training, selection and held-out limits and splits are the same as for [V10.15](../traceaad_v10_15/README.md). `launch_server3.py --batch <name> [--launch]` starts the 15-run server3 batch arranged like V10.15-6 (five tasks x three repeats, seeds 0-2, two Qwen services). Run the method tests (`tests/method/test_traceaad_v1017.py`) and a short smoke run before a formal batch.
