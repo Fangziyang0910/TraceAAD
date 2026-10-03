@@ -26,3 +26,5 @@
 完成有意义的研究工作后，主动更新 `docs/06-总结与周报/` 中当周的周报。周报面向导师，用第一人称自然总结做过的尝试、实际进展、新认识、困难和下一步；直接融入已有段落，不逐日追加操作日志，也不另建工作流水。参考[周报模板](docs/06-总结与周报/00-周报模板.md)。
 
 资料入口：[研究文档](docs/README.md)、[实验导航](experiments/README.md)。相关代码与论文位于 `/home/fang/code/LLM4AD/reference_code/` 和 `/home/fang/code/LLM4AD/papers/`。
+
+执行实验状态查询、远端操作或档案同步时，先读[Agent 执行入口](experiments/infra/AGENT_OPERATIONS.md)，复用批次状态命令与已知环境入口。
