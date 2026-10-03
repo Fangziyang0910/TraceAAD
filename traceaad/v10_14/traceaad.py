@@ -1,4 +1,4 @@
-"""Serial V10.14 search: facts -> exact revalidation -> a paid revision."""
+"""V10.14: all-source development with complete trajectory information."""
 
 from dataclasses import asdict
 from datetime import datetime
@@ -18,6 +18,7 @@ from .evaluation import SeededEvaluation, fingerprint, protocol_identity, traini
 from .frontier import Frontier
 from .prompts import ContextError, PromptBuilder, source_diff
 from .state import Facts, Ledger
+from .selection import select_parent, unique_archive, opportunity_key, syntax_id
 
 
 def now():
@@ -30,6 +31,9 @@ class TraceAADV1014:
     def __init__(self, *, evaluation, llm, run_dir, config=None, task=None,
                  selection_evaluation=None):
         self.config = config or Config()
+        if getattr(llm, "chars_per_token", None) is not None or not callable(getattr(llm, "count_tokens", None)):
+            raise ValueError("V10.14 requires the serving tokenizer, not character estimates")
+        self.parent_counts = {}
         self.llm, self.task = llm, task
         self.facts = Facts(run_dir)
         self.run_dir = self.facts.path.parent
@@ -37,7 +41,8 @@ class TraceAADV1014:
         self.probes = training_probes(evaluation, task)
         self.protocol, self.environment = protocol_identity(
             evaluation, self.config.evaluation_seeds, self.probes, "search")
-        self.evaluator = SecureEvaluator(SeededEvaluation(evaluation, self.probes))
+        self.evaluator = SecureEvaluator(SeededEvaluation(evaluation))
+        self.probe_evaluator = SecureEvaluator(SeededEvaluation(evaluation, self.probes, diagnostic_only=True))
         self.selection_evaluator = None
         self.selection_protocol = None
         if selection_evaluation is not None:
@@ -79,7 +84,7 @@ class TraceAADV1014:
         self._clock = time.monotonic()
         self.identity = {"config": asdict(self.config), "task": task, "protocol": self.protocol,
                          "selection_protocol": self.selection_protocol,
-                         "implementation": fingerprint({p.name: source_id(p.read_text()) for p in Path(__file__).parent.glob("*.py")}),
+                         "implementation": fingerprint({str(p): source_id(p.read_text()) for p in [*Path(__file__).parent.glob("*.py"), Path(__file__).parents[1] / "v10_13" / "storage.py", Path(__file__).parents[1] / "v10_13" / "parsing.py", Path(__file__).parents[2] / "core" / "llm.py"]}),
                          "model": {k: getattr(llm, k, None) for k in
                                    ("model", "temperature", "top_p", "enable_thinking", "chars_per_token", "stop", "extra_body")}}
         # JSON round-trip makes tuple/list representation identical at resume.
@@ -88,7 +93,7 @@ class TraceAADV1014:
             self._restore(self.facts.state)
 
     def _state(self):
-        return {"identity": self.identity, "ledger": asdict(self.ledger),
+        return {"identity": self.identity, "ledger": asdict(self.ledger), "parent_counts": self.parent_counts,
                 "frontier": self.frontier.regions, "phase": self.phase,
                 "init_index": self.init_index, "bootstrap": self.bootstrap,
                 "bootstrap_index": self.bootstrap_index, "session": self.session,
@@ -107,6 +112,7 @@ class TraceAADV1014:
         if state.get("pending"):
             raise RuntimeError("external result is uncertain; refusing to replay a charged request/evaluation")
         self.ledger = Ledger(**state["ledger"])
+        self.parent_counts = state["parent_counts"]
         self.frontier = Frontier(self.config, self.anchors, state["frontier"])
         for key in ("phase", "init_index", "bootstrap", "bootstrap_index", "session", "session_count",
                     "repairs", "checked_closures", "finalists", "selection_results", "elapsed",
@@ -170,7 +176,7 @@ class TraceAADV1014:
         if not revision:
             return "Develop one concrete change to the current decision mechanism and test its consequences."
         return (f"Continue testing actual revision {revision['id']} touching {', '.join(revision['symbols'])}. "
-                f"Candidate's optional rationale (unverified): {anchor.get('idea', '')[:600]}\n"
+                f"Candidate's optional rationale (unverified): {anchor.get('idea_metadata', {}).get('display', anchor.get('idea', ''))}\n"
                 "Correct dependencies or calibrate this change before proposing an unrelated redesign.")
 
     def _finish_session(self, reason="completed"):
@@ -198,32 +204,22 @@ class TraceAADV1014:
         self._save()
 
     def _donor(self, anchor):
-        # Same task/interface/protocol, distinct source. Prefer a different
-        # measured region; quality breaks ties, no semantic oracle.
-        candidates = {}
-        for a in self.anchors.values():
-            if a["artifact_id"] != anchor["artifact_id"]:
-                if a["profile"] and a["profile"] == anchor["profile"]:
-                    continue
-                candidates.setdefault(a["artifact_id"], a)
-        if not candidates:
-            return None
-        return max(candidates.values(), key=lambda a: (
-            self.frontier.region_for(a) != self.frontier.region_for(anchor), a["fitness"], -a["id"]))
+        candidates = [a for a in unique_archive(self.anchors)
+                      if opportunity_key(a) != opportunity_key(anchor)]
+        if self.config.behavior_eligibility_gate:
+            candidates = [a for a in candidates if not a["profile"] or a["profile"] != anchor["profile"]]
+        # Uniform reference opportunity over all distinct valid sources; no
+        # same-probe veto. The parent still follows the frozen quality/count rule.
+        return self.rng.choice(candidates) if candidates else None
 
     def _contract(self, anchor):
         donor = self._donor(anchor)
-        if self.session.get("discover") and self.session["step"] == 0:
-            synthesize = donor is not None and self.rng.random() < .5
-            return "Pivot", "Synthesize" if synthesize else "None", donor if synthesize else None
-        actions, weights = ["Refine"], [2]
+        actions = ["Refine", "Pivot"]
         if numeric_parameters(self.facts.code(anchor)):
             actions.append("Tune")
-            weights.append(1)
-        if donor:
+        if donor is not None:
             actions.append("Transfer")
-            weights.append(1)
-        action = self.rng.choices(actions, weights=weights)[0]
+        action = self.rng.choice(actions)
         return ("Refine", "Transfer", donor) if action == "Transfer" else (action, "None", None)
 
     def _generate(self, request):
@@ -277,10 +273,20 @@ class TraceAADV1014:
             self._save()
             started = time.monotonic()
             result = evaluator.evaluate_program_with_details(self.template, source=code, seed=seed,
-                include_probes=position == 0 and role == "search")
+                include_probes=False)
             value = result.result
             valid = isinstance(value, dict) and isinstance(value.get("score"), (int, float)) and math.isfinite(value["score"])
             error = result.error if not valid else None
+            if valid and position == 0 and role == "search" and self.probes:
+                # Diagnosis has its own timeout and cannot invalidate a valid score.
+                probe_started = time.monotonic()
+                probe_result = self.probe_evaluator.evaluate_program_with_details(
+                    self.template, source=code, seed=seed, include_probes=True)
+                if isinstance(probe_result.result, dict):
+                    value.update({k: v for k, v in probe_result.result.items() if k != "score"})
+                else:
+                    value.update(profile=[], scenes=[], probe_error=probe_result.error or probe_result.failure_kind,
+                                 probe_calls=None, probe_seconds=time.monotonic()-probe_started)
             self.facts.add("evaluation", {"id": eid, "artifact_id": artifact_id, "protocol": protocol,
                 "role": role, "seed": seed, "result": value if valid else None,
                 "valid": valid, "failure_kind": result.failure_kind, "error": error,
@@ -297,6 +303,9 @@ class TraceAADV1014:
 
     def _attempt(self, *, anchor=None, request=None, source=None, repair_of=None):
         self.ledger.consume_candidate()
+        if anchor:
+            key = opportunity_key(anchor)
+            self.parent_counts[key] = self.parent_counts.get(key, 0) + 1
         cid = self.ledger.candidates
         session = self.session
         region = session["origin_region"]
@@ -311,6 +320,13 @@ class TraceAADV1014:
         self.pending = {"kind": "candidate", "candidate_id": cid}
         self._save()
         code, idea, error = source, "", None
+        delivery = {}
+        record["selection"] = session.get("selection")
+        record["selection_applied_to_parent"] = anchor is not None and bool(session.get("selection"))
+        if request:
+            record["sampled_action"] = request.get("sampled_action", "Init" if anchor is None else "Refine")
+            record["executed_action"] = "Repair" if repair_of else ("Transfer" if request["reference_mode"] == "Transfer" else request["scope"])
+            record["context_mode"] = request["context_mode"]
         if request:
             rid, text, finish, error = self._generate(request)
             record["request_id"] = rid
@@ -321,7 +337,8 @@ class TraceAADV1014:
                     edit_base = (self.facts.tables["attempt"][repair_of]["code"] if repair_of
                                  else self.facts.code(anchor) if anchor else None)
                     code, idea = parse_response(text, finish, self.template,
-                        base=edit_base, mode=request["output_mode"])
+                        base=edit_base, mode=request["output_mode"], metadata=delivery,
+                        count_tokens=self.llm.count_tokens, idea_limit=self.config.idea_tokens)
                 except (SyntaxError, ValueError, TypeError) as exc:
                     error = f"{type(exc).__name__}: {exc}"
                     code = getattr(exc, "code", None)
@@ -332,6 +349,7 @@ class TraceAADV1014:
             except (SyntaxError, ValueError, TypeError) as exc:
                 error = f"{type(exc).__name__}: {exc}"
                 record["status"] = "delivery_failed"
+        idea = delivery.pop("idea_raw", idea)
         new_anchor = None
         if not error:
             aid = self.facts.artifact(code, self.environment)
@@ -342,6 +360,8 @@ class TraceAADV1014:
             if outcome:
                 new_anchor = {"id": cid, "artifact_id": aid, "parent_id": anchor["id"] if anchor else None,
                     "operator": record["scope"], "reference_id": record["donor_id"], "idea": idea,
+                    "syntax_id": syntax_id(code),
+                    "idea_metadata": delivery.get("idea", {}), "delivery": delivery,
                     "attempt_id": cid, "protocol": self.protocol, "origin_region": region,
                     "revision_id": cid if anchor and aid != anchor["artifact_id"] else None,
                     "is_new": is_new, **outcome}
@@ -350,6 +370,7 @@ class TraceAADV1014:
                     self.facts.add("revision", {"id": cid, "parent": anchor["id"], "child": cid,
                         "old_artifact": anchor["artifact_id"], "new_artifact": aid,
                         "old_score": anchor["fitness"], "new_score": outcome["fitness"],
+                        "idea": idea, "idea_metadata": delivery.get("idea", {}),
                         "protocol": self.protocol, "diff": diff, "symbols": changed_symbols(self.facts.code(anchor), code),
                         "interpretation": "observed original-background difference, not a universal contribution"})
                     record["diff"] = diff
@@ -366,6 +387,8 @@ class TraceAADV1014:
         if code is not None:
             record["code"] = code
         record["idea"] = idea
+        record["delivery"] = delivery
+        record["idea_metadata"] = delivery.get("idea", {})
         if anchor and code and "diff" not in record:
             record["diff"] = source_diff(self.facts.code(anchor), code)
         if anchor and code:
@@ -497,9 +520,14 @@ class TraceAADV1014:
             selected = r["challenger"] if r["challenger"] is not None else r["champion"]
             self._begin(channel, c.trial_length, self.anchors[selected], region)
         else:
-            region = self.frontier.main(self.rng)
-            anchor = self.anchors[self.frontier.regions[region]["champion"]]
-            self._begin(channel, 1, anchor, region)
+            pool = self.anchors
+            if c.behavior_eligibility_gate:
+                ids = {r["champion"] for r in self.frontier.regions if r["champion"] is not None}
+                pool = {i: self.anchors[i] for i in ids}
+            anchor, selection = select_parent(pool, self.parent_counts, c.exploration_constant, c.parent_policy)
+            self._begin(channel, 1, anchor, self.frontier.region_for(anchor))
+            self.session["selection"] = selection
+            self._save()
         return True
 
     def _comparison(self, closure, counterfactual):
@@ -570,13 +598,26 @@ class TraceAADV1014:
         if anchor:
             scope, reference_mode, donor = (("Refine", "None", None) if s["stage"] == "bootstrap"
                                             else self._contract(anchor))
+            sampled_action = "Transfer" if reference_mode == "Transfer" else scope
             if failed:
                 scope, reference_mode, donor = "Refine", "None", None
         else:
             scope, reference_mode, donor = "Init", "None", None
+            sampled_action = "Init"
         comparison = self.facts.tables["comparison"].get(s["comparison_id"])
+        independent = (scope == "Pivot" and not failed and s["channel"] == "main"
+                       and self.config.pivot_context == "independent")
+        if independent:
+            # Selection is recorded as scheduling context only: no parent code,
+            # rationale, score, probes, history or donor reaches this request.
+            s["scheduled_parent_id"] = anchor["id"]
+            s["origin"] = s["working"] = s["origin_region"] = None
+            s["reference_quality"] = None
+            s["hypothesis"] = ""
+            anchor, donor, comparison = None, None, None
+            reference_mode = "None"
         roots = []
-        if not anchor:
+        if not anchor and not independent:
             n_independent = {"independent": self.config.root_attempts, "sequential": 1,
                              "hybrid": (self.config.root_attempts+1)//2}[self.config.init_mode]
             if self.init_index >= n_independent:
@@ -595,6 +636,8 @@ class TraceAADV1014:
             self.phase = "freeze"
             self._save()
             return
+        request["sampled_action"] = sampled_action
+        request["executed_action"] = "Repair" if failed else ("Transfer" if request["reference_mode"] == "Transfer" else request["scope"])
         child, _ = self._attempt(anchor=anchor, request=request, repair_of=failed_id)
         if s["channel"] == "recheck":
             s["followup_gain"] = max(0., child["fitness"]-anchor["fitness"]) if child and child["is_new"] else 0.
@@ -612,7 +655,7 @@ class TraceAADV1014:
             unique = {}
             for a in self.anchors.values():
                 if a["parent_id"] is None:
-                    unique.setdefault(a["artifact_id"], a["id"])
+                    unique.setdefault(opportunity_key(a), a["id"])
             self.bootstrap = list(unique.values())
             self.phase = "bootstrap"
             self._save()
@@ -640,7 +683,7 @@ class TraceAADV1014:
     def _freeze_finalists(self):
         distinct = {}
         for a in sorted(self.anchors.values(), key=lambda a: (-a["fitness"], a["id"])):
-            distinct.setdefault(a["artifact_id"], a["id"])
+            distinct.setdefault(opportunity_key(a), a["id"])
         self.finalists = list(distinct.values())[:self.config.final_candidates]
         self.phase = "selection" if self.selection_evaluator else "search_complete"
         write_json(self.run_dir / "finalists.json", {"protocol": self.protocol, "frozen_at": now(),
@@ -684,7 +727,8 @@ class TraceAADV1014:
             "num_roots": sum(a["parent_id"] is None for a in self.anchors.values()),
             "started_at": self.started_at, "finished_at": now(), "best": exported,
             "selection_evaluations": sum(e["role"] == "selection" for e in self.facts.tables["evaluation"].values()),
-            "finalists": self.finalists, "descriptor": "common_state_decisions" if self.probes else "unpartitioned_quality",
+            "finalists": self.finalists, "descriptor": "diagnostic_training_probes" if self.probes else "unpartitioned_quality",
+            "unique_sources": len(unique_archive(self.anchors)), "parent_counts": self.parent_counts,
             "error": error})
 
     def run(self):

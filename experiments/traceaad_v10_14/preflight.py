@@ -17,7 +17,7 @@ from benchmarks.online_bin_packing import OBPEvaluation
 from benchmarks.op_aco import OPACOEvaluation
 from benchmarks.tsp_construct import TSPEvaluation
 from benchmarks.vrptw_construct import VRPTWEvaluation
-from traceaad.v10_14_3 import Config, TraceAADV10143
+from traceaad.v10_14 import Config, TraceAADV1014
 
 
 ROUTES = [('tsp_construct', 'local'), ('online_bin_packing', 'server3b'),
@@ -54,7 +54,7 @@ def run_one(output, task, backend):
         'forced_main_action': 'Pivot'}, indent=2))
     started = time.monotonic()
     try:
-        m = TraceAADV10143(evaluation=small_task(task), selection_evaluation=small_task(task, seed=11),
+        m = TraceAADV1014(evaluation=small_task(task), selection_evaluation=small_task(task, seed=11),
                            llm=llm, task=task, config=config, run_dir=directory)
         m._contract = lambda anchor: ('Pivot', 'None', None)
         result = m.run()

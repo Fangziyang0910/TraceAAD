@@ -41,8 +41,15 @@ def build_parser():
     parser.add_argument("--init-proposals", type=int, default=8)
     parser.add_argument("--init-mode", choices=("independent", "hybrid", "sequential"), default="hybrid")
     parser.add_argument("--regions", type=int, default=8)
-    parser.add_argument("--trial-fraction", type=float, default=.2)
-    parser.add_argument("--recheck-fraction", type=float, default=.1)
+    parser.add_argument("--trial-fraction", type=float, default=0.)
+    parser.add_argument("--recheck-fraction", type=float, default=0.)
+    parser.add_argument("--fixed-three-step-commitment", action="store_true")
+    parser.add_argument("--online-revalidation", action="store_true")
+    parser.add_argument("--behavior-eligibility-gate", action="store_true")
+    parser.add_argument("--exploration-constant", type=float, default=1.)
+    parser.add_argument("--parent-policy", choices=("rank_count", "raw_count"), default="rank_count")
+    parser.add_argument("--pivot-context", choices=("independent", "anchored"), default="independent")
+    parser.add_argument("--idea-tokens", type=int, default=500)
     parser.add_argument("--trial-length", type=int, default=3)
     parser.add_argument("--delta", type=float, default=1e-6)
     parser.add_argument("--challenger-gap", type=float, default=.1)
@@ -93,7 +100,7 @@ def main(argv=None):
         ctx.llm._client = ctx.llm._client.with_options(max_retries=0)
         method = TraceAADV1014(evaluation=ctx.evaluation, llm=ctx.llm, run_dir=ctx.run_dir,
             config=config, task=args.task, selection_evaluation=selection_task(args.task, ctx.evaluation))
-        ctx.run(method.run, ["V10.14: candidate budget; frozen common-state probes; exact local revalidation"])
+        ctx.run(method.run, ["V10.14: Idea/code fidelity; rank/count selection; independent Pivot"])
     finally:
         ctx.llm.close()
 

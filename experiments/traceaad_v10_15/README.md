@@ -17,6 +17,6 @@ For ACO held-out evaluation, pass `--split test_50`, `test_100`, or `test_200` (
 The formal launcher accepts a prior twenty-run batch manifest so the backend assignment is retained. Inspect its plan with `--dry-run` before launch:
 
 ```bash
-uv run python -m experiments.traceaad_v10_15.launch_batch --from-batch experiments_result/traceaad_v10_14_3/batch_20260928_v1014_3_template2.json --batch v1015_trial --dry-run
+uv run python -m experiments.traceaad_v10_15.launch_batch --from-batch experiments_result/traceaad_v10_14/batch_20260928_v1014.json --batch v1015_trial --dry-run
 uv run python -m experiments.traceaad_v10_15.heldout_batch --batch-manifest experiments_result/traceaad_v10_15/batch_v1015_trial.json --dry-run
 ```

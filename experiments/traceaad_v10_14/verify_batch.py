@@ -33,7 +33,6 @@ def verify(manifest_path):
         state = states[-1] if states else {}
         valid = [a for a in attempts if a['status'] in ('ok', 'duplicate')]
         cfg = json.loads((directory / 'run_config.json').read_text())
-        previous = json.loads((Path(item['previous_run']) / 'run_config.json').read_text())
         ordinary_requests = all(r.get('output_mode') == 'full' and not r.get('response_format')
                                 and not r.get('structured_outputs')
                                 and not r.get('model_config', {}).get('extra_body', {}).get('structured_outputs')
@@ -41,19 +40,18 @@ def verify(manifest_path):
         idea_accounted = all(a.get('delivery', {}).get('idea_status') ==
                              ('present' if a.get('idea', '').strip() else 'missing_in_response') for a in valid)
         settings = state.get('identity', {}).get('config', {})
-        same_evaluation = cfg['task_eval'] == previous['task_eval']
-        same_sampling = all(cfg['llm'].get(k) == previous['llm'].get(k) for k in
-                            ('base_url', 'model', 'temperature', 'top_p', 'top_k', 'max_tokens', 'enable_thinking', 'chars_per_token'))
+        configuration_matches = settings == cfg['method_params'] and cfg['task'] == item['task']
+        sampling_matches = all(cfg['llm'].get(k) == value for k, value in manifest['sampling'].items())
         row.update(completed=len(attempts), status=dict(Counter(a['status'] for a in attempts)),
                    valid_candidates=len(valid), valid_empty_ideas=sum(not a.get('idea', '').strip() for a in valid),
                    phase=state.get('phase'), ledger=state.get('ledger'), pending=state.get('pending'),
                    request_count=len(requests), ordinary_text_requests=ordinary_requests, idea_accounted=idea_accounted,
-                   same_evaluation=same_evaluation, same_sampling=same_sampling,
+                   configuration_matches=configuration_matches, sampling_matches=sampling_matches,
                    independent_pivots=sum(a.get('context_mode') == 'independent' for a in attempts),
                    formal_policy=(settings.get('budget') == 1000 and settings.get('output_mode') == 'full'
                                   and settings.get('parent_policy') == 'rank_count' and settings.get('pivot_context') == 'independent'))
         row['ready'] = (row['session_alive'] and bool(valid) and bool(requests) and idea_accounted
-                        and ordinary_requests and same_evaluation and same_sampling and row['formal_policy'])
+                        and ordinary_requests and configuration_matches and sampling_matches and row['formal_policy'])
         rows.append(row)
     report = {'checked_at': datetime.now(timezone.utc).isoformat(), 'implementation_hashes_match': hashes_ok,
               'all_ready': hashes_ok and len(rows) == 20 and all(r['ready'] for r in rows), 'runs': rows}

@@ -1,12 +1,14 @@
 # 实验入口
 
-正式 V10.14 的实现保留原始模块名 `traceaad_v10_14_3`：
+批次状态、server3 入口和同步操作见[Agent 执行入口](infra/AGENT_OPERATIONS.md)。V10.15/16 可用 `uv run python -m experiments.infra.batch_status --manifest <批次清单>` 查询；加 `--ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD` 读取远端状态。
+
+正式 V10.14 的运行入口：
 
 ```bash
-uv run python -m experiments.traceaad_v10_14_3.run --task tsp_construct --run-name trial_1 --budget 1000
+uv run python -m experiments.traceaad_v10_14.run --task tsp_construct --run-name trial_1 --budget 1000
 ```
 
-参数与复现说明见[该版本运行记录](traceaad_v10_14_3/README.md)，结果见[正式实验分析](../docs/03-机制探索与验证/2026-09-29-V10.14-正式实验结果与分析.md)。旧版本和对比方法的运行脚本保留在各自目录；批次记录见 [experiments_result](../experiments_result/README.md)。
+参数与复现说明见[该版本运行记录](traceaad_v10_14/README.md)，结果见[正式实验分析](../docs/03-机制探索与验证/2026-09-29-V10.14-正式实验结果与分析.md)。旧版本和对比方法的运行脚本保留在各自目录；批次记录见 [experiments_result](../experiments_result/README.md)。
 
 V10.15 的独立实现和运行、选择、held-out 入口见 [V10.15 运行说明](traceaad_v10_15/README.md)。
 

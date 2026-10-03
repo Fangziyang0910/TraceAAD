@@ -1,4 +1,4 @@
-"""Trace-conditioned revision with exact local revalidation."""
+"""All-source quality/count search with diagnostic-only behavior probes."""
 
 from .config import Config
 from .traceaad import TraceAADV1014

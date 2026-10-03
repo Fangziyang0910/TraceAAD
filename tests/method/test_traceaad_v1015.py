@@ -383,7 +383,7 @@ def test_resume_does_not_regenerate_completed_attempts(tmp_path):
 @pytest.mark.parametrize('task', [
     'tsp_construct', 'vrptw_construct', 'online_bin_packing', 'cvrp_aco', 'op_aco'])
 def test_real_task_template_can_run_through_search_and_selection(tmp_path, task):
-    from experiments.traceaad_v10_14_3.preflight import small_task
+    from experiments.traceaad_v10_14.preflight import small_task
 
     train, selection = small_task(task), small_task(task, seed=11)
     if task in {'vrptw_construct', 'online_bin_packing'}:
@@ -400,7 +400,7 @@ def test_real_task_template_can_run_through_search_and_selection(tmp_path, task)
 
 
 def test_aco_wrong_output_shape_is_invalid_output(tmp_path):
-    from experiments.traceaad_v10_14_3.preflight import small_task
+    from experiments.traceaad_v10_14.preflight import small_task
 
     train = small_task('cvrp_aco')
     bad = ('Idea: return a small matrix\n```python\n'

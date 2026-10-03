@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 
 from experiments.infra.launcher import write_json_atomic
-from traceaad.v10_14_3.edits import parse_response
+from traceaad.v10_14.edits import parse_response
 
 
 LAYOUT = re.compile(r"\AIdea:[ \t]*(.*?)\n[ \t]*code:[ \t]*\n\s*```python[ \t]*\n(.*?)\n```\s*\Z", re.S)

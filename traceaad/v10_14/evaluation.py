@@ -80,16 +80,19 @@ def training_probes(evaluation, task):
                 captured.append(copy.deepcopy(args))
                 return np.ones_like(args[0] if task == "cvrp_aco" else args[1])
 
-            evaluation._build_prior(instance, capture)
+            built = evaluation._build_prior(instance, capture)
             probes.append({"kind": "matrix", "args": captured[0],
-                           "mask_depot": task == "op_aco", "scene": f"training instance {index}: edge prior"})
+                           "mask_depot": task == "op_aco", "states": aco_states(evaluation, task, built),
+                           "scene": f"training instance {index}: fixed feasible ACO transition states, initial pheromone"})
         elif task == "tsp_construct":
             _, distances = instance
             current, visited = 0, {0}
-            for step in range(min(3, len(distances) - 2)):
+            stages = {0, 1, len(distances)//2, max(0, len(distances)-6), len(distances)-2}
+            for step in range(len(distances) - 1):
                 eligible = np.array([int(n) for n in np.argsort(distances[current]) if n not in visited])
-                probes.append({"kind": "node", "args": (current, 0, eligible, distances.copy()),
-                               "scene": f"training instance {index}, step {step}, current {current}"})
+                if step in stages:
+                    probes.append({"kind": "node", "args": (current, 0, eligible, distances.copy()),
+                                   "scene": f"training instance {index}, step {step}, remaining {len(eligible)}, current {current}"})
                 current = int(eligible[0])
                 visited.add(current)
         elif task == "vrptw_construct":
@@ -113,14 +116,17 @@ def training_probes(evaluation, task):
                 visited.add(current)
         elif task == "online_bin_packing":
             capacity = int(instance["capacity"])
-            bins = np.full(128, capacity, dtype=int)
-            for step, item in enumerate(instance["items"][:32]):
+            items = instance["items"]
+            bins = np.full(len(items), capacity, dtype=int)
+            stages = {0, 7, min(31, len(items)-1), len(items)//2, len(items)-1}
+            for step, item in enumerate(items):
                 feasible = np.flatnonzero(bins >= item)
                 if not len(feasible):
                     break
-                if step in {0, 7, 15, 31}:
+                if step in stages:
                     probes.append({"kind": "ranking", "args": (int(item), bins[feasible].copy()),
-                        "scene": f"training instance {index}, item {int(item)}, feasible bins {len(feasible)}"})
+                        "bin_indices": feasible.copy(), "capacity": capacity,
+                        "scene": f"training instance {index}, capacity {capacity}, step {step}/{len(items)}, item {int(item)}, feasible bins {len(feasible)}"})
                 best = feasible[np.argmin(bins[feasible] - item)]
                 bins[best] -= int(item)
     return probes
@@ -143,18 +149,96 @@ def describe_decision(value, probe):
     if array.shape != expected:
         raise ValueError("wrong common-state output shape")
     if array.ndim == 1:
-        return np.argsort(-array, kind="stable")[:min(3, len(array))].astype(int).tolist()
+        chosen = int(np.argmax(array))
+        item, bins = probe["args"]
+        return [chosen, int(bins[chosen]), int(bins[chosen] - item),
+                int(np.count_nonzero(array == array[chosen]))]
     prior = np.maximum(array.astype(float) + 1e-9, 1e-9)
-    np.fill_diagonal(prior, -np.inf)
-    if probe.get("mask_depot"):
-        prior[:, 0] = -np.inf
-    return np.argsort(-prior, axis=1, kind="stable")[:, :3].astype(int).ravel().tolist()
+    distributions = []
+    for state in probe["states"]:
+        row = prior[state["current"]]
+        if probe.get("mask_depot"):
+            row = np.append(row, 1.)  # actual OP dummy sink heuristic
+        weights = (np.asarray(state["pheromone"]) ** state["alpha"]
+                   * row ** state["beta"] * np.asarray(state["mask"]))
+        total = weights.sum()
+        if total <= 0 or not np.isfinite(total):
+            raise ValueError("invalid diagnostic ACO transition weights")
+        distributions.extend((weights / total).tolist())
+    return distributions
+
+
+def aco_states(evaluation, task, built):
+    """Capture feasibility from the real solver on a fixed baseline trajectory.
+
+    With positive flat priors and unit initial pheromones, nonzero probability
+    is exactly the solver's visit/capacity/length mask. We retain its exponent
+    and pheromone values; candidate priors are later passed through that same
+    weight/normalization rule. These states are not candidate rollout traces.
+    """
+    class Recorder:
+        def __init__(self):
+            self.current, self.states = 0, []
+            self.rng = np.random.default_rng(20260927)
+            self.solver = None
+
+        def choice(self, size, p):
+            solver = self.solver
+            self.states.append({"current": self.current, "mask": (p > 0).astype(float),
+                "pheromone": solver.pheromone[self.current].copy(),
+                "alpha": solver.alpha, "beta": solver.beta})
+            chosen = int(self.rng.choice(size, p=p))
+            self.current = chosen
+            return chosen
+
+    recorder = Recorder()
+    if task == "cvrp_aco":
+        from benchmarks.cvrp_aco.evaluation import ACO
+        distances, demands, prior = built
+        solver = ACO(distances, demands, prior, evaluation.capacity, n_ants=1, rng=recorder)
+        recorder.solver = solver
+        solver._generate_paths()
+    else:
+        from benchmarks.op_aco.evaluation import ACO
+        prizes, distances, prior = built
+        solver = ACO(prizes, distances, evaluation.max_len, prior, n_ants=1, rng=recorder)
+        recorder.solver = solver
+        solver._gen_sol()
+    n = len(recorder.states)
+    return [recorder.states[i] for i in sorted({0, min(1, n-1), n//2, n-1})] if n else []
+
+
+def decision_scene(value, probe, decision):
+    result = {"scene": probe["scene"], "scope": "finite training probe; no global equivalence claim"}
+    if probe["kind"] == "ranking":
+        chosen, capacity, residual, ties = decision
+        bins = np.asarray(probe["args"][1]).copy()
+        bins[chosen] = residual
+        capacities, counts = np.unique(bins, return_counts=True)
+        result.update(selected_index=chosen,
+                      selected_original_bin=int(probe["bin_indices"][chosen]),
+                      selected_capacity=capacity, residual_after=residual, top_score_ties=ties,
+                      after_residual_histogram=list(zip(capacities.tolist(), counts.tolist())),
+                      after_ordered_state_sha256=fingerprint(bins))
+    elif probe["kind"] == "matrix":
+        n = len(probe["args"][1]) + int(probe.get("mask_depot", False))
+        result["transitions"] = []
+        for state, probabilities in zip(probe["states"], np.asarray(decision).reshape(-1, n)):
+            top = np.argsort(-probabilities, kind="stable")[:3]
+            positive = probabilities[probabilities > 0]
+            result["transitions"].append({"current": state["current"],
+                "feasible_count": len(positive), "top_indices": top.tolist(),
+                "top_probabilities": probabilities[top].tolist(),
+                "entropy": float(-np.sum(positive * np.log(positive)))})
+    else:
+        result["decision"] = decision
+    return result
 
 
 class SeededEvaluation(Evaluation):
     """Evaluate score first, then probes in a fresh namespace; probes cannot bias fitness."""
 
-    def __init__(self, inner, probes=()):
+    def __init__(self, inner, probes=(), *, diagnostic_only=False):
         super().__init__(template_program=inner.template_program,
                          task_description=inner.task_description,
                          timeout_seconds=inner.timeout_seconds,
@@ -162,6 +246,10 @@ class SeededEvaluation(Evaluation):
                          daemon_eval_process=inner.daemon_eval_process, fork_proc=inner.fork_proc)
         self.inner = inner
         self.probes = probes
+        self.diagnostic_only = diagnostic_only
+        if diagnostic_only:
+            self.safe_evaluate = True
+            self.timeout_seconds = min(5., inner.timeout_seconds or 5.)
 
     def evaluate_program(self, program_str, callable_func, *, seed=730241, include_probes=True, source=None):
         py_state, np_state = random.getstate(), np.random.get_state()
@@ -178,7 +266,7 @@ class SeededEvaluation(Evaluation):
             evaluator = copy.copy(self.inner)
             if hasattr(evaluator, "aco_seed"):
                 evaluator.aco_seed += seed
-            score = evaluator.evaluate_program(program_str, function)
+            score = 0. if self.diagnostic_only else evaluator.evaluate_program(program_str, function)
             if score is None or not np.isfinite(float(score)):
                 raise ValueError("task returned no finite score")
             profile, scenes, probe_error = [], [], None
@@ -195,7 +283,7 @@ class SeededEvaluation(Evaluation):
                         value = probe_namespace[callable_func.__name__](*copy.deepcopy(probe["args"]))
                         decision = describe_decision(value, probe)
                         profile.extend(decision)
-                        scenes.append({"scene": probe["scene"], "decision": decision[:6]})
+                        scenes.append(decision_scene(value, probe, decision))
                 except Exception as exc:
                     profile, scenes, probe_error = [], [], f"{type(exc).__name__}: {exc}"
             return {"score": float(score), "profile": profile, "scenes": scenes,

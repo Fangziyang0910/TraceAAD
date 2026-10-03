@@ -76,6 +76,10 @@ class Frontier:
         champion = self.anchors[region["champion"]]
         gap = self.config.challenger_gap * max(abs(champion["fitness"]), 1.)
         different = distance(champion["profile"], anchor["profile"])
+        if not self.config.behavior_eligibility_gate:
+            return (anchor["artifact_id"] != champion["artifact_id"]
+                    and anchor["artifact_id"] not in region["tried"]
+                    and anchor["fitness"] >= champion["fitness"] - gap)
         return (anchor["artifact_id"] != champion["artifact_id"]
                 and anchor["artifact_id"] not in region["tried"]
                 and anchor["fitness"] >= champion["fitness"] - gap

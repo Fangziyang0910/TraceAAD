@@ -11,8 +11,15 @@ class Config:
     init_proposals: int = 8
     init_mode: str = "hybrid"
     regions: int = 8
-    trial_fraction: float = .2
-    recheck_fraction: float = .1
+    trial_fraction: float = 0.
+    recheck_fraction: float = 0.
+    fixed_three_step_commitment: bool = False
+    online_revalidation: bool = False
+    behavior_eligibility_gate: bool = False
+    exploration_constant: float = 1.
+    parent_policy: str = "rank_count"
+    pivot_context: str = "independent"
+    idea_tokens: int = 500
     trial_length: int = 3
     delta: float = 1e-6
     challenger_gap: float = .1
@@ -33,6 +40,14 @@ class Config:
     seed: int = 0
 
     def __post_init__(self):
+        if not self.fixed_three_step_commitment and self.trial_fraction:
+            raise ValueError("trial_fraction requires fixed_three_step_commitment")
+        if not self.online_revalidation and self.recheck_fraction:
+            raise ValueError("recheck_fraction requires online_revalidation")
+        if not math.isfinite(self.exploration_constant) or self.exploration_constant < 0:
+            raise ValueError("exploration_constant must be finite and nonnegative")
+        if not isinstance(self.idea_tokens, int) or not 1 <= self.idea_tokens <= 500:
+            raise ValueError("idea_tokens must be an integer from 1 to 500")
         for field in ("budget", "max_evaluations", "init_proposals", "regions",
                       "trial_length", "output_tokens", "max_input_tokens",
                       "evidence_tokens", "max_events", "history_depth", "final_candidates"):
@@ -42,7 +57,7 @@ class Config:
         if self.regions > 8 or self.final_candidates > 5 or self.trial_length > 3:
             raise ValueError("V10.14 supports at most 8 regions, 5 finalists and 3 trial steps")
         if not (0 <= self.trial_fraction <= .2 and 0 <= self.recheck_fraction <= .1):
-            raise ValueError("trial/recheck fractions exceed V10.14 caps")
+            raise ValueError("trial/recheck fractions exceed optional legacy channel caps")
         for field in ("delta", "challenger_gap", "min_behavior_distance", "comparison_tolerance"):
             if not math.isfinite(getattr(self, field)) or getattr(self, field) < 0:
                 raise ValueError(f"{field} must be finite and nonnegative")
@@ -52,6 +67,10 @@ class Config:
             raise ValueError("unknown initialization mode")
         if self.output_mode not in {"full", "edit"}:
             raise ValueError("output_mode must be full or edit")
+        if self.parent_policy not in {"rank_count", "raw_count"}:
+            raise ValueError("unknown parent policy")
+        if self.pivot_context not in {"independent", "anchored"}:
+            raise ValueError("unknown Pivot context")
         if self.evidence_policy not in {"none", "trajectory", "bag", "conditional"}:
             raise ValueError("unknown evidence policy")
         if not self.evaluation_seeds or len(set(self.evaluation_seeds)) != len(self.evaluation_seeds):

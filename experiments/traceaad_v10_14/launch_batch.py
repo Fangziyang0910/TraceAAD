@@ -14,7 +14,7 @@ from pathlib import Path
 
 from experiments.infra.base import REPO_ROOT, RESULTS_ROOT, TASK_SHORT
 from experiments.infra.launcher import check_backends, is_session_alive, launch_command, write_json_atomic
-from traceaad.v10_14_3 import Config
+from traceaad.v10_14 import Config
 
 
 def build_plan(previous, batch):
@@ -26,14 +26,14 @@ def build_plan(previous, batch):
     for item in source:
         task, repeat, backend, seed = (item[k] for k in ('task', 'repeat', 'backend', 'seed'))
         short = TASK_SHORT[task]
-        name = f'{batch}_{short}_traceaad_v10_14_3_rep{repeat}'
+        name = f'{batch}_{short}_traceaad_v10_14_rep{repeat}'
         session = f'{batch}_{short}_r{repeat}'
-        command = ['uv', 'run', 'python', '-m', 'experiments.traceaad_v10_14_3.run',
+        command = ['uv', 'run', 'python', '-m', 'experiments.traceaad_v10_14.run',
                    '--task', task, '--backend', backend, '--repeat', str(repeat),
                    '--seed', str(seed), '--run-name', name, '--budget=1000', '--eval-workers=4']
         plan.append({'task': task, 'repeat': repeat, 'seed': seed, 'backend': backend,
                      'session': session, 'run_name': name,
-                     'run_dir': str(RESULTS_ROOT / 'traceaad_v10_14_3' / task / name),
+                     'run_dir': str(RESULTS_ROOT / 'traceaad_v10_14' / task / name),
                      'command': command, 'previous_run': item['run_dir'], 'status': 'planned'})
     if len({p['run_name'] for p in plan}) != 20:
         raise ValueError('duplicate planned run identity')
@@ -53,7 +53,7 @@ def main():
     if args.dry_run:
         print(json.dumps({'batch': args.batch, 'plan': plan, 'policy': asdict(Config())}, indent=2))
         return
-    root = RESULTS_ROOT / 'traceaad_v10_14_3'
+    root = RESULTS_ROOT / 'traceaad_v10_14'
     root.mkdir(parents=True, exist_ok=True)
     manifest_path = root / f'batch_{args.batch}.json'
     if manifest_path.exists():
@@ -66,11 +66,11 @@ def main():
     if live_old:
         raise RuntimeError(f'previous batch sessions still active: {live_old}')
     check_backends(p['backend'] for p in plan)
-    files = sorted([*(REPO_ROOT / 'traceaad/v10_14_3').glob('*.py'),
-                    *(REPO_ROOT / 'experiments/traceaad_v10_14_3').glob('*.py'),
+    files = sorted([*(REPO_ROOT / 'traceaad/v10_14').glob('*.py'),
+                    *(REPO_ROOT / 'experiments/traceaad_v10_14').glob('*.py'),
                     REPO_ROOT / 'core/llm.py', REPO_ROOT / 'core/evaluate.py',
                     REPO_ROOT / 'traceaad/v10_13/storage.py', REPO_ROOT / 'traceaad/v10_13/parsing.py'])
-    manifest = {'batch': args.batch, 'method': 'v1014_3', 'display_name': 'V10.14-3',
+    manifest = {'batch': args.batch, 'method': 'v1014', 'display_name': 'V10.14',
                 'created_at': datetime.now().astimezone().isoformat(), 'status': 'launching',
                 'previous_batch': str(args.from_batch), 'search_policy': asdict(Config()),
                 'sampling': previous['sampling'], 'services': previous.get('services'),
