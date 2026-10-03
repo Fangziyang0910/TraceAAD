@@ -31,7 +31,7 @@ Continue developing the current algorithm: write a version that scores better th
 
 # Explore changes how the current algorithm decides and aims past the search
 # best; it does not start over. A fixed-parent paired test on TSP
-# (docs/03-机制探索与验证/2026-10-01-V10.15-5-正式实验诊断.md §4) found that
+# (docs/03-现象与检验/2026-10-01-生成目标与计算限制.md §4) found that
 # "write a new algorithm with a different core idea" never beat the run's best.
 EXPLORE = """[Your Task: Explore]
 Write an algorithm that scores better than the best found so far by changing how the current algorithm makes its decisions, not by tuning it."""
@@ -73,7 +73,7 @@ ANALYSIS = {
 
 
 def output_format(action):
-    # Paired Qwen tests (docs/03-机制探索与验证/2026-10-01-写代码前的决策与Design格式.md):
+    # Paired Qwen tests (docs/03-现象与检验/2026-10-01-写代码前的决策与Design格式.md):
     # on Refine a few-sentence targeted Analysis cut duplicates from 25% to 5%
     # at the cost of a 170-word Design; on Crossover it gave the best rank; on
     # Explore a Design alone ranked best at under half the tokens (on random

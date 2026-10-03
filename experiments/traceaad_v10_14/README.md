@@ -2,7 +2,7 @@
 
 **TraceAAD V10.14** 的实现位于 `traceaad/v10_14/`，运行入口位于 `experiments/traceaad_v10_14/`。
 
-最终正式实验批次为 `20260928_v1014`，五个任务各四路、每路 1,000 次候选尝试，并完成独立选择集评价。正式结果目录为 `experiments_result/traceaad_v10_14/`，包含批次清单、20 路运行目录及 held-out 汇总。当前本地档案的逐文件校验见[完整性清单](../../experiments_result/traceaad_v10_14/analysis/archive_integrity.json)。结果解释见[正式实验分析](../../docs/03-机制探索与验证/2026-09-29-V10.14-正式实验结果与分析.md)。
+最终正式实验批次为 `20260928_v1014`，五个任务各四路、每路 1,000 次候选尝试，并完成独立选择集评价。正式结果目录为 `experiments_result/traceaad_v10_14/`，包含批次清单、20 路运行目录及 held-out 汇总。当前本地档案的逐文件校验见[完整性清单](../../experiments_result/traceaad_v10_14/analysis/archive_integrity.json)。结果解释见[正式实验分析](../../docs/03-现象与检验/2026-09-29-搜索结果与运行波动.md)。
 
 ## 正式协议
 

@@ -4,7 +4,7 @@
 
 独立的 held-out 结果和实验级计划、汇总仍在对应实验目录中。
 
-实验目录是本机数据，Git 不跟踪。V10.14 的正式批次为 `traceaad_v10_14/batch_20260928_v1014.json`，包含 20 个运行目录与 76 项 held-out。正式结论见 [V10.14 实验分析](../docs/03-机制探索与验证/2026-09-29-V10.14-正式实验结果与分析.md)；共享运行入口见 [实验脚本](../experiments/README.md)。迁移或备份原始数据时应连同运行目录的 `run_config.json` 一起保存。
+实验目录是本机数据，Git 不跟踪。V10.14 的正式批次为 `traceaad_v10_14/batch_20260928_v1014.json`，包含 20 个运行目录与 76 项 held-out。正式结论见 [V10.14 实验分析](../docs/03-现象与检验/2026-09-29-搜索结果与运行波动.md)；共享运行入口见 [实验脚本](../experiments/README.md)。迁移或备份原始数据时应连同运行目录的 `run_config.json` 一起保存。
 
 ## 已完成档案的去重
 
@@ -22,4 +22,4 @@ python3 -m experiments.infra.deduplicate_archives \
   --restore experiments_result/local_cleanup_20261003/archive_dedup_manifest.json
 ```
 
-本轮清理范围和核验结果见[档案整理记录](../docs/02-实验结果/2026-10-03-本地实验档案整理.md)。恢复清单与原始数据保存在本机，迁移时一并保存；使用归档工具备份时，可保留硬链接关系，避免重新展开全部副本。
+本轮清理范围和核验结果见[档案整理记录](../experiments/infra/RESULT_STORAGE.md)。恢复清单与原始数据保存在本机，迁移时一并保存；使用归档工具备份时，可保留硬链接关系，避免重新展开全部副本。

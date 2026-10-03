@@ -1,7 +1,7 @@
 """V10.16 prompts: every shown program carries its measurements, and every operator sees the experience around it.
 
 Context states facts attached to the object they describe; instructions are
-one goal sentence (docs/03-机制探索与验证/2026-10-01-V10.15-5-正式实验诊断.md).
+one goal sentence (docs/03-现象与检验/2026-10-01-生成目标与计算限制.md).
 V10.16 adds the experience the search has gathered, not only the programs it
 kept: the attempts that started from the current algorithm with their measured
 outcomes (failures and reproductions included), the improvements of the search

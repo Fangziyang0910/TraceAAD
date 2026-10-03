@@ -1,17 +1,29 @@
 # 实验入口
 
-批次状态、server3 入口和同步操作见[Agent 执行入口](infra/AGENT_OPERATIONS.md)。V10.15/16 可用 `uv run python -m experiments.infra.batch_status --manifest <批次清单>` 查询；加 `--ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD` 读取远端状态。
+研究问题与认识见[研究主线](../docs/04-研究认识与构想/研究主线与问题.md)。这里集中查找运行命令、状态查询和结果位置。
 
-正式 V10.14 的运行入口：
+## 针对问题的检验
+
+| 问题 | 实验 |
+| --- | --- |
+| 代码前的分析怎样影响生成？ | [格式配对](format_study/README.md) |
+| 目标与计算余量怎样影响结构发现？ | [固定父代提示对照](diagnosis_v1015_5/README.md) |
+| 提供逐行耗时能改善修改吗？ | [耗时剖析重放](diagnosis_v1016_profile/README.md) |
+| 训练进展能延续到独立实例吗？ | [前沿重测](diagnosis_v1016_frontier/README.md) |
+| 新思想经过少量开发后怎样变化？ | [同等开发](diagnosis_v1016_develop/README.md) |
+
+## 搜索、选择与测试
+
+[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)、[短路径搜索](traceaad_v10_14/README.md)各自提供运行、选择和 held-out 命令。代码目录保留实现标识，文档按研究对象命名。
+
+模型、采样、时限与实例隔离见各入口的配置。评价使用单线程 BLAS/OpenMP，墙钟超时；装箱按实例重新执行候选程序，VRPTW 接口明确 depot 返回规则。
+
+## 状态与结果
+
+查询状态、等待完成和远端同步见[执行入口](infra/AGENT_OPERATIONS.md)。指定批次即可查询：
 
 ```bash
-uv run python -m experiments.traceaad_v10_14.run --task tsp_construct --run-name trial_1 --budget 1000
+uv run python -m experiments.infra.batch_status --manifest <批次清单>
 ```
 
-参数与复现说明见[该版本运行记录](traceaad_v10_14/README.md)，结果见[正式实验分析](../docs/03-机制探索与验证/2026-09-29-V10.14-正式实验结果与分析.md)。旧版本和对比方法的运行脚本保留在各自目录；批次记录见 [experiments_result](../experiments_result/README.md)。
-
-V10.15 的独立实现和运行、选择、held-out 入口见 [V10.15 运行说明](traceaad_v10_15/README.md)。
-
-V10.16 把种群扩展为程序与生成事件（失败、重复与修复都进入数据结构），按“质量 × 经验”选择出发点，并在上下文中给出从当前程序出发的尝试和实测的调用次数与耗时；入口见 [V10.16 运行说明](traceaad_v10_16/README.md)，设计见[机制设计](../docs/01-主线机制设计/TraceAAD-V10.16-机制设计.md)。
-
-首批 V10.15 实验后的修正（协议与采样）见[机制设计 §10.3](../docs/01-主线机制设计/TraceAAD-V10.15-机制设计.md)；2026-10-02 起父代与 finalist 直接以程序为单位，不再按训练分合并（§10.5）。实验入口把 BLAS/OpenMP 限为单线程，评价超时仍按墙钟计；OBP 每个实例重新执行候选程序，VRPTW 模板写明了 depot 规则。模型采样默认改为 Qwen3.8 官方的非 thinking 配置（temperature 0.7、top_p 0.8、top_k 20、presence_penalty 1.5），并对所有后端显式发送全部采样参数；此前的运行在关闭 thinking 时使用的是 thinking 模式参数。这些是任务协议的变化，与此前结果比较时需要注明。
+[结果概览](../docs/02-实验结果/01-搜索结果概览.md)用于查看成绩，[原始数据](../experiments_result/README.md)说明文件位置。结果存储与硬链接恢复见[存储说明](infra/RESULT_STORAGE.md)。
