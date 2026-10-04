@@ -1,7 +1,7 @@
 """Incremental, read-only training history for the shared monitor."""
 
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import math
 from pathlib import Path
@@ -96,7 +96,18 @@ class TrainingHistory:
     def timing_snapshot(self):
         with self.lock:
             self.read()
-            return dict(self.clock)
+            snapshot = dict(self.clock)
+            try:
+                completed = datetime.fromisoformat(snapshot.get("completed_at"))
+            except (TypeError, ValueError):
+                completed = None
+            # Copied native checkpoints have no timezone. Their preserved file
+            # timestamp is portable; active elapsed time still supplies the rate.
+            if (completed is not None and completed.tzinfo is None and self.stamp
+                    and finite(snapshot.get("elapsed")) is not None):
+                snapshot["completed_at"] = datetime.fromtimestamp(
+                    self.stamp[1] / 1e9, timezone.utc).isoformat()
+            return snapshot
 
     def read(self):
         with self.lock:

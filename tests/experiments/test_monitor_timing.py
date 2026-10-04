@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 import time
@@ -167,6 +167,36 @@ def test_api_overview_and_detail_use_native_elapsed(tmp_path, monkeypatch):
     assert timing["unit"] == "候选" and timing["rate_per_minute"] == 2
     assert timing == monitor.run_detail("traceaad_v10_14", "op_aco", "rep1")["timing"]
     assert state["summary"]["timing"]["eta_seconds"] == timing["eta_seconds"]
+
+
+@pytest.mark.parametrize("method,experiment", [
+    ("v1015", "traceaad_v10_15"), ("v1016", "traceaad_v10_16")])
+@pytest.mark.parametrize("clock_offset_hours", [-1, 8])
+@pytest.mark.parametrize("log_age", [0, 1000])
+def test_copied_checkpoint_eta_uses_preserved_file_time(
+        tmp_path, monkeypatch, method, experiment, clock_offset_hours, log_age):
+    monkeypatch.setattr("experiments.monitor.time.time", lambda: NOW)
+    directory = tmp_path / experiment / "op_aco" / "rep1"
+    write_json(directory / "run_config.json", {
+        "method": method, "task": "op_aco", "method_params": {"budget": 100}})
+    # Copying preserves the file timestamp, but a server's naive clock can be
+    # either ahead of or behind the viewer's local timezone.
+    foreign_start = (datetime.fromtimestamp(NOW - 600 - log_age)
+                     + timedelta(hours=clock_offset_hours)).isoformat()
+    journal = directory / "search.jsonl"
+    append_records(journal, [candidate(10, 1), {"kind": "state", "state": {
+        "attempts": 10, "elapsed": 600, "started_at": foreign_start,
+        "phase": "search"}}])
+    os.utime(journal, (NOW - log_age, NOW - log_age))
+    state = ResultsMonitor(tmp_path).overview(experiment)
+    timing = state["tasks"][0]["runs"][0]["timing"]
+    if log_age:
+        assert timing["state"] == "stale" and timing["eta_seconds"] is None
+    else:
+        assert timing["state"] == "estimated"
+        assert timing["rate_per_minute"] == 1
+        assert timing["eta_seconds"] == 5400
+        assert state["summary"]["timing"]["eta_seconds"] == 5400
 
 
 def test_legacy_v1013_reports_evaluations_per_minute(tmp_path, monkeypatch):
