@@ -6,6 +6,8 @@
 
 实验目录是本机数据，Git 不跟踪。V10.14 的正式批次为 `traceaad_v10_14/batch_20260928_v1014.json`，包含 20 个运行目录与 76 项 held-out。正式结论见 [V10.14 实验分析](../docs/03-现象与检验/2026-09-29-搜索结果与运行波动.md)；共享运行入口见 [实验脚本](../experiments/README.md)。迁移或备份原始数据时应连同运行目录的 `run_config.json` 一起保存。
 
+2026-10-05 清理了本机非正式批次 `traceaad_initialization/`、`task_pilot/`、`traceaad_bc/` 和 `traceaad_v10_18_smoke/`。共删除 1,864 个结果文件，按文件分配块及硬链接计数释放约 717.2 MiB；[清理明细](local_cleanup_20261005/nonformal_cleanup.json)保存在本机。相关文档保留此前的历史汇总，这些批次的原始结果已不在本机。
+
 ## 已完成档案的去重
 
 `experiments.infra.deduplicate_archives` 可以把内容相同的 JSON 文件改为硬链接，保留每个路径和原始内容。只用于已完成、后续不再写入的档案。默认仅输出计划；执行时必须保存恢复清单：
