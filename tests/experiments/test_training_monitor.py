@@ -1,7 +1,6 @@
 import json
 
-from experiments.monitor import ResultsMonitor, V1013Monitor
-from traceaad.v10_13.storage import RunStorage
+from experiments.monitor import ResultsMonitor
 
 
 def write_json(path, value):
@@ -38,19 +37,19 @@ def make_run(tmp_path):
         {"id": 0, "fitness": -12.0, "operator": "Init", "idea": "first", "code": "def f(): return 1"},
         {"id": 1, "fitness": -10.0, "operator": "Refine", "idea": "best", "code": "def f(): return 2"},
     ]
-    storage = RunStorage(run_dir)
     for index, event in enumerate(events):
-        storage.commit_candidate(event, nodes[index] if index < len(nodes) else None,
-                                 {"candidate_count": index + 1, "budget_used": index + 1})
+        append_records(run_dir / "search.jsonl", [{"kind": "candidate", **event,
+            "node": nodes[index] if index < len(nodes) else None,
+            "state": {"candidate_count": index + 1, "budget_used": index + 1}}])
     return results, run_name
 
 
 def test_overview_reads_v1013_progress(tmp_path):
     results, _ = make_run(tmp_path)
-    state = V1013Monitor(results).overview("batch")
+    state = ResultsMonitor(results.parent, results.name).overview("results")
 
-    assert state["batch"] == "batch"
-    assert {key: value for key, value in state["summary"].items() if key != "timing"} == {
+    assert state["batch"] == "results"
+    assert {key: state["summary"][key] for key in ("runs", "finished", "running", "queued", "blocked", "budget_used", "budget", "valid_nodes")} == {
         "runs": 1,
         "finished": 0,
         "running": 1,
@@ -74,7 +73,7 @@ def test_active_run_ignores_stale_error_summary(tmp_path):
         "error": "old connection failure",
     })
 
-    run = V1013Monitor(results).overview("batch")["tasks"][0]["runs"][0]
+    run = ResultsMonitor(results.parent, results.name).overview("results")["tasks"][0]["runs"][0]
 
     assert run["status"] == "running"
     assert run["budget_used"] == 3
@@ -83,7 +82,7 @@ def test_active_run_ignores_stale_error_summary(tmp_path):
     assert run["error"] is None
 
 
-def test_batch_list_only_exposes_latest_v1013_batch(tmp_path):
+def test_batch_list_exposes_experiment_with_legacy_manifests(tmp_path):
     results, _ = make_run(tmp_path)
     write_json(results / "batch_old.json", {
         "method": "v1013_three_pool",
@@ -92,12 +91,12 @@ def test_batch_list_only_exposes_latest_v1013_batch(tmp_path):
         "plan": [{"task": "tsp_construct"}],
     })
 
-    assert [item["id"] for item in V1013Monitor(results).batches()] == ["batch"]
+    assert [item["id"] for item in ResultsMonitor(results.parent, results.name).batches()] == ["results"]
 
 
 def test_run_detail_builds_minimization_curve_and_best_program(tmp_path):
     results, run_name = make_run(tmp_path)
-    detail = V1013Monitor(results).run_detail("batch", "tsp_construct", run_name)
+    detail = ResultsMonitor(results.parent, results.name).run_detail("results", "tsp_construct", run_name)
 
     assert detail is not None
     assert [{k: p[k] for k in ("evaluation", "value")} for p in detail["curve"]] == [
@@ -113,14 +112,15 @@ def test_run_detail_builds_minimization_curve_and_best_program(tmp_path):
 def test_finished_run_uses_summary_and_journal(tmp_path):
     results, run_name = make_run(tmp_path)
     run_dir = results / "tsp_construct" / run_name
-    storage = RunStorage(run_dir)
-    best = storage.records("nodes")[-1]
-    storage.save_summary({"status": "finished", "budget": 4, "budget_used": 3,
+    best = next(record["node"] for record in reversed(
+        [json.loads(line) for line in (run_dir / "search.jsonl").read_text().splitlines()])
+        if record.get("node"))
+    write_json(run_dir / "logs/run_summary.json", {"status": "finished", "budget": 4, "budget_used": 3,
                           "num_nodes": 2, "best": best})
 
-    monitor = V1013Monitor(results)
-    overview = monitor.overview("batch")
-    detail = monitor.run_detail("batch", "tsp_construct", run_name)
+    monitor = ResultsMonitor(results.parent, results.name)
+    overview = monitor.overview("results")
+    detail = monitor.run_detail("results", "tsp_construct", run_name)
     assert overview["summary"]["budget_used"] == 3
     assert overview["summary"]["valid_nodes"] == 2
     assert overview["summary"]["finished"] == 1

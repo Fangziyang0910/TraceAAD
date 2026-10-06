@@ -7,7 +7,7 @@ import pytest
 
 from experiments.infra.monitor_history import TrainingHistory
 from experiments.infra.monitor_timing import batch_timing, search_timing, timestamp
-from experiments.monitor import ResultsMonitor, V1013Monitor
+from experiments.monitor import ResultsMonitor
 from tests.experiments.test_training_monitor import append_records, candidate, make_run, write_json
 
 
@@ -203,6 +203,6 @@ def test_legacy_v1013_reports_evaluations_per_minute(tmp_path, monkeypatch):
     monkeypatch.setattr("experiments.monitor.time.time", lambda: NOW)
     root, name = make_run(tmp_path)
     write_json(root / "tsp_construct" / name / "logs/run_summary.json", summary())
-    row = V1013Monitor(root).overview("batch")["tasks"][0]["runs"][0]
+    row = ResultsMonitor(root.parent, root.name).overview(root.name)["tasks"][0]["runs"][0]
     assert row["timing"]["unit"] == "评价"
     assert row["timing"]["rate_per_minute"] == .3

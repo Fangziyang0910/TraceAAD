@@ -15,12 +15,11 @@ import time
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from experiments.infra.artifacts import pick_best_sample
 from experiments.infra.monitor_history import TrainingHistory, finite
 from experiments.infra.monitor_results import (
     SCALES, TEST_SCALES, batch_result_files, load_batch_heldout, load_selection, rep_of)
 from experiments.infra.monitor_timing import batch_timing, search_timing
-from traceaad.v10_13.storage import JOURNAL_NAME
+from traceaad.common.storage import JOURNAL_NAME
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -53,15 +52,12 @@ def _stamp(path: Path):
 
 
 def _history_stamp(run_dir: Path):
-    paths = (run_dir / JOURNAL_NAME, run_dir / "events.jsonl", run_dir / "logs/method_events.jsonl")
-    samples = tuple((p.name, _stamp(p)) for p in sorted(
-        (run_dir / "logs/samples").glob("samples_*.json")) if p.name != "samples_best.json")
-    return tuple((str(p), _stamp(p)) for p in paths), samples
+    return tuple(_stamp(run_dir / name) for name in ("events.jsonl", "programs.jsonl"))
 
 
 def _run_stamp(run_dir: Path):
     return (_history_stamp(run_dir), tuple(_stamp(run_dir / name) for name in (
-        "run_config.json", "logs/run_summary.json", "selection.json", "best_program.py")))
+        "run_config.json", "resume.json", "summary.json", "selection.json", "best_program.py")))
 
 
 def _candidate_summary(runs):
@@ -120,205 +116,41 @@ def _program_view(program, task):
     if not isinstance(program, dict):
         return None
     score = finite(program.get("fitness"))
-    return {"id": program.get("id", program.get("node_id")), "fitness": score,
+    return {"id": program.get("id"), "fitness": score,
             "value": _objective(score, task),
-            "operator": program.get("operator") or program.get("action") or program.get("origin_operator"),
+            "operator": program.get("action"),
             "idea": program.get("idea") or "", "code": program.get("code") or ""}
 
 
 def _programs(run_dir, task, summary, curve):
     history = _history(run_dir, task)
-    point = next((p for p in reversed(curve) if p.get("kind") in {"initial", "breakthrough"}), None)
-    search = None
-    if point:
-        search = (history.node(point["node_id"], by_node=True) if point.get("node_id") is not None
-                  else history.node(point.get("candidate")))
-    if search is None and history.archived_best:
-        search = history.node(history.archived_best["candidate"])
+    point = next((p for p in reversed(curve) if p["kind"] in {"initial", "breakthrough"}), None)
+    search = history.node(point["node_id"], by_node=True) if point and point.get("node_id") is not None else None
+    if search and point:
+        search = {**search, "fitness": point["fitness"]}
     selected = summary.get("best") if summary.get("status") == "finished" else None
-    if not isinstance(selected, dict) or not selected:
-        selected = None
-    else:
-        selected = {**selected, "fitness": selected.get("fitness", summary.get("best_score"))}
-    exported = history.node("@best_program")
-    if selected is None and summary.get("status") == "finished" and exported:
-        selected = {**exported, "fitness": summary.get("best_score")}
-    elif selected is not None and not selected.get("code"):
-        node = history.node(selected.get("id", selected.get("node_id")), by_node=True)
-        selected = {**(node or exported or {}), **selected,
-                    "code": selected.get("code") or (node or exported or {}).get("code", "")}
-    if point and (not search or not search.get("code")):
-        if selected and finite(selected.get("fitness")) == point["fitness"] and selected.get("code"):
-            search = selected
-        elif exported and summary.get("best_score") == point["fitness"]:
-            search = {**exported, **point, "id": point.get("node_id", point.get("candidate"))}
-        else:
-            search = {**point, "id": point.get("node_id", point.get("candidate")), "code": ""}
-    if search is None and selected is None:
-        try:
-            sample, _ = pick_best_sample(run_dir, allow_incomplete=True)
-            search = {"id": sample.get("sample_order"), "code": sample["program"],
-                      "fitness": sample["score"], "idea": sample.get("algorithm") or "",
-                      "operator": sample.get("operator")}
-            if summary.get("status") == "finished":
-                selected = search
-        except (RuntimeError, OSError, ValueError, KeyError):
-            pass
-    if (selected is None and summary.get("status") == "finished" and search
-            and finite(summary.get("best_score")) == finite(search.get("fitness"))):
-        selected = search
+    if selected:
+        code = history.sources.get(selected["key"])
+        if code is None and (run_dir / "best_program.py").exists():
+            code = (run_dir / "best_program.py").read_text(encoding="utf-8")
+        selected = {**selected, "code": code or ""}
     search, selected = _program_view(search, task), _program_view(selected, task)
     return {"search_best": search, "selected_best": selected, "best": selected or search}
 
 
-class V1013Monitor:
-    def __init__(self, results_root: Path = DEFAULT_RESULTS_ROOT / "traceaad_v10_13", batch: str | None = None):
-        self.results_root = results_root
-        self.default_batch = batch
-
-    def batches(self) -> list[dict[str, Any]]:
-        batches = []
-        for path in self.results_root.glob("batch_*.json"):
-            manifest = _read_json(path)
-            if not manifest.get("plan") or not str(manifest.get("method", "")).startswith("v1013"):
-                continue
-            batches.append({
-                "id": manifest.get("batch", path.stem.removeprefix("batch_")),
-                "created_at": manifest.get("created_at"),
-                "updated_at": manifest.get("updated_at"),
-            })
-        batches.sort(key=lambda item: item.get("created_at") or "", reverse=True)
-        if self.default_batch:
-            return [item for item in batches if item["id"] == self.default_batch]
-        return batches[:1]
-
-    def _manifest(self, batch: str | None) -> dict[str, Any]:
-        chosen = batch or self.default_batch
-        if chosen:
-            manifest = _read_json(self.results_root / f"batch_{chosen}.json")
-            if manifest.get("plan") and str(manifest.get("method", "")).startswith("v1013"):
-                return manifest
-        available = self.batches()
-        return _read_json(self.results_root / f"batch_{available[0]['id']}.json") if available else {}
-
-    def _run_dir(self, row: dict[str, Any]) -> Path:
-        return self.results_root / row["task"] / row["run_name"]
-
-    def _run_summary(self, row: dict[str, Any], now: float | None = None) -> dict[str, Any]:
-        task = row["task"]
-        run_dir = self._run_dir(row)
-        config = _read_json(run_dir / "run_config.json")
-        final = _read_json(run_dir / "logs/run_summary.json")
-        params = config.get("method_params") or {}
-        history = _history(run_dir, task)
-        curve = history.read()[0]
-        progress = history.progress_snapshot()
-        status = str(row.get("status") or "queued")
-        active = status in {"running", "launching"}
-        if final.get("status") == "finished":
-            status, active = "finished", False
-        elif final.get("status") in {"error", "interrupted"} and not active:
-            status = "blocked"
-        elif status == "launching":
-            status = "running"
-        budget = int(final.get("budget") or params.get("budget") or 1000)
-        budget_used = (progress.get("budget_used", 0) if active else
-                       int(final.get("budget_used") or progress.get("budget_used", 0)))
-        valid_nodes = int(progress.get("valid_nodes", final.get("num_nodes", 0)) or 0)
-        best_fitness = finite((final.get("best") or {}).get("fitness")) if not active else None
-        if best_fitness is None:
-            best_fitness = progress.get("best_fitness")
-
-        result = {
-            "task": task,
-            "name": row["run_name"],
-            "repeat": int(row.get("repeat") or config.get("repeat") or 0),
-            "seed": row.get("seed", config.get("seed")),
-            "backend": row.get("backend", config.get("backend")),
-            "status": status,
-            "budget": budget,
-            "budget_used": budget_used,
-            "valid_nodes": valid_nodes,
-            "best_fitness": best_fitness,
-            "best_value": _objective(best_fitness, task),
-            "updated_at": final.get("finished_at") or history.clock.get("completed_at") or row.get("started_at"),
-            "error": None if active else final.get("error") or row.get("last_error"),
-            "curve": _list_curve(curve),
-            **{k: progress.get(k, 0) for k in ("candidate_count", "valid_candidate_count")},
-            "valid_rate": progress.get("valid_rate"),
-            "x_label": "评价次数",
-        }
-        timing_summary = {**final, "started_at": final.get("started_at") or row.get("started_at")}
-        result["timing"] = search_timing(result, timing_summary,
-                                         _history(run_dir, task).timing_snapshot(), unit="评价", now=now)
-        return result
-
-    def overview(self, batch: str | None = None) -> dict[str, Any]:
-        manifest = self._manifest(batch)
-        if not manifest:
-            return {"batch": None, "summary": {}, "tasks": []}
-
-        now = time.time()
-        runs = [self._run_summary(row, now) for row in manifest["plan"]]
-        status_counts = Counter(run["status"] for run in runs)
-        task_groups = []
-        for key, meta in TASKS.items():
-            task_runs = sorted(
-                (run for run in runs if run["task"] == key),
-                key=lambda run: run["repeat"],
-            )
-            if task_runs:
-                task_groups.append({"key": key, **meta, "runs": task_runs})
-
-        return {
-            "batch": manifest.get("batch"),
-            "updated_at": manifest.get("updated_at"),
-            "summary": {
-                "runs": len(runs),
-                "finished": status_counts["finished"],
-                "running": status_counts["running"],
-                "queued": status_counts["queued"],
-                "blocked": status_counts["blocked"],
-                "budget_used": sum(run["budget_used"] for run in runs),
-                "budget": sum(run["budget"] for run in runs),
-                "valid_nodes": sum(run["valid_nodes"] for run in runs),
-                **_candidate_summary(runs),
-                "timing": batch_timing(runs),
-            },
-            "tasks": task_groups,
-        }
-
-    def run_detail(self, batch: str, task: str, name: str) -> dict[str, Any] | None:
-        manifest = self._manifest(batch)
-        row = next(
-            (item for item in manifest.get("plan", [])
-             if item.get("task") == task and item.get("run_name") == name),
-            None,
-        )
-        if row is None or task not in TASKS:
-            return None
-
-        summary = self._run_summary(row)
-        run_dir = self._run_dir(row)
-        curve, recent, operators, outcomes = _search_trend(run_dir, task)
-        return {**summary, "task_meta": TASKS[task], "curve": curve,
-                "operators": operators, "outcomes": outcomes, "recent": recent,
-                **_programs(run_dir, task, _read_json(run_dir / "logs/run_summary.json"), curve)}
-
-
 class ResultsMonitor:
-    """List experiment directories; reuse the detailed V10.13 reader where applicable."""
+    """List experiment directories through one historical-data reader."""
 
     def __init__(self, results_root: Path = DEFAULT_RESULTS_ROOT,
                  experiment: str | None = None, batch: str | None = None):
         self.results_root = Path(results_root)
         self.default_experiment = experiment
-        self.v1013 = V1013Monitor(self.results_root / "traceaad_v10_13", batch)
+        self.batch_filter = batch
 
     def _journal_is_hot(self, run_dir: Path, *, max_age_sec: float = 1200.0) -> bool:
         """A run whose journal was appended recently is live even without a summary.
 
-        Covers methods that only write ``run_summary.json`` at completion; the
+        Covers methods that only write ``summary.json`` at completion; the
         margin exceeds the LLM request timeout plus service-error retries.
         """
         journal = run_dir / JOURNAL_NAME
@@ -329,7 +161,7 @@ class ResultsMonitor:
 
     def _journal_newer_than_summary(self, run_dir: Path) -> bool:
         """True when the journal kept growing after the summary was written."""
-        journal, summary = run_dir / JOURNAL_NAME, run_dir / "logs" / "run_summary.json"
+        journal, summary = run_dir / JOURNAL_NAME, run_dir / "summary.json"
         try:
             return journal.stat().st_mtime_ns > summary.stat().st_mtime_ns
         except OSError:
@@ -348,7 +180,7 @@ class ResultsMonitor:
     @staticmethod
     def _latest_activity(directory: Path) -> float:
         latest = 0.0
-        for journal in directory.glob("*/*/search.jsonl"):
+        for journal in directory.glob("*/*/events.jsonl"):
             try:
                 latest = max(latest, journal.stat().st_mtime)
             except OSError:
@@ -369,33 +201,48 @@ class ResultsMonitor:
         for path in sorted(directory.glob("*/*/run_config.json")) if experiment else []:
             run_dir = path.parent
             stamps.append((str(run_dir.relative_to(directory)), _run_stamp(run_dir)))
-            unfinished |= _read_json(run_dir / "logs/run_summary.json").get("status") != "finished"
+            unfinished |= _read_json(run_dir / "summary.json").get("status") != "finished"
         manifests = tuple((p.name, _stamp(p)) for p in sorted(directory.glob("batch_*.json")))
         return experiment, tuple(stamps), manifests, int(time.time() // 15) if unfinished else None
 
     def run_signature(self, experiment: str, task: str, name: str):
         run_dir = self.results_root / experiment / task / name
-        unfinished = _read_json(run_dir / "logs/run_summary.json").get("status") != "finished"
+        unfinished = _read_json(run_dir / "summary.json").get("status") != "finished"
         manifests = tuple((p.name, _stamp(p)) for p in sorted((self.results_root / experiment).glob("batch_*.json")))
         return experiment, task, name, _run_stamp(run_dir), manifests, int(time.time() // 15) if unfinished else None
+
+    def _manifest_runs(self, experiment):
+        rows = {}
+        for path in sorted((self.results_root / experiment).glob("batch_*.json")):
+            manifest = _read_json(path)
+            if self.batch_filter and manifest.get("batch") != self.batch_filter:
+                continue
+            for row in manifest.get("plan", []):
+                name = row.get("run_name") or Path(row.get("run_dir", "")).name
+                rows[(row.get("task"), name)] = row
+        return rows
 
     def _runs(self, experiment: str, task_filter=None, name_filter=None):
         if experiment not in {item["id"] for item in self.batches()}:
             return []
         rows = []
+        manifest_runs = self._manifest_runs(experiment)
         now = time.time()
         for config_path in sorted((self.results_root / experiment).glob("*/*/run_config.json")):
             run_dir = config_path.parent
             if ((task_filter and run_dir.parent.name != task_filter)
                     or (name_filter and run_dir.name != name_filter)):
                 continue
+            metadata = manifest_runs.get((run_dir.parent.name, run_dir.name), {})
+            if self.batch_filter and not metadata:
+                continue
             config = _read_json(config_path)
-            summary = _read_json(run_dir / "logs/run_summary.json")
+            summary = _read_json(run_dir / "summary.json")
             raw_status = summary.get("status")
             journal_hot = self._journal_is_hot(run_dir)
             if raw_status == "finished":
                 status = "finished"
-            elif raw_status == "running":
+            elif metadata.get("status") in {"running", "launching"} or raw_status == "running":
                 status = "running"
             elif raw_status == "unknown":
                 status = "unknown"
@@ -409,15 +256,14 @@ class ResultsMonitor:
                 status = "running"
             else:
                 status = "blocked" if raw_status else "queued"
-            params = config.get("method_params") or {}
             best = summary.get("best") or {}
             if not isinstance(best, dict):
                 best = {}
-            score = finite(best.get("fitness", summary.get("best_score")))
+            score = finite(best.get("fitness"))
             selection = finite(best.get("selection_fitness"))
-            budget = summary.get("budget", summary.get("budget_slots", params.get("budget", params.get("max_sample_nums", 0))))
-            used = summary.get("budget_used", summary.get("budget_slots", summary.get("num_samples", summary.get("evaluator_call_count", 0))))
-            nodes = summary.get("num_nodes", summary.get("n_algorithms", summary.get("evaluate_success_program_num", 0)))
+            budget = summary.get("budget", config.get("budget", 0))
+            used = summary.get("budget_used", 0)
+            nodes = summary.get("num_nodes", 0)
             task = config.get("task", run_dir.parent.name)
             if task not in TASKS:
                 continue
@@ -431,20 +277,22 @@ class ResultsMonitor:
                 if status != "finished" or score is None:
                     score = progress["best_fitness"]
             row = {
-                "task": task, "name": run_dir.name, "repeat": config.get("repeat"),
-                "seed": config.get("seed"), "backend": config.get("backend"),
+                "task": task, "name": run_dir.name, "repeat": config.get("repeat", metadata.get("repeat")),
+                "seed": config.get("seed", metadata.get("seed")), "backend": config.get("backend", metadata.get("backend")),
                 "status": status, "raw_status": raw_status, "budget": int(budget or 0),
                 "budget_used": int(used or 0), "valid_nodes": int(nodes or 0),
                 "best_fitness": score, "best_value": _objective(score, task),
                 "selection_fitness": selection, "selection_value": _objective(selection, task),
-                "updated_at": summary.get("finished_at"), "run_dir": run_dir,
+                "updated_at": summary.get("finished_at") or history.clock.get("completed_at") or metadata.get("started_at"), "run_dir": run_dir,
+                "error": None if status == "running" else summary.get("error") or metadata.get("last_error"),
                 "selection_info": load_selection(run_dir),
                 "curve": _list_curve(curve),
                 **{k: progress.get(k, 0) for k in ("candidate_count", "valid_candidate_count")},
                 "valid_rate": progress.get("valid_rate"),
                 "x_label": progress.get("x_label", "已记录序号"),
             }
-            row["timing"] = search_timing(row, summary, _history(run_dir, task).timing_snapshot(),
+            timing_summary = {**summary, "started_at": summary.get("started_at") or metadata.get("started_at")}
+            row["timing"] = search_timing(row, timing_summary, _history(run_dir, task).timing_snapshot(),
                                            unit={"候选尝试": "候选", "样本次数": "样本", "预算槽位": "预算槽",
                                                  "候选序号": "候选"}.get(row["x_label"], "评价"), now=now)
             rows.append(row)
@@ -452,9 +300,6 @@ class ResultsMonitor:
 
     def overview(self, experiment: str | None = None):
         experiment = experiment or self.default_batch()
-        if experiment == "traceaad_v10_13":
-            result = self.v1013.overview()
-            return {**result, "batch": experiment}
         runs = self._runs(experiment) if experiment else []
         counts = Counter(row["status"] for row in runs)
         groups = []
@@ -505,8 +350,6 @@ class ResultsMonitor:
                      for batch in batches)
 
     def _task_rows(self, batch: str):
-        if batch == "traceaad_v10_13":
-            return [row for group in self.v1013.overview().get("tasks", []) for row in group["runs"]]
         return self._runs(batch)
 
     def compare(self, cohort_ids):
@@ -555,14 +398,12 @@ class ResultsMonitor:
                 "tasks": tasks}
 
     def run_detail(self, experiment: str, task: str, name: str):
-        if experiment == "traceaad_v10_13":
-            return self.v1013.run_detail(self.v1013.default_batch or "", task, name)
         row = next((row for row in self._runs(experiment, task, name)
                     if row["task"] == task and row["name"] == name), None)
         if row is None:
             return None
         run_dir = row["run_dir"]
-        summary = _read_json(run_dir / "logs/run_summary.json")
+        summary = _read_json(run_dir / "summary.json")
         curve, recent, operators, outcomes = _search_trend(run_dir, task)
         return {**{key: value for key, value in row.items() if key != "run_dir"},
                 "task_meta": TASKS[task], "curve": curve, "operators": operators,
@@ -604,7 +445,10 @@ def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler
             parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
             if parsed.path in {"/", "/index.html"}:
-                return self._serve_html()
+                return self._serve_asset(HTML_FILE, "text/html")
+            if parsed.path in {"/monitor.css", "/monitor.js"}:
+                content_type = "text/css" if parsed.path.endswith(".css") else "text/javascript"
+                return self._serve_asset(HTML_FILE.with_name(parsed.path[1:]), content_type)
             if parsed.path == "/api/batches":
                 return self._send_json({"batches": monitor.batches(), "default_batch": monitor.default_batch()})
             if parsed.path == "/api/state":
@@ -636,13 +480,14 @@ def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler
                 return self._send_body(body, signature)
             self.send_error(404, "Endpoint not found")
 
-        def _serve_html(self) -> None:
+        def _serve_asset(self, path, content_type) -> None:
             try:
-                body = HTML_FILE.read_bytes()
+                body = path.read_bytes()
             except OSError:
                 return self.send_error(404, "Page not found")
             self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Type", content_type + "; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
