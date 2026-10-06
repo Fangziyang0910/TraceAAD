@@ -209,15 +209,15 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
         method._max_consecutive_sample_failures = 2
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            method._profiler = MAProfiler(log_dir=tmpdir, create_random_path=False, log_style="simple")
+            method._profiler = MAProfiler(run_dir=tmpdir)
             result = method._sample_evaluate_register("prompt", func_only=True, operator="s1")
             events = [
                 json.loads(line)
-                for line in (Path(tmpdir) / "mcts_events.jsonl").read_text().splitlines()
+                for line in (Path(tmpdir) / "logs/mcts_events.jsonl").read_text().splitlines()
             ]
             llm_calls = [
                 json.loads(line)
-                for line in (Path(tmpdir) / "llm_calls.jsonl").read_text().splitlines()
+                for line in (Path(tmpdir) / "calls.jsonl").read_text().splitlines()
             ]
 
         self.assertFalse(result)
@@ -236,7 +236,7 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
         method._max_consecutive_sample_failures = 1
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            method._profiler = MAProfiler(log_dir=tmpdir, create_random_path=False, log_style="simple")
+            method._profiler = MAProfiler(run_dir=tmpdir)
             result = method._sample_evaluate_register("prompt", func_only=True, operator="s1")
 
         self.assertFalse(result)
@@ -385,7 +385,7 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
 
     def test_profiler_writes_mcts_state_and_events(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            profiler = MAProfiler(log_dir=tmpdir, create_random_path=False, log_style="simple")
+            profiler = MAProfiler(run_dir=tmpdir)
             mcts = MCTS("Root", alpha=0.5, lambad0=0.1)
             child = attach_node(mcts.root, make_function(1, 1.5), depth=1)
             child.subtree.append(child)
@@ -412,9 +412,9 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
                 response="response",
             )
 
-            state = json.loads((Path(tmpdir) / "mcts_state.jsonl").read_text().splitlines()[0])
-            event = json.loads((Path(tmpdir) / "mcts_events.jsonl").read_text().splitlines()[0])
-            llm_call = json.loads((Path(tmpdir) / "llm_calls.jsonl").read_text().splitlines()[0])
+            state = json.loads((Path(tmpdir) / "logs/mcts_state.jsonl").read_text().splitlines()[0])
+            event = json.loads((Path(tmpdir) / "logs/mcts_events.jsonl").read_text().splitlines()[0])
+            llm_call = json.loads((Path(tmpdir) / "calls.jsonl").read_text().splitlines()[0])
 
         self.assertEqual(state["phase"], "iteration_start")
         self.assertEqual(state["sample_order"], 3)
@@ -435,11 +435,11 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
         method._sample_evaluate_register = lambda prompt, func_only=False, **kwargs: make_function(2, 2.0)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            method._profiler = MAProfiler(log_dir=tmpdir, create_random_path=False, log_style="simple")
+            method._profiler = MAProfiler(run_dir=tmpdir)
             method.expand(mcts, [], parent, "m1")
             events = [
                 json.loads(line)
-                for line in (Path(tmpdir) / "mcts_events.jsonl").read_text().splitlines()
+                for line in (Path(tmpdir) / "logs/mcts_events.jsonl").read_text().splitlines()
             ]
 
         expanded = [event for event in events if event["event"] == "expand"]

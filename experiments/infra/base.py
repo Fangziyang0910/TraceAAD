@@ -17,21 +17,15 @@ import shlex
 import subprocess
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 import numpy as np
 
-from benchmarks.cvrp_aco import CVRPACOEvaluation
-from benchmarks.generated_data_config import (
-    get_generated_task_kwargs,
-)
-from benchmarks.online_bin_packing import OBPEvaluation
-from benchmarks.op_aco import OPACOEvaluation
-from benchmarks.tsp_construct import TSPEvaluation
-from benchmarks.vrptw_construct import VRPTWEvaluation
+from benchmarks.tasks import TASKS, TASK_SHORT, DEFAULT_WORKERS, training_task
 from .env import resolve_llm_api_key
 from core.llm import OpenAIAPI
 
@@ -46,22 +40,7 @@ BackendName = Literal["local", "server1", "server3", "server3b"]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RESULTS_ROOT = REPO_ROOT / "experiments_result"
-TASKS: tuple[TaskName, ...] = (
-    "tsp_construct",
-    "cvrp_aco",
-    "op_aco",
-    "online_bin_packing",
-    "vrptw_construct",
-)
-ALL_TASKS: tuple[TaskName, ...] = TASKS
-
-TASK_SHORT: dict[TaskName, str] = {
-    "tsp_construct": "tsp",
-    "cvrp_aco": "cvrp",
-    "op_aco": "op",
-    "online_bin_packing": "obp",
-    "vrptw_construct": "vrptw",
-}
+ALL_TASKS = TASKS
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +48,9 @@ class BackendProfile:
     base_url: str
     model: str
     no_proxy: str
+    capacity: int = 3
+    label: str | None = None
+    marker: str | None = None
 
 
 BACKENDS: dict[BackendName, BackendProfile] = {
@@ -81,54 +63,24 @@ BACKENDS: dict[BackendName, BackendProfile] = {
         base_url="http://222.201.145.8:8080/v1",
         model="qwen3.8-27b-awq",
         no_proxy="222.201.145.8,localhost,127.0.0.1,::1",
+        capacity=6, marker="222.201.145.8",
     ),
     "server3": BackendProfile(
         base_url="http://222.201.145.6:8000/v1",
         model="qwen3.8-27b-awq",
-        no_proxy="222.201.145.6,localhost,127.0.0.1,::1",
+        no_proxy="222.201.145.6,localhost,127.0.0.1,::1", capacity=9, label="server3-1",
     ),
     "server3b": BackendProfile(
         base_url="http://222.201.145.6:8001/v1",
         model="qwen3.8-27b-awq",
-        no_proxy="222.201.145.6,localhost,127.0.0.1,::1",
+        no_proxy="222.201.145.6,localhost,127.0.0.1,::1", capacity=9, label="server3-2",
     ),
 }
 
-BACKEND_CAPACITY: dict[BackendName, int] = {
-    "server1": 6,
-    # Endpoint-specific limits.  server3 and server3b are separate pools.
-    "server3": 9,
-    "server3b": 9,
-    "local": 3,  # llama.cpp 32k × 3 slots
-}
-BACKEND_GROUP: dict[BackendName, str] = {
-    "server1": "server1",
-    "server3": "server3",
-    "server3b": "server3b",
-    "local": "local",
-}
-BACKEND_GROUP_CAPACITY: dict[str, int] = {
-    "server1": 6,
-    "server3": 9,
-    "server3b": 9,
-    "local": 3,
-}
-PRIMARY_BACKENDS: tuple[BackendName, ...] = ("server3", "server3b", "server1", "local")
-# Public labels deliberately avoid the historical ``server3b`` name.  The
-# internal key remains only because old run configs and endpoint routing use it.
-BACKEND_DISPLAY_NAMES: dict[BackendName, str] = {
-    "server1": "server1",
-    "server3": "server3-1",
-    "server3b": "server3-2",
-    "local": "local",
-}
-# Host:port markers only — `--backend` matching uses detect_backend().
-BACKEND_MARKERS: dict[BackendName, tuple[str, ...]] = {
-    "server1": ("222.201.145.8",),
-    "server3": ("222.201.145.6:8000",),
-    "server3b": ("222.201.145.6:8001",),
-    "local": ("127.0.0.1:8001",),
-}
+BACKEND_CAPACITY = {name: profile.capacity for name, profile in BACKENDS.items()}
+BACKEND_DISPLAY_NAMES = {name: profile.label or name for name, profile in BACKENDS.items()}
+BACKEND_MARKERS = {name: (profile.marker or urlparse(profile.base_url).netloc,) for name, profile in BACKENDS.items()}
+PRIMARY_BACKENDS = ('server3', 'server3b', 'server1', 'local')
 
 # Qwen3.8-27B's official sampling settings per mode (model card). Every
 # control is sent explicitly: left unset, vLLM fills it from the model's
@@ -160,7 +112,7 @@ LLM_TIMEOUT_SECONDS = 600
 # Local ACO parallelism only; seeded scores do not depend on this count.
 # Sized for 18 concurrent searches on a 32-core host: 4 workers cover
 # CVRP's 10 train instances in three rounds without the old 10-worker pileup.
-DEFAULT_ACO_EVAL_WORKERS = 4
+DEFAULT_ACO_EVAL_WORKERS = DEFAULT_WORKERS
 
 
 # ---------------------------------------------------------------------------
@@ -175,11 +127,8 @@ def resolve_backend(
     no_proxy: str | None,
 ) -> BackendProfile:
     profile = BACKENDS[backend]
-    return BackendProfile(
-        base_url=base_url or profile.base_url,
-        model=model or profile.model,
-        no_proxy=no_proxy or profile.no_proxy,
-    )
+    return replace(profile, base_url=base_url or profile.base_url,
+                   model=model or profile.model, no_proxy=no_proxy or profile.no_proxy)
 
 
 def set_random_seed(seed: int) -> None:
@@ -222,36 +171,8 @@ def build_llm_client(
     )
 
 
-def build_task(task: TaskName, eval_workers: int | None) -> tuple[Any, dict[str, Any]]:
-    """Construct the training evaluation for a task (identical across methods)."""
-    if task == "tsp_construct":
-        kwargs = get_generated_task_kwargs(task, "train")
-        return TSPEvaluation(**kwargs), {"split": "train", **kwargs}
-    if task == "online_bin_packing":
-        kwargs = get_generated_task_kwargs(task, "train")
-        return OBPEvaluation(**kwargs), {"split": "train", **kwargs}
-    if task == "vrptw_construct":
-        kwargs = get_generated_task_kwargs(task, "train")
-        return VRPTWEvaluation(**kwargs), {"split": "train", **kwargs}
-    if task == "cvrp_aco":
-        kwargs = {
-            "split": "train",
-            "timeout_seconds": 120,
-            "n_ants": 30,
-            "n_iterations": 100,
-            "aco_seed": 1234,
-            "n_workers": eval_workers or DEFAULT_ACO_EVAL_WORKERS,
-        }
-        return CVRPACOEvaluation(**kwargs), kwargs
-    kwargs = {
-        "split": "train",
-        "timeout_seconds": 60,
-        "n_ants": 20,
-        "n_iterations": 50,
-        "aco_seed": 1234,
-        "n_workers": eval_workers or DEFAULT_ACO_EVAL_WORKERS,
-    }
-    return OPACOEvaluation(**kwargs), kwargs
+def build_task(task, eval_workers=None, *, condition='shared'):
+    return training_task(task, eval_workers, condition=condition)
 
 
 def llm_payload(
@@ -286,12 +207,9 @@ def llm_payload(
 
 
 def write_run_config(run_dir: Path, payload: dict[str, Any]) -> None:
-    from traceaad.common.storage import RESULT_FORMAT
+    from traceaad.common.storage import RESULT_FORMAT, write_json
     payload = {"result_format": RESULT_FORMAT, **payload}
-    (run_dir / "run_config.json").write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    write_json(run_dir / "run_config.json", payload)
 
 
 def resolve_run_dir(experiments_root: Path, run_name: str | None) -> tuple[Path, str]:
@@ -338,17 +256,7 @@ class LaunchItem:
     extra_args: tuple[str, ...] = ()
 
     def with_backend(self, backend: BackendName) -> LaunchItem:
-        return LaunchItem(
-            task=self.task,
-            repeat=self.repeat,
-            backend=backend,
-            session=self.session,
-            run_name=self.run_name,
-            run_dir=self.run_dir,
-            seed=self.seed,
-            module=self.module,
-            extra_args=self.extra_args,
-        )
+        return replace(self, backend=backend)
 
     def command(self) -> tuple[str, ...]:
         if self.backend is None:
@@ -485,27 +393,14 @@ def item_is_failed(item: LaunchItem) -> bool:
 
 
 def item_is_running(item: LaunchItem) -> bool:
-    # Prefix '=' forces an exact tmux session name match.
-    result = subprocess.run(
-        ["tmux", "has-session", "-t", f"={item.session}"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-    return result.returncode == 0
+    from .launcher import is_session_alive
+    return is_session_alive(item.session)
 
 
 def _retry_candidate(item: LaunchItem, retry: int) -> LaunchItem:
-    return LaunchItem(
-        task=item.task,
-        repeat=item.repeat,
-        backend=None,
-        session=f"{item.session}_retry{retry}",
-        run_name=f"{item.run_name}_retry{retry}",
-        run_dir=item.run_dir.parent / f"{item.run_name}_retry{retry}",
-        seed=item.seed,
-        module=item.module,
-    )
+    return replace(item, backend=None, session=f"{item.session}_retry{retry}",
+                   run_name=f"{item.run_name}_retry{retry}",
+                   run_dir=item.run_dir.parent / f"{item.run_name}_retry{retry}")
 
 
 def item_active_attempt(item: LaunchItem) -> LaunchItem | None:
@@ -574,19 +469,8 @@ def launch_items(items: list[LaunchItem], *, dry_run: bool) -> None:
         )
         if dry_run:
             continue
-        subprocess.run(
-            [
-                "tmux",
-                "new-session",
-                "-d",
-                "-s",
-                item.session,
-                "-c",
-                str(REPO_ROOT),
-                printable,
-            ],
-            check=True,
-        )
+        from .launcher import launch_command
+        launch_command(item.session, item.command())
 
 
 def item_has_successful_result(item: LaunchItem) -> bool:

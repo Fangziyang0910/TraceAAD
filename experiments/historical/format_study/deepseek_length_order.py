@@ -100,7 +100,7 @@ def evaluation(task):
 
 def score(task, code):
     e, sec = evaluation(task)
-    out = sec.evaluate_program_with_details(e.template_program, source=code, seed=730241)
+    out = sec.evaluate_program_with_details(code, seed=730241)
     v = out.result
     if isinstance(v, dict) and isinstance(v.get("score"), float):
         return "valid", v["score"]

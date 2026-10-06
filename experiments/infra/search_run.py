@@ -4,39 +4,11 @@ import argparse
 from dataclasses import asdict
 import json
 
-from benchmarks.cvrp_aco import CVRPACOEvaluation
-from benchmarks.generated_data_config import get_generated_task_kwargs
-from benchmarks.online_bin_packing import OBPEvaluation
-from benchmarks.op_aco import OPACOEvaluation
-from benchmarks.tsp_construct import TSPEvaluation
-from benchmarks.vrptw_construct import VRPTWEvaluation
-from experiments.infra.base import RESULTS_ROOT, write_run_config
+from benchmarks.tasks import SELECTION_SEED, selection_task, training_task
+from experiments.infra.base import RESULTS_ROOT
 from experiments.infra.runner import add_common_run_args, setup_experiment_run
 from traceaad.common.config import REVISION
 from .diagnose_search import diagnose
-
-
-SELECTION_SEED = 20260927
-TRAIN_TIMEOUT = {"online_bin_packing": 30, "vrptw_construct": 30}
-
-
-def selection_task(task, search):
-    if task in {"op_aco", "cvrp_aco"}:
-        cls = OPACOEvaluation if task == "op_aco" else CVRPACOEvaluation
-        selection = cls(split="val_50", timeout_seconds=search.timeout_seconds,
-                        n_ants=search.n_ants, n_iterations=search.n_iterations,
-                        aco_seed=search.aco_seed, n_workers=search.n_workers)
-        if search.timeout_seconds is not None:
-            selection.timeout_seconds *= max(1., selection.n_instance / search.n_instance)
-        return selection
-    kwargs = get_generated_task_kwargs(task, "train")
-    kwargs["seed"] = SELECTION_SEED
-    # Five one-off evaluations: no efficiency pressure is needed here, and a
-    # finalist that met the search limit should not be lost to host load.
-    kwargs["timeout_seconds"] = None if search.timeout_seconds is None else 2 * search.timeout_seconds
-    cls = {"tsp_construct": TSPEvaluation, "vrptw_construct": VRPTWEvaluation,
-           "online_bin_packing": OBPEvaluation}[task]
-    return cls(**kwargs)
 
 
 def build_parser(experiment):
@@ -58,8 +30,9 @@ def main(method_class, config_class, experiment, description, argv=None):
     config = config_class(budget=args.budget, output_tokens=args.output_tokens,
                     evaluation_seeds=tuple(args.evaluation_seeds), seed=args.seed)
     if args.dry_run:
+        evaluation, _ = training_task(args.task, args.eval_workers, condition="traceaad")
         print(json.dumps({"method": method_class.METHOD, "revision": REVISION, "task": args.task, "config": asdict(config),
-            "search_timeout": TRAIN_TIMEOUT.get(args.task, 30 if args.task == "tsp_construct" else 120 if args.task == "cvrp_aco" else 60),
+            "search_timeout": evaluation.timeout_seconds,
             "selection": "val_50" if args.task in {"cvrp_aco", "op_aco"} else {"seed": SELECTION_SEED},
             "test": "separate heldout.py after selection"}, indent=2))
         return
@@ -71,26 +44,10 @@ def main(method_class, config_class, experiment, description, argv=None):
         if existing.is_dir() and any(existing.iterdir()) and not (existing / "events.jsonl").exists():
             raise ValueError(f"refusing to overwrite a non-resumable run directory: {existing}")
     ctx = setup_experiment_run(args, method=method_class.METHOD, results_root=root,
-        resume_file="events.jsonl", method_params=asdict(config),
+        resume_file="events.jsonl", method_params=asdict(config), condition="traceaad",
+        extra_config={"revision": REVISION, "budget_axis": "候选尝试"},
         budget_basis="Completed model-generated candidates including initialization, failures, duplicates and repair.")
     try:
-        if not ctx.resumed:
-            config_path = ctx.run_dir / "run_config.json"
-            saved = json.loads(config_path.read_text(encoding="utf-8"))
-            saved["revision"] = REVISION
-            saved["budget_axis"] = "候选尝试"
-            saved["budget"] = args.budget
-            write_run_config(ctx.run_dir, saved)
-        ctx.llm._client = ctx.llm._client.with_options(max_retries=0)
-        if args.task in TRAIN_TIMEOUT:
-            ctx.evaluation.timeout_seconds = TRAIN_TIMEOUT[args.task]
-            config_path = ctx.run_dir / "run_config.json"
-            saved = json.loads(config_path.read_text(encoding="utf-8"))
-            if ctx.resumed and saved["task_eval"]["timeout_seconds"] != ctx.evaluation.timeout_seconds:
-                raise ValueError("resume timeout does not match the frozen task protocol")
-            saved["task_eval"]["timeout_seconds"] = ctx.evaluation.timeout_seconds
-            if not ctx.resumed:
-                write_run_config(ctx.run_dir, saved)
         method = method_class(evaluation=ctx.evaluation, llm=ctx.llm, run_dir=ctx.run_dir,
                                config=config, task=args.task,
                                selection_evaluation=selection_task(args.task, ctx.evaluation))

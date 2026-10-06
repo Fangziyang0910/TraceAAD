@@ -17,9 +17,10 @@ from urllib.parse import parse_qs, urlparse
 
 from experiments.infra.monitor_history import TrainingHistory, finite
 from experiments.infra.monitor_results import (
-    SCALES, TEST_SCALES, batch_result_files, load_batch_heldout, load_selection, rep_of)
+    batch_result_files, load_batch_heldout, load_selection, rep_of)
+from benchmarks.tasks import SCALES, TEST_SCALES
 from experiments.infra.monitor_timing import batch_timing, search_timing
-from traceaad.common.storage import JOURNAL_NAME
+from traceaad.common.storage import JOURNAL_NAME, selected_program
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -128,12 +129,7 @@ def _programs(run_dir, task, summary, curve):
     search = history.node(point["node_id"], by_node=True) if point and point.get("node_id") is not None else None
     if search and point:
         search = {**search, "fitness": point["fitness"]}
-    selected = summary.get("best") if summary.get("status") == "finished" else None
-    if selected:
-        code = history.sources.get(selected["key"])
-        if code is None and (run_dir / "best_program.py").exists():
-            code = (run_dir / "best_program.py").read_text(encoding="utf-8")
-        selected = {**selected, "code": code or ""}
+    selected = selected_program(run_dir)
     search, selected = _program_view(search, task), _program_view(selected, task)
     return {"search_best": search, "selected_best": selected, "best": selected or search}
 

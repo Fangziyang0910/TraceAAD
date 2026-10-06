@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-REVISION = "research-simple-20261006"
+REVISION = "research-simple-v2-20261006"
 
 
 @dataclass

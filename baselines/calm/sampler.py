@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence
+from typing import List, Sequence
 
 from core import LLM
 
@@ -41,7 +41,4 @@ class CALMSampler:
     def _log_llm_call(self, **payload):
         logger = getattr(self._profiler, 'log_llm_call', None)
         if callable(logger):
-            try:
-                logger(**payload)
-            except Exception:
-                pass
+            logger(llm=self.llm, **payload)

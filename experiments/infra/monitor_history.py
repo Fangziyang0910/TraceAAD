@@ -6,7 +6,7 @@ from threading import RLock
 import json
 import math
 
-from traceaad.common.storage import Programs, read_json, write_json
+from traceaad.common.storage import Programs, committed_size, read_json, write_json
 
 
 def finite(value):
@@ -18,7 +18,7 @@ def finite(value):
 
 
 class TrainingHistory:
-    CACHE_VERSION = 1
+    CACHE_VERSION = 2
     CACHE_NAME = "history.json"
 
     def __init__(self, run_dir, minimize):
@@ -45,16 +45,16 @@ class TrainingHistory:
             if not path.exists():
                 return self.result
             stat = path.stat()
-            checkpoint = read_json(self.run_dir / "resume.json", {})
-            committed = min(stat.st_size, checkpoint.get("files", {}).get("events.jsonl", stat.st_size))
+            committed = committed_size(self.run_dir)
             identity = (stat.st_dev, stat.st_ino)
             stamp = (committed, stat.st_mtime_ns)
             if identity != self.identity or committed < self.offset:
                 self.offset, self.identity = 0, identity
                 self.streams, self.programs, self.node_offsets = {"events": []}, {}, {}
-                self.clock = {}
+                self.clock, self.stamp = {}, None
             if stamp == self.stamp:
                 return self.result
+            previous_offset = self.offset
             with path.open("rb") as handle:
                 handle.seek(self.offset)
                 while handle.tell() < committed:
@@ -76,10 +76,14 @@ class TrainingHistory:
                             "idea": (attempt.get("idea") or "")[:280]})
                     if row.get("progress"):
                         progress = row["progress"]
-                        self.clock = {"completed": progress["attempts"], "elapsed": progress.get("elapsed"),
-                                      "started_at": progress.get("started_at"), "completed_at": row["ts"],
-                                      "phase": progress["phase"]}
+                        if row["kind"] == "candidate" or not self.clock:
+                            self.clock = {"completed": progress["attempts"], "elapsed": progress.get("elapsed"),
+                                          "started_at": progress.get("started_at"), "completed_at": row["ts"]}
+                        self.clock["phase"] = progress["phase"]
                     self.offset = handle.tell()
+            if self.stamp is not None and self.offset == previous_offset:
+                self.stamp = stamp
+                return self.result
             self.stamp = stamp
             self.result = self._build()
             try:

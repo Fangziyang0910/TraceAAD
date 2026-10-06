@@ -1,75 +1,21 @@
 from __future__ import annotations
 
-import json
 import os
-from threading import Lock
-from abc import ABC, abstractmethod
-from typing import List, Dict, Optional
 
-try:
-    import wandb
-except:
-    pass
-
-from .population import Population
 from pathlib import Path
-from traceaad.common.storage import append_jsonl
-from core import Function
 from baselines.profiler import ProfilerBase
 
 
 class MAProfiler(ProfilerBase):
 
-    def __init__(self,
-                 log_dir: Optional[str] = None,
-                 *,
-                 initial_num_samples=0,
-                 log_style='complex',
-                 create_random_path=True,
-                 **kwargs):
-        """MCTS_AHD Profiler
-        Args:
-            log_dir            : the directory of current run
-            initial_num_samples: the sample order start with `initial_num_samples`.
-            create_random_path : create a random log_path according to evaluation_name, method_name, time, ...
-        """
-        super().__init__(log_dir=log_dir,
-                         initial_num_samples=initial_num_samples,
-                         log_style=log_style,
-                         create_random_path=create_random_path,
-                         **kwargs)
+    def __init__(self, run_dir=None, **kwargs):
+        super().__init__(run_dir, **kwargs)
         self._cur_gen = 0
-        self._mcts_lock = Lock()
         if self._log_dir:
             self._mcts_state_path = os.path.join(self._log_dir, 'mcts_state.jsonl')
             self._mcts_events_path = os.path.join(self._log_dir, 'mcts_events.jsonl')
             self._llm_calls_path = str(Path(self._log_dir).parent / 'calls.jsonl')
 
-    def register_population(self, pop: Population):
-        if not self._log_dir:
-            return
-        with self._artifact_lock:
-            if (self._num_samples == 0 or
-                    pop.generation == self._cur_gen):
-                return
-            funcs = pop.population  # type: List[Function]
-            funcs_json = []  # type: List[Dict]
-            for f in funcs:
-                f_json = {
-                    'algorithm': f.algorithm,
-                    'function_key': self._sources.add(str(f)),
-                    'score': f.score
-                }
-                funcs_json.append(f_json)
-            append_jsonl(Path(self._log_dir).parent / 'events.jsonl',
-                         {'kind': 'population', 'generation': pop.generation, 'members': funcs_json})
-            self._cur_gen += 1
-
-    def log_message(self, message: str):
-        if self._log_dir and self._logger_txt.handlers:
-            self._logger_txt.info(message)
-        else:
-            print(message)
 
     def log_mcts_state(self, *, phase: str, sample_order: int, max_sample_nums, mcts, selected_node=None):
         if not self._log_dir:
@@ -114,19 +60,6 @@ class MAProfiler(ProfilerBase):
             f"MCTS event {event}: status={status}, op={operator}, "
             f"samples={sample_order}, parent_score={parent_score}, child_score={child_score}"
         )
-
-    def log_llm_call(self, **payload):
-        super().log_llm_call(**payload)
-
-    def _append_jsonl(self, path: str, payload: dict):
-        try:
-            self._mcts_lock.acquire()
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(payload, ensure_ascii=False) + '\n')
-        finally:
-            if self._mcts_lock.locked():
-                self._mcts_lock.release()
 
     @staticmethod
     def _node_summary(node):

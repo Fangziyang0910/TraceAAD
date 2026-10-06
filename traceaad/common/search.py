@@ -8,6 +8,7 @@ import random
 import time
 
 from .storage import write_json
+from core.llm import generate, ModelCallError
 from .canonical import canonical, key
 from .config import REVISION
 from .delivery import DeliveryError, SourceError, extract_idea, parse_response
@@ -26,14 +27,8 @@ def _tuple_tree(value):
     return tuple(_tuple_tree(v) for v in value) if isinstance(value, list) else value
 
 
-def _service_error(exc):
-    status = getattr(exc, "status_code", None)
-    return (status == 429 or isinstance(status, int) and status >= 500 or
-            isinstance(exc, (ConnectionError, TimeoutError, OSError)) or
-            any(word in type(exc).__name__.lower() for word in ("connection", "timeout", "ratelimit")))
-
-
 class Search:
+    RECORD_EXPLORATIONS = False
     MEASURE_CALLS = True
     REPLACE_FAILED_FINALISTS = True
 
@@ -103,37 +98,25 @@ class Search:
         self.facts.commit(self._state(), **record)
 
     def _generate(self, request):
-        calls = []
-        for failures in range(3):
+        try:
+            details = generate(self.llm, request['prompt'], max_tokens=self.config.output_tokens)
+            calls, failed = details['calls'], None
+        except ModelCallError as exc:
+            details, calls, failed = {}, exc.calls, exc
+        for call in calls:
             self.progress.model_calls += 1
-            rid = self.progress.model_calls
-            started = time.monotonic()
-            try:
-                details = self.llm.draw_sample_with_details(request["prompt"], max_tokens=self.config.output_tokens)
-                error = None
-            except Exception as exc:
-                details, error = {}, f"{type(exc).__name__}: {exc}"
-                transient = _service_error(exc)
-            usage = details.get("usage") or {}
-            self.progress.input_tokens += usage.get("prompt_tokens", request["input_tokens"]) or request["input_tokens"]
-            self.progress.output_tokens += usage.get("completion_tokens", self.config.output_tokens if not error else 0) or 0
-            call = {"request_id": rid, "response": details.get("content", ""),
-                    "finish_reason": details.get("finish_reason"), "usage": usage,
-                    "error": error, "seconds": time.monotonic() - started,
-                    "model": details.get("model") or getattr(self.llm, "model", None),
-                    "sampling": {name: getattr(self.llm, name, None)
-                                 for name in ("temperature", "top_p", "enable_thinking")}}
-            if error:
-                call["prompt"] = request["prompt"]
-            calls.append(call)
-            if not error:
-                return rid, details, calls
-            self.progress.service_failures += 1
-            if not transient or failures == 2:
-                self._save(calls=calls)
-                reason = "model service unavailable after 3 calls" if transient else "non-service model failure"
-                raise RuntimeError(f"{reason}: {error}")
-            time.sleep(min(2 ** (failures + 1), 8))
+            call['request_id'] = self.progress.model_calls
+            usage = call['usage']
+            self.progress.input_tokens += usage.get('prompt_tokens', request['input_tokens']) or request['input_tokens']
+            self.progress.output_tokens += usage.get('completion_tokens',
+                self.config.output_tokens if not call['error'] else 0) or 0
+            self.progress.service_failures += bool(call['error'])
+        if failed:
+            self._save(calls=calls)
+            if failed.transient:
+                raise RuntimeError(f'model service unavailable after {len(calls)} calls: {failed}') from failed
+            raise failed
+        return calls[-1]['request_id'], details, calls
 
     def _attempt(self, request, *, parent=None, reference=None, repair_of=None):
         rid, details, calls = self._generate(request)
@@ -239,13 +222,17 @@ class Search:
             self.progress.phase = "freeze"
             self._save()
             return
+        self._ordinary_search()
+
+    def _ordinary_search(self, sampled=None):
         eligible = [node for node in self.archive.values() if node["id"] not in self.progress.too_long]
         if not eligible:
             self.progress.phase = "freeze"
             self._save()
             return
         parent, selection = self._choose_parent(eligible)
-        sampled = self.action_rng.choices(list(self.config.operators), list(self.config.operators.values()))[0]
+        if sampled is None:
+            sampled = self.action_rng.choices(list(self.config.operators), list(self.config.operators.values()))[0]
         action = sampled
         reference, reference_selection = None, None
         flags = []
@@ -263,11 +250,43 @@ class Search:
         if request["action"] == "Refine" and action == "Crossover":
             reference = None
             flags.append("crossover_context_fallback")
+        if self.RECORD_EXPLORATIONS:
+            request['exploration'] = ({'id': len(self.facts.explorations) + 1, 'step': 0}
+                                      if request['action'] == 'Explore' else None)
         request.update(sampled_action=sampled, fallbacks=flags, parent_id=parent["id"],
                        reference_id=reference["id"] if reference else None, selection=selection,
                        reference_selection=reference_selection)
         self._attempt(request, parent=parent, reference=reference)
 
+
+    def _open_exploration(self):
+        """The exploration still in progress, read from the attempts (so a resumed run continues it).
+
+        Returns its proposal, the program it started from, the new program the
+        proposal produced (None if it produced none), its development attempts, the
+        best version reached so far (where the next step starts) and how many
+        development steps in a row have not produced a better version.
+        """
+        tagged = [a for a in self.attempts_table.values() if a.get("exploration")]
+        if not tagged:
+            return None
+        eid = max(a["exploration"]["id"] for a in tagged)
+        if eid in self.facts.explorations:
+            return None
+        attempts = sorted((a for a in tagged if a["exploration"]["id"] == eid), key=lambda a: a["id"])
+        proposal, development = attempts[0], attempts[1:]
+        final = final_attempt(proposal, self.attempts_table)
+        proposed = self.archive.get(final["program_id"]) if final["status"] == "valid" else None
+        best, stalled = proposed, 0
+        for attempt in development:
+            final = final_attempt(attempt, self.attempts_table)
+            reached = self.archive.get(final["program_id"]) if final["status"] == "valid" else None
+            if reached is not None and better(reached["fitness"], best["fitness"]):
+                best, stalled = reached, 0
+            else:
+                stalled += 1
+        return {"id": eid, "proposal": proposal, "source": self.programs[proposal["parent_id"]],
+                "proposed": proposed, "development": development, "best": best, "stalled": stalled}
 
     def _ranking(self):
         return [n["id"] for n in sorted(self.archive.values(), key=lambda n: (-n["fitness"], n["id"]))]
@@ -357,6 +376,8 @@ class Search:
 class DevelopingSearch(Search):
     """An Explore draw develops the open proposal before proposing another."""
 
+    RECORD_EXPLORATIONS = True
+
     def _search(self):
         if self.progress.repair_id is not None:
             self._repair()
@@ -377,64 +398,7 @@ class DevelopingSearch(Search):
         if sampled == "Explore" and opened is not None:
             self._develop(opened)
             return
-        eligible = [node for node in self.archive.values() if node["id"] not in self.progress.too_long]
-        if not eligible:
-            self.progress.phase = "freeze"
-            self._save()
-            return
-        parent, selection = self._choose_parent(eligible)
-        action = sampled
-        reference, reference_selection = None, None
-        flags = []
-        if action == "Crossover":
-            reference, reference_selection = choose_reference(parent, self.archive, self.reference_rng)
-            if reference is None:
-                action = "Refine"
-                flags.append("crossover_fallback")
-        try:
-            request = self.prompts.build(action, parent, reference=reference)
-        except ContextTooLong:
-            self.progress.too_long.append(parent["id"])
-            self._save()
-            return
-        if request["action"] == "Refine" and action == "Crossover":
-            reference = None
-            flags.append("crossover_context_fallback")
-        exploration = ({"id": len(self.facts.explorations) + 1, "step": 0}
-                       if request["action"] == "Explore" else None)
-        request.update(sampled_action=sampled, fallbacks=flags, parent_id=parent["id"],
-                       reference_id=reference["id"] if reference else None, selection=selection,
-                       reference_selection=reference_selection, exploration=exploration)
-        self._attempt(request, parent=parent, reference=reference)
-
-    def _open_exploration(self):
-        """The exploration still in progress, read from the attempts (so a resumed run continues it).
-
-        Returns its proposal, the program it started from, the new program the
-        proposal produced (None if it produced none), its development attempts, the
-        best version reached so far (where the next step starts) and how many
-        development steps in a row have not produced a better version.
-        """
-        tagged = [a for a in self.attempts_table.values() if a.get("exploration")]
-        if not tagged:
-            return None
-        eid = max(a["exploration"]["id"] for a in tagged)
-        if eid in self.facts.explorations:
-            return None
-        attempts = sorted((a for a in tagged if a["exploration"]["id"] == eid), key=lambda a: a["id"])
-        proposal, development = attempts[0], attempts[1:]
-        final = final_attempt(proposal, self.attempts_table)
-        proposed = self.archive.get(final["program_id"]) if final["status"] == "valid" else None
-        best, stalled = proposed, 0
-        for attempt in development:
-            final = final_attempt(attempt, self.attempts_table)
-            reached = self.archive.get(final["program_id"]) if final["status"] == "valid" else None
-            if reached is not None and better(reached["fitness"], best["fitness"]):
-                best, stalled = reached, 0
-            else:
-                stalled += 1
-        return {"id": eid, "proposal": proposal, "source": self.programs[proposal["parent_id"]],
-                "proposed": proposed, "development": development, "best": best, "stalled": stalled}
+        self._ordinary_search(sampled)
 
     def _rank(self, program):
         """How many programs of the search score strictly better than ``program``."""

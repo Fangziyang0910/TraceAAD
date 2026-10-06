@@ -1,6 +1,5 @@
 import hashlib
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 from experiments.infra import batch_status
@@ -24,8 +23,8 @@ def freeze(directory):
     (directory / "best_program.py").write_bytes(code)
     key = hashlib.sha256(code).hexdigest()
     write(directory / "selection.json", {"selected_key": key, "selected_node": 7})
-    write(directory / "logs/run_summary.json", {"status": "finished", "phase": "finished",
-                                               "budget": 1000, "budget_used": 1000, "best": {"id": 7}})
+    write(directory / "summary.json", {"status": "finished", "phase": "finished",
+                                               "budget": 1000, "budget_used": 1000, "best": {"id": 7, "key": key}})
     return key
 
 
@@ -39,9 +38,9 @@ def test_manifest_includes_unsynced_runs_without_claiming_they_are_running(tmp_p
 
 def test_tail_ignores_partial_utf8_and_never_falls_back_to_full_journal(tmp_path, monkeypatch):
     monkeypatch.setattr(batch_status, "TAIL_BYTES", 300)
-    path = tmp_path / "search.jsonl"
+    path = tmp_path / "events.jsonl"
     path.write_bytes(b'{"kind":"candidate","budget_used":1}\n' + b"x" * 1000 + b"\n" +
-                     b'{"kind":"state","state":{"attempts":8,"phase":"search"}}\n' +
+                     b'{"kind":"progress","progress":{"attempts":8,"phase":"search"}}\n' +
                      b'{"kind":"candidate","budget_used":9,"idea":"\xe4')
     state, candidate, modified = batch_status.journal_tail(path)
     assert state["attempts"] == 8 and candidate == {} and modified is not None
@@ -50,7 +49,7 @@ def test_tail_ignores_partial_utf8_and_never_falls_back_to_full_journal(tmp_path
 def test_checkpoint_is_progress_evidence_and_search_complete_is_not_run_finished(tmp_path):
     manifest, directory = batch(tmp_path)
     directory.mkdir(parents=True)
-    (directory / "search.jsonl").write_text(json.dumps({"kind": "state", "state": {
+    (directory / "events.jsonl").write_text(json.dumps({"kind": "progress", "progress": {
         "attempts": 1000, "phase": "selection", "started_at": "2026-10-03T00:00:00+09:00", "elapsed": 600}}) + "\n")
     row = batch_status.collect(manifest)["runs"][0]
     assert row["status"] == "recorded" and not row["frozen"]
@@ -61,13 +60,15 @@ def test_checkpoint_is_progress_evidence_and_search_complete_is_not_run_finished
 def test_failed_and_wrong_program_heldout_are_distinct_from_missing(tmp_path):
     manifest, directory = batch(tmp_path)
     key = freeze(directory)
+    heldout = []
     for size, fitness, result_key in [(50, -6.0, key), (100, None, key), (200, -20.0, "wrong")]:
-        write(directory / f"heldout_eval_{size}.json", {"task": "tsp_construct", "split": f"eval_{size}",
-                                                       "key": result_key, "fitness": fitness})
+        heldout.append({"task": "tsp_construct", "split": f"eval_{size}", "scale": str(size),
+                        "key": result_key, "node_id": 7, "fitness": fitness, "variant": "", "verification": "verified"})
+    write(directory / "heldout.json", heldout)
     result = batch_status.collect(manifest)
     row = result["runs"][0]
     assert row["frozen"]
-    assert row["heldout"] == {"valid": ["eval_50"], "failed": ["eval_100"], "missing": [], "mismatched": ["eval_200"]}
+    assert row["heldout"] == {"valid": ["eval_50"], "failed": ["eval_100"], "missing": [], "mismatched": ["eval_200"], "unverified": []}
     assert result["summary"]["ready_for_heldout"] == 0
     (directory / "best_program.py").write_text("changed")
     result = batch_status.collect(manifest)

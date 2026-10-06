@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from .storage import Programs, append_jsonl, detach_link, read_json, rows, seal_calls, write_json
+from .storage import Programs, append_jsonl, committed_rows, detach_link, read_json, seal_calls, write_json
 
 
 @dataclass
@@ -20,7 +20,7 @@ class Progress:
     selection_results: list[dict] = field(default_factory=list)
     selected_id: int | None = None
     repair_id: int | None = None
-    started_at: str = field(default_factory=lambda: datetime.now().isoformat(timespec="seconds"))
+    started_at: str = field(default_factory=lambda: datetime.now().astimezone().isoformat(timespec="seconds"))
     elapsed: float = 0.0
 
 
@@ -36,7 +36,7 @@ class Facts:
         checkpoint = read_json(self.checkpoint_path, {})
         self.state = checkpoint.get("state")
         self.files = checkpoint.get("files", {})
-        for row in rows(self.path, self.files.get("events.jsonl")):
+        for row in committed_rows(self.run_dir):
             self._apply(row)
 
     def _apply(self, row):

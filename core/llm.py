@@ -21,6 +21,9 @@
 from __future__ import annotations
 
 import copy
+import time
+from threading import local
+from uuid import uuid4
 from abc import abstractmethod
 from collections.abc import Sequence
 from typing import Any, List
@@ -74,6 +77,45 @@ class TokenizationError(RuntimeError):
     """The serving model could not count tokens for the exact request."""
 
 
+class ModelCallError(RuntimeError):
+    def __init__(self, error, calls, transient):
+        super().__init__(str(error))
+        self.calls, self.transient = calls, transient
+
+
+def generate(llm, prompt, **kwargs):
+    """One generation request, including every physical request and retry."""
+    calls = []
+    for attempt in range(3):
+        started = time.monotonic()
+        try:
+            details = llm.draw_sample_with_details(prompt, **kwargs)
+            error = None
+        except Exception as exc:
+            details, error = {}, exc
+        call = {'transport_id': uuid4().hex, 'prompt': prompt,
+                'response': details.get('content', ''), 'usage': details.get('usage') or {},
+                'finish_reason': details.get('finish_reason'), 'model': details.get('model', getattr(llm, 'model', None)),
+                'seconds': time.monotonic()-started,
+                'error': f'{type(error).__name__}: {error}' if error else None,
+                'sampling': {name: kwargs.get(name, getattr(llm, name, None))
+                             for name in ('max_tokens', 'temperature', 'top_p', 'enable_thinking')}}
+        if 'messages' in kwargs:
+            call['messages'] = kwargs['messages']
+        calls.append(call)
+        if hasattr(llm, '_requests'):
+            llm._requests.calls = calls
+        if error is None:
+            return {**details, 'calls': calls}
+        status = getattr(error, 'status_code', None)
+        transient = (status == 429 or isinstance(status, int) and status >= 500 or
+                     isinstance(error, (openai.APIConnectionError, openai.APITimeoutError,
+                                        ConnectionError, TimeoutError, OSError)))
+        if not transient or attempt == 2:
+            raise ModelCallError(error, calls, transient) from error
+        time.sleep(2 ** (attempt+1))
+
+
 class OpenAIAPI(LLM):
     """Generic OpenAI-compatible chat client (vLLM, llama.cpp, cloud, etc.)."""
 
@@ -108,6 +150,8 @@ class OpenAIAPI(LLM):
         # Choose the ratio conservatively (overestimate tokens) for the budget math.
         self.chars_per_token = chars_per_token
         self.extra_body = copy.deepcopy(extra_body) if extra_body else {}
+        self._requests = local()
+        client_kwargs['max_retries'] = 0
         self._client = openai.OpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -116,7 +160,17 @@ class OpenAIAPI(LLM):
         )
 
     def draw_sample(self, prompt: str | Any, *args: Any, **kwargs: Any) -> str:
-        return self._content_from_response(self._request_completion(prompt, **kwargs))
+        details = generate(self, prompt, **kwargs)
+        if not details['content']:
+            error = RuntimeError(f"{type(self).__name__} received empty message.content; "
+                                 f"finish_reason={details.get('finish_reason')!r}. "
+                                 "Check chat_template_kwargs.enable_thinking and max_tokens.")
+            raise ModelCallError(error, details['calls'], False)
+        return details['content']
+
+    @property
+    def last_calls(self):
+        return getattr(self._requests, 'calls', [])
 
     def draw_sample_with_details(self, prompt: str | Any, **kwargs: Any) -> dict[str, Any]:
         """Return completion metadata without discarding truncated/empty responses."""
@@ -124,13 +178,18 @@ class OpenAIAPI(LLM):
         choice = response.choices[0]
         content = choice.message.content
         usage = getattr(response, "usage", None)
-        return {
+        details = {
             "content": self._content_from_response(response) if content else "",
             "finish_reason": getattr(choice, "finish_reason", None),
             "usage": usage.model_dump() if hasattr(usage, "model_dump") else usage,
             "model": getattr(response, "model", self.model),
             "response_id": getattr(response, "id", None),
         }
+
+        reasoning = getattr(choice.message, "reasoning", None) or getattr(choice.message, "reasoning_content", None)
+        if reasoning:
+            details["reasoning"] = reasoning
+        return details
 
     def _request_completion(self, prompt: str | Any, **kwargs: Any) -> Any:
         messages = self._build_messages(prompt, kwargs.pop("messages", None))
@@ -320,17 +379,6 @@ class OpenAIAPI(LLM):
         choice = response.choices[0]
         message = choice.message
         content = message.content
-        reasoning = getattr(message, "reasoning", None) or getattr(
-            message, "reasoning_content", None
-        )
-        if content is None or (content == "" and reasoning):
-            finish_reason = getattr(choice, "finish_reason", None)
-            reasoning_note = " with reasoning output" if reasoning else ""
-            raise RuntimeError(
-                f"{self.__class__.__name__} received empty message.content{reasoning_note} "
-                f"from model {self.model!r}; finish_reason={finish_reason!r}. "
-                "Check that chat_template_kwargs.enable_thinking is false and max_tokens is large enough."
-            )
         if isinstance(content, str):
             return content
         if isinstance(content, list):

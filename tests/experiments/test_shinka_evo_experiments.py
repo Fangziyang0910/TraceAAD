@@ -4,12 +4,13 @@ import json
 from pathlib import Path
 
 import pytest
+from benchmarks.tasks import TASKS
 
 from experiments.shinka_evo import run
 from baselines.shinka_evo import ShinkaEvo
 
 
-@pytest.mark.parametrize("task", run.TASKS)
+@pytest.mark.parametrize("task", TASKS)
 def test_shinka_runner_uses_paper_parameters(tmp_path: Path, task: run.TaskName) -> None:
     spec = run.make_run_spec(task=task, experiments_root=tmp_path)
     method = run.build_method(spec, tmp_path / "logs")

@@ -164,7 +164,7 @@ def main():
             pk = f"{run}|{parent['id']}"
             if pk not in timing:
                 t0 = time.monotonic()
-                sec.evaluate_program_with_details(e.template_program, source=parent["code"], seed=730241)
+                sec.evaluate_program_with_details(parent['code'], seed=730241)
                 timing[pk] = time.monotonic() - t0
             for arm in arms:
                 prompt, best, higher = build_prompt(task, e, archive, parent, arm, nominal, timing[pk])
@@ -209,7 +209,7 @@ def main():
             else:
                 with eval_slots:
                     t1 = time.monotonic()
-                    out = sec.evaluate_program_with_details(e.template_program, source=normal, seed=730241)
+                    out = sec.evaluate_program_with_details(normal, seed=730241)
                     rec["eval_seconds"] = time.monotonic() - t1
                 v = out.result
                 if isinstance(v, dict) and isinstance(v.get("score"), float):

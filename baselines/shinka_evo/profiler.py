@@ -3,28 +3,14 @@ from __future__ import annotations
 import json
 import os
 from threading import Lock
-from typing import Any, Optional
+from typing import Any
 
 from baselines.profiler import ProfilerBase
 
 
 class ShinkaEvoProfiler(ProfilerBase):
-    def __init__(
-            self,
-            log_dir: Optional[str] = None,
-            *,
-            initial_num_samples=0,
-            log_style="complex",
-            create_random_path=True,
-            **kwargs,
-    ):
-        super().__init__(
-            log_dir=log_dir,
-            initial_num_samples=initial_num_samples,
-            log_style=log_style,
-            create_random_path=create_random_path,
-            **kwargs,
-        )
+    def __init__(self, run_dir=None, **kwargs):
+        super().__init__(run_dir, **kwargs)
         self._event_lock = Lock()
         if self._log_dir:
             self._event_dir = os.path.join(self._log_dir, "shinka_evo")

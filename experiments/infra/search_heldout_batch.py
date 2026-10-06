@@ -4,20 +4,12 @@ import argparse
 import json
 from pathlib import Path
 
+from benchmarks.tasks import SPLITS
+
 from traceaad.common.storage import read_json, write_json
 
 from .search_heldout import evaluate_run
 from .batch_status import run_path
-
-
-SPLITS = {
-    "tsp_construct": ("eval_50", "eval_100", "eval_200"),
-    "vrptw_construct": ("eval_50", "eval_100", "eval_200"),
-    "cvrp_aco": ("test_20", "test_50", "test_100", "test_200"),
-    "op_aco": ("test_50", "test_100", "test_200"),
-    "online_bin_packing": tuple(f"eval_{items}_{capacity}"
-                                for items in (1000, 5000, 10000) for capacity in (100, 500)),
-}
 
 
 def jobs(manifest, root=None):

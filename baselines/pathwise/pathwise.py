@@ -352,7 +352,7 @@ class PathWise:
             sample_time = time.time() - sample_start
             parsed = PathWiseSampler.parse_initialization_response(response, self._template_program)
             log_llm_call(
-                self,
+                self, llm=self._policy_llm,
                 method="pathwise",
                 stage="initialization",
                 role="policy",
@@ -433,7 +433,7 @@ class PathWise:
                     break
                 action = PathWiseSampler.parse_policy_response(response, state)
                 log_llm_call(
-                    self,
+                    self, llm=self._policy_llm,
                     method="pathwise",
                     stage="policy",
                     role="policy",
@@ -541,7 +541,7 @@ class PathWise:
             total_sample_time += sample_time
             parsed = PathWiseSampler.parse_world_model_response(response, self._template_program)
             log_llm_call(
-                self,
+                self, llm=self._world_model_llm,
                 method="pathwise",
                 stage="world_model",
                 role="world_model",
@@ -651,7 +651,7 @@ class PathWise:
             )
             return self._policy_reflection
         log_llm_call(
-            self,
+            self, llm=self._policy_critic_llm,
             method="pathwise",
             stage="policy_critic",
             role="policy_critic",
@@ -693,7 +693,7 @@ class PathWise:
             )
             return self._world_model_reflection
         log_llm_call(
-            self,
+            self, llm=self._world_model_critic_llm,
             method="pathwise",
             stage="world_model_critic",
             role="world_model_critic",

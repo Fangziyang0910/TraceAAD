@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import re
-from typing import Tuple, List, Dict
+from typing import Tuple
 
-from .prompt import MAPrompt
 from core import LLM, Function, Program
 from baselines.sampling import SampleTrimmer
 
@@ -53,10 +52,7 @@ class MASampler:
     def _log_llm_call(self, **payload):
         logger = getattr(self._profiler, 'log_llm_call', None)
         if callable(logger):
-            try:
-                logger(**payload)
-            except Exception:
-                pass
+            logger(llm=self.llm, **payload)
 
     def get_prompt_refine(self, task_prompt: str, idea: str, code: str):
         prompt_content = task_prompt + "\n" + "Following is the Design Idea of a heuristic algorithm for the problem and the code for implementing the heuristic algorithm.\n"

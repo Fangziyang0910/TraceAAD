@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from core import SecureEvaluator
 from experiments.infra.base import build_task
-from experiments.traceaad_v10_16.run import TRAIN_TIMEOUT, selection_task
+from benchmarks.tasks import selection_task
 from traceaad.common.evaluation import SeededEvaluation
 
 OUT = "experiments_result/diagnosis_v1016_frontier"
@@ -27,11 +27,9 @@ LOCAL = threading.local()
 def evaluator(task):
     cache = LOCAL.__dict__.setdefault("cache", {})
     if task not in cache:
-        search, _ = build_task(task, 4)
-        if task in TRAIN_TIMEOUT:
-            search.timeout_seconds = TRAIN_TIMEOUT[task]
+        search, _ = build_task(task, 4, condition="traceaad")
         selection = selection_task(task, search)
-        cache[task] = (str(selection.template_program), SecureEvaluator(SeededEvaluation(selection)))
+        cache[task] = SecureEvaluator(SeededEvaluation(selection))
     return cache[task]
 
 
@@ -47,8 +45,8 @@ def main():
     lock = threading.Lock()
 
     def run(p):
-        template, secure = evaluator(p["task"])
-        result = secure.evaluate_program_with_details(template, source=p["code"], seed=730241)
+        secure = evaluator(p["task"])
+        result = secure.evaluate_program_with_details(p['code'], seed=730241)
         value = result.result
         score = value["score"] if isinstance(value, dict) else None
         record = {"run": p["run"], "id": p["id"], "selection_fitness": score,

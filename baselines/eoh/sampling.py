@@ -9,10 +9,7 @@ from baselines.sampling import SampleTrimmer
 def log_sampler_llm_call(profiler: Any, **payload) -> None:
     logger = getattr(profiler, "log_llm_call", None)
     if callable(logger):
-        try:
-            logger(**payload)
-        except Exception:
-            pass
+        logger(**payload)
 
 
 def trim_braced_thought(response: str) -> str | None:
@@ -56,6 +53,7 @@ def sample_thought_and_function(
 
     log_sampler_llm_call(
         profiler,
+        llm=llm,
         stage=stage,
         operator=operator,
         sample_order=sample_order,

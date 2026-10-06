@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Optional
 
 from .graph import PathWiseAction, PathWiseEdge, PathWiseNode
 from .population import Population
@@ -12,22 +11,8 @@ from baselines.profiler import ProfilerBase
 
 
 class PathWiseProfiler(ProfilerBase):
-    def __init__(
-            self,
-            log_dir: Optional[str] = None,
-            *,
-            initial_num_samples=0,
-            log_style="complex",
-            create_random_path=True,
-            **kwargs,
-    ):
-        super().__init__(
-            log_dir=log_dir,
-            initial_num_samples=initial_num_samples,
-            log_style=log_style,
-            create_random_path=create_random_path,
-            **kwargs,
-        )
+    def __init__(self, run_dir=None, **kwargs):
+        super().__init__(run_dir, **kwargs)
         self._cur_gen = 0
         if self._log_dir:
             self._event_dir = os.path.join(self._log_dir, "pathwise")

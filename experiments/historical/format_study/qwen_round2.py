@@ -137,7 +137,7 @@ def run_jobs(jobs, path):
             elif k in {n["key"] for n in archive.values()}:
                 rec["status"] = "duplicate"
             else:
-                out = sec.evaluate_program_with_details(e.template_program, source=normal, seed=730241)
+                out = sec.evaluate_program_with_details(normal, seed=730241)
                 v = out.result
                 if isinstance(v, dict) and isinstance(v.get("score"), float):
                     rec["status"], rec["score"] = "valid", v["score"]

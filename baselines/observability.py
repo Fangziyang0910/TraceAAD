@@ -87,6 +87,8 @@ def record_sample_failure(
         "max_consecutive_failures": max_failures,
     }
     common.update(payload)
+    if calls := getattr(exc, 'calls', None):
+        log_llm_call(method, transport_calls=calls, **common)
     event_payload = dict(common)
     if prompt is not None:
         common["prompt"] = prompt

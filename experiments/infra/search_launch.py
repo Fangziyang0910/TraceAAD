@@ -7,52 +7,11 @@ import hashlib
 import json
 from pathlib import Path
 
-from experiments.infra.base import REPO_ROOT, RESULTS_ROOT, SAMPLING_PROFILES, TASK_SHORT, build_task
-from experiments.infra.launcher import check_backends, is_session_alive, launch_command, write_json_atomic
+from experiments.infra.base import REPO_ROOT, RESULTS_ROOT, SAMPLING_PROFILES, TASK_SHORT
+from experiments.infra.launcher import launch_plan
 from traceaad.common.config import REVISION
 
-from .search_heldout import HELDOUT_TIMEOUT
-from .search_run import TRAIN_TIMEOUT, selection_task
-
-
-def evaluation_limits():
-    """Training, selection and held-out wall-clock limits actually in force."""
-    limits = {}
-    for task in TASK_SHORT:
-        search, _ = build_task(task, 4)
-        search.timeout_seconds = TRAIN_TIMEOUT.get(task, search.timeout_seconds)
-        limits[task] = {"search": search.timeout_seconds,
-                        "selection": selection_task(task, search).timeout_seconds,
-                        "heldout": HELDOUT_TIMEOUT[task]}
-    return limits
-
-
-def served_models(backends):
-    """What each backend is serving right now (model id, weights, context)."""
-    import urllib.request
-
-    from experiments.infra.base import BACKENDS, resolve_llm_api_key
-
-    found = {}
-    for name in sorted(set(backends)):
-        profile = BACKENDS[name]
-        key = resolve_llm_api_key(base_url=profile.base_url)
-        headers = {"Authorization": f"Bearer {key}"} if key and key != "EMPTY" else {}
-        record = {"endpoint": profile.base_url}
-        try:
-            request = urllib.request.Request(profile.base_url + "/models", headers=headers)
-            with urllib.request.urlopen(request, timeout=20) as response:
-                model = json.loads(response.read())["data"][0]
-            record.update({k: model.get(k) for k in ("id", "root", "max_model_len", "owned_by")})
-            if model.get("owned_by") == "llamacpp":
-                with urllib.request.urlopen(profile.base_url[:-3] + "/props", timeout=20) as response:
-                    props = json.loads(response.read())
-                record.update(model_path=props.get("model_path"), build=props.get("build_info"),
-                              slots=props.get("total_slots"))
-        except Exception as exc:  # recorded, not fatal: check_backends decides reachability
-            record["error"] = f"{type(exc).__name__}: {exc}"
-        found[name] = record
-    return found
+from benchmarks.tasks import evaluation_limits
 
 
 def build_plan(previous, batch, experiment, module):
@@ -102,12 +61,6 @@ def main(config_class, experiment, module, method, argv=None):
     root = RESULTS_ROOT / args.experiment
     root.mkdir(parents=True, exist_ok=True)
     manifest_path = root / f"batch_{args.batch}.json"
-    if manifest_path.exists():
-        raise ValueError("batch manifest already exists")
-    for item in plan:
-        if Path(item["run_dir"]).exists() or is_session_alive(item["session"]):
-            raise ValueError(f"existing run or session: {item['run_name']}")
-    check_backends(item["backend"] for item in plan)
     hashes = implementation_files(module)
     manifest = {"batch": args.batch, "method": method, "revision": REVISION, "created_at": datetime.now().astimezone().isoformat(),
                 "status": "launching", "previous_batch": str(args.from_batch),
@@ -115,18 +68,9 @@ def main(config_class, experiment, module, method, argv=None):
                 # Requests carry every sampling control, so servers' own defaults do not apply.
                 "sampling": sampling, "evaluation_limits": evaluation_limits(),
                 "services": previous.get("services"),
-                "served_models": served_models(item["backend"] for item in plan),
                 "repeats": max(item["repeat"] for item in plan), "eval_workers": 4,
                 "implementation_files": hashes, "plan": plan}
-    write_json_atomic(manifest_path, manifest)
-    for item in plan:
-        launch_command(item["session"], item["command"])
-        item.update(status="started_unverified", started_at=datetime.now().astimezone().isoformat())
-        write_json_atomic(manifest_path, manifest)
-        print(item["session"], item["backend"], flush=True)
-    manifest["status"] = "started_pending_verification"
-    write_json_atomic(manifest_path, manifest)
-    print(manifest_path)
+    launch_plan(manifest_path, manifest)
 
 
 def implementation_files(module):

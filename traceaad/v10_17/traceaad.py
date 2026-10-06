@@ -4,12 +4,12 @@ import random
 from traceaad.common.search import Search
 from traceaad.common.prompts import ContextTooLong
 from traceaad.common.history import final_attempt
-from traceaad.common.selection import better, choose_reference
 from .config import Config
 from .prompts import PromptBuilder
 
 
 class TraceAADV1017(Search):
+    RECORD_EXPLORATIONS = True
     METHOD = "v1017"
     Config = Config
     PromptBuilder = PromptBuilder
@@ -28,61 +28,7 @@ class TraceAADV1017(Search):
         if opened is not None:
             self._develop(opened)
             return
-        eligible = [node for node in self.archive.values() if node["id"] not in self.progress.too_long]
-        if not eligible:
-            self.progress.phase = "freeze"
-            self._save()
-            return
-        parent, selection = self._choose_parent(eligible)
-        sampled = self.action_rng.choices(list(self.config.operators), list(self.config.operators.values()))[0]
-        action = sampled
-        reference, reference_selection = None, None
-        flags = []
-        if action == "Crossover":
-            reference, reference_selection = choose_reference(parent, self.archive, self.reference_rng)
-            if reference is None:
-                action = "Refine"
-                flags.append("crossover_fallback")
-        try:
-            request = self.prompts.build(action, parent, reference=reference)
-        except ContextTooLong:
-            self.progress.too_long.append(parent["id"])
-            self._save()
-            return
-        if request["action"] == "Refine" and action == "Crossover":
-            reference = None
-            flags.append("crossover_context_fallback")
-        exploration = ({"id": len(self.facts.explorations) + 1, "step": 0}
-                       if request["action"] == "Explore" else None)
-        request.update(sampled_action=sampled, fallbacks=flags, parent_id=parent["id"],
-                       reference_id=reference["id"] if reference else None, selection=selection,
-                       reference_selection=reference_selection, exploration=exploration)
-        self._attempt(request, parent=parent, reference=reference)
-
-    def _open_exploration(self):
-        """The exploration still in progress, read from the attempts (so a resumed run continues it).
-
-        Returns the exploration's state: its proposal, the new program the proposal
-        produced (None if it produced none), its development attempts and the best
-        program reached so far, which is where the next development step starts.
-        """
-        tagged = [a for a in self.attempts_table.values() if a.get("exploration")]
-        if not tagged:
-            return None
-        eid = max(a["exploration"]["id"] for a in tagged)
-        if eid in self.facts.explorations:
-            return None
-        attempts = sorted((a for a in tagged if a["exploration"]["id"] == eid), key=lambda a: a["id"])
-        proposal, development = attempts[0], attempts[1:]
-        final = final_attempt(proposal, self.attempts_table)
-        proposed = self.archive.get(final["program_id"]) if final["status"] == "valid" else None
-        best = proposed
-        for attempt in development:
-            final = final_attempt(attempt, self.attempts_table)
-            reached = self.archive.get(final["program_id"]) if final["status"] == "valid" else None
-            if reached is not None and better(reached["fitness"], best["fitness"]):
-                best = reached
-        return {"id": eid, "proposal": proposal, "proposed": proposed, "development": development, "best": best}
+        self._ordinary_search()
 
     def _developed(self, exploration_id):
         """Whether an exploration's new program is developed: a fixed draw per exploration,

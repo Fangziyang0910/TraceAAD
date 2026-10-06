@@ -403,7 +403,7 @@ class ShinkaEvoMechanicsTest(unittest.TestCase):
 
     def test_profiler_records_functions_and_shinka_events(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            profiler = ShinkaEvoProfiler(log_dir=tmpdir, create_random_path=False)
+            profiler = ShinkaEvoProfiler(run_dir=tmpdir)
             llm = ScriptedLLM([code_block(2)])
             method, _, _ = make_method(
                 llm=llm,
@@ -416,9 +416,9 @@ class ShinkaEvoMechanicsTest(unittest.TestCase):
             )
             method.run()
 
-            self.assertTrue((Path(tmpdir) / "samples" / "samples_1~200.json").exists())
-            self.assertTrue((Path(tmpdir) / "shinka_evo" / "patch_attempt.jsonl").exists())
-            self.assertTrue((Path(tmpdir) / "shinka_evo" / "bandit_update.jsonl").exists())
+            self.assertTrue((Path(tmpdir) / "events.jsonl").exists())
+            self.assertTrue((Path(tmpdir) / "logs" / "shinka_evo" / "patch_attempt.jsonl").exists())
+            self.assertTrue((Path(tmpdir) / "logs" / "shinka_evo" / "bandit_update.jsonl").exists())
 
 
 if __name__ == "__main__":

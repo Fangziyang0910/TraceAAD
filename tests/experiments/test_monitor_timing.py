@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import time
@@ -133,13 +133,13 @@ def test_batch_eta_waits_for_slowest_run_and_requires_full_coverage():
 
 
 def test_native_clock_uses_completed_candidate_and_latest_checkpoint_phase(tmp_path):
-    path = tmp_path / "search.jsonl"
-    append_records(path, [{**candidate(10, None), "state": {"elapsed": 600, "started_at": START, "phase": "search"}}])
+    path = tmp_path / "events.jsonl"
+    append_records(path, [{**candidate(10, None), "ts": LAST, "progress": {"attempts": 10, "elapsed": 600, "started_at": START, "phase": "search"}}])
     reader = TrainingHistory(tmp_path, minimize=False)
     assert reader.timing_snapshot()["completed"] == 10
     # Charged generation is not a completed candidate. Decode one final checkpoint only.
-    checkpoints = [{"kind": "state", "state": {"phase": phase, "elapsed": 700,
-                    "ledger": {"candidates": 11}}} for phase in ("search", "freeze", "selection")]
+    checkpoints = [{"kind": "progress", "ts": LAST, "progress": {"phase": phase, "elapsed": 700,
+                    "attempts": 10}} for phase in ("search", "freeze", "selection")]
     with path.open("a") as handle:
         for record in checkpoints:
             handle.write(json.dumps(record, separators=(",", ":")) + "\n")
@@ -158,9 +158,9 @@ def test_api_overview_and_detail_use_native_elapsed(tmp_path, monkeypatch):
     monkeypatch.setattr("experiments.monitor.time.time", lambda: NOW)
     directory = tmp_path / "traceaad_v10_14" / "op_aco" / "rep1"
     write_json(directory / "run_config.json", {"method": "v1014", "task": "op_aco", "repeat": 1})
-    write_json(directory / "logs/run_summary.json", {**summary(), **run(), "best": {"fitness": 1, "code": "pass"}})
-    append_records(directory / "search.jsonl", [{**candidate(10, None), "state": {
-        "elapsed": 300, "started_at": START, "phase": "search"}}])
+    write_json(directory / "summary.json", {**summary(), **run(), "best": None})
+    append_records(directory / "events.jsonl", [{**candidate(10, None), "ts": LAST, "progress": {
+        "attempts": 10, "elapsed": 300, "started_at": START, "phase": "search"}}])
     monitor = ResultsMonitor(tmp_path)
     state = monitor.overview("traceaad_v10_14")
     timing = state["tasks"][0]["runs"][0]["timing"]
@@ -178,15 +178,14 @@ def test_copied_checkpoint_eta_uses_preserved_file_time(
     monkeypatch.setattr("experiments.monitor.time.time", lambda: NOW)
     directory = tmp_path / experiment / "op_aco" / "rep1"
     write_json(directory / "run_config.json", {
-        "method": method, "task": "op_aco", "method_params": {"budget": 100}})
+        "method": method, "task": "op_aco", "budget": 100, "method_params": {"budget": 100}})
     # Copying preserves the file timestamp, but a server's naive clock can be
     # either ahead of or behind the viewer's local timezone.
     foreign_start = (datetime.fromtimestamp(NOW - 600 - log_age)
                      + timedelta(hours=clock_offset_hours)).isoformat()
-    journal = directory / "search.jsonl"
-    append_records(journal, [candidate(10, 1), {"kind": "state", "state": {
-        "attempts": 10, "elapsed": 600, "started_at": foreign_start,
-        "phase": "search"}}])
+    journal = directory / "events.jsonl"
+    append_records(journal, [candidate(10, 1, ts=datetime.fromtimestamp(NOW-log_age, timezone.utc).isoformat(),
+        progress={"attempts": 10, "elapsed": 600, "started_at": foreign_start, "phase": "search"})])
     os.utime(journal, (NOW - log_age, NOW - log_age))
     state = ResultsMonitor(tmp_path).overview(experiment)
     timing = state["tasks"][0]["runs"][0]["timing"]
@@ -202,7 +201,13 @@ def test_copied_checkpoint_eta_uses_preserved_file_time(
 def test_legacy_v1013_reports_evaluations_per_minute(tmp_path, monkeypatch):
     monkeypatch.setattr("experiments.monitor.time.time", lambda: NOW)
     root, name = make_run(tmp_path)
-    write_json(root / "tsp_construct" / name / "logs/run_summary.json", summary())
+    write_json(root / "tsp_construct" / name / "summary.json", summary())
+    journal = root / "tsp_construct" / name / "events.jsonl"
+    records = [json.loads(line) for line in journal.read_text().splitlines()]
+    for record in records:
+        record["ts"] = LAST
+        record["progress"].update(elapsed=600, started_at=START)
+    journal.write_text("\n".join(json.dumps(r) for r in records)+"\n")
     row = ResultsMonitor(root.parent, root.name).overview(root.name)["tasks"][0]["runs"][0]
     assert row["timing"]["unit"] == "评价"
     assert row["timing"]["rate_per_minute"] == .3

@@ -62,13 +62,12 @@ def test_evaluation_counts_outermost_calls_also_when_the_program_is_executed_aga
     evaluator = SecureEvaluator(seeded)
     recursive = "def score(x):\n    return x + 1 if x > 3 else score(x + 1)\n"
     seeded.reset()
-    outcome = evaluator.evaluate_program_with_details(TinyEvaluation().template_program, source=recursive, seed=1)
+    outcome = evaluator.evaluate_program_with_details(recursive, seed=1)
     assert outcome.result == {"score": 5.0}
     assert seeded.measured()["calls"] == 1 and seeded.measured()["function_seconds"] >= 0
     again = SeededEvaluation(Reexecuting())
     again.reset()
-    outcome = SecureEvaluator(again).evaluate_program_with_details(
-        Reexecuting().template_program, source="def score(x):\n    return x\n", seed=1)
+    outcome = SecureEvaluator(again).evaluate_program_with_details('def score(x):\n    return x\n', seed=1)
     assert outcome.result == {"score": 3.0} and again.measured()["calls"] == 3
 
 

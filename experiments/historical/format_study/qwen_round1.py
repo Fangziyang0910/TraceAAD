@@ -130,7 +130,7 @@ def main(n_per_task=20):
             elif k in {n["key"] for n in archive.values()}:
                 rec["status"] = "duplicate"
             else:
-                out = sec.evaluate_program_with_details(e.template_program, source=canonical(code), seed=730241)
+                out = sec.evaluate_program_with_details(canonical(code), seed=730241)
                 v = out.result
                 if isinstance(v, dict) and isinstance(v.get("score"), float):
                     rec["status"], rec["score"] = "valid", v["score"]

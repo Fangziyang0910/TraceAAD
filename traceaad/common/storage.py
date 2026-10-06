@@ -7,6 +7,7 @@ import tempfile
 import gzip
 import hashlib
 import shutil
+from functools import lru_cache
 
 JOURNAL_NAME = "events.jsonl"
 RESULT_FORMAT = "traceaad-results-v1"
@@ -27,6 +28,56 @@ def rows(path, limit=None):
             if not line.endswith(b"\n") or limit is not None and handle.tell() > limit:
                 break
             yield json.loads(line)
+
+
+def committed_size(run_dir, name=JOURNAL_NAME):
+    """The checkpoint is the common definition of visible search history."""
+    run_dir = Path(run_dir)
+    path = run_dir / name
+    if not path.exists():
+        return 0
+    size = path.stat().st_size
+    return min(size, read_json(run_dir / "resume.json", {}).get("files", {}).get(name, size))
+
+
+def committed_rows(run_dir):
+    yield from rows(Path(run_dir) / JOURNAL_NAME, committed_size(run_dir))
+
+
+def selected_program(run_dir):
+    run_dir = Path(run_dir)
+    names = ("run_config.json", "summary.json", "selection.json", "best_program.py", "programs.jsonl")
+    signature = tuple((p.stat().st_size, p.stat().st_mtime_ns, p.stat().st_ino)
+                      if p.exists() else None for p in (run_dir / name for name in names))
+    best = _selected_program(run_dir, signature)
+    return dict(best) if best else None
+
+
+@lru_cache(maxsize=1024)
+def _selected_program(run_dir, signature):
+    summary = read_json(run_dir / "summary.json", {})
+    best = summary.get("best")
+    if summary.get("status") != "finished" or not best:
+        return None
+    exported = run_dir / "best_program.py"
+    code = exported.read_text(encoding="utf-8") if exported.exists() else Programs(run_dir).get(best["key"])
+    selection = read_json(run_dir / "selection.json", {})
+    identity_matches = not selection or (selection["selected_node"], selection["selected_key"]) == (best["id"], best["key"])
+    return {**best, "code": code, "task": read_json(run_dir / "run_config.json", {}).get("task"),
+            "verified": bool(code and identity_matches and hashlib.sha256(code.encode()).hexdigest() == best["key"])}
+
+
+def heldout_identity(run_dir, result):
+    best = selected_program(run_dir)
+    task = best["task"] if best else read_json(Path(run_dir) / "run_config.json", {}).get("task")
+    if task and task != result["task"]:
+        return "task_mismatch"
+    if result["verification"] != "verified":
+        return result["verification"]
+    if not best or not best["verified"]:
+        return "program_unverified"
+    return ("verified" if (result.get("key"), result.get("node_id")) == (best["key"], best["id"])
+            else "program_mismatch")
 
 
 def append_jsonl(path, row):

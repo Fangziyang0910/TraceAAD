@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from experiments.infra.launcher import get_summary_status
+from traceaad.common.storage import read_json
 from experiments.infra.runner import (
     add_common_run_args,
     resolve_resumable_run_dir,
@@ -77,10 +77,10 @@ def test_launcher_status_and_session_naming(tmp_path: Path):
     log_dir = run_dir / "logs"
     log_dir.mkdir(parents=True)
 
-    assert get_summary_status(run_dir) is None
+    assert read_json(run_dir / "summary.json") is None
 
-    (log_dir / "run_summary.json").write_text(json.dumps({"status": "finished"}), encoding="utf-8")
-    assert get_summary_status(run_dir) == "finished"
+    (run_dir / "summary.json").write_text(json.dumps({"status": "finished"}), encoding="utf-8")
+    assert read_json(run_dir / "summary.json")["status"] == "finished"
 
 
 

@@ -58,7 +58,7 @@ class ProfilerObservabilityTest(unittest.TestCase):
     def test_common_jsonl_summary_and_sample_history_are_written(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             profiler = ProfilerBase(
-                log_dir=tmpdir, create_random_path=False, log_style="simple"
+                run_dir=tmpdir
             )
             profiler.register_function(make_function(1, 1.0), program="program-1")
             profiler.register_function(make_function(2, 2.0), program="program-2")
@@ -70,43 +70,41 @@ class ProfilerObservabilityTest(unittest.TestCase):
 
             log_dir = Path(tmpdir)
             self.assertEqual(
-                len((log_dir / "llm_calls.jsonl").read_text().splitlines()), 1
+                len((log_dir / "calls.jsonl").read_text().splitlines()), 1
             )
             self.assertEqual(
-                len((log_dir / "method_events.jsonl").read_text().splitlines()), 1
+                len([r for r in (log_dir / "events.jsonl").read_text().splitlines() if json.loads(r)["kind"] == "method"]), 1
             )
             self.assertEqual(
-                len((log_dir / "method_state.jsonl").read_text().splitlines()), 1
+                json.loads((log_dir / "resume.json").read_text())["method_state"]["population_size"], 2
             )
 
             errors = [
                 json.loads(line)
-                for line in (log_dir / "errors.jsonl").read_text().splitlines()
+                for line in (log_dir / "logs/errors.jsonl").read_text().splitlines()
             ]
             self.assertEqual(errors[0]["error_type"], "TimeoutError")
             self.assertLessEqual(len(errors[0]["error"]), 1000)
 
-            samples = json.loads(
-                (log_dir / "samples" / "samples_1~200.json").read_text()
-            )
-            self.assertEqual([entry["score"] for entry in samples], [1.0, 2.0])
-            self.assertEqual(
-                set(samples[0]),
-                {"sample_order", "score", "operator", "program"},
-            )
-            self.assertFalse((log_dir / "samples" / "samples_best.json").exists())
+            samples = [json.loads(line) for line in (log_dir / "events.jsonl").read_text().splitlines()
+                       if json.loads(line)["kind"] == "candidate"]
+            self.assertEqual([entry["fitness"] for entry in samples], [1.0, 2.0])
+            self.assertEqual([entry["candidate_id"] for entry in samples], [1, 2])
+            sources = [json.loads(line) for line in (log_dir / "programs.jsonl").read_text().splitlines()]
+            self.assertIn("program-1", [entry["code"] for entry in sources])
+            self.assertFalse((log_dir / "samples").exists())
 
-            summary = json.loads((log_dir / "run_summary.json").read_text())
+            summary = json.loads((log_dir / "summary.json").read_text())
             self.assertEqual(summary["status"], "finished")
-            self.assertEqual(summary["num_samples"], 2)
-            self.assertEqual(summary["best_score"], 2.0)
-            self.assertEqual(summary["llm_call_count"], 1)
+            self.assertEqual(summary["budget_used"], 2)
+            self.assertEqual(summary["best"]["fitness"], 2.0)
+            self.assertEqual(summary["model_calls"], 1)
             self.assertEqual(summary["error_count"], 1)
 
     def test_jsonl_append_is_thread_safe(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             profiler = ProfilerBase(
-                log_dir=tmpdir, create_random_path=False, log_style="simple"
+                run_dir=tmpdir
             )
 
             def worker(offset):
@@ -121,10 +119,10 @@ class ProfilerObservabilityTest(unittest.TestCase):
             for thread in threads:
                 thread.join()
 
-            events = (Path(tmpdir) / "method_events.jsonl").read_text().splitlines()
+            events = (Path(tmpdir) / "events.jsonl").read_text().splitlines()
             self.assertEqual(len(events), 100)
             self.assertTrue(
-                all(json.loads(line)["event"] == "thread_event" for line in events)
+                all(json.loads(line)["data"]["event"] == "thread_event" for line in events)
             )
 
     def test_parameter_log_does_not_include_credentials(self):
@@ -134,20 +132,20 @@ class ProfilerObservabilityTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             profiler = ProfilerBase(
-                log_dir=tmpdir, create_random_path=False, log_style="simple"
+                run_dir=tmpdir
             )
             profiler.record_parameters(
                 LLMWithSecret(), FakeEvaluation(), DummyMethod(None)
             )
 
-            text = (Path(tmpdir) / "run_log.txt").read_text()
+            text = (Path(tmpdir) / "logs/run_log.txt").read_text()
             self.assertIn("test-model", text)
             self.assertNotIn("secret-that-must-not-be-logged", text)
 
     def test_record_sample_failure_aborts_at_threshold_without_budget_increment(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             profiler = ProfilerBase(
-                log_dir=tmpdir, create_random_path=False, log_style="simple"
+                run_dir=tmpdir
             )
             method = DummyMethod(profiler)
 
@@ -164,20 +162,20 @@ class ProfilerObservabilityTest(unittest.TestCase):
             self.assertTrue(method._search_aborted)
             self.assertEqual(method._tot_sample_nums, 0)
 
-            errors = (Path(tmpdir) / "errors.jsonl").read_text().splitlines()
+            errors = (Path(tmpdir) / "logs/errors.jsonl").read_text().splitlines()
             events = [
                 json.loads(line)
-                for line in (Path(tmpdir) / "method_events.jsonl")
+                for line in (Path(tmpdir) / "events.jsonl")
                 .read_text()
                 .splitlines()
             ]
             self.assertEqual(len(errors), 2)
-            self.assertEqual(events[-1]["event"], "search_aborted")
+            self.assertEqual(events[-1]["data"]["event"], "search_aborted")
 
     def test_simple_sampler_helper_parses_and_logs_llm_call(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             profiler = ProfilerBase(
-                log_dir=tmpdir, create_random_path=False, log_style="simple"
+                run_dir=tmpdir
             )
             llm = FakeLLM("{use x plus one}\ndef heuristic(x):\n    return x + 1\n")
 
@@ -198,7 +196,7 @@ class ProfilerObservabilityTest(unittest.TestCase):
 
             calls = [
                 json.loads(line)
-                for line in (Path(tmpdir) / "llm_calls.jsonl").read_text().splitlines()
+                for line in (Path(tmpdir) / "calls.jsonl").read_text().splitlines()
             ]
             self.assertEqual(calls[0]["operator"], "m1")
             self.assertEqual(calls[0]["sample_order"], 3)

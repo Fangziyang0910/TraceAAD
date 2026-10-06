@@ -1,6 +1,7 @@
 """Seeded, isolated evaluation and one uniform measured result."""
 
 import copy
+from contextlib import contextmanager
 import hashlib
 import json
 import math
@@ -16,6 +17,7 @@ from core import Evaluation, SecureEvaluator
 from core.evaluate import InvalidEvaluationResult
 
 from . import probe
+from .config import REVISION
 
 def fingerprint(value):
     digest = hashlib.sha256()
@@ -44,12 +46,12 @@ def fingerprint(value):
     return digest.hexdigest()
 
 
-def protocol_identity(evaluation, seeds, role):
+def protocol_identity(evaluation, seeds, role, measure_calls):
     """Identify the fixed task data/settings, without freezing Python source files."""
     settings = {key: value for key, value in vars(evaluation).items()
                 if key == "_datasets" or not key.startswith("_")}
     environment = fingerprint({"task": type(evaluation).__name__, "settings": settings})
-    return fingerprint({"environment": environment, "seeds": seeds, "role": role}), environment
+    return fingerprint({"environment": environment, "seeds": seeds, "role": role, "execution": REVISION, "measure_calls": measure_calls}), environment
 
 
 def clean_traceback(text):
@@ -113,34 +115,43 @@ class SeededEvaluation(Evaluation):
             inside += max(0.0, (until if until is not None else time.monotonic()) - started)
         return {"calls": int(self.calls.value), "function_seconds": inside, "call_running": bool(started)}
 
-    def evaluate_program(self, program_str, callable_func, *, seed=730241, source=None):
+    @contextmanager
+    def program_context(self, source, function_name, *, seed=730241):
         py_state, np_state = random.getstate(), np.random.get_state()
         try:
-            program_str = source if source is not None else program_str
             if self.measure_calls:
-                program_str = probe.instrument(program_str, callable_func.__name__)
+                source = probe.instrument(source, function_name)
                 probe.arm(self.calls, self.function_seconds, self.call_started)
-            random.seed(seed)
-            np.random.seed(seed)
-            namespace = {}
-            exec(program_str, namespace)
-            function = namespace[callable_func.__name__]
+            if seed is not None:
+                random.seed(seed)
+                np.random.seed(seed)
             evaluator = copy.copy(self.inner)
-            if hasattr(evaluator, "aco_seed"):
+            if seed is not None and hasattr(evaluator, "aco_seed"):
                 evaluator.aco_seed += seed
-            try:
-                score = evaluator.evaluate_program(program_str, function)
-            except ValueError as exc:
-                if "heuristics must return a finite" in str(exc):
-                    raise InvalidEvaluationResult(str(exc)) from exc
-                raise
-            if score is None or not np.isfinite(float(score)):
-                raise InvalidEvaluationResult("task returned no finite score")
-            return {"score": float(score)}
+            yield source, _ScoredTask(evaluator), {}
         finally:
             probe.arm(None, None, None)
             random.setstate(py_state)
             np.random.set_state(np_state)
+
+    def evaluate_program(self, source, function):
+        return _ScoredTask(self.inner).evaluate_program(source, function)
+
+
+class _ScoredTask:
+    def __init__(self, inner):
+        self.inner = inner
+
+    def evaluate_program(self, source, function):
+        try:
+            score = self.inner.evaluate_program(source, function)
+        except ValueError as exc:
+            if "heuristics must return a finite" in str(exc):
+                raise InvalidEvaluationResult(str(exc)) from exc
+            raise
+        if score is None or not np.isfinite(float(score)):
+            raise InvalidEvaluationResult("task returned no finite score")
+        return {"score": float(score)}
 
 
 class ProgramEvaluator:
@@ -154,7 +165,7 @@ class ProgramEvaluator:
         self.seeded = SeededEvaluation(evaluation, measure_calls)
         self.evaluator = SecureEvaluator(self.seeded)
         self.seeds, self.role = tuple(seeds), role
-        self.protocol, self.environment = protocol_identity(evaluation, self.seeds, role)
+        self.protocol, self.environment = protocol_identity(evaluation, self.seeds, role, measure_calls)
 
     def evaluate(self, code, source_key):
         records = []
@@ -162,7 +173,7 @@ class ProgramEvaluator:
             started = time.monotonic()
             self.seeded.reset()
             outcome = self.evaluator.evaluate_program_with_details(
-                self.seeded.template_program, source=code, seed=seed)
+                code, seed=seed)
             elapsed = time.monotonic() - started
             measured = self.seeded.measured(until=started + elapsed)
             if outcome.failure_kind == "timeout" and self.seeded.timeout_seconds is not None and measured["function_seconds"] is not None:

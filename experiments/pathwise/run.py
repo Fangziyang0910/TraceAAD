@@ -12,7 +12,6 @@ from experiments.infra.base import (
     ALL_TASKS,
     BACKENDS,
     RESULTS_ROOT,
-    TASKS,
     TaskName,
     build_llm_client,
     build_task,
@@ -130,9 +129,7 @@ def build_method(spec: RunSpec, log_dir: Path) -> PathWise:
         llm=llm,
         evaluation=evaluation,
         profiler=PathWiseProfiler(
-            log_dir=str(log_dir),
-            log_style="complex",
-            create_random_path=False,
+            run_dir=log_dir.parent,
         ),
         max_sample_nums=spec.max_sample_nums,
         pop_size=spec.pop_size,

@@ -3,7 +3,6 @@
 import argparse
 from collections import Counter
 from datetime import datetime, timezone
-import hashlib
 import json
 import math
 from pathlib import Path
@@ -12,8 +11,9 @@ import shlex
 import subprocess
 import time
 
-from experiments.infra.monitor_results import SCALES, heldout_identity, scale_of_split
-from traceaad.common.storage import Programs, read_json as result_json
+from benchmarks.tasks import SCALES, SPLITS, scale_of_split
+from traceaad.common.storage import heldout_identity
+from traceaad.common.storage import committed_size, selected_program, read_json as result_json
 from experiments.infra.monitor_timing import batch_timing, search_timing
 
 
@@ -34,9 +34,9 @@ def journal_tail(path):
     try:
         with path.open("rb") as stream:
             stream.seek(0, 2)
-            size = stream.tell()
+            size = committed_size(path.parent, path.name)
             stream.seek(max(0, size - TAIL_BYTES))
-            data = stream.read(TAIL_BYTES)
+            data = stream.read(min(size, TAIL_BYTES))
         lines = data.splitlines(keepends=True)
         if size > TAIL_BYTES:
             lines = lines[1:]
@@ -71,11 +71,7 @@ def run_path(root, row):
 
 
 def expected_splits(task):
-    if task == "online_bin_packing":
-        return [f"eval_{size * 1000}_{capacity}" for size, capacity in
-                ((1, 100), (1, 500), (5, 100), (5, 500), (10, 100), (10, 500))]
-    prefix = "test" if task in {"cvrp_aco", "op_aco"} else "eval"
-    return [f"{prefix}_{size}" for size in SCALES[task]]
+    return list(SPLITS[task])
 
 
 def run_status(root, row, budget, now):
@@ -97,21 +93,18 @@ def run_status(root, row, budget, now):
     counts = [value for value in (checkpoint.get("attempts"), candidate.get("budget_used"), summary.get("budget_used"))
               if isinstance(value, int) and value >= 0]
     used = max(counts) if counts else None
-    snapshot = {"completed": used, "elapsed": checkpoint.get("elapsed") if checkpoint.get("attempts") == used else None,
-                "started_at": checkpoint.get("started_at"), "phase": phase,
-                "completed_at": datetime.fromtimestamp(modified, timezone.utc).isoformat() if modified else None}
+    clock = candidate.get("progress") or checkpoint
+    snapshot = {"completed": used, "elapsed": clock.get("elapsed") if clock.get("attempts") == used else None,
+                "started_at": clock.get("started_at"), "phase": phase,
+                "completed_at": candidate.get("ts") or (datetime.fromtimestamp(modified, timezone.utc).isoformat() if modified else None)}
     timing_row = {"budget_used": used or 0, "budget": summary.get("budget", budget),
                   "status": "running" if status == "recorded" else status,
                   "updated_at": snapshot["completed_at"]}
     timing = search_timing(timing_row, summary, snapshot, unit="候选", now=now)
     if timing["state"] == "stale" and status == "recorded":
         status = "stale"
-    best = summary.get("best") or {}
-    key = best.get("key")
-    program = directory / "best_program.py"
-    code = program.read_text(encoding="utf-8") if program.exists() else Programs(directory).get(key)
-    frozen = bool(status == "finished" and key and code
-                  and hashlib.sha256(code.encode()).hexdigest() == key)
+    best = selected_program(directory)
+    frozen = bool(best and best["verified"])
     heldout = {"valid": [], "failed": [], "missing": [], "mismatched": [], "unverified": []}
     results = {r["scale"]: r for r in result_json(directory / "heldout.json", []) if not r["variant"]}
     for split in expected_splits(row["task"]):

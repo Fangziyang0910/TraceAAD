@@ -17,7 +17,7 @@ from statistics import mean
 import numpy as np
 from scipy.stats import spearmanr
 
-from experiments.infra import behavior_profile as core
+from . import behavior as core
 
 from .analyze import read_jsonl, report_job
 

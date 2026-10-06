@@ -113,15 +113,14 @@ LOCAL = threading.local()
 def evaluator():
     if not hasattr(LOCAL, "evaluator"):
         evaluation = training_evaluation(LIMIT)
-        LOCAL.template = str(evaluation.template_program)
         LOCAL.evaluator = SecureEvaluator(SeededEvaluation(evaluation))
-    return LOCAL.template, LOCAL.evaluator
+    return LOCAL.evaluator
 
 
 def evaluate(code):
-    template, secure = evaluator()
+    secure = evaluator()
     started = time.monotonic()
-    result = secure.evaluate_program_with_details(template, source=code, seed=730241)
+    result = secure.evaluate_program_with_details(code, seed=730241)
     seconds = time.monotonic() - started
     value = result.result
     if isinstance(value, dict) and isinstance(value.get("score"), (int, float)):

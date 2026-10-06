@@ -1,6 +1,6 @@
 # 搜索实验与结果格式
 
-当前结果统一为 `traceaad-results-v1`。运行目录仍是 `experiments_result/<实验>/<任务>/<运行>/`，例如 `traceaad_v10_17/tsp_construct/<运行>/`。实验条件保存在 `run_config.json`，实现改动用 revision 区分，当前科研实现为 `research-simple-20261006`。
+当前结果统一为 `traceaad-results-v1`。运行目录仍是 `experiments_result/<实验>/<任务>/<运行>/`，例如 `traceaad_v10_17/tsp_construct/<运行>/`。实验条件保存在 `run_config.json`，实现改动用 revision 区分，当前科研实现为 `research-simple-v2-20261006`。
 
 ## 文件各存一类事实
 
@@ -35,9 +35,39 @@
 
 ## 测试记录
 
-`heldout.json` 中每条记录至少有 `task`、`variant`、`scale`、`fitness` 和 `verification`。带程序身份的结果还保存 `key`、`node_id` 与评价配置。不同评价条件使用不同 `variant`；当前方法默认空名称，共用批量评价器默认 `shared`。
+`heldout.json` 中每条记录至少有 `task`、`variant`、`scale`、`fitness` 和 `verification`。带程序身份的结果还保存 `key`、`node_id` 与评价配置。不同评价条件使用不同 `variant`；当前方法默认空名称。通用评价入口默认使用 `shared:research-simple-v2-20261006`；需要额外评价 TraceAAD 的种子条件时使用 `--condition traceaad`。旧 `shared` 成绩继续保留。
 
 `verified` 表示成绩对应冻结的最终程序。`legacy` 表示历史记录缺少程序身份；保留并展示原成绩及此状态。程序或任务不匹配的结果不进入比较汇总。迁移不补造原实验没有记录的身份或评价。
+
+## 评价条件与执行
+
+五项任务的训练、独立选择和 held-out 条件集中在 `benchmarks/tasks.py`。任务入口从这里构造固定实例、规模、时限和 ACO 参数。数据集种子仍为训练 2024、测试 2025，独立选择的生成实例种子为 20260927。
+
+- `shared`：基线条件，不额外重设候选的 Python/NumPy RNG，ACO 种子为 1234。
+- `traceaad`：使用本路 `evaluation_seeds`（默认 730241）；评价前设定 Python/NumPy RNG，ACO 种子加上该评价种子。
+
+两类条件保留各自含义，执行 revision 也进入协议身份。新通用评价器执行完整实例集合；TSP、VRPTW、OBP 顺序评价，`--workers` 控制 ACO 并行。旧通用 TSP 的逐实例进程和 ACO 私有求解入口已移除。新结果记录实际时限、种子和 revision，不覆盖旧条件的成绩。
+
+统一入口负责设定种子、插入调用测量并执行实际候选。此前正式 TraceAAD 先执行模板，再执行候选，候选在这一层本来就只执行一次。本轮去掉模板预执行及 `source=` 绕行。OBP 为隔离实例状态仍逐实例重新执行程序。隔离进程、墙钟超时和终止子进程继续承担实际评价职责。
+
+通用评价命令：
+
+```bash
+uv run python -m experiments.infra.evaluate <运行目录> --units 50,100,200
+uv run python -m experiments.infra.evaluate <运行目录> --condition traceaad --output-dir <汇总目录>
+```
+
+OBP 的规模写为 `1k_100,5k_500,10k_500`。未完成搜索必须显式使用 `--allow-incomplete`；任意中途程序的结果不会作为冻结最终程序的成绩参与比较。
+
+## 共用读取与基线记录
+
+恢复、曲线和成绩读取共用 `committed_size` / `committed_rows`；监控、批次状态和 held-out 共用 `selected_program` / `heldout_identity`。提交边界与源码身份只解释一次。搜索计时以最后一个完整候选的提交时间为准，进入选择后只更新阶段，避免把选择耗时算进搜索吞吐。
+
+基线记录器只接受 `run_dir` 和可选起始样本数，使用当前单个标量 fitness。删除随机目录、日志风格切换、多目标模式和未使用的恢复接口。种群记录共用一个实现，各方法自己的研究轨迹仍按实际需要保存。
+
+模型模块负责请求重试与错误分类，SDK 自动重试关闭。搜索只累计候选预算及实际请求。每次物理请求的原始回复、耗时和错误都可以单独回查；基线调用记录也使用同一份请求事实。批次计划共用端点查询和 tmux 启动，容量、名称和端点来自一个后端配置。
+
+已经结束的初始化与格式研究集中在 [historical](../historical/README.md)。当前搜索基础设施不依赖这些历史分析；研究证据与原输入名保留。
 
 ## 历史迁移与原档案
 

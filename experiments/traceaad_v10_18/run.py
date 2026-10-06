@@ -1,7 +1,6 @@
 """Run V10.18 with the shared experiment protocol."""
 
-from experiments.infra.search_run import (SELECTION_SEED, TRAIN_TIMEOUT, selection_task,
-    build_parser as _build_parser, main as run)
+from experiments.infra.search_run import build_parser as _build_parser, main as run
 from traceaad.v10_18 import Config, TraceAADV1018
 from traceaad.v10_18.config import EXPERIMENT
 

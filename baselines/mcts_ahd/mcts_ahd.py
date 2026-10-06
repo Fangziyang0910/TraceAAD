@@ -179,10 +179,7 @@ class MCTS_AHD:
     def _log_llm_call(self, **payload):
         logger = getattr(self._profiler, 'log_llm_call', None)
         if callable(logger):
-            try:
-                logger(**payload)
-            except Exception:
-                pass
+            logger(**payload)
 
     @staticmethod
     def _node_score(node: MCTSNode):
@@ -307,6 +304,7 @@ class MCTS_AHD:
 
         self._log_llm_call(
             stage='sample_error',
+            transport_calls=getattr(exc, 'calls', None),
             operator=operator,
             sample_order=sample_order,
             prompt=prompt,

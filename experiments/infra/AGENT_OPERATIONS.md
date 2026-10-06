@@ -25,7 +25,7 @@ uv run python -m experiments.infra.batch_status --manifest experiments_result/tr
 | 远端 Python | 仓库内 `.venv/bin/python` |
 | 实验档案 | 仓库内 `experiments_result/` |
 
-通过本地命令执行一次远端查询；读取器经 stdin 发送，不需部署新文件。远端需要当前 `monitor_results`、`monitor_timing`、`traceaad.common.storage` 模块，并已转换为当前结果格式。旧格式主机需先完成迁移，再使用此查询入口。
+通过本地命令执行一次远端查询；读取器经 stdin 发送，不需部署新文件。远端需要当前 `benchmarks.tasks`、`monitor_timing`、`traceaad.common.storage` 模块，并已转换为当前结果格式。旧格式主机需先完成迁移，再使用此查询入口。
 
 ```bash
 uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD --manifest experiments_result/traceaad_v10_16/batch_20261003_server3_v1016.json

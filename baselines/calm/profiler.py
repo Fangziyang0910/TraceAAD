@@ -4,39 +4,18 @@ from __future__ import annotations
 
 import json
 import os
-from threading import Lock
-from typing import Optional
 
-from core import Function
 from baselines.profiler import ProfilerBase
 
 
 class CALMProfiler(ProfilerBase):
-    def __init__(
-            self,
-            log_dir: Optional[str] = None,
-            *,
-            initial_num_samples=0,
-            log_style='complex',
-            create_random_path=True,
-            **kwargs,
-    ):
-        super().__init__(
-            log_dir=log_dir,
-            initial_num_samples=initial_num_samples,
-            log_style=log_style,
-            create_random_path=create_random_path,
-            **kwargs,
-        )
-        self._event_lock = Lock()
+    def __init__(self, run_dir=None, **kwargs):
+        super().__init__(run_dir, **kwargs)
         if self._log_dir:
             self._event_dir = os.path.join(self._log_dir, 'calm')
             self._algo_dir = os.path.join(self._log_dir, 'algos')
             os.makedirs(self._event_dir, exist_ok=True)
             os.makedirs(self._algo_dir, exist_ok=True)
-
-    def register_function(self, function: Function, *, program: str = '') -> None:
-        super().register_function(function, program=program)
 
     def save_best_algo(self, *, step: int, sid: str, code: str) -> None:
         if not self._log_dir:

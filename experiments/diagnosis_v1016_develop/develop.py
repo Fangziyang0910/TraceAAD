@@ -28,7 +28,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from experiments.infra.base import BACKENDS, build_llm_client, build_task
-from experiments.traceaad_v10_16.run import TRAIN_TIMEOUT, selection_task
+from benchmarks.tasks import selection_task
 from traceaad.v10_16 import Config, TraceAADV1016
 from traceaad.common.state import Facts
 from traceaad.common.canonical import similarity
@@ -63,9 +63,7 @@ def develop(source, arm, start_id, generations, backend):
     for item in ("events.jsonl", "programs.jsonl", "resume.json", "run_config.json") :
         shutil.copy(source / item, work / item)
     run_config = json.loads((source / "run_config.json").read_text())
-    evaluation, _ = build_task(task, 4)
-    if task in TRAIN_TIMEOUT:
-        evaluation.timeout_seconds = TRAIN_TIMEOUT[task]
+    evaluation, _ = build_task(task, 4, condition="traceaad")
     profile = BACKENDS[backend]
     llm = build_llm_client(base_url=profile.base_url, model=profile.model, no_proxy=profile.no_proxy,
                            max_tokens=8192)

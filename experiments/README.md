@@ -6,7 +6,7 @@
 
 | 问题 | 实验 |
 | --- | --- |
-| 代码前的分析怎样影响生成？ | [格式配对](format_study/README.md) |
+| 代码前的分析怎样影响生成？ | [格式配对](historical/format_study/README.md) |
 | 目标与计算余量怎样影响结构发现？ | [固定父代提示对照](diagnosis_v1015_5/README.md) |
 | 提供逐行耗时能改善修改吗？ | [耗时剖析重放](diagnosis_v1016_profile/README.md) |
 | 训练进展能延续到独立实例吗？ | [前沿重测](diagnosis_v1016_frontier/README.md) |
@@ -19,6 +19,8 @@
 [改动检验搜索](traceaad_v10_19/README.md)、[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)各自提供运行、选择和 held-out 命令，并共用[实验与结果实现](infra/SEARCH_FORMAT.md)。代码目录保留实现标识，文档按研究对象命名。V10.13–V10.14 已归档，实现已删除，历史结果继续可视化。
 
 模型、采样、时限与实例隔离见各入口的配置。评价使用单线程 BLAS/OpenMP，墙钟超时；装箱按实例重新执行候选程序，VRPTW 接口明确 depot 返回规则。
+
+任务条件集中在 `benchmarks/tasks.py`。基线和 TraceAAD 的候选种子条件分别记录，详见[评价与保存说明](infra/SEARCH_FORMAT.md#评价条件与执行)。通用 held-out 命令为 `uv run python -m experiments.infra.evaluate <运行目录>`，额外条件通过 `--condition` 与 `--variant` 明确记录。
 
 ## 状态与结果
 

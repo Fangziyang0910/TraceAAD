@@ -1,9 +1,9 @@
-import json
+from tests.experiments.test_training_monitor import append_records, candidate, write_json
 
 import numpy as np
 
 from experiments.infra.artifacts import pick_best_sample
-from experiments.infra.evaluate import _obp_task_kwargs_for_scale
+from benchmarks.tasks import obp_scale
 from benchmarks.generated_data_config import (
     get_generated_task_kwargs,
 )
@@ -64,7 +64,7 @@ def test_obp_protocol_exposes_separate_fixed_multiscale_test_set():
 def test_obp_test_evaluation_selects_the_fixed_held_out_scale():
     eval_kwargs = get_generated_task_kwargs("online_bin_packing", "eval")
 
-    selected = _obp_task_kwargs_for_scale(eval_kwargs, n_items=10000, capacity=500)
+    selected = obp_scale(eval_kwargs, n_items=10000, capacity=500)
 
     assert selected["seed"] == 2025
     assert selected["dataset_specs"] == [
@@ -92,47 +92,18 @@ def test_obp_scale_selection_preserves_the_canonical_fixed_instances():
 
 def test_obp_best_sample_can_be_truncated_at_the_formal_budget(tmp_path):
     run_dir = tmp_path / "eoh_run"
-    samples_dir = run_dir / "logs" / "samples"
-    samples_dir.mkdir(parents=True)
-    (run_dir / "logs" / "run_summary.json").write_text(
-        json.dumps({"status": "finished", "search_aborted": False}),
-        encoding="utf-8",
-    )
-    (samples_dir / "samples_1.json").write_text(
-        json.dumps(
-            [
-                {"sample_order": 1, "score": -10.0, "program": "p1"},
-                {"sample_order": 1001, "score": -1.0, "program": "p1001"},
-            ]
-        ),
-        encoding="utf-8",
-    )
-
+    write_json(run_dir / "summary.json", {"status": "finished"})
+    append_records(run_dir / "events.jsonl", [candidate(1, -10), candidate(1001, -1)])
     best, records = pick_best_sample(run_dir, max_sample_order=1000)
-
     assert len(records) == 1
     assert best["sample_order"] == 1
 
 
 def test_best_program_summary_supports_local_traceaad_layout(tmp_path):
     run_dir = tmp_path / "traceaad_local_run"
-    logs_dir = run_dir / "logs"
-    logs_dir.mkdir(parents=True)
-    (logs_dir / "summary.json").write_text(
-        json.dumps(
-            {
-                "status": "finished",
-                "search_aborted": False,
-                "best_score": -7.0,
-                "best_sample_order": 42,
-            }
-        ),
-        encoding="utf-8",
-    )
-    (run_dir / "best_program.py").write_text("def f():\n    return 1\n", encoding="utf-8")
-
+    write_json(run_dir / "summary.json", {"status": "finished"})
+    append_records(run_dir / "events.jsonl", [candidate(42, -7, code="def f():\n    return 1\n")])
     best, records = pick_best_sample(run_dir, max_sample_order=1000)
-
     assert len(records) == 1
     assert best["sample_order"] == 42
     assert best["program"].startswith("def f")

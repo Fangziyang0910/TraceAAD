@@ -1,6 +1,6 @@
 """V10.16 heldout entry point."""
 
-from experiments.infra.search_heldout import HELDOUT_TIMEOUT, heldout_task, evaluate_run, main
+from experiments.infra.search_heldout import main
 
 
 if __name__ == "__main__":

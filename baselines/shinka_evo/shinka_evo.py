@@ -298,7 +298,7 @@ class ShinkaEvo:
                     last_error = str(exc)
                     continue
                 log_llm_call(
-                    self,
+                    self, llm=selected_llm,
                     method="shinka_evo",
                     stage="patch",
                     operator=patch_type,
@@ -503,7 +503,7 @@ class ShinkaEvo:
             metadata["novelty_explanation"] = f"Novelty request failed: {exc}"
             return False, embedding, metadata
         log_llm_call(
-            self,
+            self, llm=self._novelty_llm,
             method="shinka_evo",
             stage="novelty",
             operator="novelty",
@@ -588,7 +588,7 @@ class ShinkaEvo:
                 counts_budget=False,
             )
             return
-        log_llm_call(self, method="shinka_evo", stage="meta_summary", operator="meta_summary",
+        log_llm_call(self, llm=self._meta_llm, method="shinka_evo", stage="meta_summary", operator="meta_summary",
                      sample_order=self._tot_sample_nums + 1, prompt=summaries_prompt,
                      response=summaries, generation=self._generation)
         insights_prompt = self._meta_prompt_insights(summaries)
@@ -606,7 +606,7 @@ class ShinkaEvo:
                 counts_budget=False,
             )
             return
-        log_llm_call(self, method="shinka_evo", stage="meta_insights", operator="meta_insights",
+        log_llm_call(self, llm=self._meta_llm, method="shinka_evo", stage="meta_insights", operator="meta_insights",
                      sample_order=self._tot_sample_nums + 1, prompt=insights_prompt,
                      response=insights, generation=self._generation)
         recommendations_prompt = self._meta_prompt_recommendations(insights)
@@ -624,7 +624,7 @@ class ShinkaEvo:
                 counts_budget=False,
             )
             return
-        log_llm_call(self, method="shinka_evo", stage="meta_recommendations", operator="meta_recommendations",
+        log_llm_call(self, llm=self._meta_llm, method="shinka_evo", stage="meta_recommendations", operator="meta_recommendations",
                      sample_order=self._tot_sample_nums + 1, prompt=recommendations_prompt,
                      response=recommendations, generation=self._generation)
         self._meta_summary = (self._meta_summary + "\n\n" + summaries).strip() if self._meta_summary else summaries

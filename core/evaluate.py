@@ -31,6 +31,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
+from contextlib import contextmanager
 
 from .code import TextFunctionProgramConverter, Program
 
@@ -57,6 +58,11 @@ class InvalidEvaluationResult(Exception):
 
 
 class Evaluation(ABC):
+    @contextmanager
+    def program_context(self, source, function_name, **kwargs):
+        """Prepare execution; ordinary tasks use the source as supplied."""
+        yield source, self, kwargs
+
     def __init__(
             self,
             template_program: str | Program,
@@ -306,32 +312,29 @@ class SecureEvaluator:
             **kwargs,
     ) -> None:
         _enter_eval_session()
-        outcome = self._evaluate_with_details(program_str, function_name, **kwargs)
+        try:
+            outcome = self._evaluate_with_details(program_str, function_name, **kwargs)
+        except Exception as exc:
+            outcome = self._failure('prepare_error', exc)
         result_queue.put(replace(outcome, cpu_seconds=_own_cpu_seconds()))
 
     def _evaluate_with_details(self, program_str: str, function_name, **kwargs):
-        try:
-            all_globals_namespace = {}
-            exec(program_str, all_globals_namespace)
-            program_callable = all_globals_namespace[function_name]
-        except Exception as exc:
-            return self._failure('exec_error', exc)
-
-        try:
-            res = self._evaluator.evaluate_program(program_str, program_callable, **kwargs)
-            return self._outcome(res)
-        except InvalidEvaluationResult as exc:
-            return EvaluationOutcome(
-                result=None,
-                failure_kind='invalid_result',
-                error_type='InvalidEvaluationResult',
-                error=str(exc),
-            )
-        except Exception as exc:
-            if self._debug_mode:
-                print("DEBUG: Exception occurred in evaluate_program:")
-                traceback.print_exc()  # 这将打印完整红色报错信息
-            return self._failure('runtime_error', exc)
+        with self._evaluator.program_context(program_str, function_name, **kwargs) as (code, task, task_kwargs):
+            try:
+                namespace = {}
+                exec(code, namespace)
+                function = namespace[function_name]
+            except Exception as exc:
+                return self._failure('exec_error', exc)
+            try:
+                return self._outcome(task.evaluate_program(code, function, **task_kwargs))
+            except InvalidEvaluationResult as exc:
+                return EvaluationOutcome(result=None, failure_kind='invalid_result',
+                                         error_type='InvalidEvaluationResult', error=str(exc))
+            except Exception as exc:
+                if self._debug_mode:
+                    traceback.print_exc()
+                return self._failure('runtime_error', exc)
 
     @staticmethod
     def _outcome(result: Any | None) -> EvaluationOutcome:

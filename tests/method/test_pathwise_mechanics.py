@@ -320,9 +320,9 @@ class PathWiseMechanicsTest(unittest.TestCase):
         method._construct_entailment_graph = fail_construct
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            method._profiler = PathWiseProfiler(log_dir=tmpdir, create_random_path=False, log_style="simple")
+            method._profiler = PathWiseProfiler(run_dir=tmpdir)
             method.run()
-            summary = json.loads((Path(tmpdir) / "run_summary.json").read_text())
+            summary = json.loads((Path(tmpdir) / "summary.json").read_text())
 
         self.assertEqual(summary["status"], "error")
         self.assertEqual(summary["error_type"], "RuntimeError")
