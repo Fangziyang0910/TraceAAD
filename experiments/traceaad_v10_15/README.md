@@ -20,3 +20,7 @@ The formal launcher accepts a prior twenty-run batch manifest so the backend ass
 uv run python -m experiments.traceaad_v10_15.launch_batch --from-batch experiments_result/traceaad_v10_14/batch_20260928_v1014.json --batch v1015_trial --dry-run
 uv run python -m experiments.traceaad_v10_15.heldout_batch --batch-manifest experiments_result/traceaad_v10_15/batch_v1015_trial.json --dry-run
 ```
+
+## 2026-10-06 实现整理
+
+本版本的机制保留在版本目录中，生成、评价、记录、实验入口与离线诊断改为[共用实现](../../traceaad/common/README.md)。结果仍写入 `experiments_result/traceaad_v10_15/`。解析器不再补模板依赖，完整尝试结束后才保存恢复点，允许重做未提交的尝试；revision 标记这些运行条件。历史结果已统一迁移，格式与恢复条件见[实验与结果](../infra/SEARCH_FORMAT.md)。

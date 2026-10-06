@@ -11,3 +11,7 @@ uv run python -m experiments.traceaad_v10_19.heldout --run-dir experiments_resul
 `launch_local.py --batch <name> [--launch]` starts the 15-run batch on this machine (five tasks x three repeats, seeds 0-2, the two server3 Qwen services alternated 8/7, four evaluation workers), the same host as V10.18. `heldout_batch.py --batch-manifest <manifest>` evaluates all selected programs. Method tests: `tests/method/test_traceaad_v1019.py`.
 
 Batch `20261006_local_v1019` was launched on 2026-10-06 (manifest `experiments_result/traceaad_v10_19/batch_20261006_local_v1019.json`).
+
+## 2026-10-06 实现整理
+
+本版本的机制保留在版本目录中，生成、评价、记录、实验入口与离线诊断改为[共用实现](../../traceaad/common/README.md)。结果仍写入 `experiments_result/traceaad_v10_19/`。解析器不再补模板依赖，完整尝试结束后才保存恢复点，允许重做未提交的尝试；revision 标记这些运行条件。历史结果已统一迁移，格式与恢复条件见[实验与结果](../infra/SEARCH_FORMAT.md)。

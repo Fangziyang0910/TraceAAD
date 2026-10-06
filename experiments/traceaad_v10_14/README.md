@@ -1,6 +1,6 @@
 # TraceAAD V10.14 正式版运行说明
 
-**TraceAAD V10.14** 的实现位于 `traceaad/v10_14/`，运行入口位于 `experiments/traceaad_v10_14/`。
+2026-10-06 已删除 V10.14 的本地实现与运行入口，源码保存在 Git 历史中。下面记录原实验条件与历史命令；历史结果继续由训练可视化读取。
 
 最终正式实验批次为 `20260928_v1014`，五个任务各四路、每路 1,000 次候选尝试，并完成独立选择集评价。正式结果目录为 `experiments_result/traceaad_v10_14/`，包含批次清单、20 路运行目录及 held-out 汇总。当前本地档案的逐文件校验见[完整性清单](../../experiments_result/traceaad_v10_14/analysis/archive_integrity.json)。结果解释见[正式实验分析](../../docs/03-现象与检验/2026-09-29-搜索结果与运行波动.md)。
 

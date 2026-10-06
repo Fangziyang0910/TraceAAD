@@ -8,4 +8,8 @@ uv run python -m experiments.traceaad_v10_16.run --task tsp_construct --run-name
 uv run python -m experiments.traceaad_v10_16.heldout --run-dir experiments_result/traceaad_v10_16/tsp_construct/trial_1
 ```
 
-Training, selection and held-out limits and splits are the same as for [V10.15](../traceaad_v10_15/README.md). `launch_server3.py --batch <name> [--launch]` starts the 15-run server3 batch arranged like V10.15-6 (five tasks x three repeats, seeds 0-2, two Qwen services). Run the method tests (`tests/method/test_traceaad_v1016.py`) and a short smoke run before a formal batch.
+Training, selection and held-out limits and splits are the same as for [V10.15](../traceaad_v10_15/README.md). `launch_server3.py --batch <name> [--launch]` starts the 15-run server3 batch arranged like V10.15-6 (five tasks x three repeats, seeds 0-2, two Qwen services).
+
+## 2026-10-06 实现整理
+
+本版本的机制保留在版本目录中，生成、评价、记录、实验入口与离线诊断改为[共用实现](../../traceaad/common/README.md)。结果仍写入 `experiments_result/traceaad_v10_16/`。解析器不再补模板依赖，完整尝试结束后才保存恢复点，允许重做未提交的尝试；revision 标记这些运行条件。历史结果已统一迁移，格式与恢复条件见[实验与结果](../infra/SEARCH_FORMAT.md)。
