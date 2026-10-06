@@ -12,10 +12,11 @@
 | 训练进展能延续到独立实例吗？ | [前沿重测](diagnosis_v1016_frontier/README.md) |
 | 初次生成的程序经少量改写后怎样变化？ | [同等开发](diagnosis_v1016_develop/README.md) |
 | 落后的新设计得到开发后能否成立？ | [新设计开发搜索](traceaad_v10_18/README.md) |
+| 改动在原算法上检验，能否让新计算成立？ | [改动检验搜索](traceaad_v10_19/README.md) |
 
 ## 搜索、选择与测试
 
-[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)、[短路径搜索](traceaad_v10_14/README.md)各自提供运行、选择和 held-out 命令。代码目录保留实现标识，文档按研究对象命名。
+[改动检验搜索](traceaad_v10_19/README.md)、[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)、[短路径搜索](traceaad_v10_14/README.md)各自提供运行、选择和 held-out 命令。代码目录保留实现标识，文档按研究对象命名。
 
 模型、采样、时限与实例隔离见各入口的配置。评价使用单线程 BLAS/OpenMP，墙钟超时；装箱按实例重新执行候选程序，VRPTW 接口明确 depot 返回规则。
 

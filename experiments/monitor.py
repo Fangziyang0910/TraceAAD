@@ -16,11 +16,11 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from experiments.infra.artifacts import pick_best_sample
-from experiments.infra.monitor_history import TrainingHistory
+from experiments.infra.monitor_history import TrainingHistory, finite
 from experiments.infra.monitor_results import (
     SCALES, TEST_SCALES, batch_result_files, load_batch_heldout, load_selection, rep_of)
 from experiments.infra.monitor_timing import batch_timing, search_timing
-from traceaad.v10_13.storage import JOURNAL_NAME, RunStorage, read_journal
+from traceaad.v10_13.storage import JOURNAL_NAME
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -47,9 +47,28 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _stamp(path: Path):
     try:
         stat = path.stat()
-        return (stat.st_size, stat.st_mtime_ns)
+        return (stat.st_size, stat.st_mtime_ns, stat.st_dev, stat.st_ino)
     except OSError:
         return None
+
+
+def _history_stamp(run_dir: Path):
+    paths = (run_dir / JOURNAL_NAME, run_dir / "events.jsonl", run_dir / "logs/method_events.jsonl")
+    samples = tuple((p.name, _stamp(p)) for p in sorted(
+        (run_dir / "logs/samples").glob("samples_*.json")) if p.name != "samples_best.json")
+    return tuple((str(p), _stamp(p)) for p in paths), samples
+
+
+def _run_stamp(run_dir: Path):
+    return (_history_stamp(run_dir), tuple(_stamp(run_dir / name) for name in (
+        "run_config.json", "logs/run_summary.json", "selection.json", "best_program.py")))
+
+
+def _candidate_summary(runs):
+    count = sum(run.get("candidate_count") or 0 for run in runs)
+    valid = sum(run.get("valid_candidate_count") or 0 for run in runs)
+    return {"candidate_count": count, "valid_candidate_count": valid,
+            "valid_rate": valid / count if count else None}
 
 
 def _compact_curve(points, cap: int = 200):
@@ -82,72 +101,10 @@ def _json_bytes(payload: Any):
         payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
 
 
-def _last_candidate(path: Path) -> dict[str, Any]:
-    try:
-        with path.open("rb") as handle:
-            handle.seek(0, 2)
-            end = handle.tell()
-            handle.seek(max(0, end - 131_072))
-            lines = handle.read().decode("utf-8", errors="ignore").splitlines()
-    except OSError:
-        return {}
-    for line in reversed(lines):
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict) and value.get("kind") == "candidate":
-            return value
-    if path.exists():
-        last = {}
-        for value in read_journal(path):
-            if value.get("kind") == "candidate":
-                last = value
-        return last
-    return {}
-
-
-def _run_node_stats(run_dir: Path) -> tuple[int, float | None]:
-    path = run_dir / JOURNAL_NAME
-    count, best = 0, None
-    for item in read_journal(path):
-        node = item.get("node") if item["kind"] == "candidate" else None
-        if node is not None:
-            count += 1
-            fitness = node["fitness"]
-            best = fitness if best is None else max(best, fitness)
-    return count, best
-
-
 def _objective(fitness: float | None, task: str) -> float | None:
     if fitness is None:
         return None
     return -fitness if TASKS[task]["direction"] == "min" else fitness
-
-
-def _search_events(run_dir: Path):
-    journal = run_dir / JOURNAL_NAME
-    if journal.exists():
-        with journal.open(encoding="utf-8") as handle:
-            for line in handle:
-                # Request/call/state lines carry prompts and RNG blobs and are
-                # irrelevant here; skip them before the JSON decode.
-                if line.startswith(('{"kind":"request"', '{"kind":"call"', '{"kind":"state"')):
-                    continue
-                record = json.loads(line)
-                if "source" in record:
-                    source = record["source"]
-                    if source in {"events.jsonl", "evaluations.csv", "artifacts/candidates.jsonl"}:
-                        yield source, record.get("data")
-                elif record.get("kind") == "candidate":
-                    yield "native", record
-    else:
-        for path in (run_dir / "events.jsonl", run_dir / "logs/method_events.jsonl"):
-            if path.exists():
-                with path.open(encoding="utf-8") as handle:
-                    for line in handle:
-                        yield path.name, json.loads(line)
-                break
 
 
 @lru_cache(maxsize=128)
@@ -157,6 +114,61 @@ def _history(run_dir: Path, task: str):
 
 def _search_trend(run_dir: Path, task: str):
     return _history(Path(run_dir), task).read()
+
+
+def _program_view(program, task):
+    if not isinstance(program, dict):
+        return None
+    score = finite(program.get("fitness"))
+    return {"id": program.get("id", program.get("node_id")), "fitness": score,
+            "value": _objective(score, task),
+            "operator": program.get("operator") or program.get("action") or program.get("origin_operator"),
+            "idea": program.get("idea") or "", "code": program.get("code") or ""}
+
+
+def _programs(run_dir, task, summary, curve):
+    history = _history(run_dir, task)
+    point = next((p for p in reversed(curve) if p.get("kind") in {"initial", "breakthrough"}), None)
+    search = None
+    if point:
+        search = (history.node(point["node_id"], by_node=True) if point.get("node_id") is not None
+                  else history.node(point.get("candidate")))
+    if search is None and history.archived_best:
+        search = history.node(history.archived_best["candidate"])
+    selected = summary.get("best") if summary.get("status") == "finished" else None
+    if not isinstance(selected, dict) or not selected:
+        selected = None
+    else:
+        selected = {**selected, "fitness": selected.get("fitness", summary.get("best_score"))}
+    exported = history.node("@best_program")
+    if selected is None and summary.get("status") == "finished" and exported:
+        selected = {**exported, "fitness": summary.get("best_score")}
+    elif selected is not None and not selected.get("code"):
+        node = history.node(selected.get("id", selected.get("node_id")), by_node=True)
+        selected = {**(node or exported or {}), **selected,
+                    "code": selected.get("code") or (node or exported or {}).get("code", "")}
+    if point and (not search or not search.get("code")):
+        if selected and finite(selected.get("fitness")) == point["fitness"] and selected.get("code"):
+            search = selected
+        elif exported and summary.get("best_score") == point["fitness"]:
+            search = {**exported, **point, "id": point.get("node_id", point.get("candidate"))}
+        else:
+            search = {**point, "id": point.get("node_id", point.get("candidate")), "code": ""}
+    if search is None and selected is None:
+        try:
+            sample, _ = pick_best_sample(run_dir, allow_incomplete=True)
+            search = {"id": sample.get("sample_order"), "code": sample["program"],
+                      "fitness": sample["score"], "idea": sample.get("algorithm") or "",
+                      "operator": sample.get("operator")}
+            if summary.get("status") == "finished":
+                selected = search
+        except (RuntimeError, OSError, ValueError, KeyError):
+            pass
+    if (selected is None and summary.get("status") == "finished" and search
+            and finite(summary.get("best_score")) == finite(search.get("fitness"))):
+        selected = search
+    search, selected = _program_view(search, task), _program_view(selected, task)
+    return {"search_best": search, "selected_best": selected, "best": selected or search}
 
 
 class V1013Monitor:
@@ -197,38 +209,25 @@ class V1013Monitor:
         run_dir = self._run_dir(row)
         config = _read_json(run_dir / "run_config.json")
         final = _read_json(run_dir / "logs/run_summary.json")
-        last_event = _last_candidate(run_dir / JOURNAL_NAME)
         params = config.get("method_params") or {}
-
+        history = _history(run_dir, task)
+        curve = history.read()[0]
+        progress = history.progress_snapshot()
         status = str(row.get("status") or "queued")
         active = status in {"running", "launching"}
-        final_status = final.get("status")
-        if final_status == "finished":
-            status = "finished"
-            active = False
-        elif final_status in {"error", "interrupted"} and not active:
+        if final.get("status") == "finished":
+            status, active = "finished", False
+        elif final.get("status") in {"error", "interrupted"} and not active:
             status = "blocked"
         elif status == "launching":
             status = "running"
-
         budget = int(final.get("budget") or params.get("budget") or 1000)
-        budget_used = int(
-            (last_event.get("budget_used") if active else final.get("budget_used"))
-            or last_event.get("budget_used")
-            or 0
-        )
-        valid_nodes = None if active else final.get("num_nodes")
-        best = final.get("best") or {}
-        best_fitness = last_event.get("best_fitness") if active else best.get("fitness")
+        budget_used = (progress.get("budget_used", 0) if active else
+                       int(final.get("budget_used") or progress.get("budget_used", 0)))
+        valid_nodes = int(progress.get("valid_nodes", final.get("num_nodes", 0)) or 0)
+        best_fitness = finite((final.get("best") or {}).get("fitness")) if not active else None
         if best_fitness is None:
-            best_fitness = last_event.get("best_fitness")
-        if valid_nodes is None or best_fitness is None:
-            journal_count, journal_best = _run_node_stats(run_dir)
-            valid_nodes = journal_count if valid_nodes is None else valid_nodes
-            best_fitness = journal_best if best_fitness is None else best_fitness
-        valid_nodes = int(valid_nodes or 0)
-        if best_fitness is not None:
-            best_fitness = float(best_fitness)
+            best_fitness = progress.get("best_fitness")
 
         result = {
             "task": task,
@@ -242,9 +241,11 @@ class V1013Monitor:
             "valid_nodes": valid_nodes,
             "best_fitness": best_fitness,
             "best_value": _objective(best_fitness, task),
-            "updated_at": last_event.get("ts") or final.get("finished_at") or row.get("started_at"),
+            "updated_at": final.get("finished_at") or history.clock.get("completed_at") or row.get("started_at"),
             "error": None if active else final.get("error") or row.get("last_error"),
-            "curve": _search_trend(run_dir, task)[0],
+            "curve": _list_curve(curve),
+            **{k: progress.get(k, 0) for k in ("candidate_count", "valid_candidate_count")},
+            "valid_rate": progress.get("valid_rate"),
             "x_label": "评价次数",
         }
         timing_summary = {**final, "started_at": final.get("started_at") or row.get("started_at")}
@@ -281,6 +282,7 @@ class V1013Monitor:
                 "budget_used": sum(run["budget_used"] for run in runs),
                 "budget": sum(run["budget"] for run in runs),
                 "valid_nodes": sum(run["valid_nodes"] for run in runs),
+                **_candidate_summary(runs),
                 "timing": batch_timing(runs),
             },
             "tasks": task_groups,
@@ -298,32 +300,10 @@ class V1013Monitor:
 
         summary = self._run_summary(row)
         run_dir = self._run_dir(row)
-        storage = RunStorage(run_dir)
-        nodes = storage.records("nodes")
         curve, recent, operators, outcomes = _search_trend(run_dir, task)
-
-        valid_nodes = [node for node in nodes if node.get("fitness") is not None]
-        best_node = max(valid_nodes, key=lambda node: float(node["fitness"]), default=None)
-        if best_node is None:
-            final_best = _read_json(run_dir / "logs/run_summary.json").get("best")
-            best_node = final_best if isinstance(final_best, dict) else None
-
-        return {
-            **summary,
-            "task_meta": TASKS[task],
-            "curve": curve,
-            "operators": operators,
-            "outcomes": outcomes,
-            "recent": recent,
-            "best": None if best_node is None else {
-                "id": best_node.get("id", best_node.get("node_id")),
-                "fitness": float(best_node["fitness"]),
-                "value": _objective(float(best_node["fitness"]), task),
-                "operator": best_node.get("operator"),
-                "idea": best_node.get("idea") or "",
-                "code": best_node.get("code") or "",
-            },
-        }
+        return {**summary, "task_meta": TASKS[task], "curve": curve,
+                "operators": operators, "outcomes": outcomes, "recent": recent,
+                **_programs(run_dir, task, _read_json(run_dir / "logs/run_summary.json"), curve)}
 
 
 class ResultsMonitor:
@@ -334,37 +314,6 @@ class ResultsMonitor:
         self.results_root = Path(results_root)
         self.default_experiment = experiment
         self.v1013 = V1013Monitor(self.results_root / "traceaad_v10_13", batch)
-        self._progress_cache = {}
-
-    def _recorded_progress(self, run_dir: Path) -> tuple[int, int]:
-        journal = run_dir / JOURNAL_NAME
-        if not journal.exists():
-            return 0, 0
-        stamp = (journal.stat().st_size, journal.stat().st_mtime_ns)
-        cached = self._progress_cache.get(run_dir)
-        if cached and cached[0] == stamp:
-            return cached[1]
-        streams = {}
-        for source, event in _search_events(run_dir):
-            if not isinstance(event, dict):
-                continue
-            if source == "artifacts/candidates.jsonl":
-                counted = bool(event.get("evaluator_called"))
-                valid = isinstance(event.get("child_fitness"), (int, float))
-                position = None
-            elif source in {"events.jsonl", "native"}:
-                counted = event.get("budget_used") is not None
-                valid = isinstance(event.get("fitness"), (int, float))
-                position = event.get("budget_used")
-            else:
-                continue
-            record = streams.setdefault(source, [0, 0])
-            if counted:
-                record[0] = max(record[0], int(position)) if position is not None else record[0] + 1
-            record[1] += valid
-        result = tuple(streams.get("native", streams.get("events.jsonl", streams.get("artifacts/candidates.jsonl", [0, 0]))))
-        self._progress_cache[run_dir] = stamp, result
-        return result
 
     def _journal_is_hot(self, run_dir: Path, *, max_age_sec: float = 1200.0) -> bool:
         """A run whose journal was appended recently is live even without a summary.
@@ -388,6 +337,8 @@ class ResultsMonitor:
 
     def batches(self) -> list[dict[str, str]]:
         entries = []
+        if not self.results_root.is_dir():
+            return entries
         for directory in self.results_root.iterdir():
             if directory.is_dir() and any(directory.glob("*/*/run_config.json")):
                 entries.append((self._latest_activity(directory), directory.name))
@@ -404,30 +355,40 @@ class ResultsMonitor:
                 pass
         return latest
 
+    def default_batch(self):
+        batches = self.batches()
+        if self.default_experiment in {item["id"] for item in batches}:
+            return self.default_experiment
+        return batches[0]["id"] if batches else None
+
     def state_signature(self, experiment: str | None):
-        """Cheap change-detection stamp for a batch: run journal/summary stats."""
-        experiment = experiment or next((item["id"] for item in self.batches()), None)
-        stamps = []
-        if experiment:
-            for config_path in sorted((self.results_root / experiment).glob("*/*/run_config.json")):
-                run_dir = config_path.parent
-                stamps.append((run_dir.name,
-                               _stamp(run_dir / JOURNAL_NAME),
-                               _stamp(run_dir / "logs" / "run_summary.json")))
-        return (experiment, tuple(stamps))
+        """File dependencies plus a 15-second clock for unfinished searches."""
+        experiment = experiment or self.default_batch()
+        directory = self.results_root / experiment if experiment else self.results_root
+        stamps, unfinished = [], False
+        for path in sorted(directory.glob("*/*/run_config.json")) if experiment else []:
+            run_dir = path.parent
+            stamps.append((str(run_dir.relative_to(directory)), _run_stamp(run_dir)))
+            unfinished |= _read_json(run_dir / "logs/run_summary.json").get("status") != "finished"
+        manifests = tuple((p.name, _stamp(p)) for p in sorted(directory.glob("batch_*.json")))
+        return experiment, tuple(stamps), manifests, int(time.time() // 15) if unfinished else None
 
     def run_signature(self, experiment: str, task: str, name: str):
         run_dir = self.results_root / experiment / task / name
-        return (experiment, task, name, _stamp(run_dir / JOURNAL_NAME),
-                _stamp(run_dir / "logs" / "run_summary.json"))
+        unfinished = _read_json(run_dir / "logs/run_summary.json").get("status") != "finished"
+        manifests = tuple((p.name, _stamp(p)) for p in sorted((self.results_root / experiment).glob("batch_*.json")))
+        return experiment, task, name, _run_stamp(run_dir), manifests, int(time.time() // 15) if unfinished else None
 
-    def _runs(self, experiment: str):
+    def _runs(self, experiment: str, task_filter=None, name_filter=None):
         if experiment not in {item["id"] for item in self.batches()}:
             return []
         rows = []
         now = time.time()
         for config_path in sorted((self.results_root / experiment).glob("*/*/run_config.json")):
             run_dir = config_path.parent
+            if ((task_filter and run_dir.parent.name != task_filter)
+                    or (name_filter and run_dir.name != name_filter)):
+                continue
             config = _read_json(config_path)
             summary = _read_json(run_dir / "logs/run_summary.json")
             raw_status = summary.get("status")
@@ -452,17 +413,23 @@ class ResultsMonitor:
             best = summary.get("best") or {}
             if not isinstance(best, dict):
                 best = {}
-            score = best.get("fitness", summary.get("best_score"))
-            selection = best.get("selection_fitness")
+            score = finite(best.get("fitness", summary.get("best_score")))
+            selection = finite(best.get("selection_fitness"))
             budget = summary.get("budget", summary.get("budget_slots", params.get("budget", params.get("max_sample_nums", 0))))
             used = summary.get("budget_used", summary.get("budget_slots", summary.get("num_samples", summary.get("evaluator_call_count", 0))))
             nodes = summary.get("num_nodes", summary.get("n_algorithms", summary.get("evaluate_success_program_num", 0)))
-            if raw_status == "unknown" or (status == "running" and journal_hot):
-                used, nodes = self._recorded_progress(run_dir)
             task = config.get("task", run_dir.parent.name)
             if task not in TASKS:
                 continue
-            native_v1014 = config.get("method") == "v1014" or experiment == "traceaad_v10_14"
+            history = _history(run_dir, task)
+            curve = history.read()[0]
+            progress = history.progress_snapshot()
+            if progress.get("candidate_count"):
+                nodes = progress["valid_nodes"]
+                if status != "finished" or not used:
+                    used = progress["budget_used"]
+                if status != "finished" or score is None:
+                    score = progress["best_fitness"]
             row = {
                 "task": task, "name": run_dir.name, "repeat": config.get("repeat"),
                 "seed": config.get("seed"), "backend": config.get("backend"),
@@ -472,16 +439,19 @@ class ResultsMonitor:
                 "selection_fitness": selection, "selection_value": _objective(selection, task),
                 "updated_at": summary.get("finished_at"), "run_dir": run_dir,
                 "selection_info": load_selection(run_dir),
-                "curve": _list_curve(_search_trend(run_dir, task)[0]),
-                "x_label": "候选尝试" if native_v1014 else "已记录序号",
+                "curve": _list_curve(curve),
+                **{k: progress.get(k, 0) for k in ("candidate_count", "valid_candidate_count")},
+                "valid_rate": progress.get("valid_rate"),
+                "x_label": progress.get("x_label", "已记录序号"),
             }
             row["timing"] = search_timing(row, summary, _history(run_dir, task).timing_snapshot(),
-                                           unit="候选" if native_v1014 else "预算单位", now=now)
+                                           unit={"候选尝试": "候选", "样本次数": "样本", "预算槽位": "预算槽",
+                                                 "候选序号": "候选"}.get(row["x_label"], "评价"), now=now)
             rows.append(row)
         return rows
 
     def overview(self, experiment: str | None = None):
-        experiment = experiment or (self.batches()[0]["id"] if self.batches() else None)
+        experiment = experiment or self.default_batch()
         if experiment == "traceaad_v10_13":
             result = self.v1013.overview()
             return {**result, "batch": experiment}
@@ -504,6 +474,7 @@ class ResultsMonitor:
                 "budget_used": sum(row["budget_used"] for row in runs),
                 "budget": sum(row["budget"] for row in runs),
                 "valid_nodes": sum(row["valid_nodes"] for row in runs),
+                **_candidate_summary(runs),
                 "timing": batch_timing(runs),
             },
             "tasks": groups,
@@ -563,9 +534,10 @@ class ResultsMonitor:
                         # the final program's training score (selected node for V10.14+)
                         "train": row.get("best_fitness") if row.get("status") == "finished"
                         else (row.get("curve") or [{}])[-1].get("fitness", row.get("best_fitness")),
-                        "selection": selection.get("fitness", row.get("selection_fitness")),
+                        "selection": selection.get("fitness") if selection.get("fitness") is not None else row.get("selection_fitness"),
                         "ties": selection.get("ties"), "finalists": selection.get("finalists"),
                         "heldout": {str(k): v for k, v in named.get(row["name"], {}).items()},
+                        "heldout_verification": heldout.get("verification", {}).get(row["name"], {}),
                     })
                 present = {run["name"] for run in runs}
                 for name, scores in named.items():  # held-out results whose run dir is gone
@@ -585,52 +557,17 @@ class ResultsMonitor:
     def run_detail(self, experiment: str, task: str, name: str):
         if experiment == "traceaad_v10_13":
             return self.v1013.run_detail(self.v1013.default_batch or "", task, name)
-        row = next((row for row in self._runs(experiment)
+        row = next((row for row in self._runs(experiment, task, name)
                     if row["task"] == task and row["name"] == name), None)
         if row is None:
             return None
         run_dir = row["run_dir"]
         summary = _read_json(run_dir / "logs/run_summary.json")
-        best = summary.get("best")
         curve, recent, operators, outcomes = _search_trend(run_dir, task)
-        if not isinstance(best, dict) or not isinstance(best.get("code"), str):
-            # Live V10.15 runs: the incumbent's node line is indexed by the
-            # incremental history, so fetch just that line.
-            record = next((point for point in reversed(curve)
-                           if point.get("kind") in {"initial", "breakthrough"}), None)
-            node = _history(run_dir, task).node(record["candidate"]) if record else None
-            if node and isinstance(node.get("code"), str):
-                best = node
-        if not isinstance(best, dict) or not isinstance(best.get("code"), str):
-            try:
-                sample, _ = pick_best_sample(run_dir, allow_incomplete=True)
-                best = {"code": sample["program"], "fitness": sample["score"],
-                        "operator": sample.get("operator")}
-            except (RuntimeError, OSError, ValueError, KeyError):
-                best = None
-        if best is None:
-            journal = run_dir / JOURNAL_NAME
-            if journal.exists():
-                with journal.open(encoding="utf-8") as handle:
-                    for line in handle:
-                        record = json.loads(line)
-                        node = record.get("data") if record.get("kind") == "node" else None
-                        if (isinstance(node, dict) and isinstance(node.get("code"), str)
-                                and isinstance(node.get("fitness"), (int, float))
-                                and (best is None or node["fitness"] > best["fitness"])):
-                            best = node
-        return {
-            **{key: value for key, value in row.items() if key != "run_dir"},
-            "task_meta": TASKS[task], "curve": curve, "operators": operators,
-            "outcomes": outcomes, "recent": recent,
-            "best": None if best is None else {
-                "id": best.get("id", best.get("node_id")),
-                "fitness": best.get("fitness"),
-                "value": _objective(best.get("fitness"), task),
-                "operator": best.get("operator") or best.get("action"), "idea": best.get("idea") or "",
-                "code": best.get("code") or "",
-            },
-        }
+        return {**{key: value for key, value in row.items() if key != "run_dir"},
+                "task_meta": TASKS[task], "curve": curve, "operators": operators,
+                "outcomes": outcomes, "recent": recent,
+                **_programs(run_dir, task, summary, curve)}
 
 
 class ResponseCache:
@@ -669,7 +606,7 @@ def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler
             if parsed.path in {"/", "/index.html"}:
                 return self._serve_html()
             if parsed.path == "/api/batches":
-                return self._send_json({"batches": monitor.batches()})
+                return self._send_json({"batches": monitor.batches(), "default_batch": monitor.default_batch()})
             if parsed.path == "/api/state":
                 batch = params.get("batch", [None])[0]
                 signature = monitor.state_signature(batch)
@@ -750,7 +687,7 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_ROOT)
-    parser.add_argument("--experiment", default="traceaad_v10_13")
+    parser.add_argument("--experiment", default=None)
     parser.add_argument("--batch", "--version", dest="batch", default=None)
     args = parser.parse_args()
 

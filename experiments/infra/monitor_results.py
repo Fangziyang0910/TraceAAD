@@ -7,13 +7,15 @@ Scores are always fitness (higher is better). Two layouts are understood:
   ``results_by_split`` / ``results_by_size`` / ``eval_results_by_size`` /
   ``eval_results_by_scale`` shapes.
 
-Both describe the same protocols (ACO ``test_<n>`` splits; generated eval
-instances with seed 2025), so their numbers are comparable.
+Native result identities are checked against the frozen final program. Legacy
+exports without identity fields remain visible with their verification status.
 """
 
 from __future__ import annotations
 
 import json
+import hashlib
+from functools import lru_cache
 import math
 from pathlib import Path
 import re
@@ -40,7 +42,7 @@ REP = re.compile(r"rep(\d+)")
 def _finite(value):
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return number if math.isfinite(number) else None
 
@@ -113,6 +115,7 @@ def load_batch_heldout(batch_dir: Path) -> dict[str, dict[str, dict]]:
     batch_dir = Path(batch_dir)
     candidates: dict[tuple, list] = {}
     native: dict[str, dict] = {}
+    verification: dict[str, dict] = {}
     for path in batch_result_files(batch_dir):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -121,38 +124,111 @@ def load_batch_heldout(batch_dir: Path) -> dict[str, dict[str, dict]]:
         if not isinstance(payload, dict):
             continue
         if path.name.startswith("heldout_"):
-            task = payload.get("task")
-            scale = scale_of_split(task, str(payload.get("split", ""))) if task in SCALES else None
+            config = _read_json(path.parent / "run_config.json")
+            task = config.get("task", path.parent.parent.name)
+            split = path.stem.removeprefix("heldout_")
+            scale = scale_of_split(task, split) if task in SCALES else None
             if scale is not None:
-                native.setdefault(task, {}).setdefault(path.parent.name, {})[scale] = _finite(payload.get("fitness"))
+                state = ("split_mismatch" if payload.get("split") != split
+                         else _heldout_identity(path.parent, payload))
+                checks = verification.setdefault(task, {}).setdefault(path.parent.name, {})
+                checks[str(scale)] = state
+                scores = native.setdefault(task, {}).setdefault(path.parent.name, {})
+                if state in {"verified", "legacy"}:
+                    scores[scale] = _finite(payload.get("fitness"))
             continue
         task = _task_of(path, payload, batch_dir)
         if task is None or SKIP_SOURCE.search(path.parent.name):
             continue
         runs: dict[str, dict] = {}
+        checks: dict[str, dict] = {}
         for scale, results in _entries(payload, task):
             for result in results:
                 if result.get("run_name"):
-                    runs.setdefault(str(result["run_name"]), {})[scale] = _finite(result.get("eval_score"))
+                    name = str(result["run_name"])
+                    state = (_heldout_identity(batch_dir / task / name, {"task": task, **result})
+                             if result.get("key") is not None else "legacy")
+                    checks.setdefault(name, {})[str(scale)] = state
+                    scores = runs.setdefault(name, {})
+                    if state in {"verified", "legacy"}:
+                        scores[scale] = _finite(result.get("eval_score"))
         if runs:
             key = (variant_of(path, batch_dir), task)
             candidates.setdefault(key, []).append(
-                (len(runs), str(payload.get("created_at") or ""), str(path.parent.relative_to(batch_dir)), runs))
+                (len(runs), str(payload.get("created_at") or ""), str(path.parent.relative_to(batch_dir)), runs, checks))
     output: dict[str, dict] = {}
     for (variant, task), options in candidates.items():
-        _, _, source, runs = max(options, key=lambda item: (item[0], item[1]))
-        output.setdefault(variant, {})[task] = {"source": source, "runs": runs}
+        _, _, source, runs, checks = max(options, key=lambda item: (item[0], item[1]))
+        output.setdefault(variant, {})[task] = {"source": source, "runs": runs, "verification": checks}
     for task, runs in native.items():  # per-run V10.15 results
-        output.setdefault("", {})[task] = {"source": "heldout_<split>.json", "runs": runs}
+        previous = output.setdefault("", {}).get(task, {})
+        merged = {name: dict(scores) for name, scores in previous.get("runs", {}).items()}
+        checks = {name: dict(states) for name, states in previous.get("verification", {}).items()}
+        for name, scores in runs.items():
+            merged.setdefault(name, {}).update(scores)
+            checks.setdefault(name, {}).update(verification[task][name])
+            # Explicitly rejected results must not fall back to another stale export.
+            for scale, state in verification[task][name].items():
+                if state not in {"verified", "legacy"}:
+                    key = int(scale) if scale.isdigit() else scale
+                    merged[name].pop(key, None)
+        output[""][task] = {"source": "heldout_<split>.json", "runs": merged,
+                              "verification": checks}
     return output
 
 
-def _read_config(run_dir: Path) -> dict:
+def _read_json(path: Path) -> dict:
     try:
-        value = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))
+        value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def selection_identity(payload):
+    """V10.14 and current selection files name the same two identity fields."""
+    return (payload.get("selected_node", payload.get("selected_anchor")),
+            payload.get("selected_key", payload.get("selected_source_sha256")))
+
+
+@lru_cache(maxsize=1024)
+def _frozen_program(run_dir: Path, stamps):
+    selection = _read_json(run_dir / "selection.json")
+    summary = _read_json(run_dir / "logs/run_summary.json")
+    node, key = selection_identity(selection)
+    if not key or node is None or summary.get("status") != "finished":
+        return node, key, False
+    best = summary.get("best") or {}
+    if best.get("id", best.get("node_id")) != node:
+        return node, key, False
+    try:
+        actual = hashlib.sha256((run_dir / "best_program.py").read_bytes()).hexdigest()
+    except OSError:
+        return node, key, False
+    return node, key, actual == key
+
+
+def _heldout_identity(run_dir: Path, payload: dict) -> str:
+    config = _read_json(run_dir / "run_config.json")
+    task = config.get("task", run_dir.parent.name)
+    if payload.get("task") != task:
+        return "task_mismatch"
+    if payload.get("key") is None and payload.get("node_id") is None:
+        return "legacy"  # Historical evaluator exports did not store program identity.
+    paths = (run_dir / "selection.json", run_dir / "logs/run_summary.json", run_dir / "best_program.py")
+    stamps = []
+    for path in paths:
+        try:
+            stat = path.stat()
+            stamps.append((stat.st_size, stat.st_mtime_ns, stat.st_dev, stat.st_ino))
+        except OSError:
+            stamps.append(None)
+    node, key, frozen = _frozen_program(run_dir, tuple(stamps))
+    if not frozen:
+        return "program_unverified"
+    if payload.get("key") != key or payload.get("node_id") != node:
+        return "program_mismatch"
+    return "verified"
 
 
 def load_selection(run_dir: Path) -> dict | None:
@@ -164,9 +240,19 @@ def load_selection(run_dir: Path) -> dict | None:
     results = payload.get("results") if isinstance(payload, dict) else None
     if not isinstance(results, list) or not results:
         return None
-    chosen = next((r for r in results if r.get("node_id") == payload.get("selected_node")), None)
-    winner = _finite(chosen.get("fitness")) if chosen else None
-    valid = [_finite(r.get("fitness")) for r in results]
+    selected, _ = selection_identity(payload)
+    chosen = next((r for r in results if isinstance(r, dict) and selected is not None
+                   and r.get("node_id", r.get("anchor_id")) == selected), None)
+    def score(result):
+        if not isinstance(result, dict):
+            return None
+        value = result.get("fitness")
+        outcome = result.get("outcome")
+        if value is None and isinstance(outcome, dict):
+            value = outcome.get("fitness")
+        return _finite(value)
+    winner = score(chosen) if chosen else None
+    valid = [score(r) for r in results]
     return {
         "fitness": winner,
         "finalists": len(results),

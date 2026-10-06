@@ -100,7 +100,7 @@ select.ctl { max-width: 260px; }
 main { max-width: 1480px; margin: 0 auto; padding: 18px 20px 64px; }
 
 /* ---------- KPIs ---------- */
-.kpis { display: grid; grid-template-columns: 1.3fr 1.3fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.kpis { display: grid; grid-template-columns: 1.3fr 1.3fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
 .kpi .k { color: var(--muted); font-size: 12px; }
 .kpi .v { font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -265,7 +265,7 @@ svg.dots .mean { stroke: var(--ink); stroke-width: 2; }
 
 @media (max-width: 1180px) {
   .tasks { grid-template-columns: minmax(0, 1fr); }
-  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
   .top { padding: 10px 14px; }
@@ -305,7 +305,6 @@ svg.dots .mean { stroke: var(--ink); stroke-width: 2; }
   <section class="kpis" aria-label="批次摘要">
     <div class="kpi"><div class="k">运行完成</div><div class="v" id="k-runs">–</div><div class="seg" id="k-seg"></div><div class="n" id="k-runs-n">–</div></div>
     <div class="kpi"><div class="k">搜索预算</div><div class="v" id="k-budget">–</div><div class="seg"><i class="running" id="k-budget-bar" style="width:0"></i></div><div class="n" id="k-budget-n">–</div></div>
-    <div class="kpi"><div class="k">总吞吐</div><div class="v" id="k-speed">–</div><div class="n" id="k-speed-n">–</div></div>
     <div class="kpi"><div class="k">预计搜索剩余</div><div class="v" id="k-eta">–</div><div class="n" id="k-eta-n">–</div></div>
     <div class="kpi"><div class="k">有效候选</div><div class="v" id="k-nodes">–</div><div class="n" id="k-nodes-n">–</div></div>
   </section>
@@ -345,7 +344,11 @@ svg.dots .mean { stroke: var(--ink); stroke-width: 2; }
 const REFRESH_MS = 15000;
 const STATUS = {finished: "已完成", running: "运行中", queued: "排队中", blocked: "受阻", unknown: "未确认"};
 const OUTCOME = {
-  valid: ["有效", "ok"], duplicate: ["重复", "neutral"], runtime_error: ["运行错误", "bad"],
+  valid: ["有效", "ok"], ok: ["有效", "ok"], expanded: ["有效", "ok"],
+  improve: ["有效 · 提升", "ok"], regress: ["有效 · 退步", "ok"], plateau: ["有效 · 持平", "ok"],
+  eval_failed: ["评测失败", "bad"], evaluation_failed: ["评测失败", "bad"],
+  exec_error: ["执行错误", "bad"], invalid: ["候选无效", "bad"],
+  duplicate: ["重复", "neutral"], runtime_error: ["运行错误", "bad"],
   timeout: ["超时", "warn"], invalid_output: ["输出无效", "bad"], invalid_result: ["结果无效", "bad"],
   invalid_source: ["源码无效", "bad"], known_failure: ["已知失败", "neutral"], delivery_failed: ["未交付", "warn"],
 };
@@ -353,9 +356,9 @@ const $ = id => document.getElementById(id);
 const tip = $("tip");
 
 const S = {
-  batch: "", metric: localStorage.getItem("monitor.metric") || "value",
+  batch: "", metric: (() => { try { return localStorage.getItem("monitor.metric") || "value"; } catch { return "value"; } })(),
   view: "monitor", data: null, fetchedAt: 0, structure: "", charts: new Map(), run: null, detail: null,
-  timer: null, inflight: false,
+  timer: null, inflight: false, request: null,
 };
 const etags = new Map(), bodies = new Map();
 
@@ -409,13 +412,14 @@ function bestFitness(run) {
 }
 
 /* ---------- network ---------- */
-async function getJSON(url) {
+async function getJSON(url, {signal} = {}) {
   const headers = {};
   if (etags.has(url)) headers["If-None-Match"] = etags.get(url);
-  const response = await fetch(url, {headers, cache: "no-store"});
+  const response = await fetch(url, {headers, cache: "no-store", signal});
   if (response.status === 304 && bodies.has(url)) return {data: bodies.get(url), changed: false};
   if (!response.ok) throw new Error(`${response.status} ${response.statusText || "请求失败"}`);
   const data = await response.json();
+  signal?.throwIfAborted();
   const tag = response.headers.get("ETag");
   if (tag) { etags.set(url, tag); bodies.set(url, data); }
   return {data, changed: true};
@@ -445,33 +449,46 @@ function showError(message) {
 
 async function loadBatches() {
   const {data} = await getJSON("/api/batches");
-  const select = $("batch");
+  const select = $("batch"), previous = S.batch;
   select.replaceChildren(...data.batches.map(b => new Option(b.label || b.id, b.id)));
-  const fromHash = hashParams().get("b") || "";
-  // Default to the most recently active batch; only an explicit link overrides it.
-  S.batch = data.batches.some(b => b.id === fromHash) ? fromHash : data.batches[0]?.id || "";
+  const wanted = previous || hashParams().get("b") || data.default_batch;
+  S.batch = data.batches.some(b => b.id === wanted) ? wanted : data.batches[0]?.id || "";
   select.value = S.batch;
+  if (previous && previous !== S.batch) {
+    closeRun(); S.data = null; S.structure = "";
+    writeHash();
+  }
 }
 
 async function refresh({force = false} = {}) {
-  if (!S.batch || S.inflight) return;
-  S.inflight = true;
-  const batch = S.batch;
+  if (!S.batch) {
+    try { await loadBatches(); }
+    catch (error) { setLive("err", "连接失败"); showError(`读取失败：${error.message}`); return; }
+    if (!S.batch) { setLive("", "暂无批次"); return; }
+  }
+  if (S.inflight && S.request?.batch === S.batch && !force) return;
+  S.request?.controller.abort();
+  const request = {batch: S.batch, controller: new AbortController()};
+  S.request = request; S.inflight = true;
+  const batch = request.batch;
   $("refresh").classList.add("spin");
   try {
     if (force) etags.delete(stateURL(batch));
-    const {data, changed} = await getJSON(stateURL(batch));
-    if (batch !== S.batch) return;
+    const {data, changed} = await getJSON(stateURL(batch), {signal: request.controller.signal});
+    if (S.request !== request || batch !== S.batch) return;
     S.fetchedAt = Date.now();
-    setLive("on", "实时 · 刚刚");
-    showError("");
+    setLive("on", "实时 · 刚刚"); showError("");
     if (changed || !S.data) { S.data = data; render(data); }
     if (S.run) await loadDetail();
   } catch (error) {
-    if (batch === S.batch) { setLive("err", "连接失败"); showError(`读取失败：${error.message}`); }
+    if (error.name !== "AbortError" && S.request === request && batch === S.batch) {
+      setLive("err", "连接失败"); showError(`读取失败：${error.message}`);
+    }
   } finally {
-    S.inflight = false;
-    $("refresh").classList.remove("spin");
+    if (S.request === request) {
+      S.inflight = false; S.request = null;
+      $("refresh").classList.remove("spin");
+    }
   }
 }
 
@@ -496,15 +513,13 @@ function renderKPIs(data) {
   $("k-budget-bar").style.width = `${Math.min(100, pct)}%`;
   $("k-budget-n").textContent = `${(s.budget_used ?? 0).toLocaleString()} / ${(s.budget ?? 0).toLocaleString()}`;
   const t = s.timing;
-  $("k-speed").innerHTML = t?.rate_per_minute == null ? "–" : `${t.rate_per_minute.toFixed(2)}<small>次/分</small>`;
-  $("k-speed-n").textContent = t ? `${t.rate_runs}/${t.active_runs} 路可计速` : "暂无计时";
   // Partial estimates still bound the batch from below: the slowest estimable run.
   const etas = (data.tasks || []).flatMap(task => task.runs)
     .filter(r => r.status === "running" && r.timing?.state === "estimated").map(r => r.timing.eta_seconds);
   $("k-eta").textContent = t?.state === "partial" && etas.length ? `≥ ${dur(Math.max(...etas))}` : eta(t);
   $("k-eta-n").textContent = t?.eta_at ? `约 ${clock(t.eta_at)} · 按最慢一路` : t?.pending_runs ? `${t.eta_runs}/${t.pending_runs} 路可估算` : "不含选择与测试";
   $("k-nodes").textContent = (s.valid_nodes ?? 0).toLocaleString();
-  $("k-nodes-n").textContent = s.budget_used ? `有效率 ${(s.valid_nodes / s.budget_used * 100).toFixed(1)}%` : "–";
+  $("k-nodes-n").textContent = s.valid_rate != null ? `记录有效率 ${(s.valid_rate * 100).toFixed(1)}% · ${s.valid_candidate_count}/${s.candidate_count}` : "暂无候选记录";
   const alerts = (data.tasks || []).flatMap(task => task.runs).filter(r =>
     (r.status === "running" && r.timing?.state === "stale") || (r.budget && r.budget_used > r.budget)).length;
   document.title = `${alerts ? `⚠${alerts} · ` : ""}${s.finished ?? 0}/${runs} · ${pct.toFixed(0)}% · TraceAAD`;
@@ -580,7 +595,7 @@ function updateTask(task) {
     agg.innerHTML = `<b>${fmt(mean)} <span style="font-weight:500;color:var(--muted);font-size:12px">± ${fmt(sd, 3)}</span></b>搜索最优 均值 ± 标准差 · 最好 ${fmt(better)}`;
   } else agg.textContent = "暂无有效候选";
   const chart = S.charts.get(task.key);
-  const sig = S.metric + task.runs.map(r => `${r.name}:${r.budget_used}:${r.curve?.length}:${bestFitness(r)}`).join("|");
+  const sig = S.metric + JSON.stringify(task.runs.map(r => [r.name, r.status, r.budget, r.budget_used, r.x_label, r.curve]));
   if (chart && chart.sig !== sig) {
     chart.sig = sig;
     chart.task = task;
@@ -589,7 +604,8 @@ function updateTask(task) {
       live: run.status === "running",
       points: (run.curve || []).filter(p => Number.isFinite(p.fitness)).map(p => ({x: p.evaluation, f: p.fitness, p})),
     }));
-    chart.maxX = Math.max(1, ...task.runs.map(r => Math.max(r.budget || 0, r.budget_used || 0)));
+    chart.maxX = Math.max(1, ...task.runs.map(r => Math.max(r.budget || 0, r.budget_used || 0, r.curve?.at(-1)?.evaluation || 0)));
+    chart.xLabel = task.runs[0]?.x_label || "已记录序号";
     drawChart(chart);
   }
 }
@@ -666,7 +682,7 @@ function drawChart(chart) {
   ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
   ctx.fillText("0", L, H - 6);
   ctx.textAlign = "right"; ctx.fillText(String(chart.maxX), W - R, H - 6);
-  ctx.textAlign = "center"; ctx.fillText("预算", (L + W - R) / 2, H - 6);
+  ctx.textAlign = "center"; ctx.fillText(chart.xLabel || "已记录序号", (L + W - R) / 2, H - 6);
   // series
   ctx.save();
   ctx.beginPath(); ctx.rect(L, T - 2, W - L - R + 2, H - T - B + 4); ctx.clip();
@@ -741,7 +757,7 @@ function bindOverlayHover(chart) {
         const at = end && xv <= end.x ? stepAt(s.points, xv) : null;
         return `<div class="row"><span><i class="sw" style="--c:${seriesColor(s.color)}"></i>${esc(s.name)}</span><strong>${at ? fmt(shown(at.f, task)) : "–"}</strong></div>`;
       }).join("");
-      tip.innerHTML = `<h4>预算 ${xv}</h4>${rows}`;
+      tip.innerHTML = `<h4>${esc(chart.xLabel || "已记录序号")} ${xv}</h4>${rows}`;
       placeTip(event);
     });
   });
@@ -772,7 +788,7 @@ function bindDetailHover(chart) {
       tip.innerHTML = `<h4>${p.kind === "initial" ? "首个有效候选" : "刷新历史最优"}</h4>`
         + `<div class="row"><span>${S.metric === "fitness" ? "Fitness" : `原始${esc(task.unit)}`}</span><strong>${fmt(shown(p.fitness, task), 6)}</strong></div>`
         + (p.gain != null ? `<div class="row"><span>Fitness 改进</span><strong>+${fmt(p.gain, 6)}</strong></div>` : "")
-        + `<div class="row"><span>预算位置</span><strong>${p.evaluation}</strong></div>`
+        + `<div class="row"><span>${esc(chart.xLabel || "已记录序号")}</span><strong>${p.evaluation}</strong></div>`
         + `<div class="row"><span>动作</span><strong>${esc(p.operator && p.operator !== "unknown" ? p.operator : "未记录")}</strong></div>`
         + (p.candidate != null ? `<div class="row"><span>候选 / 父代</span><strong>#${esc(p.candidate)}${p.parent_id != null ? ` ← #${esc(p.parent_id)}` : ""}</strong></div>` : "")
         + (p.idea ? `<p>${esc(p.idea)}</p>` : "");
@@ -804,6 +820,7 @@ function openRun(taskKey, name) {
 }
 function closeRun() {
   if (!S.run) return;
+  S.detailRequest?.abort(); S.detailRequest = null;
   bodies.delete(runURL(S.run)); etags.delete(runURL(S.run));
   S.run = null; S.detail = null;
   if (S.detailChart) { resizer.unobserve(S.detailChart.canvas.parentElement); S.detailChart = null; }
@@ -816,12 +833,15 @@ function closeRun() {
 async function loadDetail() {
   const selected = S.run;
   if (!selected) return;
+  S.detailRequest?.abort();
+  const request = new AbortController();
+  S.detailRequest = request;
   try {
-    const {data, changed} = await getJSON(runURL(selected));
-    if (S.run !== selected) return;
+    const {data, changed} = await getJSON(runURL(selected), {signal: request.signal});
+    if (S.run !== selected || S.detailRequest !== request) return;
     if (changed || !S.detail) { S.detail = data; renderDetail(data); }
   } catch (error) {
-    if (S.run !== selected) return;
+    if (error.name === "AbortError" || S.run !== selected || S.detailRequest !== request) return;
     if (!S.detail) $("d-body").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
     else $("d-sub").textContent = `刷新失败，保留上次数据：${error.message}`;
   }
@@ -831,12 +851,19 @@ function renderDetail(run) {
   const task = {...run.task_meta, key: run.task};
   const body = $("d-body");
   const scroll = body.scrollTop;
-  const codeOpen = body.querySelector("details.code")?.open;
+  const codeOpen = new Map([...body.querySelectorAll("[data-program]")].map(el => [el.dataset.program, el.querySelector("details.code")?.open]));
   const t = run.timing || {};
   const best = bestFitness(run);
   const outcomes = Object.entries(run.outcomes || {}).sort((a, b) => b[1] - a[1]);
-  const total = outcomes.reduce((a, [, n]) => a + n, 0) || 1;
-  const valid = run.outcomes?.valid || 0;
+  const total = run.candidate_count ?? outcomes.reduce((a, [, n]) => a + n, 0);
+  const denominator = Math.max(1, total);
+  const programs = [];
+  const same = run.search_best?.code && run.search_best.code === run.selected_best?.code && run.search_best.fitness === run.selected_best.fitness;
+  if (same) programs.push({role: "search", title: "搜索最优 / 最终选中程序", program: run.search_best});
+  else {
+    if (run.search_best) programs.push({role: "search", title: "搜索最优程序", program: run.search_best});
+    if (run.selected_best) programs.push({role: "selected", title: "最终选中程序", program: run.selected_best});
+  }
   const ops = Object.entries(run.operators || {}).sort((a, b) => b[1] - a[1]);
   const opMax = Math.max(1, ...ops.map(([, n]) => n));
   const breakthroughs = (run.curve || []).filter(p => p.kind === "breakthrough").length;
@@ -845,7 +872,7 @@ function renderDetail(run) {
   body.innerHTML = `
     <div class="tiles">
       ${tile("进度", `${run.budget_used} / ${run.budget}`)}
-      ${tile("有效候选", `${run.valid_nodes} <span style="color:var(--muted);font-weight:500;font-size:12px">(${(valid / total * 100).toFixed(0)}%)</span>`)}
+      ${tile("记录有效率", run.valid_rate != null ? `${(run.valid_rate * 100).toFixed(1)}% <span style="color:var(--muted);font-weight:500;font-size:12px">(${run.valid_candidate_count}/${total})</span>` : "–")}
       ${tile(`搜索最优 ${S.metric === "fitness" ? "Fitness" : esc(task.unit)}`, fmt(shown(best, task), 5))}
       ${tile("选择分", fmt(shown(run.selection_fitness, task), 5))}
       ${tile("平均速度", speed(t))}
@@ -854,30 +881,33 @@ function renderDetail(run) {
       ${tile("预计完成", t.eta_at ? clock(t.eta_at) : run.updated_at ? `完成于 ${clock(run.updated_at)}` : "–")}
     </div>
     <section class="sec"><h3>历史最优曲线<small>${breakthroughs} 次突破 · 悬停圆点查看候选</small></h3><div class="d-chart"><canvas></canvas></div></section>
-    <section class="sec"><h3>评测结果<small>共 ${total} 次</small></h3>
-      <div class="stack">${outcomes.map(([k, n]) => `<i style="width:${n / total * 100}%;background:var(${toneVar[tone(k)]});${tone(k) === "neutral" ? "opacity:.6" : ""}" title="${esc(outcomeLabel(k))} ${n}"></i>`).join("")}</div>
+    <section class="sec"><h3>候选结果<small>共 ${total} 条记录</small></h3>
+      <div class="stack">${outcomes.map(([k, n]) => `<i style="width:${n / denominator * 100}%;background:var(${toneVar[tone(k)]});${tone(k) === "neutral" ? "opacity:.6" : ""}" title="${esc(outcomeLabel(k))} ${n}"></i>`).join("")}</div>
       <div class="legend">${outcomes.map(([k, n]) => `<span><i style="background:var(${toneVar[tone(k)]})"></i>${esc(outcomeLabel(k))} <b>${n}</b></span>`).join("")}</div>
     </section>
     <div class="two">
       <section class="sec"><h3>动作分布</h3><div class="bars">${ops.map(([k, n]) => `<div class="bar-row"><span>${esc(k)}</span><span class="track"><i style="width:${n / opMax * 100}%;--c:var(--accent)"></i></span><b>${n}</b></div>`).join("") || '<span class="empty">–</span>'}</div></section>
       <section class="sec"><h3>最近候选</h3>
-        <table class="recent"><thead><tr><th>#</th><th>动作</th><th>结果</th><th class="nr">${S.metric === "fitness" ? "Fitness" : esc(task.unit)}</th></tr></thead>
+        <table class="recent"><thead><tr><th>${esc(run.x_label || "序号")}</th><th>动作</th><th>结果</th><th class="nr">${S.metric === "fitness" ? "Fitness" : esc(task.unit)}</th></tr></thead>
         <tbody>${(run.recent || []).map(r => `<tr><td class="num">${esc(r.evaluation)}</td><td>${esc(r.operator === "unknown" ? "–" : r.operator)}</td><td><span class="st ${tone(r.status) === "ok" ? "valid" : tone(r.status)}">${esc(outcomeLabel(r.status))}</span></td><td class="nr">${fmt(shown(r.fitness, task))}</td></tr>`).join("")}</tbody></table>
       </section>
     </div>
-    ${run.best ? `<section class="sec"><h3>当前最佳程序<small>候选 #${esc(run.best.id ?? "–")}${run.best.operator ? ` · ${esc(run.best.operator)}` : ""}</small></h3>
+    ${programs.map(({role, title, program}) => `<section class="sec" data-program="${role}"><h3>${title}<small>候选 #${esc(program.id ?? "–")} · 训练 ${S.metric === "fitness" ? "Fitness" : esc(task.unit)} ${fmt(shown(program.fitness, task), 5)}${program.operator ? ` · ${esc(program.operator)}` : ""}</small></h3>
       <p class="idea"></p>
-      <details class="code" ${codeOpen ? "open" : ""}><summary>查看代码</summary><pre></pre></details></section>` : ""}`;
-  if (run.best) {
-    body.querySelector(".idea").textContent = run.best.idea || "（无 idea 记录）";
-    const pre = body.querySelector("pre"), details = body.querySelector("details.code");
-    const fill = () => { if (!pre.textContent) pre.textContent = run.best.code || ""; };
-    if (details.open) fill(); else details.addEventListener("toggle", fill, {once: true});
+      ${program.code ? `<details class="code" ${codeOpen.get(role) ? "open" : ""}><summary>查看代码</summary><pre></pre></details>` : '<p class="empty">历史记录未保存此候选的源码</p>'}</section>`).join("")}`;
+  for (const {role, program} of programs) {
+    const section = body.querySelector(`[data-program="${role}"]`);
+    section.querySelector(".idea").textContent = program.idea || "（无 idea 记录）";
+    const pre = section.querySelector("pre"), details = section.querySelector("details.code");
+    if (!pre || !details) continue;
+    const fill = () => { if (details.open && !pre.textContent) pre.textContent = program.code; };
+    if (details.open) fill();
+    details.addEventListener("toggle", fill);
   }
   const canvas = body.querySelector(".d-chart canvas");
   if (S.detailChart) resizer.unobserve(S.detailChart.canvas.parentElement);
   S.detailChart = {
-    canvas, task, maxX: Math.max(1, run.budget || 0, run.budget_used || 0),
+    canvas, task, xLabel: run.x_label, maxX: Math.max(1, run.budget || 0, run.budget_used || 0, run.curve?.at(-1)?.evaluation || 0),
     series: [{name: run.name, color: S.run?.color ?? 0, live: run.status === "running",
       points: (run.curve || []).filter(p => Number.isFinite(p.fitness)).map(p => ({x: p.evaluation, f: p.fitness, p}))}],
   };
@@ -924,17 +954,21 @@ function renderChips() {
 }
 
 async function loadCompare({force = false} = {}) {
+  CMP.request?.abort();
+  const request = new AbortController();
+  CMP.request = request;
   renderChips();
   writeHash();
   if (!CMP.ids.length) { CMP.data = null; renderCompare(); return; }
   const url = `/api/compare?cohorts=${encodeURIComponent(CMP.ids.join(","))}`;
   if (force) etags.delete(url);
   try {
-    const {data, changed} = await getJSON(url);
-    if (url !== `/api/compare?cohorts=${encodeURIComponent(CMP.ids.join(","))}`) return;
+    const {data, changed} = await getJSON(url, {signal: request.signal});
+    if (CMP.request !== request || url !== `/api/compare?cohorts=${encodeURIComponent(CMP.ids.join(","))}`) return;
     $("cmp-error").hidden = true;
     if (changed || CMP.data !== data) { CMP.data = data; renderCompare(); }
   } catch (error) {
+    if (error.name === "AbortError" || CMP.request !== request) return;
     $("cmp-error").hidden = false;
     $("cmp-error").textContent = `对比数据读取失败：${error.message}`;
   }
@@ -995,7 +1029,10 @@ function renderCompare() {
         }
       }
       const ref = M[CMP.ref]?.[col.key];
-      if (ref) for (const [id, m] of cells) if (id !== CMP.ref) acc[id][col.group].rels.push(relGap(m, ref.mean));
+      if (ref) for (const [id, m] of cells) if (id !== CMP.ref) {
+        const gap = relGap(m, ref.mean);
+        if (Number.isFinite(gap)) acc[id][col.group].rels.push(gap);
+      }
     }
     return {task, cols, M};
   });
@@ -1013,6 +1050,11 @@ function renderCompare() {
     </tbody></table></div>`;
 
   $("cmp-tasks").innerHTML = perTask.map(({task, cols, M}) => {
+    if (!cols.length) {
+      const rejected = task.cohorts.flatMap(c => c.runs).flatMap(r => Object.values(r.heldout_verification || {}))
+        .filter(state => !["verified", "legacy"].includes(state)).length;
+      return `<article class="panel"><div class="panel-head"><h2>${esc(task.label)}</h2></div><div class="empty">暂无可用成绩${rejected ? `；${rejected} 项测试结果未通过程序身份核验，已排除` : ""}</div></article>`;
+    }
     const ids = order.filter(id => task.cohorts.some(c => c.id === id));
     const head1 = [], head2 = [];
     for (let i = 0; i < cols.length;) {
@@ -1049,6 +1091,14 @@ function renderCompare() {
       : (cols.find(c => c.group === "test") || cols[0]).key;
     CMP.col[task.key] = pick;
     const sources = task.cohorts.filter(c => c.source).map(c => `${esc(label.get(c.id) || c.id)}：${esc(c.source)}`).join("；");
+    const identityNotes = task.cohorts.map(cohort => {
+      const checks = cohort.runs.flatMap(run => Object.values(run.heldout_verification || {}));
+      const rejected = checks.filter(state => !["verified", "legacy"].includes(state)).length;
+      const legacy = checks.filter(state => state === "legacy").length;
+      const notes = [rejected ? `${rejected} 项测试结果与最终程序不一致或无法核验，已排除` : "",
+        legacy ? `${legacy} 项历史测试结果未记录程序身份` : ""].filter(Boolean);
+      return notes.length ? `${esc(label.get(cohort.id) || cohort.id)}：${notes.join("；")}` : "";
+    }).filter(Boolean).join("；");
     return `<article class="panel cmp-task" data-task="${esc(task.key)}">
       <div class="panel-head"><h2>${esc(task.label)}</h2><p>原始${esc(task.unit)} · ${task.direction === "min" ? "越低越好" : "越高越好"}</p></div>
       <div class="tbl-wrap"><table class="cmp"><thead><tr><th rowspan="2">对象</th>${head1.join("")}</tr><tr>${head2.join("")}</tr></thead><tbody>${rows}</tbody></table></div>
@@ -1056,6 +1106,7 @@ function renderCompare() {
         `<button type="button" data-col="${esc(col.key)}" aria-pressed="${col.key === pick}">${esc(col.label)}</button>`).join("")}</div></div>
       <svg class="dots"></svg>
       ${sources ? `<div class="src">held-out 来源 · ${sources}</div>` : ""}
+      ${identityNotes ? `<div class="src">${identityNotes}</div>` : ""}
     </article>`;
   }).join("");
   drawAllDots();
@@ -1215,13 +1266,22 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 
 /* ---------- polling: only while visible ---------- */
 function startPolling() {
-  clearInterval(S.timer);
+  stopPolling();
   S.timer = setInterval(() => {
     if (S.fetchedAt && !$("live").classList.contains("err")) $("live-text").textContent = `实时 · ${rel(S.fetchedAt)}`;
   }, 5000);
   let ticks = 0;
   // Comparison data changes slowly (finished runs, new held-out files): poll 4x less often.
-  S.poll = setInterval(() => S.view === "compare" ? (++ticks % 4 === 0 && loadCompare()) : refresh(), REFRESH_MS);
+  S.poll = setInterval(async () => {
+    ticks++;
+    if (ticks % 4 === 0 || !S.batch) {
+      try { await loadBatches(); } catch {}
+    }
+    if (S.view === "compare") {
+      if (ticks % 4 === 0) { try { await loadCohorts(); } catch {} loadCompare(); }
+    }
+    else refresh();
+  }, REFRESH_MS);
 }
 function stopPolling() { clearInterval(S.timer); clearInterval(S.poll); }
 document.addEventListener("visibilitychange", () => {
@@ -1244,10 +1304,11 @@ document.addEventListener("visibilitychange", () => {
       const linked = hash.get("r");
       if (linked && linked.includes("/")) openRun(linked.slice(0, linked.indexOf("/")), linked.slice(linked.indexOf("/") + 1));
     }
-    startPolling();
   } catch (error) {
     setLive("err", "初始化失败");
     showError(error.message);
+  } finally {
+    if (!document.hidden) startPolling();
   }
 })();
 </script>
