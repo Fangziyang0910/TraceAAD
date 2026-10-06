@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from experiments.traceaad_v10_15 import heldout, run
+from experiments.traceaad_v10_15 import run
+from experiments.infra import search_heldout as heldout
 from experiments.traceaad_v10_15.heldout_batch import jobs
 from experiments.traceaad_v10_15.launch_batch import build_plan
 from tests.support import TinyEvaluation, TokenLLM, response

@@ -1,6 +1,7 @@
 """V10.15's compact English prompts and deterministic context trimming."""
 
-from .history import code_diff, path, score_text, verdict
+from traceaad.common.history import code_diff, path, score_text, verdict
+from traceaad.common.prompts import ContextTooLong, PromptBuilder as MeasuredPrompts
 
 
 SCORES = {
@@ -51,10 +52,6 @@ FORMATION_INTRO = ("The steps that produced the current algorithm, oldest first.
 IDEA_DISPLAY_CHARS = 2400  # about 400 words: room for a full description, guard against run-ons
 
 
-class ContextTooLong(ValueError):
-    pass
-
-
 def idea_view(idea):
     return " ".join((idea or "").split())[:IDEA_DISPLAY_CHARS]
 
@@ -94,9 +91,14 @@ def output_format(action):
 
 
 class PromptBuilder:
-    def __init__(self, llm, task, evaluation, archive, config):
+    failure = MeasuredPrompts.failure
+    _seconds = staticmethod(MeasuredPrompts._seconds)
+    _calls = MeasuredPrompts._calls
+
+    def __init__(self, llm, task, evaluation, programs, attempts, config):
         self.llm, self.task, self.evaluation = llm, task, evaluation
-        self.archive, self.config = archive, config
+        self.timeout = evaluation.timeout_seconds
+        self.programs, self.attempts, self.config = programs, attempts, config
         if task in SCORES:
             meaning, higher = SCORES[task]
         else:
@@ -148,9 +150,13 @@ class PromptBuilder:
         return f"[Current Algorithm]\n{self._measured(node)}\n```python\n{node['code'].rstrip()}\n```"
 
     def _edge(self, parent, child, index, *, latest=False, subject="current"):
-        action = child["action"]
-        if action == "Crossover" and child.get("reference_id") is not None:
-            reference = self.archive[child["reference_id"]]
+        event = child
+        first = self.programs.get(child["parent_id"])
+        if child.get("repaired") and first is not None and not first.get("valid", True):
+            event = first
+        action = event["action"]
+        if action == "Crossover" and event.get("reference_id") is not None:
+            reference = self.programs[event["reference_id"]]
             action += f" with an algorithm scoring {score_text(reference['score'])}"
         heading = f"Step {index}"
         if latest:
@@ -214,7 +220,7 @@ class PromptBuilder:
     def build(self, action, parent, *, reference=None, references=(), best_score=None):
         if action not in {"Refine", "Explore", "Crossover"}:
             raise ValueError(action)
-        sequence = path(parent, self.archive)
+        sequence = [p for p in path(parent, self.programs) if p.get("valid", True)]
         trims = []
         current = self._current(parent)
         if action == "Refine":
@@ -249,7 +255,7 @@ class PromptBuilder:
         ref_section = (f"[Reference Algorithm]\nAnother evaluated algorithm from this search.\n"
                        f"{self._measured(reference)}\nDesign: {idea_view(reference['idea'])}\n"
                        f"```python\n{reference['code'].rstrip()}\n```")
-        reference_sequence = path(reference, self.archive)
+        reference_sequence = [p for p in path(reference, self.programs) if p.get("valid", True)]
         counts = [min(4, len(sequence)-1), min(4, len(reference_sequence)-1)]
         while True:
             recent, ids = self._formation(sequence, counts[0])
@@ -271,7 +277,9 @@ class PromptBuilder:
         fallback["trims"] = trims + ["crossover_context_fallback"] + fallback["trims"]
         return fallback
 
-    def repair(self, failed_code, idea, error_text, *, parent=None):
+    def repair(self, program):
+        failed_code, idea = program["code"], program["idea"]
+        error_text = MeasuredPrompts.error_text(self, program)
         failed = f"[Failed Program]\nDesign: {idea_view(idea)}\n```python\n{failed_code.rstrip()}\n```"
         sections = self.common + [failed, f"[Error]\n{error_text}", REPAIR, output_format("Repair")]
         result = self._result(sections, "Repair")

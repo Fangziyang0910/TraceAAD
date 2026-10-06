@@ -21,7 +21,7 @@ from experiments.infra import behavior_profile as core
 
 from .analyze import read_jsonl, report_job
 
-from .launch import RESULTS, SCHEDULE, run_dir
+from .paths import RESULTS, SCHEDULE, run_dir
 
 PROFILE_DIR = RESULTS / "behavior_profiles"
 REPORT = RESULTS / "diversity_summary.json"

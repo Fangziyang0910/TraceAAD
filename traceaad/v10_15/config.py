@@ -1,36 +1,20 @@
-"""Frozen V10.15 search protocol."""
+"""V10.15 mechanism parameters."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from traceaad.common.config import SearchConfig, REVISION
+
+EXPERIMENT = "traceaad_v10_15"
+OPERATORS = {"Refine": 0.45, "Explore": 0.3, "Crossover": 0.25}
 
 
-@dataclass(frozen=True)
-class Config:
-    budget: int = 1000
-    roots: int = 8
-    init_attempt_limit: int = 16
-    history_depth: int = 8
-    root_tokens: int = 8000
-    max_input_tokens: int = 24320
-    output_tokens: int = 8192
-    final_candidates: int = 5
-    evaluation_seeds: tuple[int, ...] = (730241,)
-    seed: int = 0
-    explore_cards: int = 0  # archive Design cards shown to Explore (0 = none)
+@dataclass
+class Config(SearchConfig):
+    explore_cards: int = 0
+    operators: dict[str, float] = field(default_factory=lambda: dict(OPERATORS))
 
     def __post_init__(self):
-        for name in ("budget", "roots", "init_attempt_limit", "history_depth",
-                     "root_tokens", "max_input_tokens",
-                     "output_tokens", "final_candidates"):
-            value = getattr(self, name)
-            if type(value) is not int or value < 1:
-                raise ValueError(f"{name} must be a positive integer")
-        if self.roots != 8 or self.init_attempt_limit != 16 or self.history_depth != 8:
-            raise ValueError("V10.15 fixes 8 roots, 16 initialization attempts and 8 history steps")
-        if type(self.explore_cards) is not int or not 0 <= self.explore_cards <= 4:
-            raise ValueError("explore_cards must be an integer from 0 to 4")
-        if self.final_candidates != 5:
-            raise ValueError("V10.15 selects from five training finalists")
-        if not self.evaluation_seeds or len(set(self.evaluation_seeds)) != len(self.evaluation_seeds):
-            raise ValueError("evaluation seeds must be nonempty and unique")
-        if any(type(seed) is not int or not 0 <= seed < 2**32 for seed in self.evaluation_seeds):
-            raise ValueError("evaluation seeds must be uint32 integers")
+        super().__post_init__()
+        if not self.operators or min(self.operators.values()) < 0 or sum(self.operators.values()) <= 0:
+            raise ValueError("operator weights must be nonnegative with a positive total")
+        if self.explore_cards < 0:
+            raise ValueError("explore_cards must be nonnegative")

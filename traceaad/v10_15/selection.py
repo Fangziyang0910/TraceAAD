@@ -5,9 +5,9 @@ make programs equivalent; a tie may simply be a change that did not improve.
 """
 
 import math
-import statistics
 
-from .canonical import similarity, token_set
+from traceaad.common.canonical import token_set
+from traceaad.common.selection import choose_reference
 
 # Effective number of programs the parent distribution spreads over
 # (V10.13's quality ESS).
@@ -65,19 +65,6 @@ def sample_parent(nodes, rng):
                           "probability": p[index], "eligible": len(nodes)}
 
 
-def choose_reference(parent, archive, rng):
-    population = list(archive.values())
-    median = statistics.median(n["fitness"] for n in population)
-    pool = [n for n in population if n["id"] != parent["id"] and
-            n["key"] != parent["key"] and n["fitness"] >= median]
-    if not pool:
-        return None, {"eligible": 0}
-    scores = {n["id"]: similarity(parent["code"], n["code"]) for n in pool}
-    cutoff = statistics.median(scores.values())
-    diverse = [n for n in pool if scores[n["id"]] <= cutoff]
-    picked = rng.choice(diverse)
-    return picked, {"eligible": len(pool), "diverse": len(diverse),
-                    "similarity": scores[picked["id"]], "similarity_median": cutoff}
 
 
 def choose_explore_references(parent, archive, rng, count=4):

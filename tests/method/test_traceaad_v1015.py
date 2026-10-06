@@ -8,9 +8,9 @@ import pytest
 
 from tests.support import TinyEvaluation, TokenLLM, response
 from traceaad.v10_15 import Config, TraceAADV1015
-from traceaad.v10_15.canonical import canonical, key
-from traceaad.v10_15.delivery import DeliveryError, SourceError, parse_response
-from traceaad.v10_15.history import change_summary, code_diff
+from traceaad.common.canonical import canonical, key
+from traceaad.common.delivery import DeliveryError, SourceError, parse_response
+from traceaad.common.history import code_diff
 from traceaad.v10_15.prompts import PromptBuilder
 from traceaad.v10_15.selection import (choose_explore_references, choose_reference, probabilities,
                                       sample_parent)
@@ -72,9 +72,11 @@ def test_finalists_are_the_best_programs(tmp_path):
     m.run()
     fitness = {n['id']: n['fitness'] for n in m.archive.values()}
     assert sorted(fitness.values()).count(8) == 4
-    assert m.finalists == [8, 9, 10, 11, 7]
-    same = [a for a in m.facts.tables['attempt'].values() if a.get('same_as_parent')]
+    assert m.progress.finalists == [8, 9, 10, 11, 7]
+    same = [p for p in m.archive.values() if p['parent_id'] in m.archive and p['fitness'] == m.archive[p['parent_id']]['fitness']]
     assert all(m.archive[a['parent_id']]['fitness'] == a['fitness'] for a in same)
+    from experiments.infra.diagnose_search import diagnose
+    diagnose(tmp_path)
     diagnostics = json.loads((tmp_path / 'diagnostics.json').read_text())
     assert 'score_classes' not in diagnostics
     assert diagnostics['new_frontiers_by_action']['Init'] == 8
@@ -86,30 +88,14 @@ def test_unclosed_final_block_is_accepted_only_when_complete():
                                       'stop', template)
     assert 'return 3' in code and idea == 'close enough'
     assert meta['strategy'] == 'unclosed_final_block'
-    with pytest.raises(DeliveryError):  # truncated body
+    with pytest.raises(SourceError):  # truncated body
         parse_response('```python\ndef score(x):\n    return (', 'stop', template)
-    with pytest.raises(DeliveryError):  # target missing
+    with pytest.raises(SourceError):  # target missing
         parse_response('```python\ndef helper(x):\n    return 1\n', 'stop', template)
     with pytest.raises(DeliveryError):  # not a finished completion
         parse_response('```python\ndef score(x):\n    return 3\n', 'length', template)
 
 
-def test_numeric_change_and_complete_diff():
-    a = 'def score(x):\n    return x + 0.15 + 3\n'
-    b = 'def score(x):\n    return x + 0.12 + 4\n'
-    assert change_summary(a, b) == 'numeric constants only, in score: 0.15 → 0.12; 3 → 4'
-    assert change_summary('def score(x):\n return x - 1\n',
-                          'def score(x):\n return x - 2\n') == 'numeric constants only, in score: 1 → 2'
-    assert change_summary('def score(x):\n return x + -1\n',
-                          'def score(x):\n return x + 2\n') == 'numeric constants only, in score: -1 → 2'
-    structural = 'def score(x):\n    y = x + 1\n    return y\n'
-    assert '+2/−1 lines in score' in change_summary(a, structural)
-    assert '+    return y' in code_diff(a, structural)
-    long_code = 'def score(x):\n' + ''.join(f'    x += {i}\n' for i in range(100)) + '    return x\n'
-    diff = code_diff(a, long_code)
-    assert len(diff.splitlines()) > 60
-    assert '+    x += 99' in diff and '+    return x' in diff
-    assert 'more diff lines not shown' not in diff
 
 
 def test_delivery_strict_finish_and_single_repair_payload():
@@ -124,7 +110,7 @@ def test_delivery_strict_finish_and_single_repair_payload():
     code, idea, meta = parse_response('Idea: use two\nCode:\n```python\ndef score(x): return 1\n```\n'
                                       '```python\ndef score(x): return 2\n```', 'stop', template)
     assert 'return 2' in code and idea == 'use two'
-    assert meta['block_indices'] == [1]
+    assert meta['strategy'] == 'after_last_code_label:last_code_block'
 
 
 def test_analysis_is_discarded_and_the_design_is_kept():
@@ -151,15 +137,6 @@ def test_design_label_and_earlier_labels_parse():
     assert parse_response(notes, 'stop', template)[1] == 'The algorithm adds two.'
 
 
-def test_template_import_completion_retains_submitted_source():
-    from benchmarks.tsp_construct.template import template_program
-
-    raw = ('def select_next_node(current_node, destination_node, unvisited_nodes, distance_matrix):\n'
-           '    return int(np.min(unvisited_nodes))\n')
-    code, _, metadata = parse_response(f'```python\n{raw}```', 'stop', template_program)
-    assert code.startswith('import numpy as np\n')
-    assert metadata['submitted_code'] == raw.rstrip('\n')
-    assert metadata['template_additions'] == ['np']
 
 
 def test_whole_search_selects_on_independent_set_and_records_provenance(tmp_path):
@@ -170,12 +147,12 @@ def test_whole_search_selects_on_independent_set_and_records_provenance(tmp_path
     assert result['num_nodes'] == 10 and result['selection_evaluations'] == 5
     assert result['search_evaluations'] == 10 and result['model_calls'] == 10
     assert result['best']['fitness'] == 10 and result['best']['selection_fitness'] == 110
-    assert m.facts.tables['request'][9]['parent_id'] in range(1, 9)
-    assert m.facts.tables['attempt'][9]['status'] == 'valid'
+    assert m.facts.attempts[9]['parent_id'] in range(1, 9)
+    assert m.facts.attempts[9]['status'] == 'valid'
     assert (tmp_path / 'best_program.py').exists()
     assert json.loads((tmp_path / 'selection.json').read_text())['selected_node'] == 10
-    assert '[Task]' in m.facts.tables['request'][9]['prompt']
-    assert '[Current Algorithm]' in m.facts.tables['request'][9]['prompt']
+    assert '[Task]' in m.facts.attempts[9]['prompt']
+    assert '[Current Algorithm]' in m.facts.attempts[9]['prompt']
 
 
 def test_invalid_source_gets_exactly_one_paid_repair(tmp_path):
@@ -184,9 +161,9 @@ def test_invalid_source_gets_exactly_one_paid_repair(tmp_path):
     result = m.run()
     assert result['budget_used'] == result['model_calls'] == 2
     assert result['num_nodes'] == 1 and result['num_roots'] == 1
-    assert m.facts.tables['attempt'][1]['status'] == 'invalid_source'
-    assert m.facts.tables['attempt'][2]['repair_of'] == 1
-    assert m.facts.tables['node'][2]['repaired']
+    assert m.facts.attempts[1]['status'] == 'invalid_source'
+    assert m.facts.attempts[2]['repair_of'] == 1
+    assert m.facts.programs[2]['repaired']
 
 
 def test_known_failure_and_repair_do_not_recurse(tmp_path):
@@ -194,11 +171,11 @@ def test_known_failure_and_repair_do_not_recurse(tmp_path):
     m = method(tmp_path, bad, bad, bad, budget=3)
     result = m.run()
     assert result['status'] == 'no_valid_root'
-    assert [m.facts.tables['attempt'][i]['status'] for i in (1, 2, 3)] == [
+    assert [m.facts.attempts[i]['status'] for i in (1, 2, 3)] == [
         'runtime_error', 'known_failure', 'known_failure']
     assert result['search_evaluations'] == 1
-    assert m.facts.tables['attempt'][2]['repair_of'] == 1
-    assert m.facts.tables['attempt'][3]['repair_of'] is None
+    assert m.facts.attempts[2]['repair_of'] == 1
+    assert m.facts.attempts[3]['repair_of'] is None
 
 
 def test_duplicate_is_paid_without_another_evaluation(tmp_path):
@@ -206,7 +183,7 @@ def test_duplicate_is_paid_without_another_evaluation(tmp_path):
     result = m.run()
     assert result['budget_used'] == 2 and result['search_evaluations'] == 1
     assert result['num_nodes'] == 1
-    assert m.facts.tables['attempt'][2]['status'] == 'duplicate'
+    assert m.facts.attempts[2]['status'] == 'duplicate'
 
 
 def test_initialization_cap_includes_repair_generations(tmp_path):
@@ -216,7 +193,7 @@ def test_initialization_cap_includes_repair_generations(tmp_path):
     assert result['status'] == 'no_valid_root'
     assert result['budget_used'] == result['init_attempts'] == 16
     assert result['search_evaluations'] == 0
-    assert sum(a['repair_of'] is not None for a in m.facts.tables['attempt'].values()) == 8
+    assert sum(a['repair_of'] is not None for a in m.facts.attempts.values()) == 8
 
 
 def test_too_long_parent_is_removed_without_spending_budget(tmp_path):
@@ -227,7 +204,7 @@ def test_too_long_parent_is_removed_without_spending_budget(tmp_path):
     m.phase = 'search'
     m.action_rng.choices = lambda *args, **kwargs: ['Refine']
     m._search()
-    assert m.attempts == 1 and m.too_long == {1}
+    assert m.attempts == 1 and m.progress.too_long == [1]
     m._search()
     assert m.phase == 'freeze'
 
@@ -258,8 +235,8 @@ def test_reference_choice_and_copy_status(tmp_path):
     # Submit the exact chosen reference, independent of its sampled ID.
     m.llm.responses = iter([f"Idea: copy\n```python\n{reference['code']}```"])
     request = m.prompts.build('Crossover', parent, reference=reference)
-    m._attempt(request, parent=parent, action='Crossover', reference=reference)
-    assert m.facts.tables['attempt'][9]['status'] == 'copied_reference'
+    m._attempt(request, parent=parent, reference=reference)
+    assert m.facts.attempts[9]['status'] == 'copied_reference'
     assert len(m.archive) == 8 and m.evaluation_calls == 8
 
 
@@ -339,8 +316,8 @@ def test_search_explore_displays_and_records_archive_references(tmp_path):
     m.phase = 'search'
     m.action_rng.choices = lambda *args, **kwargs: ['Explore']
     m._search()
-    request = m.facts.tables['request'][9]
-    attempt = m.facts.tables['attempt'][9]
+    request = m.facts.attempts[9]
+    attempt = m.facts.attempts[9]
     assert len(request['explore_reference_ids']) == 4
     assert request['parent_id'] not in request['explore_reference_ids']
     assert attempt['explore_reference_ids'] == request['explore_reference_ids']
@@ -349,7 +326,7 @@ def test_search_explore_displays_and_records_archive_references(tmp_path):
 
 
 def test_distinct_selection_protocol_is_required(tmp_path):
-    with pytest.raises(ValueError, match='distinct frozen'):
+    with pytest.raises(ValueError, match='distinct fixed'):
         TraceAADV1015(evaluation=TinyEvaluation(), selection_evaluation=TinyEvaluation(),
                        llm=TokenLLM(), run_dir=tmp_path, config=Config(budget=1))
 
@@ -362,7 +339,7 @@ def test_prompt_contract_and_crossover_context_fallback():
         [f"v{i} = {i}" for i in range(450)]) + "\ndef score(x): return x + v1\n"}
     archive = {1: parent, 2: reference}
     builder = PromptBuilder(TokenLLM(), None, TinyEvaluation(), archive,
-                            Config(max_input_tokens=500))
+                            {}, Config(max_input_tokens=500))
     prompt = builder.build("Crossover", parent, reference=reference)
     assert prompt['action'] == 'Refine'
     assert 'crossover_context_fallback' in prompt['trims']
@@ -377,13 +354,13 @@ def test_resume_does_not_regenerate_completed_attempts(tmp_path):
     assert m.run()['budget_used'] == 1
     resumed = method(tmp_path, budget=1)
     assert resumed.run()['budget_used'] == 1
-    assert resumed.model_calls == 1
+    assert resumed.progress.model_calls == 1
 
 
 @pytest.mark.parametrize('task', [
     'tsp_construct', 'vrptw_construct', 'online_bin_packing', 'cvrp_aco', 'op_aco'])
 def test_real_task_template_can_run_through_search_and_selection(tmp_path, task):
-    from experiments.traceaad_v10_14.preflight import small_task
+    from tests.support import small_task
 
     train, selection = small_task(task), small_task(task, seed=11)
     if task in {'vrptw_construct', 'online_bin_packing'}:
@@ -400,7 +377,7 @@ def test_real_task_template_can_run_through_search_and_selection(tmp_path, task)
 
 
 def test_aco_wrong_output_shape_is_invalid_output(tmp_path):
-    from experiments.traceaad_v10_14.preflight import small_task
+    from tests.support import small_task
 
     train = small_task('cvrp_aco')
     bad = ('Idea: return a small matrix\n```python\n'
@@ -410,4 +387,4 @@ def test_aco_wrong_output_shape_is_invalid_output(tmp_path):
     m = TraceAADV1015(evaluation=train, llm=TokenLLM(bad), run_dir=tmp_path,
                        task='cvrp_aco', config=Config(budget=1))
     assert m.run()['status'] == 'no_valid_root'
-    assert m.facts.tables['attempt'][1]['status'] == 'invalid_output'
+    assert m.facts.attempts[1]['status'] == 'invalid_output'

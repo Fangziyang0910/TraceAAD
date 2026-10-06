@@ -24,50 +24,16 @@ programs keeps it finite when many programs share the top score.
 """
 
 import math
-import statistics
 from collections import Counter
 
-from .canonical import similarity
+from traceaad.common.selection import better, temperature, choose_reference
 
-TARGET_ESS = 8.0
 PRIOR_STRENGTH = 3.0
 OPERATORS = ("Refine", "Explore", "Crossover", "Develop")
 
 
-def better(child, parent):
-    """Strictly better training fitness, up to the evaluation's floating-point noise."""
-    return child - parent > 1e-9 * max(1.0, abs(parent))
 
 
-def temperature(values):
-    """beta at which the distinct observed values have an ESS of min(levels, 8)."""
-    levels = sorted(set(values))
-    if not levels:
-        raise ValueError("no eligible parents")
-    if not all(math.isfinite(q) for q in levels):
-        raise ValueError("nonfinite quality")
-    target = min(float(len(levels)), TARGET_ESS)
-    if len(levels) <= TARGET_ESS:
-        return 0.0, float(len(levels))
-    maximum = levels[-1]
-
-    def ess(beta):
-        weights = [math.exp(beta * (q - maximum)) for q in levels]
-        total = math.fsum(weights)
-        return 1 / math.fsum((w / total) ** 2 for w in weights)
-
-    lo, hi = 0.0, 1.0
-    while ess(hi) > target:
-        hi *= 2
-        if not math.isfinite(hi):
-            raise ArithmeticError("could not bracket ESS")
-    for _ in range(80):
-        mid = (lo + hi) / 2
-        if ess(mid) > target:
-            lo = mid
-        else:
-            hi = mid
-    return hi, ess(hi)
 
 
 def outcome(attempt, attempts, programs, closed=None, repairs=None):
@@ -141,19 +107,6 @@ def sample_parent(nodes, attempts, programs, rng, explorations=None):
                           "eligible": len(nodes)}
 
 
-def choose_reference(parent, archive, rng):
-    population = list(archive.values())
-    median = statistics.median(n["fitness"] for n in population)
-    pool = [n for n in population if n["id"] != parent["id"] and
-            n["key"] != parent["key"] and n["fitness"] >= median]
-    if not pool:
-        return None, {"eligible": 0}
-    scores = {n["id"]: similarity(parent["code"], n["code"]) for n in pool}
-    cutoff = statistics.median(scores.values())
-    diverse = [n for n in pool if scores[n["id"]] <= cutoff]
-    picked = rng.choice(diverse)
-    return picked, {"eligible": len(pool), "diverse": len(diverse),
-                    "similarity": scores[picked["id"]], "similarity_median": cutoff}
 
 
 __all__ = ["better", "temperature", "outcome", "by_proposal", "experience", "weights", "sample_parent", "choose_reference"]

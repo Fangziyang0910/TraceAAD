@@ -4,7 +4,7 @@ import json
 from collections import Counter, defaultdict
 from statistics import mean
 
-from .launch import SCHEDULE, run_dir
+from .paths import SCHEDULE, run_dir
 
 
 def read_jsonl(path):

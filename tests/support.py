@@ -53,3 +53,22 @@ class TokenLLM(FakeLLM):
 def text_candidate(value=1, idea='Return this constant to test the score.', code=None):
     code = code or f'def score(x):\n    return {value}\n'
     return f'Idea: {idea}\nFinal implementation:\n```python\n{code}\n```'
+
+
+def small_task(task, seed=10):
+    from benchmarks.tsp_construct import TSPEvaluation
+    from benchmarks.vrptw_construct import VRPTWEvaluation
+    from benchmarks.online_bin_packing import OBPEvaluation
+    from benchmarks.cvrp_aco import CVRPACOEvaluation
+    from benchmarks.op_aco import OPACOEvaluation
+    if task == "tsp_construct":
+        return TSPEvaluation(n_instance=2, problem_size=10, seed=seed)
+    if task == "vrptw_construct":
+        return VRPTWEvaluation(n_instance=2, problem_size=10, seed=seed)
+    if task == "online_bin_packing":
+        return OBPEvaluation(dataset_specs=[{"n_instances": 1, "n_items": 64, "capacities": [100, 500]}], seed=seed)
+    cls = CVRPACOEvaluation if task == "cvrp_aco" else OPACOEvaluation
+    evaluation = cls(split="train" if seed == 10 else "val_50", n_ants=3, n_iterations=2, n_workers=1)
+    evaluation._datasets = evaluation._datasets[:2]
+    evaluation.n_instance = 2
+    return evaluation

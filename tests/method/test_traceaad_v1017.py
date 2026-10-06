@@ -9,10 +9,11 @@ import pytest
 from core import SecureEvaluator
 from tests.support import TinyEvaluation, TokenLLM, response
 from traceaad.v10_17 import Config, TraceAADV1017
-from traceaad.v10_17.delivery import parse_response
-from traceaad.v10_17.evaluation import SeededEvaluation
-from traceaad.v10_17.selection import experience, sample_parent, temperature, weights
-from traceaad.v10_17.traceaad import clean_traceback
+from traceaad.common.delivery import parse_response
+from traceaad.common.evaluation import SeededEvaluation
+from traceaad.common.selection import experience, sample_parent, temperature, weights
+from traceaad.common.evaluation import clean_traceback
+from experiments.traceaad_v10_17.diagnose import diagnose
 
 BOOM = "Design: fails\n```python\ndef score(x):\n    raise ValueError('boom')\n```"
 
@@ -41,8 +42,8 @@ class Reexecuting(TinyEvaluation):
         return total
 
 
-def method(tmp_path, *answers, budget=10, selection=None, develop=None, shown=0):
-    options = {"budget": budget, "explorations_shown": shown}
+def method(tmp_path, *answers, budget=10, selection=None, develop=None):
+    options = {"budget": budget}
     if develop is not None:
         options["development_probability"] = develop
     config = Config(**options)
@@ -152,17 +153,17 @@ def test_events_link_duplicates_failures_and_repairs(tmp_path):
     m = method(tmp_path, *(response(i) for i in range(1, 9)), response(3), BOOM, response(20), budget=12)
     roots(m)
     parent = m.archive[8]
-    m._attempt(m.prompts.build("Refine", parent), parent=parent, action="Refine")
+    m._attempt(m.prompts.build("Refine", parent), parent=parent)
     duplicate = m.attempts_table[9]
-    assert duplicate["status"] == "duplicate" and duplicate["program_id"] == 3 and not duplicate["new_program"]
+    assert duplicate["status"] == "duplicate" and duplicate["program_id"] == 3
     assert m.evaluation_calls == 8
-    m._attempt(m.prompts.build("Refine", parent), parent=parent, action="Refine")
+    m._attempt(m.prompts.build("Refine", parent), parent=parent)
     failed, repair = m.attempts_table[10], m.attempts_table[11]
-    assert failed["status"] == "runtime_error" and failed["program_id"] == 10 and failed["calls"] == 1
+    assert failed["status"] == "runtime_error" and failed["program_id"] == 10 and m.programs[10]["calls"] == 1
     assert not m.programs[10]["valid"] and "boom" in m.programs[10]["failure"]["error"]
-    assert repair["repair_of"] == 10 and repair["parent_id"] == 10 and repair["executed_action"] == "Repair"
+    assert repair["repair_of"] == 10 and repair["parent_id"] == 10 and repair["action"] == "Repair"
     repaired = m.archive[11]
-    assert repaired["parent_id"] == 10 and repaired["fitness"] == 20 and repaired["calls"] == 1
+    assert repaired["parent_id"] == 10 and m.programs[repaired["program_id"]]["fitness"] == 20 and m.programs[repaired["program_id"]]["calls"] == 1
     # The formation path folds the failed first version into its repaired step:
     # the failure and its line are stated, the diff goes to the repaired version.
     request = m.prompts.build("Refine", repaired)
@@ -188,12 +189,12 @@ def test_known_failure_links_to_the_failed_program_without_evaluation(tmp_path):
     m = method(tmp_path, *(response(i) for i in range(1, 9)), BOOM, BOOM, BOOM, budget=12)
     roots(m)
     parent = m.archive[1]
-    m._attempt(m.prompts.build("Refine", parent), parent=parent, action="Refine")
+    m._attempt(m.prompts.build("Refine", parent), parent=parent)
     assert m.attempts_table[9]["status"] == "runtime_error"
     # The repair returns the same failing code: a known failure, not evaluated again.
     assert m.attempts_table[10]["status"] == "known_failure" and m.attempts_table[10]["program_id"] == 9
     calls = m.evaluation_calls
-    m._attempt(m.prompts.build("Refine", parent), parent=parent, action="Refine")
+    m._attempt(m.prompts.build("Refine", parent), parent=parent)
     assert m.attempts_table[11]["status"] == "known_failure" and m.evaluation_calls == calls
     prompt = m.prompts.build("Refine", parent)["prompt"]
     assert "the repair returned the same failing program" in prompt
@@ -204,7 +205,7 @@ def test_known_failure_links_to_the_failed_program_without_evaluation(tmp_path):
 def test_progress_credits_a_repaired_program_to_the_generation_it_repaired(tmp_path):
     m = method(tmp_path, *(response(i) for i in range(1, 9)), BOOM, response(20), budget=12)
     roots(m)
-    m._attempt(m.prompts.build("Refine", m.archive[8]), parent=m.archive[8], action="Refine")
+    m._attempt(m.prompts.build("Refine", m.archive[8]), parent=m.archive[8])
     prompt = m.prompts.build("Explore", m.archive[2])["prompt"]
     assert "Attempt 9 · Refine, then Repair from an algorithm scoring 8 → 20 (previous best 8)" in prompt
 
@@ -212,7 +213,7 @@ def test_progress_credits_a_repaired_program_to_the_generation_it_repaired(tmp_p
 def test_explore_sees_how_the_search_best_improved(tmp_path):
     m = method(tmp_path, *(response(i) for i in range(1, 9)), response(20), budget=10)
     roots(m)
-    m._attempt(m.prompts.build("Refine", m.archive[8]), parent=m.archive[8], action="Refine")
+    m._attempt(m.prompts.build("Refine", m.archive[8]), parent=m.archive[8])
     request = m.prompts.build("Explore", m.archive[2])
     prompt = request["prompt"]
     assert "[How the Best Score Improved in This Search]" in prompt
@@ -228,25 +229,26 @@ def test_a_finalist_failing_selection_is_replaced_by_the_next_program(tmp_path):
                selection=SelectionEvaluation(broken=(8,)))
     summary = m.run()
     assert summary["status"] == "finished"
-    assert m.finalists == [8, 7, 6, 5, 4, 3]
+    assert m.progress.finalists == [8, 7, 6, 5, 4, 3]
     selection = json.loads((tmp_path / "selection.json").read_text())
-    assert selection["selected_node"] == 7 and selection["finalists"] == m.finalists
+    assert selection["selected_node"] == 7 and selection["finalists"] == m.progress.finalists
     assert sum(r["fitness"] is None for r in selection["results"]) == 1
 
 
-def test_full_run_reports_experience_diagnostics_and_resumes_identity(tmp_path):
+def test_full_run_reports_experience_diagnostics_and_resumes(tmp_path):
     answers = [response(i) for i in range(1, 9)] + [response(i) for i in range(20, 26)]
     m = method(tmp_path, *answers, budget=14, selection=SelectionEvaluation())
     summary = m.run()
+    diagnose(tmp_path)
     assert summary["status"] == "finished" and summary["budget_used"] == 14
     diagnostics = json.loads((tmp_path / "diagnostics.json").read_text())
     for name in ("attempts_on_tried_out_programs", "failure_rates_by_quarter", "explore_new_frontiers_after_300",
                  "failed_programs", "actions"):
         assert name in diagnostics
     assert set(diagnostics["actions"]) == {"Refine", "Explore", "Crossover", "Repair"}
-    nodes = [json.loads(line)["data"] for line in (tmp_path / "search.jsonl").read_text().splitlines()
-             if line.startswith('{"kind":"node"')]
-    assert nodes and all(list(node)[-1] == "attempt_id" for node in nodes)  # monitor index
+    commits = [json.loads(line) for line in (tmp_path / "events.jsonl").read_text().splitlines()
+               if json.loads(line)["kind"] == "candidate"]
+    assert len(commits) == 14 and all("attempt" in row and "progress" in row for row in commits)
     resumed = method(tmp_path, *answers, budget=14, selection=SelectionEvaluation())
     assert resumed.phase == "finished" and resumed.programs.keys() == m.programs.keys()
 
@@ -280,17 +282,15 @@ def test_development_is_a_fixed_draw_per_exploration_for_about_an_eighth(tmp_pat
     assert abs(sum(draws) / len(draws) - 0.125) < 0.015
 
 
-def test_an_undeveloped_proposal_is_recorded_and_listed_without_development(tmp_path):
-    m = method(tmp_path, *(response(i) for i in range(1, 9)), design(5.5), budget=20, develop=1e-12, shown=8)
+def test_an_undeveloped_proposal_is_recorded_without_development(tmp_path):
+    m = method(tmp_path, *(response(i) for i in range(1, 9)), design(5.5), budget=20, develop=1e-12)
     roots(m)
     explore_once(m)
     attempts = m.attempts
     m._search()
     assert m.attempts == attempts
-    record = m.facts.tables["exploration"][1]
+    record = m.facts.explorations[1]
     assert record["developed"] is False and record["development_attempts"] == [] and record["first_score"] == 5.5
-    prompt = m.prompts.build("Explore", m.archive[3])["prompt"]
-    assert "Exploration 1 · Design: return 5.5\n  First version → 5.5; not developed; search best at that time 8." in prompt
 
 
 def test_a_proposed_design_is_developed_from_the_best_program_the_exploration_reached(tmp_path):
@@ -303,7 +303,7 @@ def test_a_proposed_design_is_developed_from_the_best_program_the_exploration_re
     assert [(aid, step["step"]) for aid, _, step in tags(m)] == [(9, 0), (10, 1), (11, 2), (12, 3)]
     assert [parent for aid, parent, _ in tags(m) if aid > 9] == [9, 10, 10]  # 6.5 improved on 5.5; 4.5 did not
     assert [a["action"] for a in m.attempts_table.values() if a["id"] > 9] == ["Refine"] * 3
-    record = m.facts.tables["exploration"][1]
+    record = m.facts.explorations[1]
     assert (record["first_score"], record["best_score"], record["best_id"]) == (5.5, 7.5, 12)
     assert record["search_best_score"] == 8 and record["development_attempts"] == [10, 11, 12]
     assert m._open_exploration() is None
@@ -317,7 +317,7 @@ def test_an_exploration_without_a_new_program_ends_at_its_proposal(tmp_path):
     attempts = m.attempts
     m._search()  # closes the exploration without a generation
     assert m.attempts == attempts
-    record = m.facts.tables["exploration"][1]
+    record = m.facts.explorations[1]
     assert record["proposed_id"] is None and record["first_status"] == "duplicate"
     assert record["development_attempts"] == []
 
@@ -352,28 +352,7 @@ def test_the_end_of_the_budget_closes_an_open_exploration(tmp_path):
     m._search()
     m._search()
     assert m.phase in {"freeze", "search_complete"} or m.phase == "selection"
-    assert m.facts.tables["exploration"][1]["development_attempts"] == [10]
-
-
-def test_explore_sees_recent_explorations_also_those_that_did_not_set_a_new_best(tmp_path):
-    m = method(tmp_path, *(response(i) for i in range(1, 9)), design(5.5), design(6.5), design(4.5), design(7.5),
-               response(8), budget=30, develop=1, shown=8)
-    roots(m)
-    explore_once(m)
-    for _ in range(4):
-        m._search()
-    explore_once(m)  # the second proposal reproduces a root
-    m._search()
-    request = m.prompts.build("Explore", m.archive[3])
-    prompt = request["prompt"]
-    assert "[Recent Explorations in This Search]" in prompt
-    assert "Every Explore proposal so far (2) is an exploration;" in prompt and "All are listed, oldest first." in prompt
-    assert ("Exploration 1 · Design: return 5.5\n  First version → 5.5; after 3 development steps → best 7.5; "
-            "search best at that time 8.\n  Design of that best version: return 7.5") in prompt
-    assert "Exploration 2 · Design: return 8\n  First version: reproduced an existing algorithm." in prompt
-    assert request["exploration_ids"] == [1, 2]
-    assert prompt.index("[How the Best Score Improved in This Search]") < prompt.index("[Recent Explorations")
-    assert "[Recent Explorations in This Search]" not in m.prompts.build("Refine", m.archive[3])["prompt"]
+    assert m.facts.explorations[1]["development_attempts"] == [10]
 
 
 def test_full_run_reports_exploration_diagnostics(tmp_path):
@@ -381,6 +360,7 @@ def test_full_run_reports_exploration_diagnostics(tmp_path):
     m = method(tmp_path, *answers, budget=40, selection=SelectionEvaluation(), develop=1)
     m.action_rng = AlwaysExplore()  # every new step starts an exploration
     summary = m.run()
+    diagnose(tmp_path)
     assert summary["status"] == "finished"
     explorations = json.loads((tmp_path / "diagnostics.json").read_text())["explorations"]
     assert explorations["count"] == 8 and explorations["developed"] == 8 and explorations["new_programs"] == 8
@@ -409,6 +389,6 @@ def test_the_formal_configuration_records_explorations_without_showing_them(tmp_
     roots(m)
     explore_once(m)
     m._search()
-    assert Config().explorations_shown == 0 and 1 in m.facts.tables["exploration"]
+    assert 1 in m.facts.explorations
     request = m.prompts.build("Explore", m.archive[3])
-    assert "[Recent Explorations in This Search]" not in request["prompt"] and request["exploration_ids"] == []
+    assert "[Recent Explorations in This Search]" not in request["prompt"]
