@@ -286,6 +286,8 @@ def llm_payload(
 
 
 def write_run_config(run_dir: Path, payload: dict[str, Any]) -> None:
+    from traceaad.common.storage import RESULT_FORMAT
+    payload = {"result_format": RESULT_FORMAT, **payload}
     (run_dir / "run_config.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -463,7 +465,7 @@ def free_slots() -> dict[BackendName, int]:
 
 
 def _summary_status(item: LaunchItem) -> str | None:
-    summary = item.run_dir / "logs" / "run_summary.json"
+    summary = item.run_dir / "summary.json"
     if not summary.exists():
         return None
     try:

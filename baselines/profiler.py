@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import os
-import re
 import sys
 import traceback
 from typing import Any, Literal, Optional, List, Tuple
@@ -33,6 +32,8 @@ from threading import Lock, RLock
 from datetime import datetime
 
 from core import Function
+from pathlib import Path
+from traceaad.common.storage import Programs, append_jsonl, read_json, rows, seal_calls, write_json
 
 # Fields that are safe to log from an LLM object (no secrets).
 _LLM_SAFE_FIELDS = frozenset(
@@ -133,6 +134,7 @@ class ProfilerBase:
         self._method_event_count = 0
         self._method_state_count = 0
         self._finished = False
+        self._canonical_best = None
         self._logging_degraded = False
 
         self._parameters = None
@@ -147,25 +149,23 @@ class ProfilerBase:
 
         self._register_function_lock = Lock()
         self._artifact_lock = RLock()
-        self._samples_json_dir = (
-            os.path.join(self._log_dir, "samples") if self._log_dir else None
-        )
+        self._sources = Programs(Path(self._log_dir).parent) if self._log_dir else None
         self._llm_calls_path = (
-            os.path.join(self._log_dir, "llm_calls.jsonl") if self._log_dir else None
+            str(Path(self._log_dir).parent / "calls.jsonl") if self._log_dir else None
         )
         self._method_events_path = (
-            os.path.join(self._log_dir, "method_events.jsonl")
+            str(Path(self._log_dir).parent / "events.jsonl")
             if self._log_dir
             else None
         )
         self._method_state_path = (
-            os.path.join(self._log_dir, "method_state.jsonl") if self._log_dir else None
+            str(Path(self._log_dir).parent / "resume.json") if self._log_dir else None
         )
         self._errors_path = (
             os.path.join(self._log_dir, "errors.jsonl") if self._log_dir else None
         )
         self._run_summary_path = (
-            os.path.join(self._log_dir, "run_summary.json") if self._log_dir else None
+            str(Path(self._log_dir).parent / "summary.json") if self._log_dir else None
         )
 
     def record_parameters(self, llm, prob, method):
@@ -183,12 +183,15 @@ class ProfilerBase:
                 function, program=program, resume_mode=resume_mode
             )
             if not resume_mode:
-                self._write_json(function, program)
+                with self._artifact_lock:
+                    self._write_json(function, program)
         finally:
             self._register_function_lock.release()
 
     def finish(self):
         self.write_run_summary(status="finished")
+        if self._log_dir:
+            seal_calls(Path(self._log_dir).parent)
 
     def get_logger(self):
         return self._logger_txt
@@ -203,35 +206,36 @@ class ProfilerBase:
             print(message)
 
     def log_llm_call(self, **payload):
-        """Append one LLM interaction to `llm_calls.jsonl`."""
+        """Append one LLM interaction to calls.jsonl."""
         if not self._log_dir:
             return
         payload = self._with_common_log_fields(payload)
+        payload.setdefault("request_id", self._llm_call_count + 1)
         self._safe_append_jsonl(
             self._llm_calls_path, payload, counter="_llm_call_count"
         )
 
     def log_method_event(self, event: str | None = None, **payload):
-        """Append a method-level event to `method_events.jsonl`."""
+        """Append a method event to events.jsonl."""
         if not self._log_dir:
             return
         if event is not None:
             payload.setdefault("event", event)
         payload = self._with_common_log_fields(payload)
         self._safe_append_jsonl(
-            self._method_events_path, payload, counter="_method_event_count"
+            self._method_events_path, {"kind": "method", "data": payload}, counter="_method_event_count"
         )
 
     def log_method_state(self, phase: str | None = None, **payload):
-        """Append a lightweight method state snapshot to `method_state.jsonl`."""
+        """Replace the latest method snapshot in resume.json."""
         if not self._log_dir:
             return
         if phase is not None:
             payload.setdefault("phase", phase)
         payload = self._with_common_log_fields(payload)
-        self._safe_append_jsonl(
-            self._method_state_path, payload, counter="_method_state_count"
-        )
+        with self._artifact_lock:
+            write_json(self._method_state_path, {"method_state": payload})
+            self._method_state_count += 1
 
     def log_error(self, stage: str, exc: Exception | None = None, **payload):
         """Append a structured error record to `errors.jsonl`."""
@@ -259,77 +263,58 @@ class ProfilerBase:
             if not self._log_dir or self._finished:
                 return
             self._process_end_time = datetime.now(ZoneInfo("Asia/Shanghai"))
-            summary = {
-                "status": payload.pop("status", "finished"),
-                "started_at": self._process_start_time.isoformat(),
-                "finished_at": self._process_end_time.isoformat(),
-                "duration_seconds": (
-                    self._process_end_time - self._process_start_time
-                ).total_seconds(),
-                "num_samples": self._num_samples,
-                "evaluate_success_program_num": self._evaluate_success_program_num,
-                "evaluate_failed_program_num": self._evaluate_failed_program_num,
-                "best_sample_order": self._cur_best_program_sample_order,
-                "best_score": self._cur_best_program_score,
-                "total_sample_time": self._tot_sample_time,
-                "total_evaluate_time": self._tot_evaluate_time,
-                "llm_call_count": self._llm_call_count,
-                "method_event_count": self._method_event_count,
-                "method_state_count": self._method_state_count,
-                "error_count": self._error_count,
-                "logging_degraded": self._logging_degraded,
-            }
-            # Caller-supplied fields (e.g. from TraceAAD) override the profiler's tracked values.
-            summary.update(payload)
-            os.makedirs(self._log_dir, exist_ok=True)
-            with open(self._run_summary_path, "w", encoding="utf-8") as json_file:
-                json.dump(
-                    summary,
-                    json_file,
-                    indent=4,
-                    ensure_ascii=False,
-                    default=self._json_default,
-                )
+            config = read_json(Path(self._log_dir).parent / "run_config.json", {})
+            status = payload.pop("status", "finished")
+            summary = {"status": status, "phase": "finished" if status == "finished" else "stopped",
+                       "method": config.get("method"), "budget": config.get("budget", 0),
+                       "budget_axis": "样本次数", "budget_used": self._num_samples,
+                       "started_at": self._process_start_time.isoformat(),
+                       "finished_at": self._process_end_time.isoformat(),
+                       "seconds": (self._process_end_time - self._process_start_time).total_seconds(),
+                       "num_nodes": self._evaluate_success_program_num,
+                       "candidate_count": self._num_samples,
+                       "valid_candidate_count": self._evaluate_success_program_num,
+                       "best": self._canonical_best, "model_calls": self._llm_call_count,
+                       "evaluation_calls": self._evaluate_success_program_num + self._evaluate_failed_program_num,
+                       "error_count": self._error_count, "logging_degraded": self._logging_degraded,
+                       **payload}
+            write_json(self._run_summary_path, summary)
             self._finished = True
 
-    def _write_json(
-        self,
-        function: Function,
-        program: str = "",
-        *,
-        record_type: Literal["history", "best"] = "history",
-        record_sep=200,
-    ):
-        """Write one evaluated program to the segmented sample history."""
-        if record_type == "best":
+    def _write_json(self, function, program="", *, record_type="history", record_sep=200):
+        if record_type == "best" or not self._log_dir:
             return
-        if not self._log_dir:
-            return
-        os.makedirs(self._samples_json_dir, exist_ok=True)
-
-        sample_order = self._num_samples
-        content = {
-            "sample_order": sample_order,
-            "score": function.score,
-            "operator": function.operator,
-            "program": program,
-        }
-
-        lower_bound = ((sample_order - 1) // record_sep) * record_sep
-        upper_bound = lower_bound + record_sep
-        filename = f"samples_{lower_bound + 1}~{upper_bound}.json"
-
-        path = os.path.join(self._samples_json_dir, filename)
-
-        try:
-            with open(path, "r", encoding="utf-8") as json_file:
-                data = json.load(json_file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            data = []
-
-        data.append(content)
-        with open(path, "w") as json_file:
-            json.dump(data, json_file, indent=4)
+        run_dir = Path(self._log_dir).parent
+        config = read_json(run_dir / "run_config.json", {})
+        sources = self._sources
+        score = float(function.score) if function.score is not None and self._num_objs == 1 else None
+        order = self._num_samples
+        valid = function.score is not None and bool(np.all(np.isfinite(function.score)))
+        metadata = None
+        if program:
+            metadata = {"id": order, "key": sources.add(program), "fitness": score if valid else None,
+                        "score": (-score if config.get("objective") == "min" else score) if valid and score is not None else None,
+                        "valid": bool(valid), "action": function.operator or "unknown",
+                        "idea": getattr(function, "algorithm", "") or "",
+                        "parent_id": None, "depth": 0}
+            if self._num_objs > 1:
+                metadata["objectives"] = [float(v) if np.isfinite(v) else None for v in function.score] if function.score is not None else None
+            if score is not None and valid and (self._canonical_best is None or score > self._canonical_best["fitness"]):
+                self._canonical_best = metadata
+        elapsed = (datetime.now(ZoneInfo("Asia/Shanghai")) - self._process_start_time).total_seconds()
+        attempt = {"id": order, "action": function.operator or "unknown",
+                   "idea": getattr(function, "algorithm", "") or "",
+                   "program_id": order if metadata else None, "parent_id": None, "repair_of": None,
+                   "function_key": sources.add(str(function)),
+                   "sample_time": function.sample_time, "evaluate_time": function.evaluate_time,
+                   "status": "valid" if valid else "invalid_output"}
+        append_jsonl(run_dir / "events.jsonl", {
+            "kind": "candidate", "candidate_id": order, "budget_used": order, "x_label": "样本次数",
+            "operator": attempt["action"], "status": attempt["status"], "fitness": score if valid else None,
+            "valid": bool(valid), "node_id": attempt["program_id"], "attempt": attempt, "program": metadata,
+            "ts": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
+            "progress": {"attempts": order, "phase": "search", "elapsed": elapsed,
+                         "started_at": self._process_start_time.isoformat()}})
 
     def _record_and_print_verbose(self, function, program="", *, resume_mode=False):
         function_str = str(function).strip("\n")
@@ -405,14 +390,12 @@ class ProfilerBase:
             self._tot_evaluate_time += evaluate_time
 
     def _create_log_path(self):
-        self._samples_json_dir = os.path.join(self._log_dir, "samples")
-        self._llm_calls_path = os.path.join(self._log_dir, "llm_calls.jsonl")
-        self._method_events_path = os.path.join(self._log_dir, "method_events.jsonl")
-        self._method_state_path = os.path.join(self._log_dir, "method_state.jsonl")
+        self._llm_calls_path = str(Path(self._log_dir).parent / "calls.jsonl")
+        self._method_events_path = str(Path(self._log_dir).parent / "events.jsonl")
+        self._method_state_path = str(Path(self._log_dir).parent / "resume.json")
         self._errors_path = os.path.join(self._log_dir, "errors.jsonl")
-        self._run_summary_path = os.path.join(self._log_dir, "run_summary.json")
+        self._run_summary_path = str(Path(self._log_dir).parent / "summary.json")
         os.makedirs(self._log_dir, exist_ok=True)
-        os.makedirs(self._samples_json_dir, exist_ok=True)
 
         file_name = self._log_dir + "/run_log.txt"
         file_mode = "a" if os.path.isfile(file_name) else "w"
@@ -520,31 +503,17 @@ class ProfilerBase:
 
     @classmethod
     def load_logfile(cls, logdir, valid_only=False) -> Tuple[List[str], List[float]]:
-        """Load (program_source, score) pairs from the `samples/` artifacts."""
-        file_dir = os.path.join(logdir, "samples")
-        sample_files = [f for f in os.listdir(file_dir) if f.startswith("samples_")]
-
-        def extract_number(filename):
-            match = re.search(r"samples_(\d+)~", filename)
-            return int(match.group(1)) if match else 0
-
-        all_func: List[str] = []
-        all_score: List[float] = []
-        for file in sorted(sample_files, key=extract_number):
-            file_path = os.path.join(file_dir, file)
-            with open(file_path, "r", encoding="utf-8") as f:
-                try:
-                    samples = json.load(f)
-                except json.JSONDecodeError as exc:
-                    print(f"{file_path}: {exc}")
-                    continue
-            for sample in samples:
-                func = sample["program"]
-                score = (
-                    sample["score"] if sample["score"] is not None else float("-inf")
-                )
-                if valid_only and (score is None or np.isinf(score)):
-                    continue
-                all_func.append(func)
-                all_score.append(score)
-        return all_func, all_score
+        """Load (program_source, fitness) from the run owning this log directory."""
+        run_dir = Path(logdir).parent
+        sources = Programs(run_dir)
+        programs, functions, scores = {}, [], []
+        for row in rows(run_dir / "events.jsonl"):
+            if row.get("program"):
+                programs[row["program"]["id"]] = row["program"]
+            if row["kind"] != "candidate" or valid_only and not row["valid"]:
+                continue
+            program = programs.get(row["node_id"])
+            code = sources.get(program["key"]) if program else sources.get(row["attempt"].get("function_key"))
+            functions.append(code or "")
+            scores.append(row["fitness"] if row["fitness"] is not None else float("-inf"))
+        return functions, scores

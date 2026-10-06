@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 from core import SecureEvaluator
 from experiments.infra.base import build_task
 from experiments.traceaad_v10_16.run import TRAIN_TIMEOUT, selection_task
-from traceaad.v10_16.evaluation import SeededEvaluation
+from traceaad.common.evaluation import SeededEvaluation
 
 OUT = "experiments_result/diagnosis_v1016_frontier"
 LOCAL = threading.local()

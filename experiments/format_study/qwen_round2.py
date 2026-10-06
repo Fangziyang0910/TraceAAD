@@ -1,3 +1,5 @@
+from traceaad.common.state import Facts
+from pathlib import Path
 """Round 2: how much Analysis, what kind, and how long a Design?  Qwen, paired contexts, resumable.
 
 usage: think_exp2.py refine N        (8 arms on Refine, N parents per task)
@@ -17,10 +19,10 @@ from concurrent.futures import ThreadPoolExecutor
 import traceaad.v10_15.prompts as prompts
 from core import SecureEvaluator
 from experiments.infra.base import BACKENDS, build_llm_client, build_task
-from traceaad.v10_15.canonical import canonical, key
+from traceaad.common.canonical import canonical, key
 from traceaad.v10_15.config import Config
-from traceaad.v10_15.delivery import DeliveryError, SourceError, parse_response
-from traceaad.v10_15.evaluation import SeededEvaluation
+from traceaad.common.delivery import DeliveryError, SourceError, parse_response
+from traceaad.common.evaluation import SeededEvaluation
 from traceaad.v10_15.selection import choose_explore_references, choose_reference
 
 OUT = os.environ.get("FORMAT_STUDY_OUT", "experiments_result/format_study/qwen_round2")
@@ -74,19 +76,13 @@ def evaluation(task):
         if task not in EVAL:
             e, _ = build_task(task, 4)
             e.timeout_seconds = 120
-            EVAL[task] = (e, SecureEvaluator(SeededEvaluation(e)))
+            EVAL[task] = (e, SecureEvaluator(SeededEvaluation(e, measure_calls=False)))
         return EVAL[task]
 
 
 def archives(task):
-    for path in sorted(glob.glob(f"experiments_result/traceaad_v10_15_4/{task}/*/search.jsonl")):
-        nodes = {}
-        with open(path, "rb") as f:
-            for raw in f:
-                if raw.startswith(b'{"kind":"node"'):
-                    n = json.loads(raw)["data"]
-                    nodes[n["id"]] = n
-        yield path.split("/")[-2], nodes
+    for path in sorted(glob.glob(f"experiments_result/traceaad_v10_15_4/{task}/*/events.jsonl")):
+        yield Path(path).parent.name, Facts(Path(path).parent).valid
 
 
 CLIENTS = {}
@@ -177,7 +173,7 @@ def build(actions, arms, n_per_task, seed, path):
                     kwargs = {"reference": ref}
                 for arm in arms:
                     prompts.output_format = lambda _action, f=fmt(arm, action): f
-                    request = prompts.PromptBuilder(Counter(), task, e, archive, Config()).build(action, parent, **kwargs)
+                    request = prompts.PromptBuilder(Counter(), task, e, archive, {}, Config()).build(action, parent, **kwargs)
                     if request["action"] != action:
                         continue
                     job = f"{task}|{run}|{parent['id']}|{action}|{arm}"

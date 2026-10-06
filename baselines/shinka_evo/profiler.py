@@ -5,7 +5,6 @@ import os
 from threading import Lock
 from typing import Any, Optional
 
-from core import Function
 from baselines.profiler import ProfilerBase
 
 
@@ -46,32 +45,3 @@ class ShinkaEvoProfiler(ProfilerBase):
         finally:
             if self._event_lock.locked():
                 self._event_lock.release()
-
-    def _write_json(self, function: Function, program="", *, record_type="history", record_sep=200):
-        assert record_type in ["history", "best"]
-        if not self._log_dir:
-            return
-        sample_order = self._num_samples
-        content = {
-            "sample_order": sample_order,
-            "algorithm": function.algorithm,
-            "function": str(function),
-            "operator": function.operator,
-            "score": function.score,
-            "program": program,
-        }
-        if record_type == "history":
-            lower_bound = ((sample_order - 1) // record_sep) * record_sep
-            upper_bound = lower_bound + record_sep
-            filename = f"samples_{lower_bound + 1}~{upper_bound}.json"
-        else:
-            filename = "samples_best.json"
-        path = os.path.join(self._samples_json_dir, filename)
-        try:
-            with open(path, "r") as json_file:
-                data = json.load(json_file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            data = []
-        data.append(content)
-        with open(path, "w") as json_file:
-            json.dump(data, json_file, indent=4)

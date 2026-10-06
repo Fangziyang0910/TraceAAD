@@ -1,3 +1,5 @@
+from traceaad.common.state import Facts
+from pathlib import Path
 """Does the Design's length and position affect generated code?  (DeepSeek v4.1 flash, thinking off)
 
 Part A (producer): Refine on paired parent contexts, 7 arms =
@@ -20,10 +22,10 @@ from concurrent.futures import ThreadPoolExecutor
 import traceaad.v10_15.prompts as prompts
 from core import SecureEvaluator
 from experiments.infra.base import build_task
-from traceaad.v10_15.canonical import canonical, key
+from traceaad.common.canonical import canonical, key
 from traceaad.v10_15.config import Config
-from traceaad.v10_15.delivery import DeliveryError, SourceError, parse_response
-from traceaad.v10_15.evaluation import SeededEvaluation
+from traceaad.common.delivery import DeliveryError, SourceError, parse_response
+from traceaad.common.evaluation import SeededEvaluation
 from traceaad.v10_15.selection import choose_explore_references
 
 URL = os.environ.get("FORMAT_STUDY_URL", "http://183.36.243.124:33333/v1/chat/completions")
@@ -92,7 +94,7 @@ def evaluation(task):
         if task not in EVAL:
             e, _ = build_task(task, 4)
             e.timeout_seconds = 120  # arm comparison, not a timeout study
-            EVAL[task] = (e, SecureEvaluator(SeededEvaluation(e)))
+            EVAL[task] = (e, SecureEvaluator(SeededEvaluation(e, measure_calls=False)))
         return EVAL[task]
 
 
@@ -106,14 +108,8 @@ def score(task, code):
 
 
 def archives(task):
-    for path in sorted(glob.glob(f"experiments_result/traceaad_v10_15_2/{task}/*/search.jsonl")):
-        nodes = {}
-        with open(path, "rb") as f:
-            for raw in f:
-                if raw.startswith(b'{"kind":"node"'):
-                    n = json.loads(raw)["data"]
-                    nodes[n["id"]] = n
-        yield path.split("/")[-2], nodes
+    for path in sorted(glob.glob(f"experiments_result/traceaad_v10_15_2/{task}/*/events.jsonl")):
+        yield Path(path).parent.name, Facts(Path(path).parent).valid
 
 
 def outcome(task, archive, parent, content, finish, tokens, design_expected):
@@ -164,7 +160,7 @@ def part_a(n_per_task=20):
         for run, archive, parent in rng.sample(pool, n_per_task):
             for order, length in ARMS:
                 prompts.output_format = lambda f=fmt(order, length): f
-                builder = prompts.PromptBuilder(TokenCounter(), task, e, archive, Config())
+                builder = prompts.PromptBuilder(TokenCounter(), task, e, archive, {}, Config())
                 job = f"{task}|{run}|{parent['id']}|{order}|{length}"
                 if job not in finished:
                     jobs.append((job, task, archive, parent, order, length, builder.build("Refine", parent)["prompt"]))
@@ -220,7 +216,7 @@ def part_b(n_per_task=20):
             return
         cards = [{**r, "idea": describe(task, r, length)} for r in refs]
         e, _ = evaluation(task)
-        builder = prompts.PromptBuilder(TokenCounter(), task, e, archive, Config())
+        builder = prompts.PromptBuilder(TokenCounter(), task, e, archive, {}, Config())
         best = max(n["score"] for n in archive.values())
         prompt = builder.build("Explore", parent, references=cards, best_score=best)["prompt"]
         content, finish, tokens = chat(prompt)

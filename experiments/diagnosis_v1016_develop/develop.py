@@ -30,7 +30,8 @@ from pathlib import Path
 from experiments.infra.base import BACKENDS, build_llm_client, build_task
 from experiments.traceaad_v10_16.run import TRAIN_TIMEOUT, selection_task
 from traceaad.v10_16 import Config, TraceAADV1016
-from traceaad.v10_16.canonical import similarity
+from traceaad.common.state import Facts
+from traceaad.common.canonical import similarity
 from traceaad.v10_16.prompts import ContextTooLong
 
 OUT = Path("experiments_result/diagnosis_v1016_develop")
@@ -38,17 +39,10 @@ LATE = 500
 MAX_SIMILARITY = 0.5
 
 
-class Restored(TraceAADV1016):
-    def _restore(self, state):
-        super()._restore({**state, "identity": self.identity})
 
 
 def arms(run_dir):
-    nodes = []
-    with open(run_dir / "search.jsonl") as f:
-        for line in f:
-            if line[:30].replace(" ", "").startswith('{"kind":"node"'):
-                nodes.append(json.loads(line)["data"])
+    nodes = list(Facts(run_dir).valid.values())
     best = max(nodes, key=lambda n: (n["fitness"], -n["id"]))
     late = [n for n in nodes if n["action"] == "Explore" and n["attempt_id"] > LATE
             and similarity(n["code"], best["code"]) <= MAX_SIMILARITY]
@@ -66,7 +60,7 @@ def develop(source, arm, start_id, generations, backend):
     if work.exists():
         shutil.rmtree(work)
     work.mkdir(parents=True)
-    for item in ("search.jsonl", "run_config.json"):
+    for item in ("events.jsonl", "programs.jsonl", "resume.json", "run_config.json") :
         shutil.copy(source / item, work / item)
     run_config = json.loads((source / "run_config.json").read_text())
     evaluation, _ = build_task(task, 4)
@@ -76,7 +70,7 @@ def develop(source, arm, start_id, generations, backend):
     llm = build_llm_client(base_url=profile.base_url, model=profile.model, no_proxy=profile.no_proxy,
                            max_tokens=8192)
     config = replace(Config(seed=run_config["seed"]), budget=10 ** 6)
-    method = Restored(evaluation=evaluation, llm=llm, run_dir=work, config=config, task=task,
+    method = TraceAADV1016(evaluation=evaluation, llm=llm, run_dir=work, config=config, task=task,
                       selection_evaluation=selection_task(task, evaluation))
     first = method.attempts
     start = method.archive[start_id]
@@ -90,16 +84,17 @@ def develop(source, arm, start_id, generations, backend):
         request.update(sampled_action="Refine", fallbacks=[], parent_id=current["id"], reference_id=None,
                        selection=None, reference_selection=None)
         before = method.attempts
-        method._attempt(request, parent=current, action="Refine", selection=None)
+        method._attempt(request, parent=current)
         for aid in range(before + 1, method.attempts + 1):
             attempt = method.attempts_table[aid]
             steps.append({"generation": aid - first, "action": attempt["action"], "parent": attempt["parent_id"],
-                          "status": attempt["status"], "fitness": attempt["fitness"]})
+                          "status": attempt["status"], "fitness": (method.programs.get(attempt["program_id"]) or {}).get("fitness")})
         reached = [method.archive[s] for s in range(first + 1, method.attempts + 1) if s in method.archive]
         current = max([start] + reached, key=lambda n: (n["fitness"], -n["id"]))
     selection = {}
     for label, node in (("start", start), ("reached", current)):
-        fitness, _, failure, _, _ = method._evaluate(node["code"], node["key"], role="selection")
+        result = method.selection.evaluate(node["code"], node["key"])
+        fitness, failure = result["fitness"], result["failure"]
         selection[label] = {"id": node["id"], "training": node["fitness"], "selection": fitness, "failure": failure}
     record = {"run": source.name, "task": task, "arm": arm, "start": start_id,
               "generations": method.attempts - first, "stop": stop, "steps": steps, "selection": selection}

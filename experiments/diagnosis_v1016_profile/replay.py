@@ -26,8 +26,8 @@ from benchmarks.generated_data_config import get_generated_task_kwargs
 from benchmarks.tsp_construct import TSPEvaluation
 from core import SecureEvaluator
 from experiments.infra.base import BACKENDS, build_llm_client
-from traceaad.v10_16.delivery import DeliveryError, SourceError, parse_response
-from traceaad.v10_16.evaluation import SeededEvaluation
+from traceaad.common.delivery import DeliveryError, SourceError, parse_response
+from traceaad.common.evaluation import SeededEvaluation
 
 OUT = os.environ.get("PROFILE_STUDY_OUT", "experiments_result/diagnosis_v1016_profile")
 LIMIT = 90.0

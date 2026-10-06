@@ -1,4 +1,4 @@
-"""Compact, read-only status for V10.15/16 batch manifests, locally or over SSH."""
+"""Compact, read-only status for canonical batch manifests, locally or over SSH."""
 
 import argparse
 from collections import Counter
@@ -12,12 +12,13 @@ import shlex
 import subprocess
 import time
 
-from experiments.infra.monitor_results import SCALES
+from experiments.infra.monitor_results import SCALES, heldout_identity, scale_of_split
+from traceaad.common.storage import Programs, read_json as result_json
 from experiments.infra.monitor_timing import batch_timing, search_timing
 
 
 TAIL_BYTES = 1_048_576
-PROGRESS_RECORD = re.compile(rb'^\s*\{\s*"kind"\s*:\s*"(?:state|candidate)"')
+PROGRESS_RECORD = re.compile(rb'^\s*\{\s*"kind"\s*:\s*"(?:progress|candidate)"')
 
 
 def read_json(path):
@@ -51,9 +52,9 @@ def journal_tail(path):
             continue
         if not isinstance(record, dict):
             continue
-        if record.get("kind") == "state" and not checkpoint:
-            checkpoint = record.get("state") or {}
-        elif record.get("kind") == "candidate" and not candidate:
+        if record.get("progress") and not checkpoint:
+            checkpoint = record.get("progress") or {}
+        if record.get("kind") == "candidate" and not candidate:
             candidate = record
         if checkpoint and candidate:
             break
@@ -79,9 +80,9 @@ def expected_splits(task):
 
 def run_status(root, row, budget, now):
     directory = run_path(root, row)
-    summary_path = directory / "logs/run_summary.json"
+    summary_path = directory / "summary.json"
     summary = read_json(summary_path)
-    checkpoint, candidate, modified = journal_tail(directory / "search.jsonl") if summary.get("status") != "finished" else ({}, {}, None)
+    checkpoint, candidate, modified = journal_tail(directory / "events.jsonl") if summary.get("status") != "finished" else ({}, {}, None)
     phase = checkpoint.get("phase") or summary.get("phase")
     raw = summary.get("status")
     resumed = modified is not None and summary_path.exists() and modified > summary_path.stat().st_mtime
@@ -105,20 +106,23 @@ def run_status(root, row, budget, now):
     timing = search_timing(timing_row, summary, snapshot, unit="候选", now=now)
     if timing["state"] == "stale" and status == "recorded":
         status = "stale"
-    selection = read_json(directory / "selection.json")
-    key = selection.get("selected_key")
+    best = summary.get("best") or {}
+    key = best.get("key")
     program = directory / "best_program.py"
-    frozen = bool(status == "finished" and key and program.exists()
-                  and hashlib.sha256(program.read_bytes()).hexdigest() == key
-                  and (summary.get("best") or {}).get("id") == selection.get("selected_node"))
-    heldout = {"valid": [], "failed": [], "missing": [], "mismatched": []}
+    code = program.read_text(encoding="utf-8") if program.exists() else Programs(directory).get(key)
+    frozen = bool(status == "finished" and key and code
+                  and hashlib.sha256(code.encode()).hexdigest() == key)
+    heldout = {"valid": [], "failed": [], "missing": [], "mismatched": [], "unverified": []}
+    results = {r["scale"]: r for r in result_json(directory / "heldout.json", []) if not r["variant"]}
     for split in expected_splits(row["task"]):
-        path = directory / f"heldout_{split}.json"
-        if not path.exists():
+        result = results.get(str(scale_of_split(row["task"], split)))
+        if result is None:
             heldout["missing"].append(split)
             continue
-        result = read_json(path)
-        if not frozen or result.get("key") != key or result.get("task") != row["task"] or result.get("split") != split:
+        verification = heldout_identity(directory, result)
+        if verification == "legacy":
+            heldout["unverified"].append(split)
+        elif verification != "verified":
             heldout["mismatched"].append(split)
         elif isinstance(result.get("fitness"), (int, float)) and math.isfinite(result["fitness"]):
             heldout["valid"].append(split)
@@ -147,6 +151,7 @@ def collect(manifest_path):
                         "heldout_valid": sum(len(r["heldout"]["valid"]) for r in rows),
                         "heldout_failed": sum(len(r["heldout"]["failed"]) for r in rows),
                         "heldout_mismatched": sum(len(r["heldout"]["mismatched"]) for r in rows),
+                        "heldout_unverified": sum(len(r["heldout"]["unverified"]) for r in rows),
                         "ready_for_heldout": sum(r["frozen"] and bool(r["heldout"]["missing"]) for r in rows)},
             "search_timing": batch_timing([{**r, "status": "running" if r["status"] == "recorded" else r["status"]} for r in rows])}
 
@@ -207,11 +212,11 @@ def main(argv=None):
             print("Wait:", payload["wait_result"])
         for row in payload["runs"]:
             h = row["heldout"]
-            attention = row["status"] in {"blocked", "stale", "unknown"} or h["failed"] or h["mismatched"] or (row["frozen"] and h["missing"]) or (row["status"] == "finished" and not row["frozen"])
+            attention = row["status"] in {"blocked", "stale", "unknown"} or h["failed"] or h["mismatched"] or h["unverified"] or (row["frozen"] and h["missing"]) or (row["status"] == "finished" and not row["frozen"])
             if args.details or attention:
                 used = row['budget_used'] if row['budget_used'] is not None else '?'
                 print(f"{row['name']}: {row['status']}/{row['phase']} {used}/{row['budget']} frozen={row['frozen']} "
-                      f"heldout={len(h['valid'])} missing={len(h['missing'])} failed={len(h['failed'])} mismatched={len(h['mismatched'])}")
+                      f"heldout={len(h['valid'])} missing={len(h['missing'])} failed={len(h['failed'])} mismatched={len(h['mismatched'])} unverified={len(h['unverified'])}")
     return 0
 
 

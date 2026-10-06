@@ -16,6 +16,7 @@ from experiments.infra.base import (
     BackendName,
 )
 from .env import resolve_llm_api_key
+from traceaad.common.storage import read_json
 
 def check_backends(backends: Iterable[BackendName]) -> None:
     """Read each backend's /v1/models once; abort if any is unreachable."""
@@ -41,18 +42,8 @@ def check_backends(backends: Iterable[BackendName]) -> None:
 
 
 def get_summary_status(run_dir: Path) -> str | None:
-    """Return status from logs/run_summary.json or logs/summary.json."""
-    for filename in ("run_summary.json", "summary.json"):
-        path = run_dir / "logs" / filename
-        if path.exists():
-            try:
-                payload = json.loads(path.read_text(encoding="utf-8"))
-                status = payload.get("status")
-                if isinstance(status, str):
-                    return status
-            except json.JSONDecodeError:
-                pass
-    return None
+    """Return status from the run's canonical summary.json."""
+    return read_json(run_dir / "summary.json", {}).get("status")
 
 
 def write_json_atomic(path: Path, payload: object) -> None:
@@ -82,5 +73,3 @@ def is_session_alive(session: str) -> bool:
         check=False,
     )
     return result.returncode == 0
-
-

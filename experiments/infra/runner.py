@@ -125,6 +125,9 @@ def setup_experiment_run(
             run_dir,
             {
                 "created_at": datetime.now().isoformat(timespec="seconds"),
+                "budget": getattr(args, "budget", params.get("max_sample_nums", 0)),
+                "objective": "min" if args.task in {"tsp_construct", "cvrp_aco", "vrptw_construct", "online_bin_packing"} else "max",
+                "budget_axis": "样本次数",
                 "run_dir": str(run_dir),
                 "run_name": run_name,
                 "task": args.task,
@@ -196,6 +199,9 @@ def baseline_run_config(spec, run_dir: Path, run_name: str, method: str,
         _, task_config = build_task(spec.task, spec.eval_workers)
     return {
         "created_at": datetime.now().isoformat(timespec="seconds"),
+        "budget": method_params["max_sample_nums"],
+        "objective": "min" if spec.task in {"tsp_construct", "cvrp_aco", "vrptw_construct", "online_bin_packing"} else "max",
+        "budget_axis": "样本次数",
         "run_dir": str(run_dir), "run_name": run_name, "task": spec.task,
         "method": method, "repeat": spec.repeat, "backend": spec.backend,
         "seed": spec.seed,

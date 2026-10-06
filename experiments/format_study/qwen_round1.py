@@ -1,3 +1,5 @@
+from traceaad.common.state import Facts
+from pathlib import Path
 """How should Qwen think before coding? Paired Refine contexts, 6 output formats.  Resumable JSONL."""
 import experiments  # noqa: F401
 import glob
@@ -12,10 +14,10 @@ from concurrent.futures import ThreadPoolExecutor
 import traceaad.v10_15.prompts as prompts
 from core import SecureEvaluator
 from experiments.infra.base import BACKENDS, build_llm_client, build_task
-from traceaad.v10_15.canonical import canonical, key
+from traceaad.common.canonical import canonical, key
 from traceaad.v10_15.config import Config
-from traceaad.v10_15.delivery import DeliveryError, SourceError, parse_response
-from traceaad.v10_15.evaluation import SeededEvaluation
+from traceaad.common.delivery import DeliveryError, SourceError, parse_response
+from traceaad.common.evaluation import SeededEvaluation
 
 OUT = os.environ.get("FORMAT_STUDY_OUT", "experiments_result/format_study/qwen_round1")
 os.makedirs(OUT, exist_ok=True)
@@ -57,19 +59,13 @@ def evaluation(task):
         if task not in EVAL:
             e, _ = build_task(task, 4)
             e.timeout_seconds = 120
-            EVAL[task] = (e, SecureEvaluator(SeededEvaluation(e)))
+            EVAL[task] = (e, SecureEvaluator(SeededEvaluation(e, measure_calls=False)))
         return EVAL[task]
 
 
 def archives(task):
-    for path in sorted(glob.glob(f"experiments_result/traceaad_v10_15_4/{task}/*/search.jsonl")):
-        nodes = {}
-        with open(path, "rb") as f:
-            for raw in f:
-                if raw.startswith(b'{"kind":"node"'):
-                    n = json.loads(raw)["data"]
-                    nodes[n["id"]] = n
-        yield path.split("/")[-2], nodes
+    for path in sorted(glob.glob(f"experiments_result/traceaad_v10_15_4/{task}/*/events.jsonl")):
+        yield Path(path).parent.name, Facts(Path(path).parent).valid
 
 
 CLIENTS = {}
@@ -98,7 +94,7 @@ def main(n_per_task=20):
         for run, archive, parent in rng.sample(pool, n_per_task):
             for arm, (fmt, thinking) in ARMS.items():
                 prompts.output_format = lambda f=fmt: f
-                prompt = prompts.PromptBuilder(Counter(), task, e, archive, Config()).build("Refine", parent)["prompt"]
+                prompt = prompts.PromptBuilder(Counter(), task, e, archive, {}, Config()).build("Refine", parent)["prompt"]
                 job = f"{task}|{run}|{parent['id']}|{arm}"
                 if job not in finished:
                     jobs.append((job, task, archive, parent, arm, thinking, prompt))

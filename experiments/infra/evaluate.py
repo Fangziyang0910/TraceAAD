@@ -31,6 +31,8 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+import hashlib
+from traceaad.common.storage import save_heldout
 from typing import Any, Callable
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -527,6 +529,7 @@ def _run_batch(
     workers: int,
     max_sample_order: int | None,
     allow_incomplete: bool,
+    variant: str = "shared",
 ) -> None:
     methods = {_resolve_method(run_dir) for run_dir in run_dirs}
     if len(methods) != 1:
@@ -734,6 +737,23 @@ def _run_batch(
         payload["results_by_size"] = container
     else:
         payload["results_by_split"] = container
+
+    by_name = {run.name: run for run in run_dirs}
+    for unit in units:
+        block = container[spec["unit_key"](unit)]
+        scale = (f"{unit[0]//1000}k_{unit[1]}" if task == "online_bin_packing" else
+                 str(unit.split("_")[-1]) if isinstance(unit, str) else str(unit))
+        for entry in block["results"]:
+            run = by_name[entry["run_name"]]
+            chosen = next(r for r in run_records if r["run_name"] == run.name)
+            summary = load_run_summary(run, require_finished=not allow_incomplete)
+            best = summary.get("best") or {}
+            key = hashlib.sha256(chosen["program"].encode()).hexdigest()
+            verification = "verified" if summary["status"] == "finished" and key == best.get("key") else "different_program"
+            save_heldout(run, {"task": task, "scale": scale, "fitness": entry.get("eval_score"),
+                "key": key, "node_id": best.get("id"), "verification": verification,
+                "timeout_seconds": timeout, "workers": workers, "evaluation": block.get("eval_config", block.get("config")),
+                **{k:v for k,v in entry.items() if k not in {"run_name", "eval_score"}}}, variant)
 
     output_path = output_dir / "results.json"
     output_path.write_text(

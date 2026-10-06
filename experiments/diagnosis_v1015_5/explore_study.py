@@ -22,10 +22,12 @@ from concurrent.futures import ThreadPoolExecutor
 import traceaad.v10_15.prompts as P
 from core import SecureEvaluator
 from experiments.infra.base import BACKENDS, build_llm_client, build_task
-from traceaad.v10_15.canonical import canonical, key, similarity
+from traceaad.common.canonical import canonical, key, similarity
 from traceaad.v10_15.config import Config
-from traceaad.v10_15.delivery import DeliveryError, SourceError, parse_response
-from traceaad.v10_15.evaluation import SeededEvaluation
+from traceaad.common.state import Facts
+from pathlib import Path
+from traceaad.common.delivery import DeliveryError, SourceError, parse_response
+from traceaad.common.evaluation import SeededEvaluation
 from traceaad.v10_15.selection import choose_explore_references
 
 OUT = os.environ.get("EXPLORE_STUDY_OUT", "experiments_result/diagnosis_v1015_5/explore_study")
@@ -92,18 +94,12 @@ def evaluation(task):
             e, _ = build_task(task, 4)
             nominal = e.timeout_seconds
             e.timeout_seconds = 120
-            EVAL[task] = (e, SecureEvaluator(SeededEvaluation(e)), nominal)
+            EVAL[task] = (e, SecureEvaluator(SeededEvaluation(e, measure_calls=False)), nominal)
         return EVAL[task]
 
 
 def load_run(path):
-    nodes, attempts = {}, {}
-    with open(path, "rb") as f:
-        for raw in f:
-            if raw.startswith(b'{"kind": "node"') or raw.startswith(b'{"kind":"node"'):
-                n = json.loads(raw)["data"]
-                nodes[n["id"]] = n
-    return nodes
+    return Facts(Path(path).parent).valid
 
 
 def truncated(nodes, cut):
@@ -121,7 +117,7 @@ def parents_of(archive, n, higher):
 
 def build_prompt(task, e, archive, parent, arm, nominal, parent_seconds):
     instr, fmt, refs, wording, _ = ARMS[arm]
-    builder = P.PromptBuilder(Counter(), task, e, archive, Config())
+    builder = P.PromptBuilder(Counter(), task, e, archive, {}, Config())
     if wording == "headroom":
         timeout = format(nominal, "g")
         builder.common[1] = builder.common[1].replace(
@@ -160,7 +156,7 @@ def main():
     e, sec, nominal = evaluation(task)
     jobs = []
     timing = {}
-    for run_path in sorted(glob.glob(f"experiments_result/traceaad_v10_15_5/{task}/*/search.jsonl")):
+    for run_path in sorted(glob.glob(f"experiments_result/traceaad_v10_15_5/{task}/*/events.jsonl")):
         run = run_path.split("/")[-2]
         archive = truncated(load_run(run_path), CUT)
         higher = P.SCORES[task][1]
