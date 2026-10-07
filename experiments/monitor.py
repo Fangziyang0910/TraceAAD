@@ -34,9 +34,7 @@ TASKS = {
     "online_bin_packing": {"label": "在线装箱", "direction": "min", "unit": "箱数"},
     "vrptw_construct": {"label": "VRPTW 构造", "direction": "min", "unit": "距离"},
     "fssp_gls": {"label": "FSSP-GLS", "direction": "min", "unit": "参考偏差 %"},
-    "mdmkp_search": {"label": "多需求多维背包", "direction": "min", "unit": "参考偏差 %"},
     "graph_colouring": {"label": "图着色", "direction": "min", "unit": "参考偏差 %"},
-    "set_cover_construct": {"label": "集合覆盖", "direction": "min", "unit": "参考偏差 %"},
     "jssp_construct": {"label": "作业车间调度", "direction": "min", "unit": "参考偏差 %"},
 }
 

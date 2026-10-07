@@ -16,7 +16,6 @@ TASKS = tuple(task for task in CO_TASKS if task in FIXED_TASKS)
 def test_primary_suite_replaces_easy_tasks_with_jssp_and_op():
     assert set(CO_TASKS) == {'tsp_construct', 'cvrp_aco', 'fssp_gls',
                              'graph_colouring', 'jssp_construct', 'op_aco'}
-    assert 'mdmkp_search' not in CO_TASKS and 'set_cover_construct' not in CO_TASKS
 
 
 @pytest.mark.parametrize("method", launch.METHODS)
@@ -37,7 +36,7 @@ def test_task_conditions_and_prompt_match_primary_data(task):
     training, _ = training_task(task)
     testing = heldout_task(task, PRIMARY_SPLITS[task][0])
     assert testing.outer_settings == training.outer_settings
-    assert testing.n_instance == (108 if task == "mdmkp_search" else 100)
+    assert testing.n_instance == 100
     assert testing.timeout_seconds / testing.n_instance == training.timeout_seconds / training.n_instance
     assert SCALES[task] == (training.problem_size,)
     assert SPLITS[task] == PRIMARY_SPLITS[task]

@@ -58,10 +58,8 @@ V10.15–V10.19 共用生成、评价和结果保存，各版本仍写到原版�
 2026-10-07 已统一为最小化目标。三路运行中的 V10.20 CVRP 暂由 `.minimize/live.json` 标记只读转换，旧进程继续按原条件运行。完成迁移的后台会话为 `traceaad_minimize_migration`，日志在 `/tmp/traceaad-minimize-live.log`；可用 `tmux has-session -t traceaad_minimize_migration` 检查。它只在搜索终局文件稳定后改写分数和恢复字节位置，不中断实验。监控已重新加载；五个任务均标记为 `min`。
 
 
-2026-10-07，新增四任务的12路实验已归入 `experiments_result/traceaad_v10_20/`，清单为 `batch_20261007_local_v1020_new4_seeded.json`。训练页统一显示9个任务、27路：`http://127.0.0.1:8765/#b=traceaad_v10_20`。
+2026-10-07，主套件为TSP、CVRP、FSSP、图着色、JSSP与OP。FSSP／图着色六路使用`batch_20261007_local_v1020_new4_seeded.json`，JSSP三路使用`batch_20261007_local_v1020_replacement.json`，均归入`traceaad_v10_20`。OP复用`20261006_local_v1020`已完成的原三路搜索；训练最好节点与哈希保存在后一个清单的`reused_runs`。原OP rep1与旧选中程序相同，rep2、rep3不同；只复用程序身份一致的测试记录，不覆盖历史验证选择。
 
-运行进程仍持有旧路径，临时别名连接到新的实际目录。`traceaad_v10_20_co6/` 当前只承担旧路径转接；V10.20 任务目录内带旧名称的符号链接也是写入别名，不是额外实验。监控不计入这些别名。自动清理会话为 `traceaad_v1020_path_cleanup`，读取 `/tmp/traceaad-v1020-path-aliases.json`；对应原进程退出后删除其运行别名，全部结束后删除旧路径容器并退出。运行期间不要手动删除这些链接。原启动命令保留在清单的 `original_command`，当前规范路径与续跑命令使用清单的 `run_dir` 和 `command`。
+已停止的九路及启动日志、清单条目、废弃任务代码已删除。当前FSSP／图着色／JSSP九路分配server3五路、server3b四路。训练页面：`http://127.0.0.1:8765/#b=traceaad_v10_20`。
 
-2026-10-07任务替换：主套件 `co6` 现为TSP、CVRP、FSSP、图着色、JSSP与OP。原新增批次的背包、集合覆盖各三路已经停止，`summary.status=stopped` 与清单中记录原因，检查点保留。状态查询和监控将其显示为已停止，不列为运行故障或估算剩余运行时间。原FSSP、图着色六路继续运行。JSSP与OP的替换批次统一归入 `traceaad_v10_20`，清单为 `batch_20261007_local_v1020_replacement.json`；原六路和替换六路合计两个模型端点各六路。运行中路径别名仍由现有清理会话管理。
-
-同日按用户纠正，重复启动的OP三路已停止，JSSP三路继续。OP复用`20261006_local_v1020`原三路已完成搜索，训练最好节点与哈希保存在替换清单的`reused_runs`。更改最终选择规则不要求重新模型搜索。原OP rep1的训练最好程序与原选中程序相同，rep2、rep3不同；只有同一程序的已验证测试记录可以直接复用，不覆盖历史验证选择档案。FSSP／图着色／JSSP九路当前分配server3五路、server3b四路。
+FSSP和图着色进程仍持有旧路径，`traceaad_v10_20_co6/`仅保留这两个任务的写入转接。任务目录内旧名称的符号链接不是额外实验，监控不计入。自动清理会话`traceaad_v1020_path_cleanup`读取`/tmp/traceaad-v1020-path-aliases.json`，目前只登记六个活动写入别名。对应原进程退出后移除链接，全部退出后删除旧路径容器。运行期间不要删除这些活动链接。

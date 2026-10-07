@@ -36,9 +36,7 @@ TaskName = Literal[
     "online_bin_packing",
     "vrptw_construct",
     "fssp_gls",
-    "mdmkp_search",
     "graph_colouring",
-    "set_cover_construct",
     "jssp_construct",
 ]
 BackendName = Literal["local", "server1", "server3", "server3b"]

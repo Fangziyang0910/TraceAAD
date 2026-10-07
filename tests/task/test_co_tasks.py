@@ -8,8 +8,7 @@ import pytest
 
 from benchmarks.fssp_gls import evaluation as fssp
 from benchmarks.graph_colouring import evaluation as graph
-from benchmarks.mdmkp_search import evaluation as mdmkp
-from benchmarks.set_cover_construct import evaluation as set_cover
+from benchmarks.jssp_construct import evaluation as jssp
 from benchmarks.tasks import CLASSES, FIXED_TASKS as TASKS
 from benchmarks._seeded_data import digest_arrays, generate_dataset
 from core import SecureEvaluator
@@ -49,34 +48,6 @@ def test_flowshop_rejects_invalid_perturbations(output):
         fssp.solve({"processing_times": np.ones((3, 2))}, lambda *args: output, iterations=1)
 
 
-def test_mdmkp_moves_agree_with_binary_feasibility_oracle():
-    data = {"A_leq": np.array([[2, 3, 1, 4], [1, 2, 3, 2]]), "b_leq": np.array([6, 5]),
-            "A_geq": np.array([[1, 1, 2, 1]]), "b_geq": np.array([2]),
-            "cost_vector": np.array([5, -2, 7, 4])}
-    for bits in itertools.product((0, 1), repeat=4):
-        x = np.array(bits, dtype=np.int8)
-        if not mdmkp.feasible(data, x):
-            continue
-        expected = set()
-        for remove in [-1, *np.flatnonzero(x)]:
-            for add in [-1, *np.flatnonzero(1-x)]:
-                if remove == add == -1:
-                    continue
-                trial = x.copy()
-                if remove >= 0: trial[remove] = 0
-                if add >= 0: trial[add] = 1
-                if mdmkp.feasible(data, trial): expected.add((remove, add))
-        assert set(map(tuple, mdmkp.eligible_moves(data, x))) == expected
-
-
-def test_mdmkp_retains_best_feasible_solution_after_a_worse_move():
-    data = {"A_leq": np.array([[1, 1]]), "b_leq": np.array([2]),
-            "A_geq": np.array([[1, 1]]), "b_geq": np.array([1]),
-            "cost_vector": np.array([8, -2]), "initial_solution": np.array([1, 0], dtype=np.int8)}
-    x, value = mdmkp.solve(data, lambda profits, a, b, g, d, x, moves: -seed("mdmkp_search")(profits, a, b, g, d, x, moves), steps=1)
-    assert value == 8 and x.tolist() == [1, 0]
-
-
 @pytest.mark.parametrize("adjacency,optimal", [(np.ones((3, 3), dtype=bool) ^ np.eye(3, dtype=bool), 3),
     (np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=bool), 2)])
 def test_graph_final_solution_survives_failed_color_reduction(adjacency, optimal):
@@ -84,55 +55,29 @@ def test_graph_final_solution_survives_failed_color_reduction(adjacency, optimal
     assert graph.valid(adjacency, colors) and k == optimal
 
 
-def test_covering_solution_and_cost_against_enumerated_optimum():
-    coverage = np.array([[1, 0, 1], [0, 1, 1]], dtype=bool)
-    costs = np.array([2., 2., 3.])
-    feasible_costs = [costs[np.array(bits, dtype=bool)].sum() for bits in itertools.product((0, 1), repeat=3)
-                      if coverage[:, np.array(bits, dtype=bool)].any(axis=1).all()]
-    chosen, value = set_cover.solve({"coverage": coverage, "costs": costs}, seed("set_cover_construct"))
-    assert coverage[:, chosen].any(axis=1).all()
-    assert value == costs[chosen].sum() == min(feasible_costs)
-
-
-def test_candidate_mutations_do_not_change_covering_solver_inputs():
-    data = {"coverage": np.array([[1, 0], [0, 1]], dtype=bool), "costs": np.array([2., 3.])}
-    original = {key: value.copy() for key, value in data.items()}
-
-    def hostile(costs, coverage, selected, uncovered):
-        value = np.ones(len(costs))
-        coverage[:] = False
-        costs[:] = 0
-        selected[:] = True
-        uncovered[:] = False
-        return value
-
-    _, value = set_cover.solve(data, hostile)
-    assert value == 5
-    assert all(np.array_equal(data[k], v) for k, v in original.items())
-
-
 def miniature_evaluation():
     class TinyData:
-        TASK = 'set_cover_construct'
+        TASK = 'jssp_construct'
         SCALE = 2
         COUNTS = {'train': 1, 'test': 1}
-        DIMENSIONS = {'elements': 2, 'sets': 2}
-        DISTRIBUTION = 'two independent sets covering two elements'
+        DIMENSIONS = {'jobs': 2, 'machines': 2, 'operations': 4}
+        DISTRIBUTION = 'two jobs visiting two machines in opposite orders'
 
         @staticmethod
         def describe(split, count=None):
-            return f"{count} fixed {split} instances with 2 elements and 2 sets"
+            return f"{count} fixed {split} instances with 2 jobs and 2 machines"
 
         @staticmethod
         def generate_instances(split):
-            arrays = {'coverage': np.array([[1, 0], [0, 1]], dtype=bool), 'costs': np.array([2., 3.])}
+            arrays = {'processing_times': np.array([[3, 2], [2, 4]]),
+                      'machine_order': np.array([[0, 1], [1, 0]])}
             yield arrays, {'id': split, 'group': split, 'scale': 2,
-                           'dimensions': TinyData.DIMENSIONS}, 6., 'test reference'
+                           'dimensions': TinyData.DIMENSIONS}, 8., 'test reference'
 
-    class TinySetCoverEvaluation(set_cover.SetCoverEvaluation):
+    class TinyJSSPEvaluation(jssp.JSSPEvaluation):
         DATASET = TinyData
 
-    return TinySetCoverEvaluation(safe_evaluate=False)
+    return TinyJSSPEvaluation(safe_evaluate=False)
 
 
 def test_eval_isolates_module_state_and_measures_calls():
@@ -141,19 +86,19 @@ def test_eval_isolates_module_state_and_measures_calls():
     evaluation._rows *= 2
     evaluation._instances *= 2
     code = ('import numpy as np\n_calls = 0\n'
-            'def score_sets(costs, coverage, selected, uncovered):\n'
+            'def score_operations(t, m, n, j, r, candidates):\n'
             '    global _calls\n    _calls += 1\n    assert _calls <= 4\n'
-            '    return np.ones(len(costs))\n')
+            '    return np.array([t[j,k:].sum() for j,k in candidates])\n')
     result = ProgramEvaluator(evaluation, (123,)).evaluate(code, "isolation")
     assert result["failure"] is None
     assert result["calls"] == 8
-    assert result["fitness"] == pytest.approx(-100/6)
+    assert result["fitness"] == pytest.approx(-100/8)
 
 
 def test_invalid_scores_are_reported_as_invalid_output():
     from traceaad.common.evaluation import ProgramEvaluator
     evaluation = miniature_evaluation()
-    result = ProgramEvaluator(evaluation).evaluate('def score_sets(*args):\n    return [float("nan")]\n', "bad")
+    result = ProgramEvaluator(evaluation).evaluate('def score_operations(*args):\n    return [float("nan")]\n', "bad")
     assert result["failure"]["kind"] == "invalid_output"
 
 
@@ -170,7 +115,7 @@ def test_candidates_reuse_initial_data_and_references(monkeypatch):
     first = runner.evaluate(evaluation.template_program, 'first')
     second = runner.evaluate(evaluation.template_program, 'second')
     assert first['failure'] is second['failure'] is None
-    assert first['fitness'] == second['fitness'] == pytest.approx(-100/6)
+    assert first['fitness'] == second['fitness'] == pytest.approx(-100/8)
     assert [digest_arrays(data) for data in evaluation._instances] == before
 
 
@@ -222,11 +167,11 @@ def test_offline_training_winner_and_heldout_use_the_new_task(tmp_path):
     llm = TokenLLM(text_candidate(code=evaluation.template_program))
     config = Config(budget=1, roots=1, final_candidates=1)
     method = TraceAADV1020(evaluation=evaluation,
-                           llm=llm, run_dir=run, task="set_cover_construct", config=config)
+                           llm=llm, run_dir=run, task="jssp_construct", config=config)
     summary = method.run()
     assert summary['status'] == 'finished' and summary['selection_evaluations'] == 0
     assert len(llm.calls) == 1
-    write_json(run / "run_config.json", {"task": "set_cover_construct", "method_params": {"evaluation_seeds": [730241]}})
+    write_json(run / "run_config.json", {"task": "jssp_construct", "method_params": {"evaluation_seeds": [730241]}})
     # Real task data are used for held-out; a frozen valid heuristic must transfer.
-    results = evaluate_run(run, ["test_2000"], condition="traceaad")
+    results = evaluate_run(run, ["test_20"], condition="traceaad")
     assert results[0]["fitness"] is not None and not results[0]["failures"]
