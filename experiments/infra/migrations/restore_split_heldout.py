@@ -2,7 +2,8 @@
 
 The 2026-10-03 backfills wrote ``heldout_<date>_<variant>/<task>/<run>_<split>/results.json``.
 The 2026-10-06 conversion kept, per variant and task, only the one results file
-covering the most runs, so each backfill lost all but one run-split. This adds
+covering the most runs, so each backfill lost all but one run-split. It also
+skipped every ``<task>_per_run`` retry, which held V11.0's only VRPTW results. This adds
 the missing records to each run's ``heldout.json``; existing records are kept
 and must agree with the source.
 
@@ -23,7 +24,8 @@ ROOT = Path(__file__).resolve().parents[3] / "experiments_result"
 
 def collect(batch_dir: Path):
     """Yield (task, run_name, variant, scale, value) from per-split held-out dirs."""
-    for path in sorted(batch_dir.glob("heldout_*/*/*/results.json")):
+    paths = [*batch_dir.glob("heldout_*/*/*/results.json"), *batch_dir.glob("heldout_*/*_per_run/results.json")]
+    for path in sorted(paths):
         payload = json.loads(path.read_text(encoding="utf-8"))
         task = _task_of(path, payload, batch_dir)
         if task not in SCALES:
@@ -31,7 +33,8 @@ def collect(batch_dir: Path):
         for scale, results in _entries(payload, task):
             for result in results:
                 if result.get("run_name"):
-                    yield task, str(result["run_name"]), variant_of(path, batch_dir), str(scale), result.get("eval_score")
+                    yield (task, str(result["run_name"]), variant_of(path, batch_dir), str(scale),
+                           result.get("eval_score"), result.get("eval_failed"))
 
 
 def main(argv=None):
@@ -41,7 +44,7 @@ def main(argv=None):
     added, conflicts, missing_runs = {}, [], []
     for batch_dir in sorted(p for p in ROOT.iterdir() if p.is_dir()):
         updates = {}
-        for task, name, variant, scale, value in collect(batch_dir):
+        for task, name, variant, scale, value, failure in collect(batch_dir):
             run = batch_dir / task / name
             if not (run / "run_config.json").exists():
                 missing_runs.append(str(run))
@@ -53,8 +56,11 @@ def main(argv=None):
                 if existing.get("fitness") != fitness:
                     conflicts.append((str(run), variant, scale, existing.get("fitness"), fitness))
                 continue
-            records.append({"variant": variant, "scale": scale, "task": task,
-                            "fitness": fitness, "verification": "legacy"})
+            record = {"variant": variant, "scale": scale, "task": task,
+                      "fitness": fitness, "verification": "legacy"}
+            if failure:
+                record["failures"] = [{"kind": "legacy", "error": failure}]
+            records.append(record)
             added[batch_dir.name] = added.get(batch_dir.name, 0) + 1
         if args.apply:
             for run, records in updates.items():
