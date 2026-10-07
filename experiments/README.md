@@ -19,7 +19,7 @@
 
 ## 搜索、选择与测试
 
-[当前规则引导的搜索](traceaad_v10_20/README.md)、[改动检验搜索](traceaad_v10_19/README.md)、[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)各自提供运行、选择和 held-out 命令，并共用[实验与结果实现](infra/SEARCH_FORMAT.md)。代码目录保留实现标识，文档按研究对象命名。V10.13–V10.14 已归档，实现已删除，历史结果继续可视化。
+[当前规则引导的搜索](traceaad_v10_20/README.md)、[改动检验搜索](traceaad_v10_19/README.md)、[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)各自提供运行、选择和 held-out 命令，并共用[实验与结果实现](infra/SEARCH_FORMAT.md)。代码目录保留实现标识，文档按研究对象命名。V10.13–V10.14 的说明见[历史研究脚本](historical/README.md)，历史结果继续可视化。
 
 模型、采样、时限与实例隔离见各入口的配置。评价使用单线程 BLAS/OpenMP，墙钟超时；装箱按实例重新执行候选程序，VRPTW 接口明确 depot 返回规则。
 

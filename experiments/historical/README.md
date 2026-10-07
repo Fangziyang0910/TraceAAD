@@ -5,6 +5,7 @@
 - `initialization/analyze.py`：E32 三臂初始化汇总。
 - `initialization/diversity.py` 与 `behavior.py`：训练集 A/B 行为探针。
 - [format_study](format_study/README.md)：代码前文字的格式、长度与位置对照。
+- [V10.14 运行说明](traceaad_v10_14.md)：正式批次 `20260928_v1014` 的协议与历史命令。V10.13 的机制见[质量抽样与局部试验](../../docs/01-搜索方法/质量抽样与局部试验.md)。两版的实现已删除，源码在 Git 历史中。
 
 初始化分析命令：
 
