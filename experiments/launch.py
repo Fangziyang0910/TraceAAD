@@ -7,7 +7,6 @@ from dataclasses import replace
 
 from experiments.infra.base import (
     ALL_TASKS,
-    TASKS,
     add_launch_parser_args,
     build_launch_plan,
     fill_once,
@@ -40,8 +39,6 @@ def build_plan(args: argparse.Namespace):
     plan = build_launch_plan(
         args, module=f"experiments.{args.method}.run", method=args.method
     )
-    if args.tasks:
-        plan = [item for item in plan if item.task in args.tasks]
     if args.run_arg:
         plan = [replace(item, extra_args=tuple(args.run_arg)) for item in plan]
     return plan

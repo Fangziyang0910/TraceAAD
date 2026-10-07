@@ -49,13 +49,15 @@ def main(config_class, experiment, module, method, host="local", backends=("serv
     manifest_path = ROOT / "experiments_result" / experiment / f"batch_{args.batch}.json"
     if not args.launch:
         print(json.dumps({"manifest": str(manifest_path), "plan": plan,
-                          "suite": args.suite, "evaluation_limits": evaluation_limits(tasks)}, indent=2))
+                          "suite": args.suite, "final_selection": "training",
+                          "evaluation_limits": evaluation_limits(tasks)}, indent=2))
         return
     hashes = implementation_files(module)
     manifest = {"batch": args.batch, "method": method, "revision": REVISION,
                 "experiment": experiment, "created_at": datetime.now().astimezone().isoformat(),
                 "execution_host": host, "host": {"node": platform.node(), "cpus": os.cpu_count()},
                 "status": "launching", "suite": args.suite, "repeats": args.repeats, "eval_workers": 4,
+                "final_selection": "training",
                 "budget_per_run": args.budget, "total_budget": len(plan) * args.budget,
                 "search_policy": asdict(config_class(budget=args.budget)),
                 "sampling": {**SAMPLING_PROFILES[False], "enable_thinking": False},
@@ -64,5 +66,5 @@ def main(config_class, experiment, module, method, host="local", backends=("serv
                 "git_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT).decode(),
                 "implementation_files": hashes,
                 "load_average_at_launch": list(os.getloadavg()),
-                "heldout": "separate after independent selection", "plan": plan}
+                "heldout": "separate evaluation of the frozen training-best program", "plan": plan}
     launch_plan(manifest_path, manifest, min_context=32768)

@@ -6,6 +6,6 @@
 
 运行实验、查询状态与定位结果见[实验入口](experiments/README.md)。搜索实现位于 `traceaad/`，比较方法位于 `baselines/`，数据与测试条件见[实验配置](docs/02-实验结果/00-实验配置.md)。
 
-六个组合优化任务的规模、函数契约、数据划分与运行命令见[六任务 AHD 实验](benchmarks/ahd_suite/README.md)。主比较使用同规模独立测试。
+六个组合优化任务的规模、函数契约、数据划分与运行命令见[六任务 AHD 实验](experiments/co6/README.md)。主比较使用同规模独立测试。
 
 所有任务评价统一为最小化：路径长度和箱数直接返回，最大化任务返回负目标值。搜索、基线、提示、历史档案和可视化都按越小越好解释 `fitness`。迁移说明见[结果格式](experiments/infra/SEARCH_FORMAT.md)。

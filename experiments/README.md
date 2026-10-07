@@ -17,9 +17,11 @@
 | ACO 训练成绩有多少是种子噪声？后期提升是否真实？ | [ACO 噪声审计](diagnosis_aco_noise/README.md) |
 | 更正计算事实并增加 Deepen，能否把时限换成质量？ | [当前规则引导的搜索](traceaad_v10_20/README.md) |
 
-## 搜索、选择与测试
+## 搜索与独立测试
 
-[六任务 AHD 实验](../benchmarks/ahd_suite/README.md)提供 TSP、CVRP、FSSP、MDMKP、图着色与集合覆盖的任务说明、函数契约、已准备数据和运行命令。启动计划用 `--suite co6`；通用评价用 `--primary` 只执行同规模主测试。新任务的 `--units standard` 是单独的标准补充测试；TSP/CVRP 保留已有跨规模条件。旧批次默认仍使用 `legacy`。
+新实验默认在训练集上进化，冻结训练成绩最好的程序，再执行独立测试；不使用验证集筛选。旧五任务的验证条件可用 `--final-selection validation` 显式复现。
+
+[六任务 AHD 实验](co6/README.md)提供 TSP、CVRP、FSSP、MDMKP、图着色与集合覆盖的任务说明、函数契约、已准备数据和运行命令。启动计划用 `--suite co6`；通用评价用 `--primary` 只执行同规模主测试。新任务的 `--units standard` 是单独的标准补充测试；TSP/CVRP 保留已有跨规模条件。旧批次默认仍使用 `legacy`。
 
 [当前规则引导的搜索](traceaad_v10_20/README.md)、[改动检验搜索](traceaad_v10_19/README.md)、[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)各自提供运行、选择和 held-out 命令，并共用[实验与结果实现](infra/SEARCH_FORMAT.md)。代码目录保留实现标识，文档按研究对象命名。V10.13–V10.14 的说明见[历史研究脚本](historical/README.md)，历史结果继续可视化。
 

@@ -293,8 +293,26 @@ class Search:
         return [n["id"] for n in sorted(self.archive.values(), key=lambda n: (n["fitness"], n["id"]))]
 
     def _freeze(self):
-        self.progress.finalists = self._ranking()[:self.config.final_candidates]
-        self.progress.phase = "selection" if self.selection else "search_complete"
+        self.progress.finalists = self._ranking()[:self.config.final_candidates if self.selection else 1]
+        if self.selection:
+            self.progress.phase = "selection"
+            self._save()
+        elif self.progress.finalists:
+            self._finish(self.archive[self.progress.finalists[0]], "training")
+        else:
+            self.progress.phase = "no_valid_root"
+            self._save()
+
+    def _finish(self, node, criterion):
+        """Freeze one winner before any held-out evaluation."""
+        self.progress.selected_id = node['id']
+        (self.run_dir / 'best_program.py').write_text(node['code'], encoding='utf-8')
+        write_json(self.run_dir / 'selection.json', {
+            'criterion': criterion,
+            'selection_protocol': self.selection.protocol if self.selection else None,
+            'results': self.progress.selection_results, 'finalists': self.progress.finalists,
+            'selected_node': node['id'], 'selected_key': node['key']})
+        self.progress.phase = 'finished'
         self._save()
 
     def _select(self):
@@ -319,13 +337,8 @@ class Search:
             self.progress.phase = "selection_failed"
         else:
             selected = min(valid, key=lambda r: (r["fitness"], self.progress.finalists.index(r["node_id"])))
-            self.progress.selected_id = selected["node_id"]
-            node = self.archive[selected["node_id"]]
-            (self.run_dir / "best_program.py").write_text(node["code"], encoding="utf-8")
-            write_json(self.run_dir / "selection.json", {
-                "selection_protocol": self.selection.protocol if self.selection else None, "results": self.progress.selection_results,
-                "finalists": self.progress.finalists, "selected_node": node["id"], "selected_key": node["key"]})
-            self.progress.phase = "finished"
+            self._finish(self.archive[selected['node_id']], 'validation')
+            return
         self._save()
 
     def _summary(self, status, error=None):
@@ -336,6 +349,7 @@ class Search:
                     "selection_fitness": next((r["fitness"] for r in self.progress.selection_results
                     if r["node_id"] == best["id"]), None)}
         summary = {"status": status, "phase": self.phase, "method": self.METHOD, "revision": REVISION,
+                   "final_selection": "validation" if self.selection else "training",
                    "budget": self.config.budget, "budget_used": self.attempts, "budget_axis": "候选尝试",
                    "init_attempts": self.progress.init_attempts, "num_nodes": len(self.archive),
                    "num_failed_programs": len(self.programs) - len(self.archive),

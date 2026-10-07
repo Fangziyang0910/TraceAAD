@@ -64,6 +64,7 @@ def main(config_class, experiment, module, method, argv=None):
     hashes = implementation_files(module)
     manifest = {"batch": args.batch, "method": method, "revision": REVISION, "created_at": datetime.now().astimezone().isoformat(),
                 "status": "launching", "previous_batch": str(args.from_batch),
+                "final_selection": "training",
                 "experiment": args.experiment, "search_policy": asdict(config_class()),
                 # Requests carry every sampling control, so servers' own defaults do not apply.
                 "sampling": sampling, "evaluation_limits": evaluation_limits(),

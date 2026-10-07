@@ -1,0 +1,2774 @@
+{
+  "protocol": "ahd-six-tasks-v3-training-selection",
+  "task": "graph_colouring",
+  "seed": 20261007,
+  "final_selection": "training",
+  "primary_source": "TraceAAD explicit generated distributions",
+  "distribution": "G(300,0.5): each undirected edge independently present with probability 0.5; reference is deterministic DSATUR construction",
+  "standard_source_url": "https://huggingface.co/datasets/CO-Bench/CO-Bench",
+  "split_policy": "Independent train/test seed streams; base-group variants stay together; standard data are supplementary.",
+  "preparation_environment": {
+    "python": "3.14.7",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "numba": "0.67.0"
+  },
+  "source_files": {
+    "benchmarks/graph_colouring/prepare_data.py": "f164584632e8708d8f8023be640534218394bc8d0d096011398909005a0aa4bc",
+    "benchmarks/graph_colouring/dataset.py": "56a838468f68b012854c2da756aafd75b40521026325ec27dbe241d29e7ea901",
+    "benchmarks/graph_colouring/evaluation.py": "7ac0495e598124b3df228895e38808ef624e981987086669ce4f20ca9b3e9028",
+    "benchmarks/graph_colouring/template.py": "77d1a6452e17a949595f99d643ae5aaaee0688d30b29893277a12bb20e87042c",
+    "benchmarks/_prepared_data.py": "7baf48986b3bad541c6b64717d66bd1c6f90b79bfed28a2cfab8e8488919f298",
+    "benchmarks/_fixed_evaluation.py": "a7c0fe77e363dbebdb55306d147e1630e04ef1f164d14bb5e0c3fcd3f1020151",
+    "Graph colouring/config.py": "4245e2ae2dc29b7ad1a8c21f5c673cc7571b2ec6227c3e1784f4971d32f29c14",
+    "Graph colouring/gcol21.txt": "17f3b1ccd7ff4b257a3d2751967c87135a1b62a37fb300a672aa581d34aa62cf",
+    "Graph colouring/gcol22.txt": "d1f06e74776c90f87ae24977ed54b5b3a5f74c773686c60ebdcb39576ecdabb3",
+    "Graph colouring/gcol23.txt": "8d9208f52f08065b4322237277faa3adab01f777ad79a0d389234c88f88e1148",
+    "Graph colouring/gcol24.txt": "0e301ff1ca2e61e5c907f294132f5d466ca866ef052584f40141d25c6e7f0909",
+    "Graph colouring/gcol25.txt": "919c3a53f2afcbcf1f9ac6b7d5eeea0a6271b82843824b3a2e008f6ac94ed33c",
+    "Graph colouring/gcol26.txt": "c9c7ee3ee389156e38f74c8d7a7462832e34fe071528e055f88c80509897e96a",
+    "Graph colouring/gcol27.txt": "da52151139fdc1bb3fb33c5e389f9c4e347283f4a3c5864e80f97068525897c1",
+    "Graph colouring/gcol28.txt": "861e51ae3abda9efbfcaf1613008580796d03698594b3ad7f0779b1093c949ae",
+    "Graph colouring/gcol29.txt": "bb527dad113ae0b3864ee9ac230c45ff18013ae81ac3cec6504f34ceb43d5b20",
+    "Graph colouring/gcol30.txt": "ab8aa1453c21b9ec0239c12206251ce699df27d2bb693ec25990408d8e5f51e6"
+  },
+  "instances": [
+    {
+      "id": "generated_train_base000",
+      "group": "generated_train_base000",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        0
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.503768115942029,
+      "split": "train",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "5caff4f3e7de71f34c011e52d31a8199ba8e9ebe5667d87818cf215bb560f87d",
+      "file": "train/generated_train_base000.npz",
+      "sha256": "0c42e2f108fca87de029b8c431f4d062c4d0af96def80c40ea3931d38ff4b8ee"
+    },
+    {
+      "id": "generated_train_base001",
+      "group": "generated_train_base001",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        1
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4983723522853958,
+      "split": "train",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "16df8d81720e3a9c259b073cc276955ac2dd1d50074fc651b62965865d29bdff",
+      "file": "train/generated_train_base001.npz",
+      "sha256": "6410714fdeeddfddb8b196d2d57da19f6936f3bf3dbf001e85cd19f7172d6a7f"
+    },
+    {
+      "id": "generated_train_base002",
+      "group": "generated_train_base002",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        2
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49600891861761426,
+      "split": "train",
+      "reference": 41.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "419999cfce6bdbd15c38ee448eaa3d9d0fc91971d4060dbb20d4901ace284600",
+      "file": "train/generated_train_base002.npz",
+      "sha256": "09ce53139e4a162600bde36fcbb7fd843b06662874f629f15de138b4bb52b5b9"
+    },
+    {
+      "id": "generated_train_base003",
+      "group": "generated_train_base003",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        3
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5060200668896321,
+      "split": "train",
+      "reference": 45.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "e042db49c9724e82945bc7f58e1e070ef2d40c1eb9a27a2b1e3c71c664a1a508",
+      "file": "train/generated_train_base003.npz",
+      "sha256": "d19ba44d12b5ada6965a7a2d33bb98450abb0035d4398265c9e6900f30dbd662"
+    },
+    {
+      "id": "generated_train_base004",
+      "group": "generated_train_base004",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        4
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4987736900780379,
+      "split": "train",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "e49d1e980860f43fbe79d13c8d55acd2c7bd41ae12ac1a9aa9a8162377705f25",
+      "file": "train/generated_train_base004.npz",
+      "sha256": "22580b780bd2ca6945fd3c7e88111cec3198e25d8eea59baea9eecd15714e727"
+    },
+    {
+      "id": "generated_train_base005",
+      "group": "generated_train_base005",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        5
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5022519509476031,
+      "split": "train",
+      "reference": 45.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "83b69e2d5a84b26f76e37fc9601fdfe781b434d3e7b8f170d18f5e5168463187",
+      "file": "train/generated_train_base005.npz",
+      "sha256": "e171fa4c217973ba52f4bc8d2ae97b0c0170f02f01ae49be4fbf7ad077a172ad"
+    },
+    {
+      "id": "generated_train_base006",
+      "group": "generated_train_base006",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        6
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.50082497212932,
+      "split": "train",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "07d1f063c42b93047e5e29334bdae3e8530f0d7c1c387e943b1b1cdfaac8fde3",
+      "file": "train/generated_train_base006.npz",
+      "sha256": "7ecc455e0574cbbb6d8be7ac84de34a1885ecbf142a3691001590800fd84ee7d"
+    },
+    {
+      "id": "generated_train_base007",
+      "group": "generated_train_base007",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        7
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5019397993311037,
+      "split": "train",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "ed79ba76f8571cacff3826f1ea2317074ea0fe1981211bcb569b33e3f3ff9a0e",
+      "file": "train/generated_train_base007.npz",
+      "sha256": "0fb0e5a15c4bedda107ff0c175edfed82f74dd0004a7d802ae04cd988ad06a01"
+    },
+    {
+      "id": "generated_train_base008",
+      "group": "generated_train_base008",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        8
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.50082497212932,
+      "split": "train",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "2317b0770fe668510ac6eda2be864ef979e40979fb67b4a840c39b5fbef8de7c",
+      "file": "train/generated_train_base008.npz",
+      "sha256": "ec02959f3c97c529bdeb3b3ba265a588546f49b8f3df3ad087206fb7662eebb2"
+    },
+    {
+      "id": "generated_train_base009",
+      "group": "generated_train_base009",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        9
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5025195094760312,
+      "split": "train",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "33cf48099fd9f0d2188f28774115001d256d9574170a44200eb9aa5f89f7961b",
+      "file": "train/generated_train_base009.npz",
+      "sha256": "a6f9d663c7c11cf71b03d549e3b0e9baeeb9a8b9b14a5516de8fdc748660c063"
+    },
+    {
+      "id": "generated_train_base010",
+      "group": "generated_train_base010",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        10
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49950947603121515,
+      "split": "train",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "28d0c7b176f0ed76470144820ed732e9ad2d3de41c2fa5f4c31a78c573a0ee13",
+      "file": "train/generated_train_base010.npz",
+      "sha256": "0521219ee2df569fd50522c635b368d80c8919849abb23c8630bb87b4a72afe7"
+    },
+    {
+      "id": "generated_train_base011",
+      "group": "generated_train_base011",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        11
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4999777034559643,
+      "split": "train",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "9a0deff870d10f50f5e5026cc72b767d9bde03a6a9a69c0464bdbce4051aee80",
+      "file": "train/generated_train_base011.npz",
+      "sha256": "0202c1be3905c884c07c4cb817c581ad7ce1b8b4a0ceaf8ef5d93797ec5acff2"
+    },
+    {
+      "id": "generated_train_base012",
+      "group": "generated_train_base012",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        12
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5001114827201784,
+      "split": "train",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "5d01c1fef3edb678765269b2bf12ca579573269eab13634a3a7e003489d48cd8",
+      "file": "train/generated_train_base012.npz",
+      "sha256": "3dac6c4926938729190b5f4d9c9603564c7bf89cb3433be5224d09ea6f99196f"
+    },
+    {
+      "id": "generated_train_base013",
+      "group": "generated_train_base013",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        13
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5006911928651059,
+      "split": "train",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "e0a2d7ad7251da7297b19d77899d732c5ba15eed8cb027ac7550febdc3a2ea44",
+      "file": "train/generated_train_base013.npz",
+      "sha256": "a83926e4e00a7377b957f11637724bf5069964f712e0bfb07dea6c03bc94ceba"
+    },
+    {
+      "id": "generated_train_base014",
+      "group": "generated_train_base014",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        14
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49830546265328873,
+      "split": "train",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "18a6da860e3a4a3e789c99a130f6b126b2b299376a2cfd21434ca491e7a9e1a9",
+      "file": "train/generated_train_base014.npz",
+      "sha256": "62e654701b119dd8b7b18fc5e759f5a251ed3cd2008e2fa0c66f00580167e6f7"
+    },
+    {
+      "id": "generated_train_base015",
+      "group": "generated_train_base015",
+      "seed_entropy": [
+        20261007,
+        2,
+        0,
+        15
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5003121516164994,
+      "split": "train",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "7ea94cee09cbac1d0be380f8a512956c52870b31d306d89eb0a0f42043280c45",
+      "file": "train/generated_train_base015.npz",
+      "sha256": "f247773746ad55f3c4d6ddba6536cae8fbf1ed8896446a758e74a0eb866a9015"
+    },
+    {
+      "id": "generated_test_base000",
+      "group": "generated_test_base000",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        0
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4983723522853958,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "981fe3f540ed7a67641e4a6013515e7daa8b80c0c40f821e1976fee69843b398",
+      "file": "test/generated_test_base000.npz",
+      "sha256": "737445006ab5e2155f13b913e717acb604d1345ce39b9b42207465454f0e5468"
+    },
+    {
+      "id": "generated_test_base001",
+      "group": "generated_test_base001",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        1
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4993756967670011,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "049395572feefaf143a2f7224209d24541124bf6106c56a52e73bad1291d9ad8",
+      "file": "test/generated_test_base001.npz",
+      "sha256": "350fb18872cf902ba8bbf934fa72d213ec229c075c67d34da9ab2535493aefe5"
+    },
+    {
+      "id": "generated_test_base002",
+      "group": "generated_test_base002",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        2
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5004013377926422,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "ba5eaaebf9508d507756ddb3fcc211798153f2460118ff7e43cf7b39585ca5f1",
+      "file": "test/generated_test_base002.npz",
+      "sha256": "f1f4d588ef84b8990f6da9c727a6eaa2217378673902542ae678975141cf686c"
+    },
+    {
+      "id": "generated_test_base003",
+      "group": "generated_test_base003",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        3
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4986176142697882,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "74be1fa7413c1400de9827f6f0055ea0d45dd45366f8ace3c24e15b4bbd499f7",
+      "file": "test/generated_test_base003.npz",
+      "sha256": "39196c33875368e12362cbe34db574224878e066ddb795ede54987127225b909"
+    },
+    {
+      "id": "generated_test_base004",
+      "group": "generated_test_base004",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        4
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49480490523968784,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "d3bf86ce6510e6bc5bb4287c249e8a976db37aa9cd51d124640828d21e54e6f3",
+      "file": "test/generated_test_base004.npz",
+      "sha256": "53542e1e2716f60ba7b0a450141869e0be28d57bd2f70f833b8c09e4072da68c"
+    },
+    {
+      "id": "generated_test_base005",
+      "group": "generated_test_base005",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        5
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5036566332218506,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "060853e234f46a9a0d7ff5feefe14494e4cc2d727578bfc6c709ff56064db2d4",
+      "file": "test/generated_test_base005.npz",
+      "sha256": "8f622ff039db9b6232578988ba1bff7698d8bd5c0eef23c0de51819bcc3cb29e"
+    },
+    {
+      "id": "generated_test_base006",
+      "group": "generated_test_base006",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        6
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4993088071348941,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "1d1dcddd7b68b27a2fe38448419cc32d7da0ffdae4edcca441e6672ba9f04b40",
+      "file": "test/generated_test_base006.npz",
+      "sha256": "1b4a602ffb706609ca92b648d61f0ed62315aec52eb7e7b4b3d79d3586133038"
+    },
+    {
+      "id": "generated_test_base007",
+      "group": "generated_test_base007",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        7
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.501984392419175,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "e81fbfa9a1611fbc7844b644181c5f7e43c43fd441a608e7b43710472a97c84c",
+      "file": "test/generated_test_base007.npz",
+      "sha256": "d3015e9c846d454c94546bb8bd1021a20370e60178fd59161bee64cf704ba7b5"
+    },
+    {
+      "id": "generated_test_base008",
+      "group": "generated_test_base008",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        8
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4990189520624303,
+      "split": "test",
+      "reference": 40.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "5f9c9312698f7ffd3bd8c2d2780a6fd2af2361380ee06a21d76bb8cfd9f58f22",
+      "file": "test/generated_test_base008.npz",
+      "sha256": "4635434e3033e618518e9a54ffd4b6acf8d5d3d873adc714dd7350adc1d6fff0"
+    },
+    {
+      "id": "generated_test_base009",
+      "group": "generated_test_base009",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        9
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5003790412486064,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "f2afe7774cbfbf34963f29a85be7e70632aed76933ca28a1c2c34062636d356b",
+      "file": "test/generated_test_base009.npz",
+      "sha256": "0746a19faa344d7723c6389787a995ee300f75633fb1d2433d0ccbe4a2c9bfae"
+    },
+    {
+      "id": "generated_test_base010",
+      "group": "generated_test_base010",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        10
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5007134894091416,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "dbc9d81067aed5f3b0a4346d0520ea2143e31fbbfdb49e95c2edc9dafb1bbb83",
+      "file": "test/generated_test_base010.npz",
+      "sha256": "ffb3a842fed45e32191cb9831d028cec81318f32d9e29042d4ac51982595beff"
+    },
+    {
+      "id": "generated_test_base011",
+      "group": "generated_test_base011",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        11
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49821627647714606,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "62714033bb7119c1a5ace027259f18063db5b4ba6c2931b9d2bcdfdd64eeb02e",
+      "file": "test/generated_test_base011.npz",
+      "sha256": "e4a604dd0f22288f6106526250db97fc8ebde61935491a04b11fbe5b3bfe7b18"
+    },
+    {
+      "id": "generated_test_base012",
+      "group": "generated_test_base012",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        12
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5004682274247492,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "4d11a4152d086c35bcb441daccb917e523e15faee432c6b1356c01c1b3a0a228",
+      "file": "test/generated_test_base012.npz",
+      "sha256": "b86274525e0594200b4000097d6d780058086cf70191cb7b84475fdc832da94b"
+    },
+    {
+      "id": "generated_test_base013",
+      "group": "generated_test_base013",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        13
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4995540691192865,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "0425dca6bac7cc034c317a88312d8e33328b2788540728f119b259d51fe1ae3a",
+      "file": "test/generated_test_base013.npz",
+      "sha256": "c70adaa50eb122f41f8cba33742a98e569f0d9737fa2e6655b4dcd5fb386ddf6"
+    },
+    {
+      "id": "generated_test_base014",
+      "group": "generated_test_base014",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        14
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.501716833890747,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "6671613c9caef8d24a4a53c97d96c4cb2f061be670182b73a31578c1744f6cd0",
+      "file": "test/generated_test_base014.npz",
+      "sha256": "fadfa11f1776fa99eef1f986607347c46e83a1713b1ecc87f5774276b59bb4ac"
+    },
+    {
+      "id": "generated_test_base015",
+      "group": "generated_test_base015",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        15
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4993979933110368,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "910e94e8937037385696f3b43fb9c1840997fba3415f7f1986794b0ad20b1fb7",
+      "file": "test/generated_test_base015.npz",
+      "sha256": "d25e3b39a864a8331b81ae8ceafaf49a6ed782070c5cece8694324ef3f443732"
+    },
+    {
+      "id": "generated_test_base016",
+      "group": "generated_test_base016",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        16
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4971460423634337,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "70fa44d1a1dff0224ecf3350cdd91ca0045443013f41a836255c2467b3f92c95",
+      "file": "test/generated_test_base016.npz",
+      "sha256": "bb06e3a8aa6fa7ac86a074463dc82a17bca864d4e3aae0764ddcf481bed1d863"
+    },
+    {
+      "id": "generated_test_base017",
+      "group": "generated_test_base017",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        17
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5012040133779264,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "866f81ec4fca9d9f2b29ad226e3640d424c4c0791440dc64d876a5a589bf633e",
+      "file": "test/generated_test_base017.npz",
+      "sha256": "3b141a76a17e2cb4ded0e61d910c7a8f817672ed21237c1ed00816951fafda93"
+    },
+    {
+      "id": "generated_test_base018",
+      "group": "generated_test_base018",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        18
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4975696767001115,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "e3130dd19f1d4ad5c3ee94cdbb42933f25703a56164bb08cd564a3743604f3b5",
+      "file": "test/generated_test_base018.npz",
+      "sha256": "6f48df66dfa75dc668aa8fa1adb89ea22097e10c3a9a02d2083ede2189c77912"
+    },
+    {
+      "id": "generated_test_base019",
+      "group": "generated_test_base019",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        19
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5018506131549609,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "ba8d42117d650e22a6ae67e73e947155186368a2c45ac5c75ca6d45a79a8670b",
+      "file": "test/generated_test_base019.npz",
+      "sha256": "5d435055ab355fe710952127da4a5b76daf5472f9a164c19864bf1941557d04a"
+    },
+    {
+      "id": "generated_test_base020",
+      "group": "generated_test_base020",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        20
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4950724637681159,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "05bd37bc65241f585241885de0e4d4ecbe14ec0e496a8a715d6413b7832b15c5",
+      "file": "test/generated_test_base020.npz",
+      "sha256": "02d25ae11393f484169a1582ffde150d7450b86dbdff369da8c9a164956602c5"
+    },
+    {
+      "id": "generated_test_base021",
+      "group": "generated_test_base021",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        21
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49881828316610927,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "8b9baf2cc2de832458ec3437fd042b6b0776080a649d071b52e52ea10366d6d7",
+      "file": "test/generated_test_base021.npz",
+      "sha256": "4dd3e846b3e44eafa474f1c44fcc530ff0d84c91050a462acf8f4b840500fbfd"
+    },
+    {
+      "id": "generated_test_base022",
+      "group": "generated_test_base022",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        22
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49846153846153846,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "a70c65d3a278f18be4e37f832a0e98ac85c11b943cce4a829f84623e1a419d9e",
+      "file": "test/generated_test_base022.npz",
+      "sha256": "c5078f1e70ee84a6199aae134ecc91bc1c99e3c168e561bd3ea9bcb306b18b71"
+    },
+    {
+      "id": "generated_test_base023",
+      "group": "generated_test_base023",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        23
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5016276477146042,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "d8d1d32988c37744bf269882a5c4577fcbebbe5d89fc0d9ba1298c3669a6e8ed",
+      "file": "test/generated_test_base023.npz",
+      "sha256": "d5d959383e5c563a37c10746c3f9fa22a991eebde6b1a95ab34d7a565d1a7599"
+    },
+    {
+      "id": "generated_test_base024",
+      "group": "generated_test_base024",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        24
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4998439241917503,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "724707036da7cbd17f3620b6124a811e62b09cbcc2cee5dc3b8ea06207a00507",
+      "file": "test/generated_test_base024.npz",
+      "sha256": "5a81a6e46105db64410503f1f091eca4965a979fe12b3c9998e02917d018ced4"
+    },
+    {
+      "id": "generated_test_base025",
+      "group": "generated_test_base025",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        25
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4997324414715719,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "4ea3e1aebe389f444bb86153ecd8691af95376f67e37824e8bdb7f187cffc048",
+      "file": "test/generated_test_base025.npz",
+      "sha256": "97e3dec67a1ec95b020feca454e418168467aea9b6e95d2f6c4cb54e3dfe0fb1"
+    },
+    {
+      "id": "generated_test_base026",
+      "group": "generated_test_base026",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        26
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4999108138238573,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "439cc9c14fe7903648a663cc9004e99c6e7ed6e29fc985095243ad3bec7a0118",
+      "file": "test/generated_test_base026.npz",
+      "sha256": "11afd1109f1bad077336a002d1acdd6e94cea167097f69019b3ba9a86cbc2832"
+    },
+    {
+      "id": "generated_test_base027",
+      "group": "generated_test_base027",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        27
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4967670011148272,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "408fbeec351e955ccb240ea56fbaa1fb119a31a4e77c060c2cb4dc06d94aaf7e",
+      "file": "test/generated_test_base027.npz",
+      "sha256": "3a1f66964bb90095a36ed8ea7dd53af900325788562420c6e3022baf0e80f0f6"
+    },
+    {
+      "id": "generated_test_base028",
+      "group": "generated_test_base028",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        28
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5052173913043478,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "c61ffe04ea2065794d12192e5f2222116cafa768733359edff307e68f00a12be",
+      "file": "test/generated_test_base028.npz",
+      "sha256": "a046ea8d614b2f61764cf21b4e85069a5a45a92fb6bbd3b7c37a79c1ffa3f504"
+    },
+    {
+      "id": "generated_test_base029",
+      "group": "generated_test_base029",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        29
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49971014492753624,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "faa1e53ab53f3577e02aabba018788533633bae1b8b21f2f59f1863250f3889d",
+      "file": "test/generated_test_base029.npz",
+      "sha256": "a5f8e8777e48daba9970972feacc177301d7310a0fef73c475b0b345dd28b185"
+    },
+    {
+      "id": "generated_test_base030",
+      "group": "generated_test_base030",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        30
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5015161649944259,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "7ecc5e17225fd704d57b923d553ecd9424734c3e2895165b719a205b7d1c86bd",
+      "file": "test/generated_test_base030.npz",
+      "sha256": "d34fc1e3a6cc590f4843967af26734d9b4f158646e02da356a29e97980977f82"
+    },
+    {
+      "id": "generated_test_base031",
+      "group": "generated_test_base031",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        31
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4978149386845039,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "39283751f840f6dae9eb8f01a0320bab73792d3916293dce72e2986f7f86e4f9",
+      "file": "test/generated_test_base031.npz",
+      "sha256": "d8a37f68810324145044004ed352634dfbd562bbfde2175e843b6278061e21d4"
+    },
+    {
+      "id": "generated_test_base032",
+      "group": "generated_test_base032",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        32
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5012709030100334,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "275ee46818a79d180a2f1a9d3c1db99debeb0d3403d6e5f79609055c576ff940",
+      "file": "test/generated_test_base032.npz",
+      "sha256": "ce3d5745e4b494248556e22576d8c38bfdfe10e5be2c2c285ecde736e6240a51"
+    },
+    {
+      "id": "generated_test_base033",
+      "group": "generated_test_base033",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        33
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5046822742474917,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "e134146dc2d774adeb1f0810ae287cadce48599204d61149f91f026c466054be",
+      "file": "test/generated_test_base033.npz",
+      "sha256": "39b8bd83a9db2ba5439504ebc96e21402248c46c1bb20ef7a3d6e1a2bdcb2c67"
+    },
+    {
+      "id": "generated_test_base034",
+      "group": "generated_test_base034",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        34
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5022519509476031,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "829de37f1e58c06d70b032a2712a4d7d26357a2f9ff24fe48ca9b313f6187660",
+      "file": "test/generated_test_base034.npz",
+      "sha256": "d1e0dee017c3a7c5f4a58b625d497285aebe4361eb6b1954cd0cbb5319e30983"
+    },
+    {
+      "id": "generated_test_base035",
+      "group": "generated_test_base035",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        35
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5012486064659978,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "e844b130747b8126ba3fe52ffbe6c40ce615edac5b4fbce73e2a3821d9f8cefb",
+      "file": "test/generated_test_base035.npz",
+      "sha256": "b42e2cd204c1498cb659f6182f3adb4db93a10cadd79dd158405658e4671c32e"
+    },
+    {
+      "id": "generated_test_base036",
+      "group": "generated_test_base036",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        36
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5012709030100334,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "b4f51721bbdeade8ff2b4f79af67ecab38c1829cc1cc7fb3796f09ffae0bb821",
+      "file": "test/generated_test_base036.npz",
+      "sha256": "8f3c159702c1e88bbd1e658f9eabcc88d6a3aa4e5569a1833cf4a5e0764975b9"
+    },
+    {
+      "id": "generated_test_base037",
+      "group": "generated_test_base037",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        37
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5020289855072464,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "e9ad135d2bd2ec2a5796421f75600edae0c4ef505c2561f51ede5248e0bc119d",
+      "file": "test/generated_test_base037.npz",
+      "sha256": "68052768dce85c357ec2991e9d4b59090a7360349a46f855da92ef395495aace"
+    },
+    {
+      "id": "generated_test_base038",
+      "group": "generated_test_base038",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        38
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5030992196209587,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "2436674d14e2cef450c671e37856c95bd0aa4fe67610979d99d2ce921f097a73",
+      "file": "test/generated_test_base038.npz",
+      "sha256": "1107f6e4775a4ba3a4e2138faf235ef9b2a16db981cfb99bf55893bf240a882b"
+    },
+    {
+      "id": "generated_test_base039",
+      "group": "generated_test_base039",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        39
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5035005574136009,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "a106cb81e5c5b029a2f75fcdd1c4dea8c83d2ad0c94296b1c18458032c7f4e1e",
+      "file": "test/generated_test_base039.npz",
+      "sha256": "48a3fec8addb93c484c366a962485e49f7b9128f01212cc9eeb3f88416fc97bb"
+    },
+    {
+      "id": "generated_test_base040",
+      "group": "generated_test_base040",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        40
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5022519509476031,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "adb27565507a17d66c229e19cf9cdbe81506fbad33114ded7f40a7cc58ddce46",
+      "file": "test/generated_test_base040.npz",
+      "sha256": "45adc4be96298451ae463ff9a62af7bcebd6d65c96ad9c9b69351666c92307f0"
+    },
+    {
+      "id": "generated_test_base041",
+      "group": "generated_test_base041",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        41
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5017391304347826,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "04c4080ee785aa48324e399acaba1e253a8193188e66d5cd9f9f8ce23f398c3b",
+      "file": "test/generated_test_base041.npz",
+      "sha256": "d6924460047f3ac470c166e500d72abc4762ee3727068841ebd8537b4f794220"
+    },
+    {
+      "id": "generated_test_base042",
+      "group": "generated_test_base042",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        42
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49839464882943146,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "1849f05d78910de15532ab6f534ec9243615b996fd0950322549bff3e8dc5ad4",
+      "file": "test/generated_test_base042.npz",
+      "sha256": "daa65a1384a5a5cfdf505f843c46abf4d15e1604a2223052e31a3f4bc7107526"
+    },
+    {
+      "id": "generated_test_base043",
+      "group": "generated_test_base043",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        43
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.501226309921962,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "857e4f98b5be420a0d526c201b66506e4cb2c017529ae3193bab694f4bee4c84",
+      "file": "test/generated_test_base043.npz",
+      "sha256": "5474861736fbd3f055c7a339e23d39fa47083da1cf3e06082e42faca810c3043"
+    },
+    {
+      "id": "generated_test_base044",
+      "group": "generated_test_base044",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        44
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49665551839464883,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "3b98eeb8f20ef3c2076d9d231cc461a07ef34291efcb956ceac8c61b27b225c5",
+      "file": "test/generated_test_base044.npz",
+      "sha256": "1d9990a5e8630cc123b872f4af80a8e3a91db3edde4c34828c7d0a3a78fb94e9"
+    },
+    {
+      "id": "generated_test_base045",
+      "group": "generated_test_base045",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        45
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4979041248606466,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "0ed8e52a36d964b67932e17239659cdf1600a2d5d98d3dfeb2d6513a1a2a9f8f",
+      "file": "test/generated_test_base045.npz",
+      "sha256": "cbdbebd269a70229babdc229ea20fef5e292254daeab437a7f2fd2ac2acfc6f4"
+    },
+    {
+      "id": "generated_test_base046",
+      "group": "generated_test_base046",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        46
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5007134894091416,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "b6fbf3f6f386676095555bb65febde3c0436f97957ffe108d7230d8afd75a00b",
+      "file": "test/generated_test_base046.npz",
+      "sha256": "6508dcdae538903eeae7dcdcb8c76171de7588c8df5ee832abd9f102ffde47cf"
+    },
+    {
+      "id": "generated_test_base047",
+      "group": "generated_test_base047",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        47
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5001337792642141,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "72300dc6c4408bf665e5639f143698363dc9a43709c4054a1a9b1c7c5b1485dc",
+      "file": "test/generated_test_base047.npz",
+      "sha256": "9010d9bb7abe7a81a55c0889ad86f6567088b5cdc5c4b84c6a34888ca601c3fc"
+    },
+    {
+      "id": "generated_test_base048",
+      "group": "generated_test_base048",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        48
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "91a3b949cc239285fb8936448db8059eefc419b8b9153d480478ed17e4dbcfd9",
+      "file": "test/generated_test_base048.npz",
+      "sha256": "c88b9bceb7dd4b9837eef22110e03dde99e96689aee38090b5c2548c39ef4ee7"
+    },
+    {
+      "id": "generated_test_base049",
+      "group": "generated_test_base049",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        49
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4993979933110368,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "4ddf76822e58bdeac4a3e4df9b513d1cecbadf33a6d6fef913ff64af81b40647",
+      "file": "test/generated_test_base049.npz",
+      "sha256": "06508a8a12ea90b287974e07c7ed2d94f4cd7642535d46335b12bb19659e1749"
+    },
+    {
+      "id": "generated_test_base050",
+      "group": "generated_test_base050",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        50
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5013154960981048,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "b37996233b218e1aadf7c3b5155860e3be523b51f472873c4631f6932dd43066",
+      "file": "test/generated_test_base050.npz",
+      "sha256": "14d0a97789481c61d127eaae2b113a8c2cc02f65977540c4c9f62515a8f651c9"
+    },
+    {
+      "id": "generated_test_base051",
+      "group": "generated_test_base051",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        51
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5019620958751394,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "3691ed030b44432eefda8bf1452bb884cf015d0e2d6747e95932e74285c5048b",
+      "file": "test/generated_test_base051.npz",
+      "sha256": "316ef2440ab4bd9a23d172b45c7dbdf430b49c738686ec92df31d558c1998976"
+    },
+    {
+      "id": "generated_test_base052",
+      "group": "generated_test_base052",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        52
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5008695652173913,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "8d7389203aba2339f177a80c94b9ba948c9dd90e1a15db3d8f26e1cee0c13404",
+      "file": "test/generated_test_base052.npz",
+      "sha256": "78eda3eaa91637bba81d623d852b195a349c4b5558ceba1a0d2ebbc2c12974fe"
+    },
+    {
+      "id": "generated_test_base053",
+      "group": "generated_test_base053",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        53
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.500066889632107,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "6f9e4b72587ea029d803c7924ec215007e1bfebb7fbeb0dcf1cca31d503e53e3",
+      "file": "test/generated_test_base053.npz",
+      "sha256": "0f24e1025628e88ca12a0f8167604ef8c66bf623f16b2a7d48e1a3cdb7c0479b"
+    },
+    {
+      "id": "generated_test_base054",
+      "group": "generated_test_base054",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        54
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4960535117056856,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "bff386f00200ddedf611ff9546aeee19bd840015caf67dd21959fcfc624c0214",
+      "file": "test/generated_test_base054.npz",
+      "sha256": "d7d66ad48b33d78c1f29dd4c586591c20f2a83a39917fe9eae60453cab07f0ee"
+    },
+    {
+      "id": "generated_test_base055",
+      "group": "generated_test_base055",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        55
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4997993311036789,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "82700a0f5e07a0ff5e8d160efc984ee3a1122af140cc984ae300329abbe134e2",
+      "file": "test/generated_test_base055.npz",
+      "sha256": "428de95d0a8194aace23edfc8cae1b2e17562f6f26c7687c0dfa0f9b637417ff"
+    },
+    {
+      "id": "generated_test_base056",
+      "group": "generated_test_base056",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        56
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5006465997770345,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "c989f1d8f01c16bf483bd2f087284bdd0e95abc794f2f6d3b8e1e8f7855af5c2",
+      "file": "test/generated_test_base056.npz",
+      "sha256": "061a7bc9e42d2eb99a50778943050246d72910a1edbf723513d4c774f758d0ac"
+    },
+    {
+      "id": "generated_test_base057",
+      "group": "generated_test_base057",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        57
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5025418060200669,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "738c88bda5d05d55ba908e6d1514f26f8f9ae0c643edc1709c62af6b85eb645c",
+      "file": "test/generated_test_base057.npz",
+      "sha256": "d8be0b404e57e7178592907f452ce70996eb9ce0986c97111f5ec13199db3be4"
+    },
+    {
+      "id": "generated_test_base058",
+      "group": "generated_test_base058",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        58
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49944258639910816,
+      "split": "test",
+      "reference": 45.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "4efbb6c65f73886fa9af758cbb2ae5b1f43631c43539bd2ce1103598d0e433b7",
+      "file": "test/generated_test_base058.npz",
+      "sha256": "930378d55abcb7b7342782ba490b90e0b6f336910263dc1120597fe3c7bdc6ff"
+    },
+    {
+      "id": "generated_test_base059",
+      "group": "generated_test_base059",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        59
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5043032329988851,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "f9ac9a924ef8cdcc4c156a44d5f4d2dcbfed539a33a2d875f0ff59456dc270df",
+      "file": "test/generated_test_base059.npz",
+      "sha256": "d52ec7403ed6e4c74891bb562d2f95674894388d63b01c17f7a49497e0378956"
+    },
+    {
+      "id": "generated_test_base060",
+      "group": "generated_test_base060",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        60
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5003344481605351,
+      "split": "test",
+      "reference": 45.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "16fbb36580b93f1d70af9d62c70c1f3ead80c11f33001ed543bc415bf0757263",
+      "file": "test/generated_test_base060.npz",
+      "sha256": "5a11451c765ffceddb80c79c31f2c62adb6a06b51afe56d048b39ab227d64164"
+    },
+    {
+      "id": "generated_test_base061",
+      "group": "generated_test_base061",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        61
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4993534002229654,
+      "split": "test",
+      "reference": 45.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "500c62de94ec356f31d1e3b2745b31b744ebf4052f547fbeeadc1416eb1324e3",
+      "file": "test/generated_test_base061.npz",
+      "sha256": "b122a7a775bfec334d707fe6a0db650ef5720ddf36245b60b7b3d49430bfb194"
+    },
+    {
+      "id": "generated_test_base062",
+      "group": "generated_test_base062",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        62
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5041248606465998,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "a2a32bc52ba54efaaa00a40f4551c65de2df7766c46a0d80ad4b97fc5e77910b",
+      "file": "test/generated_test_base062.npz",
+      "sha256": "d0f9bb0d1fa4e37a495daa4d16c21c83f96f62fdf7525f09d052aac461749d85"
+    },
+    {
+      "id": "generated_test_base063",
+      "group": "generated_test_base063",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        63
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4999777034559643,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "ed334824a4889a42ddc368e01fa62b9baca03b8eae1ee18986c6b85ccc063b5f",
+      "file": "test/generated_test_base063.npz",
+      "sha256": "73ec73f9edee511827019ee7d35af1bb6f8cefa2bd954410ff4541c8567ca318"
+    },
+    {
+      "id": "generated_test_base064",
+      "group": "generated_test_base064",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        64
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5005128205128205,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "03426d3748b390ca29b763e44a89eb54dc2ed2ae42013590d2989494f8bbcc70",
+      "file": "test/generated_test_base064.npz",
+      "sha256": "8dab37c19524b62a3fd32291518bd8e3ecbf8f217962de76076dfae199be7dac"
+    },
+    {
+      "id": "generated_test_base065",
+      "group": "generated_test_base065",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        65
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49977703455964323,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "20f3f8858c920d0a573725ceb1dacf149ca6d26e697dfb4b3feaf23082f9f13f",
+      "file": "test/generated_test_base065.npz",
+      "sha256": "f17da8084f2878820c229baf8a95d8ef6cdf25e3520eae5fdeb1b09c63c04127"
+    },
+    {
+      "id": "generated_test_base066",
+      "group": "generated_test_base066",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        66
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4993756967670011,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "23daecbee2f2e7235da96d597d456a9ca5a98e409954869af8830bfbfd826e10",
+      "file": "test/generated_test_base066.npz",
+      "sha256": "748ec5b0c5d8295ee16868f5f183a9f4161eaad1298ddd30f104827e59945132"
+    },
+    {
+      "id": "generated_test_base067",
+      "group": "generated_test_base067",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        67
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.498082497212932,
+      "split": "test",
+      "reference": 45.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "5bd0569699f7e153a6b408b776e595284c67b0fb3433dbbc51decedf668e12b2",
+      "file": "test/generated_test_base067.npz",
+      "sha256": "8323a52289ad0dca1307c4b1ff81dd1bbf9777d364f3ad12d8c34a4d2da6c4ce"
+    },
+    {
+      "id": "generated_test_base068",
+      "group": "generated_test_base068",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        68
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5002675585284281,
+      "split": "test",
+      "reference": 45.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "67160ab435beae1bb44b0b39335fec4cf501f741b627f4cf0a2dbfedc8037f19",
+      "file": "test/generated_test_base068.npz",
+      "sha256": "34bc85cd62879eac9109fd58375642890f0080c04dcd297313806710870a1c64"
+    },
+    {
+      "id": "generated_test_base069",
+      "group": "generated_test_base069",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        69
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5030769230769231,
+      "split": "test",
+      "reference": 45.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "f63171c50920b91985d19b20fc6e2c1ab267166f5fe061c163d024bb6d79ec09",
+      "file": "test/generated_test_base069.npz",
+      "sha256": "079ffab3f20aee16b5ebce3d0e7620e48456b75576bd1f3434ff410c0238daa9"
+    },
+    {
+      "id": "generated_test_base070",
+      "group": "generated_test_base070",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        70
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.500066889632107,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "d9d34b69efc9b6297efa2711b21c1564092e8d105f60225c4fa70a9524ee8108",
+      "file": "test/generated_test_base070.npz",
+      "sha256": "a6da298ae4cebbf2f3e08e34371ec67d63fc8b2946098c4fcf9928c4e771d429"
+    },
+    {
+      "id": "generated_test_base071",
+      "group": "generated_test_base071",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        71
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4964994425863991,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "c17aec859cce3ae9bf53ffaaae6913075c41a58310afb449f3a08048e85ae533",
+      "file": "test/generated_test_base071.npz",
+      "sha256": "b02108a25acc3e74285394b1dba07b092a5589125678459016b3f80e64fe3970"
+    },
+    {
+      "id": "generated_test_base072",
+      "group": "generated_test_base072",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        72
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4958974358974359,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "31d1c4bf9fc2f0ef2074b5924474c19334335d440155cf5d572a87af3a686fe4",
+      "file": "test/generated_test_base072.npz",
+      "sha256": "50365d74c8732964848c2c907ceea00c62ce9d60327c3987e3ab8e6da44bfb1d"
+    },
+    {
+      "id": "generated_test_base073",
+      "group": "generated_test_base073",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        73
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5024749163879598,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "dd0237d45b7c0c3d6ee18468d2ca265f7ec67035fdc6e21688197ba32efa876d",
+      "file": "test/generated_test_base073.npz",
+      "sha256": "116f1b813635b9459a55d4417cfa032aa5c928a73c4bf262040d9aaf3f8295ca"
+    },
+    {
+      "id": "generated_test_base074",
+      "group": "generated_test_base074",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        74
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49986622073578596,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "d3bcdc04cba905bf1b2f37caea2014377a181deeaace520f8ff30f05265635d2",
+      "file": "test/generated_test_base074.npz",
+      "sha256": "376e57fdf3db27b413cd4b6aa88d2d3204f512f0d8487fdc74eb377c3d092498"
+    },
+    {
+      "id": "generated_test_base075",
+      "group": "generated_test_base075",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        75
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49558528428093646,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "3476ece016f97306a91051bf51c15312aa4b6dc630498e623656fa0e7f4dbf46",
+      "file": "test/generated_test_base075.npz",
+      "sha256": "b3ec938d817ef3c257f1df293a1b2ecb939b50e2a16f86572192d30cb64c456f"
+    },
+    {
+      "id": "generated_test_base076",
+      "group": "generated_test_base076",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        76
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5026309921962095,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "121702b2d2edbdbd43fa71a2b493cbe0162e31d5fe3fc72eb4d7b87a2ee084b2",
+      "file": "test/generated_test_base076.npz",
+      "sha256": "7f41709288347a2b98217de72196dc343acb0d95de339fd28c30ada8725a7ebd"
+    },
+    {
+      "id": "generated_test_base077",
+      "group": "generated_test_base077",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        77
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49917502787068,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "2cdc781f9cff09b83cd0c27a23dc05457c46f5f7f116a1624716d292a7837870",
+      "file": "test/generated_test_base077.npz",
+      "sha256": "359617331f7718e6f5a5f7b01eaeb99c2bfeca2fb3e210eef6f624b16e8f326a"
+    },
+    {
+      "id": "generated_test_base078",
+      "group": "generated_test_base078",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        78
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4973913043478261,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "0bd80e9a59e240b1bc37b4aa1b33359b9cfdcacf618945c4763e04f64b986497",
+      "file": "test/generated_test_base078.npz",
+      "sha256": "a74e9f60f65392ae974d779118c2600a9b276b5d34aaa9c82dc36b10b45a3664"
+    },
+    {
+      "id": "generated_test_base079",
+      "group": "generated_test_base079",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        79
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5013823857302118,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "ff24f5326943c65c5376293f2ab1895b909b6195170a386f1014ffd39f771ab1",
+      "file": "test/generated_test_base079.npz",
+      "sha256": "c9d2779d681462e3dd2d9b064f6aa5e2ccd3024adeec48b2e6ae0a6a9d01c9c7"
+    },
+    {
+      "id": "generated_test_base080",
+      "group": "generated_test_base080",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        80
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4990189520624303,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "79a867fa03f78e958b4beed7f6cacb7326386cf2813fb04dd7bfce6f051abe5c",
+      "file": "test/generated_test_base080.npz",
+      "sha256": "8e8fcc4ae296cd2fea9277848016afbc73abf677894cac210552e502c64382a0"
+    },
+    {
+      "id": "generated_test_base081",
+      "group": "generated_test_base081",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        81
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5019620958751394,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "94599327eb8b9b8f969a32c206f2cb7bd605a71c737005ceb33b7d2a875613c6",
+      "file": "test/generated_test_base081.npz",
+      "sha256": "43a92e3804955581280f7465a4fbaa0f20193ffd96cd93276012936c50b8aaaf"
+    },
+    {
+      "id": "generated_test_base082",
+      "group": "generated_test_base082",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        82
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5012040133779264,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "de2e31360c73bd33398477f90b8da3b0ea8566692f10403b29ac6fccaa2268bf",
+      "file": "test/generated_test_base082.npz",
+      "sha256": "547b8fc52a9701bd8d60f72104c21d1627a8bfd3f6d0f2eac5c165741dee38c5"
+    },
+    {
+      "id": "generated_test_base083",
+      "group": "generated_test_base083",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        83
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5013377926421405,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "d534cbc7825e9815797fb368d15563b94058ec57fe6624bad4ac7f7e8f5e25c1",
+      "file": "test/generated_test_base083.npz",
+      "sha256": "3da6c0279f57721560178f0f541b8329a70b5ad6dd230444df4acb3487f61804"
+    },
+    {
+      "id": "generated_test_base084",
+      "group": "generated_test_base084",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        84
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49576365663322186,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "1eeb7b5f4bda528c299c8512e3b9562755ab29d6acd853a78e0fed581d2b17e3",
+      "file": "test/generated_test_base084.npz",
+      "sha256": "3a40235f592987c795ef01c93886d7a44a38036912db5bf6f8bfc9db1c3d67e7"
+    },
+    {
+      "id": "generated_test_base085",
+      "group": "generated_test_base085",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        85
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49863991081382386,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "a0567fec45a6a7bdb67076ab8c6d9237d2d75aaf3998b21cc4831c344a9bd04b",
+      "file": "test/generated_test_base085.npz",
+      "sha256": "af43894f3f1e34c1c6b40ecb31c4f070832a5fb8846ecf68af4bc4952f5e3648"
+    },
+    {
+      "id": "generated_test_base086",
+      "group": "generated_test_base086",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        86
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5016945373467112,
+      "split": "test",
+      "reference": 45.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "6bcc327e21123c09b84610a4994b14ac46152a32d970014179b839d3d2cf6559",
+      "file": "test/generated_test_base086.npz",
+      "sha256": "67b3c454d7fa7c03a1bebcf28fa03abe150d84d30839367608af852a92307ce6"
+    },
+    {
+      "id": "generated_test_base087",
+      "group": "generated_test_base087",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        87
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.498974358974359,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "7bf2c0c5754516ab9bd94a121d8c3d09fc7a7fb59f4e083ba9e391f8601cdf03",
+      "file": "test/generated_test_base087.npz",
+      "sha256": "0e9cb0dca1dcf61851ccf13b87361aa0afbfd4705adce9a53983a41344141026"
+    },
+    {
+      "id": "generated_test_base088",
+      "group": "generated_test_base088",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        88
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49681159420289855,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "221a8f288810ce7fe4cf2ef58b2ebfaca31226bc47e350415b11e4bf5a40c29b",
+      "file": "test/generated_test_base088.npz",
+      "sha256": "3b2dce7606df0e2d96b385aa131119ee6ed34ba664df759f96d481771438f056"
+    },
+    {
+      "id": "generated_test_base089",
+      "group": "generated_test_base089",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        89
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4987736900780379,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "b617b67887530f66e723c2867518c6db1cb7febbd0469977fd52dc3ab4e0aeab",
+      "file": "test/generated_test_base089.npz",
+      "sha256": "469752a2ece37930d5a012a1095655e2d2c7fb2d96602020727b26d3ff25af30"
+    },
+    {
+      "id": "generated_test_base090",
+      "group": "generated_test_base090",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        90
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49803790412486065,
+      "split": "test",
+      "reference": 44.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "e4d52ecc613799743785e9041806b5da631ad866ec6833ed90e1dbc91c6ce7a8",
+      "file": "test/generated_test_base090.npz",
+      "sha256": "26d85f566b6dbcbea1c24e5055c0f8b12384dbe91469529eb299eb49922e52cf"
+    },
+    {
+      "id": "generated_test_base091",
+      "group": "generated_test_base091",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        91
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5021850613154961,
+      "split": "test",
+      "reference": 41.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "3588f4d61920af6ea9552e05cb3edefb3a8ad780a93126b0d0c520e7fa0f6f37",
+      "file": "test/generated_test_base091.npz",
+      "sha256": "643364e6cdfa8c57d0b834f3052a3d79d75387a1d4424e452372e0a51a70e4fd"
+    },
+    {
+      "id": "generated_test_base092",
+      "group": "generated_test_base092",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        92
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5012040133779264,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "6ed6e6a17f9165f62fdfca1468845ee539c674621c2c257baa7beca6f8213195",
+      "file": "test/generated_test_base092.npz",
+      "sha256": "1f4a4d69bd8f0c9d75d74a0e23ca041d4825af043b849ee6cad93a95f66a500e"
+    },
+    {
+      "id": "generated_test_base093",
+      "group": "generated_test_base093",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        93
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5026978818283167,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "1ea07333e68bd261cbeaa8006cbcc8f6e98489bc7bbbe235a5006270f1149ac4",
+      "file": "test/generated_test_base093.npz",
+      "sha256": "aa5bcf76a6cc1f2f0947b1c08d2cead590659e6b7d8201f9e09b6aeb5a90f59c"
+    },
+    {
+      "id": "generated_test_base094",
+      "group": "generated_test_base094",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        94
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4973690078037904,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "a1c714a37509695aa336f4ed2bbe2ee4173f76f744f543e79b2111e02dc0a4da",
+      "file": "test/generated_test_base094.npz",
+      "sha256": "8601cc6dc27f1578fa5b124a0a8ba15b97934e99607cffa05c26d1d0fb9829a5"
+    },
+    {
+      "id": "generated_test_base095",
+      "group": "generated_test_base095",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        95
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5001783723522853,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "203cbefc245822296b7726d65fb13de934b7dfbb56e4cfdf56fa5b6955633ff3",
+      "file": "test/generated_test_base095.npz",
+      "sha256": "783c22ac4e60f4c658875cfdac14ecf28dffcfde740b0105c72b7fee24f5a72b"
+    },
+    {
+      "id": "generated_test_base096",
+      "group": "generated_test_base096",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        96
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49968784838350055,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "d5d8dbbbef679a1304647ead881eeafd939e054694ba3c326184780654c2229e",
+      "file": "test/generated_test_base096.npz",
+      "sha256": "7056815fe46e95aad185a1a31e47494a503be453d19ded25c0afbdf856794369"
+    },
+    {
+      "id": "generated_test_base097",
+      "group": "generated_test_base097",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        97
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49872909698996654,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "c9e3e7b53d1a5ae368ae6261386d3eb8bc663e21b8c88e294b26c158be9a4fcb",
+      "file": "test/generated_test_base097.npz",
+      "sha256": "47fdc3a9ef9f3e3dd5772bac4fe3b8e663cadf61a2f23448b71236fb0c36522d"
+    },
+    {
+      "id": "generated_test_base098",
+      "group": "generated_test_base098",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        98
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5008472686733556,
+      "split": "test",
+      "reference": 43.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "daf8869978593a66a35b9b3e82e93990d634570a8b8ba89cae7cf5c2bcd3626e",
+      "file": "test/generated_test_base098.npz",
+      "sha256": "a343879615bed4114d44e11924399aa0d9e463ffe487dd29b91373959e0e366e"
+    },
+    {
+      "id": "generated_test_base099",
+      "group": "generated_test_base099",
+      "seed_entropy": [
+        20261007,
+        2,
+        2,
+        99
+      ],
+      "source_kind": "generated",
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4971014492753623,
+      "split": "test",
+      "reference": 42.0,
+      "reference_kind": "DSATUR feasible upper bound",
+      "content": "50e4177b25be98bd28b1086d34ff42c11180e67aa80f5ca6587091718121e1b4",
+      "file": "test/generated_test_base099.npz",
+      "sha256": "b0f3d840189f892fbd5c95fa5e8aacddbb86b75962e7ce41e8f1e0c31c3fedac"
+    },
+    {
+      "id": "standard_gcol21_0",
+      "group": "standard_gcol21_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "gcol21.txt",
+      "source_index": 0,
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5012709030100334,
+      "split": "standard",
+      "reference": 34.0,
+      "reference_kind": "CO-Bench published reference",
+      "content": "9c817854cfa468dedcedbf5a81e16e4107c1be125b46ccb086b3f0353d82abcc",
+      "file": "standard/standard_gcol21_0.npz",
+      "sha256": "f121c69cf4cd7688e56cef8d672226ef996dd24a01a10d00795a1e64297b2bd4"
+    },
+    {
+      "id": "standard_gcol22_0",
+      "group": "standard_gcol22_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "gcol22.txt",
+      "source_index": 0,
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5032107023411371,
+      "split": "standard",
+      "reference": 34.0,
+      "reference_kind": "CO-Bench published reference",
+      "content": "1c582737b461187efbdfc826f331d7ec2f6aeb71854d4c78f985332a10f86b42",
+      "file": "standard/standard_gcol22_0.npz",
+      "sha256": "76db46889d2254e2cff158228c7a400a7283eab4db970f127c86c6a48dd5db8e"
+    },
+    {
+      "id": "standard_gcol23_0",
+      "group": "standard_gcol23_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "gcol23.txt",
+      "source_index": 0,
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.49928651059085843,
+      "split": "standard",
+      "reference": 34.0,
+      "reference_kind": "CO-Bench published reference",
+      "content": "06ccc2a9d06456449f271670d92d512505f417bf395dd77176e7a9776986f211",
+      "file": "standard/standard_gcol23_0.npz",
+      "sha256": "68bb28fbfe702013d53bd67d0e25bccf5eb8772bb06a67606cfa6834ed0b453b"
+    },
+    {
+      "id": "standard_gcol24_0",
+      "group": "standard_gcol24_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "gcol24.txt",
+      "source_index": 0,
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5004682274247492,
+      "split": "standard",
+      "reference": 34.0,
+      "reference_kind": "CO-Bench published reference",
+      "content": "e6baa7d6a1599acfab35bf8033c4decb51fc1000c3948b4903159f068789be77",
+      "file": "standard/standard_gcol24_0.npz",
+      "sha256": "3ee1498d7abd322328b7d90de907f32d928ce70ef322afb28c7fe7cc6cf861ba"
+    },
+    {
+      "id": "standard_gcol25_0",
+      "group": "standard_gcol25_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "gcol25.txt",
+      "source_index": 0,
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4985507246376812,
+      "split": "standard",
+      "reference": 34.0,
+      "reference_kind": "CO-Bench published reference",
+      "content": "e926ee73e92a9586f3fca2b8f627c8fc1df95cfbfe95217f93e8345cb94a2dde",
+      "file": "standard/standard_gcol25_0.npz",
+      "sha256": "597530e84c120a910b4bbfbfd0363b573df0f8762c9688b0af5088c8d7936bb2"
+    },
+    {
+      "id": "standard_gcol26_0",
+      "group": "standard_gcol26_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "gcol26.txt",
+      "source_index": 0,
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5039241917502787,
+      "split": "standard",
+      "reference": 34.0,
+      "reference_kind": "CO-Bench published reference",
+      "content": "aced9eb99d3300fca5a64cf4708d21b426ac6bcf941bf2c14769a59d21aeabdc",
+      "file": "standard/standard_gcol26_0.npz",
+      "sha256": "f3072667108da466bddff9e6a8d01c112b5796ebdd3a22d631b11c196191de37"
+    },
+    {
+      "id": "standard_gcol27_0",
+      "group": "standard_gcol27_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "gcol27.txt",
+      "source_index": 0,
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.4978149386845039,
+      "split": "standard",
+      "reference": 34.0,
+      "reference_kind": "CO-Bench published reference",
+      "content": "98f51f0fad21c58a5a8337d6500d8f26300014e586b329e1cc20ba07fda66ff1",
+      "file": "standard/standard_gcol27_0.npz",
+      "sha256": "13e7ceaf92bd165273bef0e966b15746b9c5aa6af778f22f6726220dc14001b9"
+    },
+    {
+      "id": "standard_gcol28_0",
+      "group": "standard_gcol28_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "gcol28.txt",
+      "source_index": 0,
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5010479375696767,
+      "split": "standard",
+      "reference": 34.0,
+      "reference_kind": "CO-Bench published reference",
+      "content": "06ecc16fdacc9f658a7ad1b4f5c8d72397dade7cee189d844e745fbca8889566",
+      "file": "standard/standard_gcol28_0.npz",
+      "sha256": "07e768c9ae48bca4dd9841f36939f84edb27d8f6a71f03a0e877e378d91c1ba4"
+    },
+    {
+      "id": "standard_gcol29_0",
+      "group": "standard_gcol29_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "gcol29.txt",
+      "source_index": 0,
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5021181716833891,
+      "split": "standard",
+      "reference": 34.0,
+      "reference_kind": "CO-Bench published reference",
+      "content": "1863d71ae942f489b18c18e355679aee34e3bab3c62f2ef69905ca671142bd5f",
+      "file": "standard/standard_gcol29_0.npz",
+      "sha256": "03a2fe45ace1f9e8dcb5502e69687ddbaa6251befc13f3ec3ee48dbdd22ed5be"
+    },
+    {
+      "id": "standard_gcol30_0",
+      "group": "standard_gcol30_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "gcol30.txt",
+      "source_index": 0,
+      "scale": 300,
+      "dimensions": {
+        "vertices": 300
+      },
+      "density": 0.5026309921962095,
+      "split": "standard",
+      "reference": 34.0,
+      "reference_kind": "CO-Bench published reference",
+      "content": "922e9bc14223924e6619f0c9f40c18e65d8afc72d68e8f8b77d455357a9a15a7",
+      "file": "standard/standard_gcol30_0.npz",
+      "sha256": "4f46078f4d6865d33468d412786e833240778f37540f24435507b34c64af78e0"
+    }
+  ],
+  "counts": {
+    "train": 16,
+    "test": 100,
+    "standard": 10
+  }
+}

@@ -1,0 +1,2765 @@
+{
+  "protocol": "ahd-six-tasks-v3-training-selection",
+  "task": "fssp_gls",
+  "seed": 20261007,
+  "final_selection": "training",
+  "primary_source": "TraceAAD explicit generated distributions",
+  "distribution": "50 jobs x 20 machines; independent integer processing times uniform in 1..99; reference is NEH makespan",
+  "standard_source_url": "https://huggingface.co/datasets/CO-Bench/CO-Bench",
+  "split_policy": "Independent train/test seed streams; base-group variants stay together; standard data are supplementary.",
+  "preparation_environment": {
+    "python": "3.14.7",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "numba": "0.67.0"
+  },
+  "source_files": {
+    "benchmarks/fssp_gls/prepare_data.py": "b64136d3949801a71758350d9d109d220fbd5a5ff999606d7406d98216dd0cc4",
+    "benchmarks/fssp_gls/dataset.py": "09e7541ab0da3185b648c8a3cf0680298ab8f015a53d8e6294eab44e738c86a2",
+    "benchmarks/fssp_gls/evaluation.py": "aba5cc7c7a3508df5d9e393adf1ddbc9af2bc8c0049ad3922d848ffde0680f27",
+    "benchmarks/fssp_gls/template.py": "3ee9639f71eda70d2c02d51c3de2deffc1871fb3d440bec41ef3f836ec04f18c",
+    "benchmarks/_prepared_data.py": "7baf48986b3bad541c6b64717d66bd1c6f90b79bfed28a2cfab8e8488919f298",
+    "benchmarks/_fixed_evaluation.py": "a7c0fe77e363dbebdb55306d147e1630e04ef1f164d14bb5e0c3fcd3f1020151",
+    "Flow shop scheduling/config.py": "fe33de1c25e6288c6682785d8aa168d2598851813d6215d4338ab89658e605f4",
+    "Flow shop scheduling/tai50_20.txt": "cc139745dece17a2538e74ad2eaed232cc97321293f6b121883a6e3c69c8f8ba"
+  },
+  "instances": [
+    {
+      "id": "generated_train_base000",
+      "group": "generated_train_base000",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        0
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 4005.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "8257e08e437dcdab978818899b20538e03ba72ad3d083d3745da1bb4a0388a5b",
+      "file": "train/generated_train_base000.npz",
+      "sha256": "ce8e09769ee7d29a99aaa028f530b1368dc383dd249e979dc62128c667295996"
+    },
+    {
+      "id": "generated_train_base001",
+      "group": "generated_train_base001",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        1
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 3982.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "e5661653111edc544f2076adc337e88c5d657e0e413c7f1a4151b0f9886827ab",
+      "file": "train/generated_train_base001.npz",
+      "sha256": "5c9292aacd59731ddbab13173865d6a6ae38d099b55efb63153724a4ef7b14c0"
+    },
+    {
+      "id": "generated_train_base002",
+      "group": "generated_train_base002",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        2
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 4033.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "688e692dd29d74ab70b0ca053dd50f52c0bcbf6d8108a8205f84a24d37abd810",
+      "file": "train/generated_train_base002.npz",
+      "sha256": "765ca19931c0d4457e3f5d7a6597625cb17bf2e47e6a87563ad4d80ba570e101"
+    },
+    {
+      "id": "generated_train_base003",
+      "group": "generated_train_base003",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        3
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 4114.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "e775c35bd78d3bdfbe9862c322ec9f5e9cb3e38ada02370df596f67ef36314ca",
+      "file": "train/generated_train_base003.npz",
+      "sha256": "9c15f9c568c643a39353f0e281346c6cf977bdb10c443a53a365a42e8825df73"
+    },
+    {
+      "id": "generated_train_base004",
+      "group": "generated_train_base004",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        4
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 3970.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "4a4ed575028ef7419fcd6dad3cdfd01f2602184d1e0728729d44695c10a5d81c",
+      "file": "train/generated_train_base004.npz",
+      "sha256": "ae2c9554e9d84802300dfa946d57ba5666a63b24549abf449acde5ca1901fb15"
+    },
+    {
+      "id": "generated_train_base005",
+      "group": "generated_train_base005",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        5
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 3902.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "fa0f0eab07a04382d4423e61eb5a5ab336c4d0268a969a161759495a32f4c314",
+      "file": "train/generated_train_base005.npz",
+      "sha256": "c37333e973f034195b4b26f5af04fea895a20df37d906c710c8356d1573b846a"
+    },
+    {
+      "id": "generated_train_base006",
+      "group": "generated_train_base006",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        6
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 4196.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "6336fee605b278e815f9f17cc626545440ca13fec740a1bd99844004f5f8358e",
+      "file": "train/generated_train_base006.npz",
+      "sha256": "175a58b85a88f28172356d9d046b73d64867e9240da9e78395fe746eb60ab557"
+    },
+    {
+      "id": "generated_train_base007",
+      "group": "generated_train_base007",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        7
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 4109.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "392af83a5ea242f8bf14d6b7a0b93f1bfad432959c60c85557a0acc38edc9b4e",
+      "file": "train/generated_train_base007.npz",
+      "sha256": "acb60bca1795ce3b0ccad7c8942ad8cb5b1f390dcded4946d537982f9c90f6e5"
+    },
+    {
+      "id": "generated_train_base008",
+      "group": "generated_train_base008",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        8
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 3942.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "5b1b56c4ce58ee901976f367f0aa393b1d378e61dc84b63735c7945afbbdec66",
+      "file": "train/generated_train_base008.npz",
+      "sha256": "30866182a7ad603d8a4e68a4ba01a810faf8cfe0f38fd2efcf29d9c4e8f6aeab"
+    },
+    {
+      "id": "generated_train_base009",
+      "group": "generated_train_base009",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        9
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 4032.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "f285bc448a5daf5edfed27c4b0b661933c1e1ed503c462360485796c6e3fce7e",
+      "file": "train/generated_train_base009.npz",
+      "sha256": "db6a621a1a0c00716ffb23e714368fb252fdce07f1b18d7c979c59458ac8ecb4"
+    },
+    {
+      "id": "generated_train_base010",
+      "group": "generated_train_base010",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        10
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 3963.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "74a28f7ade5336fc0adf1e8a42a05c7acc22005ce4542dc0168dcf483c4b4687",
+      "file": "train/generated_train_base010.npz",
+      "sha256": "3129e66b55782c61d493a411f47f6f69bd2fb1f77cd4b9921ccee82caeb04117"
+    },
+    {
+      "id": "generated_train_base011",
+      "group": "generated_train_base011",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        11
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 4002.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "fd7b3d8405c404a6a64e06f9a1b0b2666086c57c6ea22919c53f59aa05411495",
+      "file": "train/generated_train_base011.npz",
+      "sha256": "4f4db14112a70867d1d3e5f679acd677b08616ed16e474370cb76bf6befa84c7"
+    },
+    {
+      "id": "generated_train_base012",
+      "group": "generated_train_base012",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        12
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 3960.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "f414f542bc178c5eeb7372793e90f80358de9757b35a5ab1653958d1d457ac10",
+      "file": "train/generated_train_base012.npz",
+      "sha256": "e733828fc10b78fc3a9a6753e1c0c6254b393e419dc7daacdb7e8842d380ad86"
+    },
+    {
+      "id": "generated_train_base013",
+      "group": "generated_train_base013",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        13
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 4089.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "ce49443e8b9699e670f95bfbce99e05b889e59c15bee8860829a7355cb5fb806",
+      "file": "train/generated_train_base013.npz",
+      "sha256": "be1e5554064152bbf93a92e543b66dc24cc7723b396af354dc835a1da90133a3"
+    },
+    {
+      "id": "generated_train_base014",
+      "group": "generated_train_base014",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        14
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 3928.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "38a20b6f650d14c733ef08693e331b3a0d4be19c222d5e7c4fb659673b3270cf",
+      "file": "train/generated_train_base014.npz",
+      "sha256": "d27a7d7e5a6f072c575e25e68b4ebb70eed8de12b21359443c13af77f7d7bfc7"
+    },
+    {
+      "id": "generated_train_base015",
+      "group": "generated_train_base015",
+      "seed_entropy": [
+        20261007,
+        0,
+        0,
+        15
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "train",
+      "reference": 4213.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "b705835c3d9357f1fcebfd5d12363f84a2eca164f7548815bddeabce5722a7b2",
+      "file": "train/generated_train_base015.npz",
+      "sha256": "deac2e5a5a78fd2be3144534caa37ae408d6f751e393d44536366b9eb24d6967"
+    },
+    {
+      "id": "generated_test_base000",
+      "group": "generated_test_base000",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        0
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4006.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "162661b405a145b69b9f73998b8d50818307ff247833065f2cf4b51d882539ca",
+      "file": "test/generated_test_base000.npz",
+      "sha256": "2212c6051046c25b5b4be88547016c65e00eed78007d119c714621c4a4771db7"
+    },
+    {
+      "id": "generated_test_base001",
+      "group": "generated_test_base001",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        1
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3903.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "34457b05a51121e6ee32f6365053c0f62d0645571abfd460aeac1e3daea32b38",
+      "file": "test/generated_test_base001.npz",
+      "sha256": "d609d791e96e5a4992d1bfe6e789aa672da52e993b8e1922d194e5c179b3d71b"
+    },
+    {
+      "id": "generated_test_base002",
+      "group": "generated_test_base002",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        2
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3938.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "76e6b3f0cb06d074db6641c4b34fd33f7a3ad64614f1d04c4a1f77ecf0da52b0",
+      "file": "test/generated_test_base002.npz",
+      "sha256": "ebdc60d49d5c2223b756753bd7fa37e1fba0beed691bd670148113bf16d98aad"
+    },
+    {
+      "id": "generated_test_base003",
+      "group": "generated_test_base003",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        3
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3895.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "2f30db36c758b454bd925e35889c6016fea099369a0836e0685095453efdf633",
+      "file": "test/generated_test_base003.npz",
+      "sha256": "90b34af6ee93168cc72251e3fbca917da7f26aa2c1acb421a80c295e9e5be63e"
+    },
+    {
+      "id": "generated_test_base004",
+      "group": "generated_test_base004",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        4
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4060.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "db8e837454d502545fd3671d396dbc3b221c5e865154f5e1fafec2e5106b0f38",
+      "file": "test/generated_test_base004.npz",
+      "sha256": "5088ea81209fdb1e31eb8f438984b75fc25bfe5c6a70e2374a4c6387b2da45e9"
+    },
+    {
+      "id": "generated_test_base005",
+      "group": "generated_test_base005",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        5
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4012.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "3d8b8260771177db77101e3bbb3ddf49735081a63759934a67e7b7fa0b675b0b",
+      "file": "test/generated_test_base005.npz",
+      "sha256": "209f718f79e409743fd899582a8f3f533f54caff3b38a6363a23c95c5fdbbc8d"
+    },
+    {
+      "id": "generated_test_base006",
+      "group": "generated_test_base006",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        6
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4099.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "1e2ff35c2dfeebc79eaf5db4e4a6cead5568b517018846ef6241bfa6d42c4a23",
+      "file": "test/generated_test_base006.npz",
+      "sha256": "28aee11e6f104030be300da1fad2bb5ae3d707e297da6be66b81bd2f9507109e"
+    },
+    {
+      "id": "generated_test_base007",
+      "group": "generated_test_base007",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        7
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3894.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "2e6cfc159a2ee59365bb5c75bfd18a83053e0097e822f201dcb37d1958b0060b",
+      "file": "test/generated_test_base007.npz",
+      "sha256": "72425cd70606585984b43d157f28a1c47a820f26657e97782bf80f27e76ee23d"
+    },
+    {
+      "id": "generated_test_base008",
+      "group": "generated_test_base008",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        8
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3878.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "ce08790c47152fb4c50090ab72af5d69cf212090f7fcdb22755452146ddbd1ac",
+      "file": "test/generated_test_base008.npz",
+      "sha256": "9a343f4db91b30d1116eb3294bb40965a502c8d1a6b995c51d1ab50853a9e1ed"
+    },
+    {
+      "id": "generated_test_base009",
+      "group": "generated_test_base009",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        9
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4006.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "95c4ae8c1775072afa66755d717d36cea9fd241a0ff82cad80177303037ef193",
+      "file": "test/generated_test_base009.npz",
+      "sha256": "82e55764163b2733638056f93c16aa02c36b11ea19a99df72aa0d39861d61a71"
+    },
+    {
+      "id": "generated_test_base010",
+      "group": "generated_test_base010",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        10
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4018.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "a28109bea53108d7c5a895c1de032ac6301f22a67562f4a527038b726093fe98",
+      "file": "test/generated_test_base010.npz",
+      "sha256": "e397c7efedcb551db2207bb8f498b367d2562372a799fb96c9fe33a534690c38"
+    },
+    {
+      "id": "generated_test_base011",
+      "group": "generated_test_base011",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        11
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3830.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "65bd146e575795a1a55e49ec3d70b1bce8f96a46fadf59bfd61dd0e63b79922e",
+      "file": "test/generated_test_base011.npz",
+      "sha256": "a78ea0c6bc6e365e0f870dbca3d6d38c46399737e3b051a73ce4af0a13bd0974"
+    },
+    {
+      "id": "generated_test_base012",
+      "group": "generated_test_base012",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        12
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3967.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "1e38d59879aa172403af9bbdd22d1662287f4a92394dba69df7b02a01dbcb802",
+      "file": "test/generated_test_base012.npz",
+      "sha256": "ca702ce42da6ac702628dc54e93f357fd58198c713c09c4c00cf07f1a9dbcc1a"
+    },
+    {
+      "id": "generated_test_base013",
+      "group": "generated_test_base013",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        13
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3970.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "2ce577a4a92601b99e777bc8f71118d97cad21985e6a8e789ed47b4c6e9466ff",
+      "file": "test/generated_test_base013.npz",
+      "sha256": "9d9664acd9ce4afaae4edb175af66732be8a0308e8348cda03de3c2bc38eacad"
+    },
+    {
+      "id": "generated_test_base014",
+      "group": "generated_test_base014",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        14
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3954.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "8ec221ba3a3394d7cff997408bb1b8239b526a67cb6ef6d656ccca903b501c0a",
+      "file": "test/generated_test_base014.npz",
+      "sha256": "7af608106fde5ab35a3786e1a3b3e515d2566df49eeb770ed7935193eaec69a4"
+    },
+    {
+      "id": "generated_test_base015",
+      "group": "generated_test_base015",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        15
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3961.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "6db55660b0088ff71299ef7abf8d6b654bbc93757c9c1a40b63c7a2cbf6fed3d",
+      "file": "test/generated_test_base015.npz",
+      "sha256": "f6af427d14305c22151fd0fecf6e8fd254eea0c9e02cd75fa9e23f78a9e84dd2"
+    },
+    {
+      "id": "generated_test_base016",
+      "group": "generated_test_base016",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        16
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3994.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "245a7cb17b0ce53aa07fd4360f12df456677578ad8040ba5a2cb626a8fa52f06",
+      "file": "test/generated_test_base016.npz",
+      "sha256": "dd04a148c2e0b1d4f2e002a6561dd1e0bf29acd8d76f5efa9bdea2089bf4e2d2"
+    },
+    {
+      "id": "generated_test_base017",
+      "group": "generated_test_base017",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        17
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3948.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "c5c151146c21b4d28c84a8e0176631e468f782e1ce5cac91ce70bacc842ab0ae",
+      "file": "test/generated_test_base017.npz",
+      "sha256": "5c14f0ed71c371a32dc15f0c7a5bbf992441f5b0476064a1bb2730ef5cdc0d81"
+    },
+    {
+      "id": "generated_test_base018",
+      "group": "generated_test_base018",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        18
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4055.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "270a3dffb3c5d1e8839ef7d1de7047362afaa105a00cc09e73e91424fc04eb72",
+      "file": "test/generated_test_base018.npz",
+      "sha256": "10a5b954213270ee9225822a7b1d22da1dfa7d0fff51981c68729d919dbe2907"
+    },
+    {
+      "id": "generated_test_base019",
+      "group": "generated_test_base019",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        19
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3837.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "fc6fae3993d54ae9e52a63d3af9249be5629e7ba9e1903f1ca935081ab09f72b",
+      "file": "test/generated_test_base019.npz",
+      "sha256": "1106a29606f45c811671001eab8717036df05555ff179dc73909a953d589ccf3"
+    },
+    {
+      "id": "generated_test_base020",
+      "group": "generated_test_base020",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        20
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4074.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "1e9fb12dd79ca0ebc9913552bdddcf24c6adcde88ec0dbeafccac7aef1fec07f",
+      "file": "test/generated_test_base020.npz",
+      "sha256": "1004c67ba760a73ad67a6e11332df6e223f33166c345b5c1d20dad1e66d2fb93"
+    },
+    {
+      "id": "generated_test_base021",
+      "group": "generated_test_base021",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        21
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3904.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "f84041c8c70b591f717f88bde5c23c8b3fe76caa6a5e432738664957eb534f7b",
+      "file": "test/generated_test_base021.npz",
+      "sha256": "5b26e2f38d15716a2ad57a8a25774d584e58c96396bf9f67ae2955fe149eceed"
+    },
+    {
+      "id": "generated_test_base022",
+      "group": "generated_test_base022",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        22
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3868.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "e657c740ca81320c50eb9422c0cbf9f45570c50543e86f26ec228835e8068f56",
+      "file": "test/generated_test_base022.npz",
+      "sha256": "409729d6d9f8b80331ac259b255728c2efc533b54706d712eb55e9b37fbc23af"
+    },
+    {
+      "id": "generated_test_base023",
+      "group": "generated_test_base023",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        23
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3872.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "5b58c5a5110cdcd13e058d05284fe2bc8f0a6d909dc17f6713f4686c38b15166",
+      "file": "test/generated_test_base023.npz",
+      "sha256": "3643d8e7b4ad97f0e1e9699d2026acb353881e40b98aa0aaad217633896b958b"
+    },
+    {
+      "id": "generated_test_base024",
+      "group": "generated_test_base024",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        24
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3938.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "4972df73f34263647ea27e1f98784cdf3f455e5692b5c9cd508f094e8e206154",
+      "file": "test/generated_test_base024.npz",
+      "sha256": "ddcfb0e0e8dbe6cae3bed082bc357813a68c0a470affe488370072a0d122a643"
+    },
+    {
+      "id": "generated_test_base025",
+      "group": "generated_test_base025",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        25
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3902.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "a587719e663d06d07ac7fe1f4a78cae811b9fccc9257c56e12ecd28f56bbaf61",
+      "file": "test/generated_test_base025.npz",
+      "sha256": "a6a70c98da45715a94bfc02d5da314db2541d3deac1b72c832ac2ff1279992a4"
+    },
+    {
+      "id": "generated_test_base026",
+      "group": "generated_test_base026",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        26
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3917.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "eef158b75b531329d3d702d73e787da33d73e00aaae3cfd09678c2de2ade77cc",
+      "file": "test/generated_test_base026.npz",
+      "sha256": "896a7664d2847960ccb15f21f7070a617186ff75091adf196a618c9fbf0e10f2"
+    },
+    {
+      "id": "generated_test_base027",
+      "group": "generated_test_base027",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        27
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3968.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "88a27f2ba0dbd8b765e7449e73cc49f5244ff3a4fd3902306d5c5cd989d49155",
+      "file": "test/generated_test_base027.npz",
+      "sha256": "b8eae3ba7d0e84b884d636fa1d33f0f2d1fbc9322dd8a341d84ac513205f683d"
+    },
+    {
+      "id": "generated_test_base028",
+      "group": "generated_test_base028",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        28
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4002.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "4981a3d30ffa94c972c689166f89d2f7bc7123b783c42636fad1923e3102741a",
+      "file": "test/generated_test_base028.npz",
+      "sha256": "7bb5edca832f0b6cccd23b3c2537350fdde50f71a922e5558f8e627cfb5505c2"
+    },
+    {
+      "id": "generated_test_base029",
+      "group": "generated_test_base029",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        29
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3956.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "fce2b88e612341f36b87617d1c8de572a4d84d6d72a624ff1b82c244ad101b24",
+      "file": "test/generated_test_base029.npz",
+      "sha256": "5a2930d3805184aa063c6f8ad8e846a2a5e200804b176445b8096cb659625a2c"
+    },
+    {
+      "id": "generated_test_base030",
+      "group": "generated_test_base030",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        30
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4097.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "d99cabf47f02b219ec6a183efcfc60a263fefd782c337cb001f656c93a7c047f",
+      "file": "test/generated_test_base030.npz",
+      "sha256": "b9d389d9dae28c722dcca6fe4f672e751b2c08240075beaaec391b05d5afdef2"
+    },
+    {
+      "id": "generated_test_base031",
+      "group": "generated_test_base031",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        31
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4014.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "f2d4307b284033610bd6c60d4c6e2743b1410b1382af475c57fb91d7be525174",
+      "file": "test/generated_test_base031.npz",
+      "sha256": "2b3b0b5840537112aa0ff408c5a5658fe0599210794f3f5342f9ee8bcb7cedbc"
+    },
+    {
+      "id": "generated_test_base032",
+      "group": "generated_test_base032",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        32
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3920.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "dafeeec33b962364c4e9c4215d773eedd1cab505ccc1f2cbcbac8a882704822f",
+      "file": "test/generated_test_base032.npz",
+      "sha256": "52621f7ae18a50064786ac5c8d6ad56993bfb0c738dd29bb9d3258e0b3f847ae"
+    },
+    {
+      "id": "generated_test_base033",
+      "group": "generated_test_base033",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        33
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3910.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "13f9b07bd0368082c9ba48ed495d8ca819f84f0534e0c1fd83d7a476a92e7119",
+      "file": "test/generated_test_base033.npz",
+      "sha256": "c0e21cc72aee3d397b4063ab79105d0b286c078d0ae1a5b790ce07253835cb49"
+    },
+    {
+      "id": "generated_test_base034",
+      "group": "generated_test_base034",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        34
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4051.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "0b34f73f5ffdbd2c5de8207d3c892bf197bfcf08ea26dfb9c3ad66792c0c327d",
+      "file": "test/generated_test_base034.npz",
+      "sha256": "e44f49f5321919d86a52aabacf691c8cfe17cd2599c70a6376d268d7c197aa9b"
+    },
+    {
+      "id": "generated_test_base035",
+      "group": "generated_test_base035",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        35
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3781.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "bd2f2a1c84954d5ecda61fcb683d2bf3375a654d41ae6d690fa1a84646546700",
+      "file": "test/generated_test_base035.npz",
+      "sha256": "e2c9e867d09391c5a0ebfffa3ecc51af791855a6c89183f3883fb4e918566a8b"
+    },
+    {
+      "id": "generated_test_base036",
+      "group": "generated_test_base036",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        36
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4074.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "a56e98a50e51aa2bca75ba13227deeb0876e2b64ab5a0ee7c5c36e0a48a84714",
+      "file": "test/generated_test_base036.npz",
+      "sha256": "15402559c7d9a14e8d542c8a89bfcf5bb762a2a8a17e0264552ec7d89c083460"
+    },
+    {
+      "id": "generated_test_base037",
+      "group": "generated_test_base037",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        37
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4082.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "5d292abbd051fde42104923105718281f3918ed4cc29db93018be5c4e8739c79",
+      "file": "test/generated_test_base037.npz",
+      "sha256": "c504999c11793d7623dc20b7dd4356d4a1c6acca7e85f615b13db05aa70ef7a3"
+    },
+    {
+      "id": "generated_test_base038",
+      "group": "generated_test_base038",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        38
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4018.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "01394a6b2338f99715ee5758dad62aa25975162839e7a6c06728eba0ae7ab0cb",
+      "file": "test/generated_test_base038.npz",
+      "sha256": "415d237b3d1b25e0e11d470bb250d311d58413a5172951e762d9e51a2661ed36"
+    },
+    {
+      "id": "generated_test_base039",
+      "group": "generated_test_base039",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        39
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3928.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "67d15c89f9fb2fe36cef08ecb699f92db6a648c6ed06d49117466e4b6befa36e",
+      "file": "test/generated_test_base039.npz",
+      "sha256": "97836ebf49b90c44f46b3741147b66fde4f9b6446ddc4e59280fae8a6e7dcb74"
+    },
+    {
+      "id": "generated_test_base040",
+      "group": "generated_test_base040",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        40
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3952.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "0cb7b2dbddc2591678c1bd4e955e7e2959e8403ab244f1b65a7bf50edec0852c",
+      "file": "test/generated_test_base040.npz",
+      "sha256": "f1263e0d1e638e97d7ea19477bf5cc11612836d9d286080da488ee559c97b89a"
+    },
+    {
+      "id": "generated_test_base041",
+      "group": "generated_test_base041",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        41
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3951.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "15f7d6f3af1eaf3640b91fb879457a83656ca1faaaaed2ec136baf5d1ff9f9a7",
+      "file": "test/generated_test_base041.npz",
+      "sha256": "7cf5a087708ae4615100777247a15af461295e81ca0451acbf8fdb447d3984de"
+    },
+    {
+      "id": "generated_test_base042",
+      "group": "generated_test_base042",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        42
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4093.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "c3d35243789e8643d025dc1e825dbee3d7a3fb1ebb208a20e5dc83ee455c5a32",
+      "file": "test/generated_test_base042.npz",
+      "sha256": "ec41ce4ec524419cc82649467e9cfce64f6b4e9c9a359fcdf359efe0c9847c28"
+    },
+    {
+      "id": "generated_test_base043",
+      "group": "generated_test_base043",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        43
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3974.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "46c409c90a8f6c7f5d1175ac1a57abc7c647b3a4585a0c345b1b739c32e45cd3",
+      "file": "test/generated_test_base043.npz",
+      "sha256": "0fea6adc4ecac8294c92899ad75ee2a88fdebbbd99b87ee5e75d4f3ce375b2b9"
+    },
+    {
+      "id": "generated_test_base044",
+      "group": "generated_test_base044",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        44
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4154.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "28b686411dab6fc3120219a45147a9a84bc81292c8b0d3d69d3cea360ee9dcf1",
+      "file": "test/generated_test_base044.npz",
+      "sha256": "865c0e69851fa95641414781b6c773df6e1712c7bc74964404454da06780433f"
+    },
+    {
+      "id": "generated_test_base045",
+      "group": "generated_test_base045",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        45
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3991.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "7268f1523456527570d32220f5719ef27c58b9cb2f044e18abcf0e7c5e26def5",
+      "file": "test/generated_test_base045.npz",
+      "sha256": "f4c3920bd67f5a61842a5496b486c3fae848e281fef77c4c241c21fc1b3299da"
+    },
+    {
+      "id": "generated_test_base046",
+      "group": "generated_test_base046",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        46
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3981.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "00d0f5cba29ac74e71c57b40218180ec4571c62768e4815a61cc39572dd95f95",
+      "file": "test/generated_test_base046.npz",
+      "sha256": "e90ccb9a3f1df6920fa6a56a6b4b4e1f15600251405c7573a57ea72cb43ac89e"
+    },
+    {
+      "id": "generated_test_base047",
+      "group": "generated_test_base047",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        47
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4043.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "1a08d108ea16831dd5b218dc2fe2d459954dda868f2857eb66b1eb50a165be8a",
+      "file": "test/generated_test_base047.npz",
+      "sha256": "ca685b6bff7b863180a9275882350bf928df52434237b5eaa9c2d2cbf56ef52c"
+    },
+    {
+      "id": "generated_test_base048",
+      "group": "generated_test_base048",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        48
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3872.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "477eacef1be3b9e0dd6851aebb564ae0b7a8570cc426065ea481bdd58b014367",
+      "file": "test/generated_test_base048.npz",
+      "sha256": "7ef95c6530acbb1f7246d52b1b410c0f6e6db80c4cc54004f7ceb17b63080259"
+    },
+    {
+      "id": "generated_test_base049",
+      "group": "generated_test_base049",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        49
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4013.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "404c009d8897d56419050999e347c3aefc7ac7f4d7118da2d8e75133a905bf52",
+      "file": "test/generated_test_base049.npz",
+      "sha256": "087c5cccf9df7a11b50cdb4563597769c7382720d76ba477821a2b5b047a6852"
+    },
+    {
+      "id": "generated_test_base050",
+      "group": "generated_test_base050",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        50
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3782.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "a6f0afa8fc609b7b101b5abb99111fc4d5f86b1c4e14b7b3bba1257f7242c406",
+      "file": "test/generated_test_base050.npz",
+      "sha256": "bf067e86dc12e3d3c64b7be58ab62f63ef6d676e5737dad1c74eba1bee7ef345"
+    },
+    {
+      "id": "generated_test_base051",
+      "group": "generated_test_base051",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        51
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4059.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "f4ce83f449a394625320c2c83d0db52685f15d7e8079c8f513fc944cdb9349e1",
+      "file": "test/generated_test_base051.npz",
+      "sha256": "f0ef45dd4b1a6bd5763ceaffffed4821b5bfc7d17a397eedf72d841d4836aae2"
+    },
+    {
+      "id": "generated_test_base052",
+      "group": "generated_test_base052",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        52
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3950.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "092f8d61488736a86459619dd422e101f19fb994b89ae5ee39c487bcf7498c00",
+      "file": "test/generated_test_base052.npz",
+      "sha256": "ee2be0f37bf857b5c1de9fee96c21083e37890622551e1792badb5dc8234fbbd"
+    },
+    {
+      "id": "generated_test_base053",
+      "group": "generated_test_base053",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        53
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3954.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "a7960f174707f2a2a8fc590a2c9f6200444cc06fa97b16f5766ad038a1a1509d",
+      "file": "test/generated_test_base053.npz",
+      "sha256": "9b784632dea72f706933dac1edb362ae666a1709183b2321c3782eb811228766"
+    },
+    {
+      "id": "generated_test_base054",
+      "group": "generated_test_base054",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        54
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4011.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "7642d7e3bf02a4ef107d7a9fa357f7315137c28e4bd63582ceec4052414768e0",
+      "file": "test/generated_test_base054.npz",
+      "sha256": "fba57696ec9fae230da9be5736fad833fdd8c41499dce2cdbede7fab9a338baa"
+    },
+    {
+      "id": "generated_test_base055",
+      "group": "generated_test_base055",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        55
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4023.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "7db841b46d22df4795eab3673b6370ab87a038f84f149d48b3ca8921c95ac845",
+      "file": "test/generated_test_base055.npz",
+      "sha256": "f7a0d25f9d6269d675e688b9a5c82228810a5e2055c0df58b2094043d9ce376d"
+    },
+    {
+      "id": "generated_test_base056",
+      "group": "generated_test_base056",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        56
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3890.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "b7699279a276b3bbc05c7edcee91c06ccc88c4018c49bf2d3dd1f528e2206094",
+      "file": "test/generated_test_base056.npz",
+      "sha256": "2a90f3212175c28e9cc81d0a01a849ee94945b42ae92df84d8f52b5f4c82d78a"
+    },
+    {
+      "id": "generated_test_base057",
+      "group": "generated_test_base057",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        57
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3953.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "7488c931c2b2be9a43da058af857881915b338ecb87be24756236edca9a15845",
+      "file": "test/generated_test_base057.npz",
+      "sha256": "9494861a068a4a7d0d3d605ce0023682703137cdbb6960e44efa8b51d1e02b4e"
+    },
+    {
+      "id": "generated_test_base058",
+      "group": "generated_test_base058",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        58
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4027.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "c8c2dbc1921d8df901402ed2a24aaaf5d97453eea4d2c3f93d9fd612f9ecbdfe",
+      "file": "test/generated_test_base058.npz",
+      "sha256": "3fe3f0753e88615b3c3d8f096e982997c70116e436d366ff0ef358623326bb42"
+    },
+    {
+      "id": "generated_test_base059",
+      "group": "generated_test_base059",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        59
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4104.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "8434d6b362ebe3a8e951885555c3efdbe1b6ee2fbb690b3a3268604851ae8a65",
+      "file": "test/generated_test_base059.npz",
+      "sha256": "751e446548a537448a098da632aa9a32592b04954febffa047a42629cf888683"
+    },
+    {
+      "id": "generated_test_base060",
+      "group": "generated_test_base060",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        60
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4046.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "2745230166f5238fd257e2a4d980a0001e248b4a1606873381b638f894199965",
+      "file": "test/generated_test_base060.npz",
+      "sha256": "74ba62b817227385400ed328c336d322e219ccffd22a8fbc555385ab0d91e40c"
+    },
+    {
+      "id": "generated_test_base061",
+      "group": "generated_test_base061",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        61
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3975.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "939064f016ba8bf6a0e83d5552eb775c88358b4fd5084a3c97731f4153ec7fbf",
+      "file": "test/generated_test_base061.npz",
+      "sha256": "8044dd98b093e090374d22921389125cd0fc0ea7ce3487c59daa1f62b437438b"
+    },
+    {
+      "id": "generated_test_base062",
+      "group": "generated_test_base062",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        62
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4043.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "415f6972e165da7269c1f4e5c3a09482fb4d54d7dbb20caa349e9a882392e9ba",
+      "file": "test/generated_test_base062.npz",
+      "sha256": "2689b0dc3489211123f1f4b446bcb47c0bca51d58ba36319449257fc5f739501"
+    },
+    {
+      "id": "generated_test_base063",
+      "group": "generated_test_base063",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        63
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4074.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "84a8e7b083611e94f1471513348c5ae564435ee05f33fe58274a7cffcedf19cd",
+      "file": "test/generated_test_base063.npz",
+      "sha256": "20c6a42fa572397c2394752a1a28a660b2bc0962e4d80a2491a788d519039c08"
+    },
+    {
+      "id": "generated_test_base064",
+      "group": "generated_test_base064",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        64
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4080.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "b7bec5d524dc3b046663aa3cc78d0576d5dc940172cfdf84da7dcb8cafde1a85",
+      "file": "test/generated_test_base064.npz",
+      "sha256": "03fba14af42d86834512f51ba33f9afa2f8b409ee99d59e9841246111856263d"
+    },
+    {
+      "id": "generated_test_base065",
+      "group": "generated_test_base065",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        65
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3956.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "467bfde6576917bc6e220827d705c37e1ccf406965dabb45413b1b4bbe6217e8",
+      "file": "test/generated_test_base065.npz",
+      "sha256": "4988e4e6ef21eb886a79fbcc4f0193e65d76c49b5a5bf3b08643991dbd719a51"
+    },
+    {
+      "id": "generated_test_base066",
+      "group": "generated_test_base066",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        66
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4025.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "2ab03938a45f09cce6e2c92887a9e15edb3d897991a480fc96e430df28bf0136",
+      "file": "test/generated_test_base066.npz",
+      "sha256": "ab397eed09204d20a83d660faf2d36a65910dca59c1b7422be843dbdc77ff38b"
+    },
+    {
+      "id": "generated_test_base067",
+      "group": "generated_test_base067",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        67
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4037.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "0d8e26eb24fcf9248402ab87e6117d1516345ae29f18479a9c5985a81c548b76",
+      "file": "test/generated_test_base067.npz",
+      "sha256": "a7ca9298197575c823943dc3d9b4f83130dc2f229f6c972f282cc9e0fc8d88e8"
+    },
+    {
+      "id": "generated_test_base068",
+      "group": "generated_test_base068",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        68
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3985.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "9aa5ac0f813e1f669b77dbed3dd05f0d9e417877d973e10ee57b321c48405ffc",
+      "file": "test/generated_test_base068.npz",
+      "sha256": "7e7cd5e88c651ed12fa7f6b4b9a176c71337ddca14f0024e3da4cf66c42dbe0c"
+    },
+    {
+      "id": "generated_test_base069",
+      "group": "generated_test_base069",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        69
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4061.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "c63f501f228b811aad649d10429bf4f2fe4bff483f0d085a890ecc3dfaaa212c",
+      "file": "test/generated_test_base069.npz",
+      "sha256": "d68d8bb5dad4f78e83f0d6b935e68a26ef9f6cb67a14aa609414e62694afe079"
+    },
+    {
+      "id": "generated_test_base070",
+      "group": "generated_test_base070",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        70
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3911.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "13747a434d9f155d7cacbc2fd13cee68ed2c75b85750ee7457f4e4c0744d7632",
+      "file": "test/generated_test_base070.npz",
+      "sha256": "3ff905eef7c679ac25d804a7b884adb7d3c627145dfd97bbdaa135bd8a77c6ba"
+    },
+    {
+      "id": "generated_test_base071",
+      "group": "generated_test_base071",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        71
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3920.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "ae59fe5a9fe72b069e2c895019eb980b405b6b9d97c384f965fd58031dd1c076",
+      "file": "test/generated_test_base071.npz",
+      "sha256": "b915645f098fc04dbc94ab1699f6a29fea02163a3c556f246d73a34db8bf0f6b"
+    },
+    {
+      "id": "generated_test_base072",
+      "group": "generated_test_base072",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        72
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3957.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "fe930eb5c5f26bbaa78bef2183708aa9388dd37a1bf9305b93cc799265464381",
+      "file": "test/generated_test_base072.npz",
+      "sha256": "4a3c4f93dd04ad9766879eeb520adfeec25c9abe8e2e57df93540793ca261c00"
+    },
+    {
+      "id": "generated_test_base073",
+      "group": "generated_test_base073",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        73
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4171.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "79220145fff673a21c66e28c85a3762344201df2403bcf7ce8cf092c275ffb80",
+      "file": "test/generated_test_base073.npz",
+      "sha256": "f3ec9e80a711ae47eb3e1575e1390e97ea92e0b94819e115301f15457ecc94a7"
+    },
+    {
+      "id": "generated_test_base074",
+      "group": "generated_test_base074",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        74
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4145.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "a996ddaeed48155d638df1604f5e616ca0e3f8f0e870fb5f63d0e09cd5d73925",
+      "file": "test/generated_test_base074.npz",
+      "sha256": "b4a8fb9ef5e9f0670b72b4a6ca6e0669cfdeb4336b646740649d22595f9c1088"
+    },
+    {
+      "id": "generated_test_base075",
+      "group": "generated_test_base075",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        75
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3985.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "cbf639208bced139ee5c0538a09be39c291093f7827cb75227196a6687154a0a",
+      "file": "test/generated_test_base075.npz",
+      "sha256": "9e84e15218ddf2bea55c09b958ee949811b5cc8e6a0404a8c468de7f2686b787"
+    },
+    {
+      "id": "generated_test_base076",
+      "group": "generated_test_base076",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        76
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4084.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "d454d9445498e49115779da1ad8a187908f01e6803dc3a8f1f68b8bba790beb9",
+      "file": "test/generated_test_base076.npz",
+      "sha256": "7a03651a7876341fa0992621036ce70e49028a34b34b8427909030006176c344"
+    },
+    {
+      "id": "generated_test_base077",
+      "group": "generated_test_base077",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        77
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3913.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "cd72386699f1627c57b72be6a06733a9387d4468d5c46bdd7aca8e189f622c1f",
+      "file": "test/generated_test_base077.npz",
+      "sha256": "827820a3645ab317b11a46c6ef3915cd4702b711aafaf2abfceff3d5ce62f610"
+    },
+    {
+      "id": "generated_test_base078",
+      "group": "generated_test_base078",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        78
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4006.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "c584a4bc7aa3feb09705431beacde6bd978affcc161f09555f92de0ad50d0802",
+      "file": "test/generated_test_base078.npz",
+      "sha256": "74f7f1765ae21f33a0942ac419e6ee7707982cb4255512bcbf08575bfca365e9"
+    },
+    {
+      "id": "generated_test_base079",
+      "group": "generated_test_base079",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        79
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3899.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "5e2dfa293e4299019ee1c64e8b4cdfe5e0751ffd31dcf8ffef63c91bb6163674",
+      "file": "test/generated_test_base079.npz",
+      "sha256": "44c159ae23c0f1df40e5a4d3261cb153f50862bebfb0a0efc4954000245c5f01"
+    },
+    {
+      "id": "generated_test_base080",
+      "group": "generated_test_base080",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        80
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3965.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "06d79a87bdad0f1c323ba6b7f933211e1ececb7dc13db2ba6221da710e03c365",
+      "file": "test/generated_test_base080.npz",
+      "sha256": "7a0273b90f775ed2f57ea58002d31b62ffc75e74dc50fb7eaf266009ee9888d3"
+    },
+    {
+      "id": "generated_test_base081",
+      "group": "generated_test_base081",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        81
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4012.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "12fa403c1b837347c398a220392bc9bfdc393d22a67ec9033636d37e88c25b31",
+      "file": "test/generated_test_base081.npz",
+      "sha256": "6c96bb0baae7e0528fd7255675de825d9918bab180270e126a8f009ebf2d1b71"
+    },
+    {
+      "id": "generated_test_base082",
+      "group": "generated_test_base082",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        82
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4013.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "71f5af852262ca41ead4a117a09c85436fe100067268ddb326a2abd4a9d578d3",
+      "file": "test/generated_test_base082.npz",
+      "sha256": "22663c10f79728598cfbcdd239b1099b5569911a401001abec95f824d5f9805a"
+    },
+    {
+      "id": "generated_test_base083",
+      "group": "generated_test_base083",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        83
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3985.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "49a637a343953ce1b5c6918405743ec97a1ec3878af5818911aeb65fc31b5325",
+      "file": "test/generated_test_base083.npz",
+      "sha256": "ab5bad9a268f4a220f85dbe4260217ca4e05d1a4b1212a06b6a0ae36041543cb"
+    },
+    {
+      "id": "generated_test_base084",
+      "group": "generated_test_base084",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        84
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3885.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "961147b87b312a6fbb72f567b29e5bb7ebef7682bb3d822957e21a4a2ff4d268",
+      "file": "test/generated_test_base084.npz",
+      "sha256": "73cdd12dbe7ccc2f7f652471fe7ef69eb8e7c05a4ef1fba6279b15b89e8c2c96"
+    },
+    {
+      "id": "generated_test_base085",
+      "group": "generated_test_base085",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        85
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4021.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "57d30dbab42d93575f43246fc6340da212371a9f124c8c8749d5e37176477355",
+      "file": "test/generated_test_base085.npz",
+      "sha256": "8d13ab1cbe55b91b590b6bbf01dea88e87b6a81a4109d5e7bd2481969b467ef8"
+    },
+    {
+      "id": "generated_test_base086",
+      "group": "generated_test_base086",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        86
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3932.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "7ddebd13b44166b872498e02a28272d44d466360806bb9a8e27ca803270e8f0b",
+      "file": "test/generated_test_base086.npz",
+      "sha256": "3f9c52e896ff02e8ae028e6a884f5df7e8c5b563aeaccee3701e640e817f40f5"
+    },
+    {
+      "id": "generated_test_base087",
+      "group": "generated_test_base087",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        87
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3939.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "775bf4d67b049a1487547ecfd597a5ec4a160024857331f3754853a49e523cee",
+      "file": "test/generated_test_base087.npz",
+      "sha256": "3231b941a9672cbd05c568c5d2ff38ad612f523722787cd9bdb2cad495d83536"
+    },
+    {
+      "id": "generated_test_base088",
+      "group": "generated_test_base088",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        88
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4000.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "32055b951208c68da717e739a0cfb6f94bcb51132c8c63d12d4912f39f62df39",
+      "file": "test/generated_test_base088.npz",
+      "sha256": "f6e9067393421f2cce2871e69ac97cb208edae327af19fc06aeccae63d29bb78"
+    },
+    {
+      "id": "generated_test_base089",
+      "group": "generated_test_base089",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        89
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3943.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "07214cb29727e4b2f7aedaddc1c617647d8a7a2a26ee3c8db19e81538cf4bfbe",
+      "file": "test/generated_test_base089.npz",
+      "sha256": "1a528bbbc6213a5219832129f3b713e9e665e1ad810b4c30ca4245f8b7c31464"
+    },
+    {
+      "id": "generated_test_base090",
+      "group": "generated_test_base090",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        90
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3969.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "21764b5e4f0bdd252516c770a14ae8d733af8e92d314acb869e8d900e39490c8",
+      "file": "test/generated_test_base090.npz",
+      "sha256": "3d94aec1eeec257afe61c92961d526ea98abb226d396830383da201ce19e3f41"
+    },
+    {
+      "id": "generated_test_base091",
+      "group": "generated_test_base091",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        91
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4057.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "ea10197159aa7ef0daf9f72d9d28be538cde69746d3a77829ded84fc32d595ef",
+      "file": "test/generated_test_base091.npz",
+      "sha256": "8d9417e883c982f747ff7424f60e287be420f1e8ae74c73daa7d2606a1d6d630"
+    },
+    {
+      "id": "generated_test_base092",
+      "group": "generated_test_base092",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        92
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4059.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "115d20265502e2814f9d7481c4b51086343c7271e1176e09ee4cf384dce5e26f",
+      "file": "test/generated_test_base092.npz",
+      "sha256": "21129e7d5ef99fff20fe1b3d9686ce2ece9423f33844dc745cddb5ac524f2109"
+    },
+    {
+      "id": "generated_test_base093",
+      "group": "generated_test_base093",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        93
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3983.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "17b44a8dbb25d1da82bdca01e65aee4e4d8b1ff3378e76e015ac2d4e958bdd4c",
+      "file": "test/generated_test_base093.npz",
+      "sha256": "3e0d2b0b0da7b8d1555a569543ca9f3800214efbe348b5426b0449e0abf74b77"
+    },
+    {
+      "id": "generated_test_base094",
+      "group": "generated_test_base094",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        94
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4052.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "353eb64adc8f3c2c7bcdd6ff0072b731c393378b53eacc6c73d537ea63ab30b0",
+      "file": "test/generated_test_base094.npz",
+      "sha256": "3a5e292001002f5008b08aeecf1d9f2f340da4b29b3f2f3d44c599e4c787c43a"
+    },
+    {
+      "id": "generated_test_base095",
+      "group": "generated_test_base095",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        95
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3991.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "8c17841b0c3bb129c92874279640a149956a473b4e5fee90af56f04928d42d8b",
+      "file": "test/generated_test_base095.npz",
+      "sha256": "71ed36713fa2ec677282495c22287c2462652d58bf27c9e90b40028f6d000f60"
+    },
+    {
+      "id": "generated_test_base096",
+      "group": "generated_test_base096",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        96
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3956.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "f80b90a8af2c9053d00cea305aff3273e459e0496b138badf698b984b2cda0a2",
+      "file": "test/generated_test_base096.npz",
+      "sha256": "1b80f7005f70b8d47387f3a5b174d429bd84707e3790ac5086072b79d2069056"
+    },
+    {
+      "id": "generated_test_base097",
+      "group": "generated_test_base097",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        97
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3935.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "8e71be148acbb475e9c543bce994955b6cae178c45ab0c400d099200d8592255",
+      "file": "test/generated_test_base097.npz",
+      "sha256": "6e15d07d59ce67e0f7fc3ab74dfc7433608081d759d77fa9fa14c4fe2b3db752"
+    },
+    {
+      "id": "generated_test_base098",
+      "group": "generated_test_base098",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        98
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 4035.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "91e7549ef4f0145d2d67a21930dffcdd231de3782b1bbb2c4364a3aecd551563",
+      "file": "test/generated_test_base098.npz",
+      "sha256": "78c945030612814146fb2cc045ae75edd1133db74f5029d4f1d7b996835ede43"
+    },
+    {
+      "id": "generated_test_base099",
+      "group": "generated_test_base099",
+      "seed_entropy": [
+        20261007,
+        0,
+        2,
+        99
+      ],
+      "source_kind": "generated",
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "test",
+      "reference": 3947.0,
+      "reference_kind": "NEH feasible upper bound",
+      "content": "fa8a8d5ead24e89b13dc3da1ab81fd760737bf2f599ee5d78ef2358a6bde4e2a",
+      "file": "test/generated_test_base099.npz",
+      "sha256": "2e5ad0f5c1d0663e91ac48f5c3439632f45b076163b2e40070687c707bae182e"
+    },
+    {
+      "id": "standard_tai50_20_0",
+      "group": "standard_tai50_20_0",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "tai50_20.txt",
+      "source_index": 0,
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "standard",
+      "reference": 3875.0,
+      "reference_kind": "published Taillard upper bound",
+      "content": "dd79bc13bb46dc1a60901e7a13f4b5ba4b469d262cdda81a86b33f76596492ae",
+      "file": "standard/standard_tai50_20_0.npz",
+      "sha256": "8ceb085003bd0a3552d5c41f1b75d9005552d177e04ba3e6eb7a93418470b7ac"
+    },
+    {
+      "id": "standard_tai50_20_1",
+      "group": "standard_tai50_20_1",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "tai50_20.txt",
+      "source_index": 1,
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "standard",
+      "reference": 3715.0,
+      "reference_kind": "published Taillard upper bound",
+      "content": "3c7362e5b4d5f3fb39add0dfe85eba5c28f9b7e21455617bd29c0be64e54ae99",
+      "file": "standard/standard_tai50_20_1.npz",
+      "sha256": "99b54f084de10999ec0896aaeea62caaaf798ccfde7e9f9c35e7bff50e4f40b3"
+    },
+    {
+      "id": "standard_tai50_20_2",
+      "group": "standard_tai50_20_2",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "tai50_20.txt",
+      "source_index": 2,
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "standard",
+      "reference": 3668.0,
+      "reference_kind": "published Taillard upper bound",
+      "content": "66c2fe582b32376f7caf538b4be700f7b99083a10daf61aa1fad0e01b6726101",
+      "file": "standard/standard_tai50_20_2.npz",
+      "sha256": "ca104816059034b34522088143da77ca5e4833cea107db4258e9bf652138d535"
+    },
+    {
+      "id": "standard_tai50_20_3",
+      "group": "standard_tai50_20_3",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "tai50_20.txt",
+      "source_index": 3,
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "standard",
+      "reference": 3752.0,
+      "reference_kind": "published Taillard upper bound",
+      "content": "3e3dbbc47443a82a4658fc5c321a94be8db1dbd33eb78f770671f2b3509e8301",
+      "file": "standard/standard_tai50_20_3.npz",
+      "sha256": "53c5a6b33416a46ecb2b9432ab07b25b0ad001f59f63563fa9427c4bf4ce12b4"
+    },
+    {
+      "id": "standard_tai50_20_4",
+      "group": "standard_tai50_20_4",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "tai50_20.txt",
+      "source_index": 4,
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "standard",
+      "reference": 3635.0,
+      "reference_kind": "published Taillard upper bound",
+      "content": "6700534eb87c334a7139442048ea03504ac5bcf6bd8fc88f88f8dc01db1b9bb5",
+      "file": "standard/standard_tai50_20_4.npz",
+      "sha256": "d57cd04fbd00f671c645e85dd7ed3d7d75fff116d13690100800aee51b7c13cc"
+    },
+    {
+      "id": "standard_tai50_20_5",
+      "group": "standard_tai50_20_5",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "tai50_20.txt",
+      "source_index": 5,
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "standard",
+      "reference": 3698.0,
+      "reference_kind": "published Taillard upper bound",
+      "content": "c4abb302a84d51307d29e29918cb5f3594bbdc4d15d59e331496a7b8f71db7bd",
+      "file": "standard/standard_tai50_20_5.npz",
+      "sha256": "ab83c54a2d460211c1750f12c1e6464952d3f971575a9e24f17f5088f0677b4d"
+    },
+    {
+      "id": "standard_tai50_20_6",
+      "group": "standard_tai50_20_6",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "tai50_20.txt",
+      "source_index": 6,
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "standard",
+      "reference": 3716.0,
+      "reference_kind": "published Taillard upper bound",
+      "content": "e9debe130d61b6d519304140b4f559cbe43b0c624efbc4c4f94ac7a35425e535",
+      "file": "standard/standard_tai50_20_6.npz",
+      "sha256": "caae38f0dc378c8a7bdb7fd1b2c95ae0eca86ccc5b11528e6a498b21657d00e1"
+    },
+    {
+      "id": "standard_tai50_20_7",
+      "group": "standard_tai50_20_7",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "tai50_20.txt",
+      "source_index": 7,
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "standard",
+      "reference": 3709.0,
+      "reference_kind": "published Taillard upper bound",
+      "content": "ec66df166216bc15d05280b4aa94373c9dee1054bd878ef5f31963c870ec302d",
+      "file": "standard/standard_tai50_20_7.npz",
+      "sha256": "659a74ccfd1bf15686380df88a7d5b48203fbfc10ddaeb3b903f36964aab0b6a"
+    },
+    {
+      "id": "standard_tai50_20_8",
+      "group": "standard_tai50_20_8",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "tai50_20.txt",
+      "source_index": 8,
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "standard",
+      "reference": 3765.0,
+      "reference_kind": "published Taillard upper bound",
+      "content": "6d9c344bc4d6cf0e5f76da8778803af865fbb664669b0e9771f7c47101530e81",
+      "file": "standard/standard_tai50_20_8.npz",
+      "sha256": "afc9ef162c48aaac91430ae59b0f3d519286f9501d370dda38dd327ded90a8e7"
+    },
+    {
+      "id": "standard_tai50_20_9",
+      "group": "standard_tai50_20_9",
+      "source_kind": "CO-Bench/OR-Library",
+      "source_case": "tai50_20.txt",
+      "source_index": 9,
+      "scale": 50,
+      "dimensions": {
+        "jobs": 50,
+        "machines": 20
+      },
+      "split": "standard",
+      "reference": 3777.0,
+      "reference_kind": "published Taillard upper bound",
+      "content": "3b31344cf86080e8bddc03fb8915f7ed0b01d55018401da19750b35bd7868400",
+      "file": "standard/standard_tai50_20_9.npz",
+      "sha256": "32f07071894e08e6bc01213280fd4ee5dfc386543c22cc087a2f8ed9d4e738aa"
+    }
+  ],
+  "counts": {
+    "train": 16,
+    "test": 100,
+    "standard": 10
+  }
+}
