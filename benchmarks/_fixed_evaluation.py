@@ -59,8 +59,7 @@ class FixedEvaluation(Evaluation):
             f'over instances: 100 * {direction} / abs(reference). Lower is better. '
             f'References for this split are: {references}. They are hidden from the candidate and are '
             'not guaranteed integer optima. Negative deviations mean the reference was improved. '
-            'Generated reference bounds/baselines differ from published standard references, so their '
-            'deviations must be reported separately. Score computation does not clip negative deviations. Invalid return '
+            'Score computation does not clip negative deviations. Invalid return '
             'contracts or errors fail the evaluation; score quality is always computed from the final valid solution.')
         self.task_description += '\n\n' + self.design_notes
 

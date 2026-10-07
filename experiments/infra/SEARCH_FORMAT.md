@@ -73,7 +73,7 @@ OBP 的规模写为 `1k_100,5k_500,10k_500`。未完成搜索必须显式使用 
 
 2026-10-07 已将本机 601 路已结束档案及 7,150 份诊断、汇总和历史数值文件切换为最小化。三路 V10.20 CVRP 的旧进程仍在运行；其 `.minimize/live.json` 标记只读最小化视图，原写入字节位置保持不变。后台 `traceaad_minimize_migration` 会在终局文件稳定后转换其事件、恢复点、选择与测试结果，再删除该标记。此次迁移只转换数值表示，没有重跑评价或重新选择程序。程序源码、模型原始请求与回复、任务实例、种子、预算、状态及身份保留原记录。过去实际送给模型的文字仍可从原始调用查看；新提示统一说明 Lower is better。原实验 revision 和协议身份继续指向当时条件，结果格式 v2 指明现在的数值方向。旧的未完成搜索不能把已转换的恢复点交给旧进程续写。
 
-数值备份与核验记录位于 `experiments_result/.archive/minimize_20261007/`，每路有 `.minimize/receipt.json`。迁移器支持重复执行，已完成的文件不会再次取负：
+每路核验记录为 `.minimize/receipt.json`。转换前的数值备份已于 2026-10-07 删除，receipt 中的 `backup` 路径不再存在；原始数值仍可从 `storage_20261006/` 冷归档取回。迁移器支持重复执行，已完成的文件不会再次取负：
 
 ```bash
 uv run python -m experiments.infra.migrations.minimize_results --root experiments_result --auxiliary

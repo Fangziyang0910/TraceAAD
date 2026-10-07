@@ -2,7 +2,7 @@
 
 ## 2026-10-07：统一最小化目标
 
-601 路已结束的统一档案及 7,150 份诊断、汇总和历史数值文件已转换。三路仍在运行的 CVRP 由只读视图统一方向，结束后自动转换。所有 fitness 越小越好，程序身份、预算和实验结论保持不变。原始数值按原路径压缩保存在 `experiments_result/.archive/minimize_20261007/`，总报告为该目录中的 `report.json`，逐路记录为 `.minimize/receipt.json`。源码与模型调用未改写。旧格式冷归档继续保存当时的原始证据；再次导入时由转换器统一方向。
+601 路已结束的统一档案及 7,150 份诊断、汇总和历史数值文件已转换。三路仍在运行的 CVRP 由只读视图统一方向，结束后自动转换。所有 fitness 越小越好，程序身份、预算和实验结论保持不变。逐路核验记录为 `.minimize/receipt.json`。转换前的数值备份已于 2026-10-07 删除，receipt 中的 `backup` 路径不再存在。三路 CVRP 结束时，迁移器会在 `.archive/minimize_20261007/live_completion/` 重新写入这三路的少量备份。源码与模型调用未改写。旧格式冷归档继续保存当时的原始证据；再次导入时由转换器统一方向。
 
 ## 2026-10-06：统一结果格式
 
@@ -32,6 +32,6 @@ tar -xzf <原档.tar.gz> -C /tmp/traceaad-original-run
 
 ## 2026-10-07：清理中间产物
 
-已转换为逐路 `heldout.json` 的原始测试输出、补测队列、清理清单，以及未被文档引用的早期对照，压缩保存在 `experiments_result/.archive/cleanup_20261007/`，路径见同目录 `paths.txt`。
+已转换为逐路 `heldout.json` 的原始测试输出、补测队列、清理清单，以及未被文档引用的早期对照（`traceaad_e2_a`、`traceaad_e2_b`、`traceaad_refine_e1`、`traceaad_v10_prompt_probe` 等）已删除，不再保留压缩副本。
 
 远端 server3 同步完成 108 路统一档案与 60 份评价输入的最小化转换。107 个不属于当前代码清单的旧源码和测试保存在远端 `.archive/minimize_20261007/legacy_source/`，并有 `manifest.json`；迁移前完整源码备份为同目录上层的 `source_before.tar.gz`。当前源码已逐文件核对。

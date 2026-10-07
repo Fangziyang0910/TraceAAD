@@ -169,8 +169,8 @@ def test_packaged_splits_have_no_base_group_or_content_overlap():
     for task in TASKS:
         rows = read_manifest(CLASSES[task].DATASET.DATA_ROOT)["instances"]
         for field in ("group", "content"):
-            assert {r['split'] for r in rows} == {'train', 'test', 'standard'}
-            groups = {split: {r[field] for r in rows if r["split"] == split} for split in ("train", "test", "standard")}
+            assert {r['split'] for r in rows} == {'train', 'test'}
+            groups = {split: {r[field] for r in rows if r["split"] == split} for split in ("train", "test")}
             assert all(groups[a].isdisjoint(groups[b]) for a, b in itertools.combinations(groups, 2)), task
         assert len({json.dumps(r["dimensions"], sort_keys=True) for r in rows}) == 1
 

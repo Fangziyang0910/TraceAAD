@@ -5,8 +5,7 @@
   "final_selection": "training",
   "primary_source": "TraceAAD explicit generated distributions",
   "distribution": "G(300,0.5): each undirected edge independently present with probability 0.5; reference is deterministic DSATUR construction",
-  "standard_source_url": "https://huggingface.co/datasets/CO-Bench/CO-Bench",
-  "split_policy": "Independent train/test seed streams; base-group variants stay together; standard data are supplementary.",
+  "split_policy": "Independent train/test seed streams; base-group variants stay together.",
   "preparation_environment": {
     "python": "3.14.7",
     "numpy": "2.5.3",
@@ -14,23 +13,12 @@
     "numba": "0.67.0"
   },
   "source_files": {
-    "benchmarks/graph_colouring/prepare_data.py": "f164584632e8708d8f8023be640534218394bc8d0d096011398909005a0aa4bc",
-    "benchmarks/graph_colouring/dataset.py": "56a838468f68b012854c2da756aafd75b40521026325ec27dbe241d29e7ea901",
+    "benchmarks/graph_colouring/prepare_data.py": "085c10c0fabfa4cc668140644fa35c0f9e7f3ab22ba52f77d8ebbb02bba48147",
+    "benchmarks/graph_colouring/dataset.py": "40ff890906ed9b3cb7f6f01c0d6e0a0d15ff5c41185fee6630f43e71067b1373",
     "benchmarks/graph_colouring/evaluation.py": "7ac0495e598124b3df228895e38808ef624e981987086669ce4f20ca9b3e9028",
     "benchmarks/graph_colouring/template.py": "77d1a6452e17a949595f99d643ae5aaaee0688d30b29893277a12bb20e87042c",
-    "benchmarks/_prepared_data.py": "7baf48986b3bad541c6b64717d66bd1c6f90b79bfed28a2cfab8e8488919f298",
-    "benchmarks/_fixed_evaluation.py": "a7c0fe77e363dbebdb55306d147e1630e04ef1f164d14bb5e0c3fcd3f1020151",
-    "Graph colouring/config.py": "4245e2ae2dc29b7ad1a8c21f5c673cc7571b2ec6227c3e1784f4971d32f29c14",
-    "Graph colouring/gcol21.txt": "17f3b1ccd7ff4b257a3d2751967c87135a1b62a37fb300a672aa581d34aa62cf",
-    "Graph colouring/gcol22.txt": "d1f06e74776c90f87ae24977ed54b5b3a5f74c773686c60ebdcb39576ecdabb3",
-    "Graph colouring/gcol23.txt": "8d9208f52f08065b4322237277faa3adab01f777ad79a0d389234c88f88e1148",
-    "Graph colouring/gcol24.txt": "0e301ff1ca2e61e5c907f294132f5d466ca866ef052584f40141d25c6e7f0909",
-    "Graph colouring/gcol25.txt": "919c3a53f2afcbcf1f9ac6b7d5eeea0a6271b82843824b3a2e008f6ac94ed33c",
-    "Graph colouring/gcol26.txt": "c9c7ee3ee389156e38f74c8d7a7462832e34fe071528e055f88c80509897e96a",
-    "Graph colouring/gcol27.txt": "da52151139fdc1bb3fb33c5e389f9c4e347283f4a3c5864e80f97068525897c1",
-    "Graph colouring/gcol28.txt": "861e51ae3abda9efbfcaf1613008580796d03698594b3ad7f0779b1093c949ae",
-    "Graph colouring/gcol29.txt": "bb527dad113ae0b3864ee9ac230c45ff18013ae81ac3cec6504f34ceb43d5b20",
-    "Graph colouring/gcol30.txt": "ab8aa1453c21b9ec0239c12206251ce699df27d2bb693ec25990408d8e5f51e6"
+    "benchmarks/_prepared_data.py": "b034567d7a107385ffcbf808689d77dfeb7a115de6de122c55f53a80d671a8d3",
+    "benchmarks/_fixed_evaluation.py": "d6134838ba8f3de8b83499d583dd44561c0c7cfa1340e9ff47fb63778dfcd2cd"
   },
   "instances": [
     {
@@ -2584,191 +2572,10 @@
       "content": "50e4177b25be98bd28b1086d34ff42c11180e67aa80f5ca6587091718121e1b4",
       "file": "test/generated_test_base099.npz",
       "sha256": "b0f3d840189f892fbd5c95fa5e8aacddbb86b75962e7ce41e8f1e0c31c3fedac"
-    },
-    {
-      "id": "standard_gcol21_0",
-      "group": "standard_gcol21_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "gcol21.txt",
-      "source_index": 0,
-      "scale": 300,
-      "dimensions": {
-        "vertices": 300
-      },
-      "density": 0.5012709030100334,
-      "split": "standard",
-      "reference": 34.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "9c817854cfa468dedcedbf5a81e16e4107c1be125b46ccb086b3f0353d82abcc",
-      "file": "standard/standard_gcol21_0.npz",
-      "sha256": "f121c69cf4cd7688e56cef8d672226ef996dd24a01a10d00795a1e64297b2bd4"
-    },
-    {
-      "id": "standard_gcol22_0",
-      "group": "standard_gcol22_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "gcol22.txt",
-      "source_index": 0,
-      "scale": 300,
-      "dimensions": {
-        "vertices": 300
-      },
-      "density": 0.5032107023411371,
-      "split": "standard",
-      "reference": 34.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "1c582737b461187efbdfc826f331d7ec2f6aeb71854d4c78f985332a10f86b42",
-      "file": "standard/standard_gcol22_0.npz",
-      "sha256": "76db46889d2254e2cff158228c7a400a7283eab4db970f127c86c6a48dd5db8e"
-    },
-    {
-      "id": "standard_gcol23_0",
-      "group": "standard_gcol23_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "gcol23.txt",
-      "source_index": 0,
-      "scale": 300,
-      "dimensions": {
-        "vertices": 300
-      },
-      "density": 0.49928651059085843,
-      "split": "standard",
-      "reference": 34.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "06ccc2a9d06456449f271670d92d512505f417bf395dd77176e7a9776986f211",
-      "file": "standard/standard_gcol23_0.npz",
-      "sha256": "68bb28fbfe702013d53bd67d0e25bccf5eb8772bb06a67606cfa6834ed0b453b"
-    },
-    {
-      "id": "standard_gcol24_0",
-      "group": "standard_gcol24_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "gcol24.txt",
-      "source_index": 0,
-      "scale": 300,
-      "dimensions": {
-        "vertices": 300
-      },
-      "density": 0.5004682274247492,
-      "split": "standard",
-      "reference": 34.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "e6baa7d6a1599acfab35bf8033c4decb51fc1000c3948b4903159f068789be77",
-      "file": "standard/standard_gcol24_0.npz",
-      "sha256": "3ee1498d7abd322328b7d90de907f32d928ce70ef322afb28c7fe7cc6cf861ba"
-    },
-    {
-      "id": "standard_gcol25_0",
-      "group": "standard_gcol25_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "gcol25.txt",
-      "source_index": 0,
-      "scale": 300,
-      "dimensions": {
-        "vertices": 300
-      },
-      "density": 0.4985507246376812,
-      "split": "standard",
-      "reference": 34.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "e926ee73e92a9586f3fca2b8f627c8fc1df95cfbfe95217f93e8345cb94a2dde",
-      "file": "standard/standard_gcol25_0.npz",
-      "sha256": "597530e84c120a910b4bbfbfd0363b573df0f8762c9688b0af5088c8d7936bb2"
-    },
-    {
-      "id": "standard_gcol26_0",
-      "group": "standard_gcol26_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "gcol26.txt",
-      "source_index": 0,
-      "scale": 300,
-      "dimensions": {
-        "vertices": 300
-      },
-      "density": 0.5039241917502787,
-      "split": "standard",
-      "reference": 34.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "aced9eb99d3300fca5a64cf4708d21b426ac6bcf941bf2c14769a59d21aeabdc",
-      "file": "standard/standard_gcol26_0.npz",
-      "sha256": "f3072667108da466bddff9e6a8d01c112b5796ebdd3a22d631b11c196191de37"
-    },
-    {
-      "id": "standard_gcol27_0",
-      "group": "standard_gcol27_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "gcol27.txt",
-      "source_index": 0,
-      "scale": 300,
-      "dimensions": {
-        "vertices": 300
-      },
-      "density": 0.4978149386845039,
-      "split": "standard",
-      "reference": 34.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "98f51f0fad21c58a5a8337d6500d8f26300014e586b329e1cc20ba07fda66ff1",
-      "file": "standard/standard_gcol27_0.npz",
-      "sha256": "13e7ceaf92bd165273bef0e966b15746b9c5aa6af778f22f6726220dc14001b9"
-    },
-    {
-      "id": "standard_gcol28_0",
-      "group": "standard_gcol28_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "gcol28.txt",
-      "source_index": 0,
-      "scale": 300,
-      "dimensions": {
-        "vertices": 300
-      },
-      "density": 0.5010479375696767,
-      "split": "standard",
-      "reference": 34.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "06ecc16fdacc9f658a7ad1b4f5c8d72397dade7cee189d844e745fbca8889566",
-      "file": "standard/standard_gcol28_0.npz",
-      "sha256": "07e768c9ae48bca4dd9841f36939f84edb27d8f6a71f03a0e877e378d91c1ba4"
-    },
-    {
-      "id": "standard_gcol29_0",
-      "group": "standard_gcol29_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "gcol29.txt",
-      "source_index": 0,
-      "scale": 300,
-      "dimensions": {
-        "vertices": 300
-      },
-      "density": 0.5021181716833891,
-      "split": "standard",
-      "reference": 34.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "1863d71ae942f489b18c18e355679aee34e3bab3c62f2ef69905ca671142bd5f",
-      "file": "standard/standard_gcol29_0.npz",
-      "sha256": "03a2fe45ace1f9e8dcb5502e69687ddbaa6251befc13f3ec3ee48dbdd22ed5be"
-    },
-    {
-      "id": "standard_gcol30_0",
-      "group": "standard_gcol30_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "gcol30.txt",
-      "source_index": 0,
-      "scale": 300,
-      "dimensions": {
-        "vertices": 300
-      },
-      "density": 0.5026309921962095,
-      "split": "standard",
-      "reference": 34.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "922e9bc14223924e6619f0c9f40c18e65d8afc72d68e8f8b77d455357a9a15a7",
-      "file": "standard/standard_gcol30_0.npz",
-      "sha256": "4f46078f4d6865d33468d412786e833240778f37540f24435507b34c64af78e0"
     }
   ],
   "counts": {
     "train": 16,
-    "test": 100,
-    "standard": 10
+    "test": 100
   }
 }

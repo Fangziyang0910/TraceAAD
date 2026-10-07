@@ -35,7 +35,7 @@ HELDOUT_TIMEOUT.update({task: 60 * CLASSES[task].DATASET.COUNTS['test'] / CLASSE
 SCALES = {'tsp_construct': (50, 100, 200), 'vrptw_construct': (50, 100, 200),
           'cvrp_aco': (20, 50, 100, 200), 'op_aco': (50, 100, 200),
           'online_bin_packing': ('1k_100', '1k_500', '5k_100', '5k_500', '10k_100', '10k_500')}
-SCALES.update({task: (CLASSES[task].DATASET.SCALE, 'standard') for task in PREPARED_TASKS})
+SCALES.update({task: (CLASSES[task].DATASET.SCALE,) for task in PREPARED_TASKS})
 TEST_SCALES = {task: {50} for task in TASKS}
 TEST_SCALES['online_bin_packing'] = {'1k_100', '1k_500', '5k_100', '5k_500'}
 TEST_SCALES.update({task: {CLASSES[task].DATASET.SCALE} for task in PREPARED_TASKS})
@@ -52,8 +52,6 @@ def split_of_scale(task, scale):
 
 def scale_of_split(task, split):
     if task in PREPARED_TASKS:
-        if split == 'test_standard':
-            return 'standard'
         if split == 'eval':
             return CLASSES[task].DATASET.SCALE
         if split not in SPLITS[task]:

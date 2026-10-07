@@ -5,8 +5,7 @@
   "final_selection": "training",
   "primary_source": "TraceAAD explicit generated distributions",
   "distribution": "200 elements x 2000 sets; each element chooses 40 distinct sets uniformly, independently of other elements; costs independently uniform integers 1..100; reference is gain/cost construction plus redundant-set deletion",
-  "standard_source_url": "https://huggingface.co/datasets/CO-Bench/CO-Bench",
-  "split_policy": "Independent train/test seed streams; base-group variants stay together; standard data are supplementary.",
+  "split_policy": "Independent train/test seed streams; base-group variants stay together.",
   "preparation_environment": {
     "python": "3.14.7",
     "numpy": "2.5.3",
@@ -14,23 +13,12 @@
     "numba": "0.67.0"
   },
   "source_files": {
-    "benchmarks/set_cover_construct/prepare_data.py": "610992eed2245f9f131e00ba514ed481a1fccc982d2e34e3cbcdcb38db8f3fcf",
-    "benchmarks/set_cover_construct/dataset.py": "2827c9a280cd4d96d1f89c9b14216f54824a9b45e7bb0c7298e79655d055045d",
+    "benchmarks/set_cover_construct/prepare_data.py": "cfb2671e92a9b02d27434ea4695879e9fd61657e0fb93682d69be8ddbed2c577",
+    "benchmarks/set_cover_construct/dataset.py": "2df32a8d57cef89d7e6383b82f2bc358a0dde65de9b46bc2a62299fa502a4062",
     "benchmarks/set_cover_construct/evaluation.py": "3d5efc45e33ca61d472c278a045ac24425ce28f8eaf10cb697ec4b732d31ad86",
     "benchmarks/set_cover_construct/template.py": "bb19596192f822625ffc815464e5b478c2e754fbe346cfc1daad1c2f595e2ebb",
-    "benchmarks/_prepared_data.py": "7baf48986b3bad541c6b64717d66bd1c6f90b79bfed28a2cfab8e8488919f298",
-    "benchmarks/_fixed_evaluation.py": "a7c0fe77e363dbebdb55306d147e1630e04ef1f164d14bb5e0c3fcd3f1020151",
-    "Set covering/config.py": "f8812f53a361a31a240f3bffdf19137a232079fa6ddf4aad38ad76b0ecd84761",
-    "Set covering/scp51.txt": "c97d8cb7b00e8528efb9114565c02292fd5efa147ce4bf8e6208df843d1a60f8",
-    "Set covering/scp52.txt": "070585918b02d5eee078b03373b6cc4e6d5b1643da06e4b18a3f06963cd1f1b0",
-    "Set covering/scp53.txt": "15bf4cdf3e88040b11f9991389c5285001fa665f8a22fc1b17f30a9616a8131a",
-    "Set covering/scp54.txt": "ff32fd1cb0eadd2f056a5eb7b08ba60934253ef2546b449159d5c379d7c803ab",
-    "Set covering/scp55.txt": "939e60400a50bd9ca400e90242e5d9085fa7350a74c8827ecc328dfc74f84395",
-    "Set covering/scp56.txt": "1cbb7f77759117fb18c15be5c6b1f79dbf85999ed1f98ba6710b5db82d8e04c9",
-    "Set covering/scp57.txt": "f953675a5252b8108cf438307eefc95edab69ff057bbc4fc601e02b9ff60e51f",
-    "Set covering/scp58.txt": "23868d4492a4dc1d8879d20fff14aecfe0bbe9181515395a4ad175f69502fbaa",
-    "Set covering/scp59.txt": "cc8bf6b4f4f56ac076041e2f28578e25438bb6de19d32c57432f28de2d255d96",
-    "Set covering/scp510.txt": "e7d521e4d2df266cb80d87d9f43604bac0805d2bb634b959b21a2f934cb32e87"
+    "benchmarks/_prepared_data.py": "b034567d7a107385ffcbf808689d77dfeb7a115de6de122c55f53a80d671a8d3",
+    "benchmarks/_fixed_evaluation.py": "d6134838ba8f3de8b83499d583dd44561c0c7cfa1340e9ff47fb63778dfcd2cd"
   },
   "instances": [
     {
@@ -2700,201 +2688,10 @@
       "content": "3fefbe94922cbb1aedebc3bc7f09cf5770d7de0784bc7a50e0cc22377a72b31d",
       "file": "test/generated_test_base099.npz",
       "sha256": "39d92df50ca20d23c54ecae8be7b579a6c36d4ee97a69772d8e3f11cc36085e0"
-    },
-    {
-      "id": "standard_scp51_0",
-      "group": "standard_scp51_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "scp51.txt",
-      "source_index": 0,
-      "scale": 2000,
-      "dimensions": {
-        "elements": 200,
-        "sets": 2000
-      },
-      "density": 0.0199875,
-      "split": "standard",
-      "reference": 253.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "7a3e70ba00c6965c511fa71ea7d3f6dc8e8d1c320e4509ca65825370cf3968df",
-      "file": "standard/standard_scp51_0.npz",
-      "sha256": "e7c0513f18ec2d8bca8271ffbc3faa10e639cb78b1e3831cf62394eb9fdbb173"
-    },
-    {
-      "id": "standard_scp52_0",
-      "group": "standard_scp52_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "scp52.txt",
-      "source_index": 0,
-      "scale": 2000,
-      "dimensions": {
-        "elements": 200,
-        "sets": 2000
-      },
-      "density": 0.0199925,
-      "split": "standard",
-      "reference": 302.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "06a816574e81f3fed4fc6b93a52a8fe42cf6e5658abbf1e35bad2ffc5f75d4a6",
-      "file": "standard/standard_scp52_0.npz",
-      "sha256": "6d4923e3412b9e33d9c9cf166a5fa6cbd7226adfbd08f3e89c3e88ac33373517"
-    },
-    {
-      "id": "standard_scp53_0",
-      "group": "standard_scp53_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "scp53.txt",
-      "source_index": 0,
-      "scale": 2000,
-      "dimensions": {
-        "elements": 200,
-        "sets": 2000
-      },
-      "density": 0.0200375,
-      "split": "standard",
-      "reference": 226.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "7d53aa37a6c1b2c56e3177d953969203f573c37b723620e2b45483adca57f586",
-      "file": "standard/standard_scp53_0.npz",
-      "sha256": "dd25a1a690ec01654dce8dba3bd5d9e00110211eb858adbf3690853580ba19c6"
-    },
-    {
-      "id": "standard_scp54_0",
-      "group": "standard_scp54_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "scp54.txt",
-      "source_index": 0,
-      "scale": 2000,
-      "dimensions": {
-        "elements": 200,
-        "sets": 2000
-      },
-      "density": 0.0198375,
-      "split": "standard",
-      "reference": 242.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "e245d5a2f2d54674d3b594af7c7b9877a0bf08bbccf6b2bc871fb64e80a9ccbb",
-      "file": "standard/standard_scp54_0.npz",
-      "sha256": "c791a09269db10017a2af6445ec76ded7b459bdd711bf0edacebda0178d39664"
-    },
-    {
-      "id": "standard_scp55_0",
-      "group": "standard_scp55_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "scp55.txt",
-      "source_index": 0,
-      "scale": 2000,
-      "dimensions": {
-        "elements": 200,
-        "sets": 2000
-      },
-      "density": 0.0196375,
-      "split": "standard",
-      "reference": 211.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "0d6c665f7669e7a9d752b0f042cdec08a8fbf4d356dc1e0e1d69c80ce1e36fee",
-      "file": "standard/standard_scp55_0.npz",
-      "sha256": "6c0835b94fd567f0a19a6427b98554001f802dd0185aa8b4277328d5b425fe88"
-    },
-    {
-      "id": "standard_scp56_0",
-      "group": "standard_scp56_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "scp56.txt",
-      "source_index": 0,
-      "scale": 2000,
-      "dimensions": {
-        "elements": 200,
-        "sets": 2000
-      },
-      "density": 0.0199875,
-      "split": "standard",
-      "reference": 213.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "1056d1bcb1b0c01cbcef3d50bba01729868ff26e1bad16699201af224423a260",
-      "file": "standard/standard_scp56_0.npz",
-      "sha256": "f16e04d6941b89e47201a4c6dffbb84203a76318a1c518c9bcbb7b6414153a5b"
-    },
-    {
-      "id": "standard_scp57_0",
-      "group": "standard_scp57_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "scp57.txt",
-      "source_index": 0,
-      "scale": 2000,
-      "dimensions": {
-        "elements": 200,
-        "sets": 2000
-      },
-      "density": 0.020145,
-      "split": "standard",
-      "reference": 293.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "db91ddc499a58e41f0ea558d0e1f5431d875ea6c3a943c8532a56da0518a5c69",
-      "file": "standard/standard_scp57_0.npz",
-      "sha256": "1cdc7427e3162c42df100e11ecd8acc3d639700cacac2624b3b3bba413c9a97f"
-    },
-    {
-      "id": "standard_scp58_0",
-      "group": "standard_scp58_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "scp58.txt",
-      "source_index": 0,
-      "scale": 2000,
-      "dimensions": {
-        "elements": 200,
-        "sets": 2000
-      },
-      "density": 0.0198025,
-      "split": "standard",
-      "reference": 288.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "86cd91253b971884f2ffcb7bc5a21353f5fcea30623291f609b9a7fd43b8599a",
-      "file": "standard/standard_scp58_0.npz",
-      "sha256": "9ccfa4177d940863f90bbf1185882907fffb6e2ed1a2b85f8a5226a9644bf662"
-    },
-    {
-      "id": "standard_scp59_0",
-      "group": "standard_scp59_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "scp59.txt",
-      "source_index": 0,
-      "scale": 2000,
-      "dimensions": {
-        "elements": 200,
-        "sets": 2000
-      },
-      "density": 0.0196775,
-      "split": "standard",
-      "reference": 279.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "caf2496e34fb6b71c19bfae79ee6e46c4dcf498d47dd936e424f7dcfd223c43a",
-      "file": "standard/standard_scp59_0.npz",
-      "sha256": "9e694e1e6917b19200dd8711c0bde51ea82e22b25016a76c62aa0b1f46c58724"
-    },
-    {
-      "id": "standard_scp510_0",
-      "group": "standard_scp510_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "scp510.txt",
-      "source_index": 0,
-      "scale": 2000,
-      "dimensions": {
-        "elements": 200,
-        "sets": 2000
-      },
-      "density": 0.0200025,
-      "split": "standard",
-      "reference": 265.0,
-      "reference_kind": "CO-Bench published reference",
-      "content": "3435847c09862310568eba1d50b42462a5bb37f4e90e74eab60b06da42e73c57",
-      "file": "standard/standard_scp510_0.npz",
-      "sha256": "cb68988000b13c964b1c5c404f016360df9d622ce458213a678c596d3287792c"
     }
   ],
   "counts": {
     "train": 16,
-    "test": 100,
-    "standard": 10
+    "test": 100
   }
 }

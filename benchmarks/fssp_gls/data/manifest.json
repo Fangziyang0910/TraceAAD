@@ -5,8 +5,7 @@
   "final_selection": "training",
   "primary_source": "TraceAAD explicit generated distributions",
   "distribution": "50 jobs x 20 machines; independent integer processing times uniform in 1..99; reference is NEH makespan",
-  "standard_source_url": "https://huggingface.co/datasets/CO-Bench/CO-Bench",
-  "split_policy": "Independent train/test seed streams; base-group variants stay together; standard data are supplementary.",
+  "split_policy": "Independent train/test seed streams; base-group variants stay together.",
   "preparation_environment": {
     "python": "3.14.7",
     "numpy": "2.5.3",
@@ -14,14 +13,12 @@
     "numba": "0.67.0"
   },
   "source_files": {
-    "benchmarks/fssp_gls/prepare_data.py": "b64136d3949801a71758350d9d109d220fbd5a5ff999606d7406d98216dd0cc4",
-    "benchmarks/fssp_gls/dataset.py": "09e7541ab0da3185b648c8a3cf0680298ab8f015a53d8e6294eab44e738c86a2",
+    "benchmarks/fssp_gls/prepare_data.py": "9bab1a48f7959e01d8db1b31395b3724383ccbe49c05cacd3320dc72d4eb79d2",
+    "benchmarks/fssp_gls/dataset.py": "e4137fdbe51a63fd4aa2c9b24f5dffa40b3c95b18bcb9e47888392f5e274c906",
     "benchmarks/fssp_gls/evaluation.py": "aba5cc7c7a3508df5d9e393adf1ddbc9af2bc8c0049ad3922d848ffde0680f27",
     "benchmarks/fssp_gls/template.py": "3ee9639f71eda70d2c02d51c3de2deffc1871fb3d440bec41ef3f836ec04f18c",
-    "benchmarks/_prepared_data.py": "7baf48986b3bad541c6b64717d66bd1c6f90b79bfed28a2cfab8e8488919f298",
-    "benchmarks/_fixed_evaluation.py": "a7c0fe77e363dbebdb55306d147e1630e04ef1f164d14bb5e0c3fcd3f1020151",
-    "Flow shop scheduling/config.py": "fe33de1c25e6288c6682785d8aa168d2598851813d6215d4338ab89658e605f4",
-    "Flow shop scheduling/tai50_20.txt": "cc139745dece17a2538e74ad2eaed232cc97321293f6b121883a6e3c69c8f8ba"
+    "benchmarks/_prepared_data.py": "b034567d7a107385ffcbf808689d77dfeb7a115de6de122c55f53a80d671a8d3",
+    "benchmarks/_fixed_evaluation.py": "d6134838ba8f3de8b83499d583dd44561c0c7cfa1340e9ff47fb63778dfcd2cd"
   },
   "instances": [
     {
@@ -2575,191 +2572,10 @@
       "content": "fa8a8d5ead24e89b13dc3da1ab81fd760737bf2f599ee5d78ef2358a6bde4e2a",
       "file": "test/generated_test_base099.npz",
       "sha256": "2e5ad0f5c1d0663e91ac48f5c3439632f45b076163b2e40070687c707bae182e"
-    },
-    {
-      "id": "standard_tai50_20_0",
-      "group": "standard_tai50_20_0",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "tai50_20.txt",
-      "source_index": 0,
-      "scale": 50,
-      "dimensions": {
-        "jobs": 50,
-        "machines": 20
-      },
-      "split": "standard",
-      "reference": 3875.0,
-      "reference_kind": "published Taillard upper bound",
-      "content": "dd79bc13bb46dc1a60901e7a13f4b5ba4b469d262cdda81a86b33f76596492ae",
-      "file": "standard/standard_tai50_20_0.npz",
-      "sha256": "8ceb085003bd0a3552d5c41f1b75d9005552d177e04ba3e6eb7a93418470b7ac"
-    },
-    {
-      "id": "standard_tai50_20_1",
-      "group": "standard_tai50_20_1",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "tai50_20.txt",
-      "source_index": 1,
-      "scale": 50,
-      "dimensions": {
-        "jobs": 50,
-        "machines": 20
-      },
-      "split": "standard",
-      "reference": 3715.0,
-      "reference_kind": "published Taillard upper bound",
-      "content": "3c7362e5b4d5f3fb39add0dfe85eba5c28f9b7e21455617bd29c0be64e54ae99",
-      "file": "standard/standard_tai50_20_1.npz",
-      "sha256": "99b54f084de10999ec0896aaeea62caaaf798ccfde7e9f9c35e7bff50e4f40b3"
-    },
-    {
-      "id": "standard_tai50_20_2",
-      "group": "standard_tai50_20_2",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "tai50_20.txt",
-      "source_index": 2,
-      "scale": 50,
-      "dimensions": {
-        "jobs": 50,
-        "machines": 20
-      },
-      "split": "standard",
-      "reference": 3668.0,
-      "reference_kind": "published Taillard upper bound",
-      "content": "66c2fe582b32376f7caf538b4be700f7b99083a10daf61aa1fad0e01b6726101",
-      "file": "standard/standard_tai50_20_2.npz",
-      "sha256": "ca104816059034b34522088143da77ca5e4833cea107db4258e9bf652138d535"
-    },
-    {
-      "id": "standard_tai50_20_3",
-      "group": "standard_tai50_20_3",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "tai50_20.txt",
-      "source_index": 3,
-      "scale": 50,
-      "dimensions": {
-        "jobs": 50,
-        "machines": 20
-      },
-      "split": "standard",
-      "reference": 3752.0,
-      "reference_kind": "published Taillard upper bound",
-      "content": "3e3dbbc47443a82a4658fc5c321a94be8db1dbd33eb78f770671f2b3509e8301",
-      "file": "standard/standard_tai50_20_3.npz",
-      "sha256": "53c5a6b33416a46ecb2b9432ab07b25b0ad001f59f63563fa9427c4bf4ce12b4"
-    },
-    {
-      "id": "standard_tai50_20_4",
-      "group": "standard_tai50_20_4",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "tai50_20.txt",
-      "source_index": 4,
-      "scale": 50,
-      "dimensions": {
-        "jobs": 50,
-        "machines": 20
-      },
-      "split": "standard",
-      "reference": 3635.0,
-      "reference_kind": "published Taillard upper bound",
-      "content": "6700534eb87c334a7139442048ea03504ac5bcf6bd8fc88f88f8dc01db1b9bb5",
-      "file": "standard/standard_tai50_20_4.npz",
-      "sha256": "d57cd04fbd00f671c645e85dd7ed3d7d75fff116d13690100800aee51b7c13cc"
-    },
-    {
-      "id": "standard_tai50_20_5",
-      "group": "standard_tai50_20_5",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "tai50_20.txt",
-      "source_index": 5,
-      "scale": 50,
-      "dimensions": {
-        "jobs": 50,
-        "machines": 20
-      },
-      "split": "standard",
-      "reference": 3698.0,
-      "reference_kind": "published Taillard upper bound",
-      "content": "c4abb302a84d51307d29e29918cb5f3594bbdc4d15d59e331496a7b8f71db7bd",
-      "file": "standard/standard_tai50_20_5.npz",
-      "sha256": "ab83c54a2d460211c1750f12c1e6464952d3f971575a9e24f17f5088f0677b4d"
-    },
-    {
-      "id": "standard_tai50_20_6",
-      "group": "standard_tai50_20_6",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "tai50_20.txt",
-      "source_index": 6,
-      "scale": 50,
-      "dimensions": {
-        "jobs": 50,
-        "machines": 20
-      },
-      "split": "standard",
-      "reference": 3716.0,
-      "reference_kind": "published Taillard upper bound",
-      "content": "e9debe130d61b6d519304140b4f559cbe43b0c624efbc4c4f94ac7a35425e535",
-      "file": "standard/standard_tai50_20_6.npz",
-      "sha256": "caae38f0dc378c8a7bdb7fd1b2c95ae0eca86ccc5b11528e6a498b21657d00e1"
-    },
-    {
-      "id": "standard_tai50_20_7",
-      "group": "standard_tai50_20_7",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "tai50_20.txt",
-      "source_index": 7,
-      "scale": 50,
-      "dimensions": {
-        "jobs": 50,
-        "machines": 20
-      },
-      "split": "standard",
-      "reference": 3709.0,
-      "reference_kind": "published Taillard upper bound",
-      "content": "ec66df166216bc15d05280b4aa94373c9dee1054bd878ef5f31963c870ec302d",
-      "file": "standard/standard_tai50_20_7.npz",
-      "sha256": "659a74ccfd1bf15686380df88a7d5b48203fbfc10ddaeb3b903f36964aab0b6a"
-    },
-    {
-      "id": "standard_tai50_20_8",
-      "group": "standard_tai50_20_8",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "tai50_20.txt",
-      "source_index": 8,
-      "scale": 50,
-      "dimensions": {
-        "jobs": 50,
-        "machines": 20
-      },
-      "split": "standard",
-      "reference": 3765.0,
-      "reference_kind": "published Taillard upper bound",
-      "content": "6d9c344bc4d6cf0e5f76da8778803af865fbb664669b0e9771f7c47101530e81",
-      "file": "standard/standard_tai50_20_8.npz",
-      "sha256": "afc9ef162c48aaac91430ae59b0f3d519286f9501d370dda38dd327ded90a8e7"
-    },
-    {
-      "id": "standard_tai50_20_9",
-      "group": "standard_tai50_20_9",
-      "source_kind": "CO-Bench/OR-Library",
-      "source_case": "tai50_20.txt",
-      "source_index": 9,
-      "scale": 50,
-      "dimensions": {
-        "jobs": 50,
-        "machines": 20
-      },
-      "split": "standard",
-      "reference": 3777.0,
-      "reference_kind": "published Taillard upper bound",
-      "content": "3b31344cf86080e8bddc03fb8915f7ed0b01d55018401da19750b35bd7868400",
-      "file": "standard/standard_tai50_20_9.npz",
-      "sha256": "32f07071894e08e6bc01213280fd4ee5dfc386543c22cc087a2f8ed9d4e738aa"
     }
   ],
   "counts": {
     "train": 16,
-    "test": 100,
-    "standard": 10
+    "test": 100
   }
 }

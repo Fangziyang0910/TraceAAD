@@ -2,7 +2,7 @@
 
 import pytest
 
-from benchmarks.tasks import (CO_TASKS, PRIMARY_SPLITS, SCALES, heldout_task, training_task,
+from benchmarks.tasks import (CO_TASKS, PRIMARY_SPLITS, SCALES, SPLITS, heldout_task, training_task,
                               PREPARED_TASKS as TASKS)
 from experiments import launch
 from experiments.infra.search_host_launch import plan_for
@@ -31,7 +31,8 @@ def test_task_conditions_and_prompt_match_primary_data(task):
     assert testing.outer_settings == training.outer_settings
     assert testing.n_instance == (108 if task == "mdmkp_search" else 100)
     assert testing.timeout_seconds / testing.n_instance == training.timeout_seconds / training.n_instance
-    assert SCALES[task][-1] == "standard"
+    assert SCALES[task] == (training.problem_size,)
+    assert SPLITS[task] == PRIMARY_SPLITS[task]
     text = "\n".join(PromptBuilder(TokenLLM(), task, training, {}, {}, Config()).common)
     assert training.instance_description in text
     assert "100 fixed generated test" in text or "108 fixed generated test" in text

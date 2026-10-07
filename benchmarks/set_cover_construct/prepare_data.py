@@ -1,11 +1,11 @@
-"""Prepare independent primary data and separate standard supplementary data."""
+"""Prepare independent training and test data from the fixed task distribution."""
 
 from pathlib import Path
 
 import numpy as np
 
 from .. import _fixed_evaluation, _prepared_data
-from .._prepared_data import prepare_cli, rng_for, source_cases, standard_metadata
+from .._prepared_data import prepare_cli, rng_for
 from . import dataset
 from .evaluation import solve
 from .template import function_name, template_program
@@ -28,20 +28,8 @@ def generated_instances(split):
             'density': float(coverage.mean())}, float(reference), 'greedy feasible upper bound'
 
 
-def standard_instances(source, hashes):
-    folder = Path(source) / 'Set covering'
-    for name, index, case, reference in source_cases(folder, [f'scp5{i}.txt' for i in range(1, 11)], hashes):
-        coverage = np.zeros((200, 2000), dtype=bool)
-        for row, columns in enumerate(case['row_cover']):
-            coverage[row, np.asarray(columns)-1] = True
-        arrays = {'coverage': coverage, 'costs': np.asarray(case['costs'], dtype=float)}
-        meta = standard_metadata(name, index, int(case['n']))
-        meta.update(dimensions={'elements': 200, 'sets': 2000}, density=float(coverage.mean()))
-        yield arrays, meta, float(reference), 'CO-Bench published reference'
-
-
 if __name__ == '__main__':
-    prepare_cli(dataset, generated_instances, standard_instances,
+    prepare_cli(dataset, generated_instances,
                 [Path(__file__), Path(dataset.__file__), Path(__file__).with_name('evaluation.py'),
                  Path(__file__).with_name('template.py'), Path(_prepared_data.__file__),
                  Path(_fixed_evaluation.__file__)])

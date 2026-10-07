@@ -21,9 +21,8 @@ def score_moves(profits: np.ndarray, upper_coefficients: np.ndarray, upper_limit
 task_description = '''Design a move-priority heuristic for the multi-demand multidimensional knapsack problem.
 Choose a binary item subset to MAXIMIZE total profit. All resource upper bounds A @ x <= b and
 all demand lower bounds G @ x >= d must hold simultaneously. Profits may be negative. The empty
-subset is usually infeasible. The fixed search begins with a prepared feasible binary solution,
-prepared independently of profits: generated instances use a planted feasible witness, and
-standard instances use an offline ZERO-objective feasibility solve. It enumerates
+subset is usually infeasible. The fixed search begins with a planted feasible binary solution,
+prepared independently of profits. It enumerates
 feasible single additions, removals and one-out/one-in exchanges. A five-step item tabu filter
 removes recently changed items when any non-tabu moves exist. score_moves ranks the supplied moves.
 The search always takes a highest-scoring move, even if true profit decreases, and retains the

@@ -13,34 +13,30 @@
 | 图着色 | [template.py](../../benchmarks/graph_colouring/template.py) | [evaluation.py](../../benchmarks/graph_colouring/evaluation.py) | [prepare_data.py](../../benchmarks/graph_colouring/prepare_data.py) | [manifest.json](../../benchmarks/graph_colouring/data/manifest.json) |
 | 集合覆盖 | [template.py](../../benchmarks/set_cover_construct/template.py) | [evaluation.py](../../benchmarks/set_cover_construct/evaluation.py) | [prepare_data.py](../../benchmarks/set_cover_construct/prepare_data.py) | [manifest.json](../../benchmarks/set_cover_construct/data/manifest.json) |
 
-每项任务的 `dataset.py` 定义规模、数量和生成分布；`data/` 下按 `train/`、`test/`、`standard/` 存放实例。修改任务时可从该目录完成。
+每项任务的 `dataset.py` 定义规模、数量和生成分布；`data/` 下按 `train/`、`test/` 存放实例。修改任务时可从该目录完成。
 
 `benchmarks/tasks.py` 注册任务与实验条件。两个内部共用模块只负责候选执行和计分、数据校验和准备，不包含按任务分派的求解逻辑。任务选择依据保存在研究文档，整套运行命令集中在本页。
 
-## 主数据与补充数据
+## 训练与独立测试数据
 
 本次实验只使用训练集与独立测试集。流程为 **训练集上进化 → 按训练成绩选出一个最终程序 → 冻结程序并在独立测试集报告成绩**。所有方法采用相同规则，测试成绩不用于选择或继续修改程序。训练同分时取最早产生的有效程序；测试失败只记录失败，不替换为另一个程序。
 
 TraceAAD 实验入口默认 `--final-selection training`，不执行验证集评价。最终程序及选择依据会落盘。旧五任务的历史验证条件仍可通过显式 `--final-selection validation` 复现，不用于本次六任务实验。
 
-| task key | 固定规模 | 训练 | 同规模主测试 | 标准补充测试 |
-| --- | --- | ---: | ---: | ---: |
-| `tsp_construct` | 50 节点 | 16 | 16 | — |
-| `cvrp_aco` | 50 客户 | 10 | 64 | — |
-| `fssp_gls` | 50 作业、20 机器 | 16 | 100 | 10 |
-| `mdmkp_search` | 100 物品、10 上界、5 下界 | 18 | 108 | 30 |
-| `graph_colouring` | 300 顶点、边密度约 0.5 | 16 | 100 | 10 |
-| `set_cover_construct` | 200 元素、2000 集合、密度 0.02 | 16 | 100 | 10 |
+| task key | 固定规模 | 训练 | 同规模主测试 |
+| --- | --- | ---: | ---: |
+| `tsp_construct` | 50 节点 | 16 | 16 |
+| `cvrp_aco` | 50 客户 | 10 | 64 |
+| `fssp_gls` | 50 作业、20 机器 | 16 | 100 |
+| `mdmkp_search` | 100 物品、10 上界、5 下界 | 18 | 108 |
+| `graph_colouring` | 300 顶点、边密度约 0.5 | 16 | 100 |
+| `set_cover_construct` | 200 元素、2000 集合、密度 0.02 | 16 | 100 |
 
-主数据采用本项目明确定义的生成分布，训练与测试分别从独立种子流生成。它们不是 OR-Library 实例的复刻。标准实例只用于补充测试，不参与搜索或最终程序选择，不并入主测试成绩。TSP 与 CVRP 的既有数据数量、随机种子和求解预算沿用原配置。
+主数据采用本项目明确定义的生成分布，训练与测试分别从独立种子流生成。四项新增任务只保存训练与独立测试实例。TSP 与 CVRP 的既有数据数量、随机种子和求解预算沿用原配置。
 
 生成规则在各任务的 `prepare_data.py`，规模与分布在 `dataset.py`，实例身份与参考值在 `data/manifest.json`。[选择依据与分布说明](../../docs/04-研究认识与构想/2026-10-07-六个组合优化任务的设计.md)
 
 MDMKP 训练、测试分别有 **9、54 个独立基础实例**；18、108 是包含收益变体的实例数。分析抽样不应把两个变体视为独立基础实例。这组数量是起步配置，不是统计功效保证；主实验还需要独立重复算法搜索。
-
-标准补充集来自 CO-Bench 保存的 Taillard `tai50_20`、MDMKP `mdmkp_ct4` 的 q=5 变体、图着色 `gcol21–gcol30`、集合覆盖 `scp51–scp510`。其来源、配置文件与原始文件哈希均记录在 manifest。主数据生成分布与标准数据的分布一致性没有被假定。
-
-部分标准实例已在任务开发期用于简单规则检查。因此，标准成绩作为补充基准；严格独立的主要评价使用新生成的主测试集。
 
 数据已压缩保存为可移植 NPZ，运行无需访问外部数据目录或网络。加载时核对 SHA256；manifest 记录尺寸、内容身份、基础实例组、参考值类型、生成种子及准备环境。各任务可独立复现数据：
 
@@ -71,9 +67,9 @@ ID 均从0开始。每个实例重新执行候选程序，模块状态可在同�
 - FSSP、图着色、集合覆盖：`100 × (objective − reference) / |reference|`。
 - MDMKP：`100 × (reference − profit) / |reference|`。
 
-生成 FSSP 的参考是 NEH 可行解；图着色是确定性 DSATUR 构造；集合覆盖是 gain/cost 构造加冗余删除。它们是可行上界。生成 MDMKP 的参考是连续 LP 松弛上界，不是整数最优解。标准 FSSP 使用原始文件的已发表上界，其余标准任务使用 CO-Bench 发布的参考值。
+生成 FSSP 的参考是 NEH 可行解；图着色是确定性 DSATUR 构造；集合覆盖是 gain/cost 构造加冗余删除。它们是可行上界。生成 MDMKP 的参考是连续 LP 松弛上界，不是整数最优解。
 
-因此这里称为“参考偏差”，不称为最优性 gap。负值不截断。参考值不传给候选函数。主数据与标准数据使用不同参考类型，分别报告，比较方法时使用相同数据与分数定义。
+因此这里称为“参考偏差”，不称为最优性 gap。负值不截断。参考值不传给候选函数。比较方法时使用相同数据与分数定义。
 
 训练整套评价默认限时 60 秒。测试按实例数比例放大总时限，保持相同的每实例平均时间预算；外层迭代次数在各阶段一致。主测试限时分别为 375、360、375、375 秒。候选超时、报错或违反返回契约时，本次评价失败。这是可运行的初始配置，正式实验前仍要检查算法开发空间和评价代价。
 
@@ -109,4 +105,4 @@ uv run python -m experiments.launch --method eoh --suite co6 --batch co6_example
 uv run python -m experiments.infra.evaluate experiments_result/traceaad_v10_20_co6/fssp_gls/fssp_rep1 --condition traceaad --primary
 ```
 
-标准补充测试显式指定 `--units standard`。TSP/CVRP 的跨规模测试仍可通过 `--units` 指定。原五任务批次使用 `--suite legacy`；既有默认保持该组，以免旧批次意外增加任务。
+TSP/CVRP 的跨规模测试仍可通过 `--units` 指定。原五任务批次使用 `--suite legacy`；既有默认保持该组，以免旧批次意外增加任务。

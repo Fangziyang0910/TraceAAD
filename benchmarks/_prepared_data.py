@@ -1,9 +1,7 @@
 """Portable dataset loading and preparation; problem rules live in task directories."""
 
 import argparse
-import ast
 import hashlib
-import importlib.util
 import json
 from pathlib import Path
 import platform
@@ -26,10 +24,12 @@ def read_manifest(root):
 
 
 def read_records(root, split, *, task=None):
-    if split not in {'train', 'test', 'standard', 'test_standard'} and not split.startswith('test_'):
+    if split in {'train', 'test'}:
+        phase, scale = split, None
+    elif split.startswith('test_') and split[5:].isdigit():
+        phase, scale = 'test', int(split[5:])
+    else:
         raise ValueError(f'unknown prepared-data split: {split}')
-    phase = 'standard' if split == 'test_standard' else 'test' if split.startswith('test_') else split
-    scale = int(split[5:]) if split.startswith('test_') and split != 'test_standard' else None
     data = read_manifest(root)
     if task is not None and data['task'] != task:
         raise ValueError(f'dataset belongs to {data["task"]}, expected {task}')
@@ -64,32 +64,7 @@ def rng_for(stream, split, index):
     return np.random.default_rng(np.random.SeedSequence(entropy)), entropy
 
 
-def source_cases(folder, filenames, hashes):
-    config = Path(folder) / 'config.py'
-    source = config.read_text()
-    module_spec = importlib.util.spec_from_file_location('prepare_cobench', config)
-    module = importlib.util.module_from_spec(module_spec)
-    module_spec.loader.exec_module(module)
-    refs = {}
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'optimal_scores' for t in node.targets):
-            refs = ast.literal_eval(node.value)
-    hashes[f'{config.parent.name}/config.py'] = hashlib.sha256(config.read_bytes()).hexdigest()
-    for name in filenames:
-        path = Path(folder) / name
-        hashes[f'{path.parent.name}/{name}'] = hashlib.sha256(path.read_bytes()).hexdigest()
-        for index, case in enumerate(module.load_data(str(path))):
-            reference = refs[name][index] if name in refs else None
-            yield name, index, case, reference
-
-
-def standard_metadata(name, index, scale):
-    identifier = f'standard_{Path(name).stem}_{index}'
-    return {'id': identifier, 'group': identifier, 'source_kind': 'CO-Bench/OR-Library',
-            'source_case': name, 'source_index': index, 'scale': scale}
-
-
-def prepare(dataset, generated, standard, source, destination, implementation_files):
+def prepare(dataset, generated, destination, implementation_files):
     """Write a complete task dataset, then publish its manifest and remove obsolete records."""
     import numba
     import scipy
@@ -101,17 +76,15 @@ def prepare(dataset, generated, standard, source, destination, implementation_fi
               for path in implementation_files}
     report = {'protocol': PROTOCOL, 'task': dataset.TASK, 'seed': SEED, 'final_selection': 'training',
               'primary_source': 'TraceAAD explicit generated distributions', 'distribution': dataset.DISTRIBUTION,
-              'standard_source_url': 'https://huggingface.co/datasets/CO-Bench/CO-Bench',
-              'split_policy': 'Independent train/test seed streams; base-group variants stay together; standard data are supplementary.',
+              'split_policy': 'Independent train/test seed streams; base-group variants stay together.',
               'preparation_environment': {'python': platform.python_version(), 'numpy': np.__version__,
                                           'scipy': scipy.__version__, 'numba': numba.__version__},
               'source_files': hashes, 'instances': []}
     with tempfile.TemporaryDirectory(prefix='prepare_', dir=root.parent) as temp:
         staged = Path(temp)
-        for split in ('train', 'test', 'standard'):
+        for split in ('train', 'test'):
             print(f'preparing {dataset.TASK}/{split}', flush=True)
-            cases = standard(source, hashes) if split == 'standard' else generated(split)
-            for arrays, metadata, reference, kind in cases:
+            for arrays, metadata, reference, kind in generated(split):
                 if not np.isfinite(reference) or reference <= 0:
                     raise ValueError(f'non-positive reference: {metadata["id"]}')
                 relative = Path(split) / (metadata['id'] + '.npz')
@@ -125,7 +98,7 @@ def prepare(dataset, generated, standard, source, destination, implementation_fi
             for row in report['instances']:
                 if used.setdefault(row[field], row['split']) != row['split']:
                     raise ValueError(f'split leakage: {row["id"]}')
-        report['counts'] = {s: sum(r['split'] == s for r in report['instances']) for s in ('train', 'test', 'standard')}
+        report['counts'] = {s: sum(r['split'] == s for r in report['instances']) for s in ('train', 'test')}
         root.mkdir(parents=True, exist_ok=True)
         for row in report['instances']:
             target = root / row['file']
@@ -142,9 +115,8 @@ def prepare(dataset, generated, standard, source, destination, implementation_fi
     return report
 
 
-def prepare_cli(dataset, generated, standard, implementation_files):
-    parser = argparse.ArgumentParser(description=f'Prepare {dataset.TASK} train/test and standard supplementary data')
-    parser.add_argument('--source', type=Path, default=Path('/home/fang/code/LLM4AD/data/CO-Bench'))
+def prepare_cli(dataset, generated, implementation_files):
+    parser = argparse.ArgumentParser(description=f'Prepare {dataset.TASK} independent train/test data')
     parser.add_argument('--output', type=Path, default=dataset.DATA_ROOT)
     args = parser.parse_args()
-    prepare(dataset, generated, standard, args.source, args.output, implementation_files)
+    prepare(dataset, generated, args.output, implementation_files)
