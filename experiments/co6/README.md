@@ -71,3 +71,5 @@ uv run python -m experiments.infra.evaluate experiments_result/traceaad_v10_20/j
 训练监控仍统一使用 [V10.20页面](http://127.0.0.1:8765/#b=traceaad_v10_20)。原新增批次 `20261007_local_v1020_new4_seeded` 的FSSP、图着色继续运行；背包和集合覆盖各三路已停止，保留检查点和生成记录，监控显示“已停止”。新JSSP、OP各三路沿用1000次候选预算、server3双端点与搜索种子0、1、2，按训练成绩冻结最终程序。
 
 替换清单：`experiments_result/traceaad_v10_20/batch_20261007_local_v1020_replacement.json`。
+
+启动源码`83ce4d1f`；六路已核验存活并有有效候选，监控均有曲线。原OP的历史三路与本次替换三路并列显示，但最终选择条件不同，比较时使用替换清单确定本轮范围。
