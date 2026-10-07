@@ -57,7 +57,7 @@ class Population:
         unique = []
         seen_code = set()
         seen_score = set()
-        for func in sorted(valid_pop, key=lambda f: f.score, reverse=True):
+        for func in sorted(valid_pop, key=lambda f: f.score):
             code_key = str(func)
             score_key = float(func.score)
             if code_key in seen_code or score_key in seen_score:
@@ -105,7 +105,7 @@ class Population:
         funcs = [f for f in self._population if self._is_valid_score(f.score)]
         if not funcs:
             raise ValueError("Cannot select from an empty EoH population.")
-        func = sorted(funcs, key=lambda f: f.score, reverse=True)
+        func = sorted(funcs, key=lambda f: f.score)
         p = [1 / (r + 1 + len(func)) for r in range(len(func))]
         p = np.array(p)
         p = p / np.sum(p)

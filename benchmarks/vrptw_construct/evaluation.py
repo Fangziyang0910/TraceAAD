@@ -190,7 +190,7 @@ class VRPTWEvaluation(Evaluation):
                 break
         # print(dis)
         ave_dis = np.average(dis)
-        return -ave_dis
+        return ave_dis
 
 
 if __name__ == '__main__':

@@ -55,7 +55,7 @@ class TraceAADV1017(Search):
 
     def _close_exploration(self, exploration):
         proposal, proposed, best = exploration["proposal"], exploration["proposed"], exploration["best"]
-        search_best = max(self.archive.values(), key=lambda n: (n["fitness"], -n["id"]))
+        search_best = min(self.archive.values(), key=lambda n: (n["fitness"], n["id"]))
         record = {
             "id": exploration["id"], "start_id": proposal["parent_id"], "proposal_attempt": proposal["id"],
             "idea": proposal["idea"], "first_status": final_attempt(proposal, self.attempts_table)["status"],

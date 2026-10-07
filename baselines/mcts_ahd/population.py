@@ -59,7 +59,7 @@ class Population:
                 unique_pop.append(individual)
                 unique_objectives.append(individual.score)
 
-        pop = sorted(unique_pop, key=lambda f: f.score, reverse=True)  # better sort
+        pop = sorted(unique_pop, key=lambda f: f.score)  # better sort
         self._population = pop[:pop_size]
         self._next_gen_pop = []
         self._generation += 1
@@ -69,13 +69,13 @@ class Population:
         if self._generation == 0 and func.score is None:
             return
         # if the score is None, we still put it into the population,
-        # we set the score to '-inf'
+        # we set the score to '+inf'
         if func.score is None:
-            func.score = float('-inf')
+            func.score = float('inf')
         try:
             self._lock.acquire()
             # if self.has_duplicate_function(func):
-            #     func.score = float('-inf')
+            #     func.score = float('inf')
             # register to next_gen
             self._next_gen_pop.append(func)
             # update: perform survival if reach the pop size
@@ -101,7 +101,7 @@ class Population:
         if pop is None:
             pop = self._population
         funcs = [f for f in pop if not math.isinf(f.score)]
-        func = sorted(funcs, key=lambda f: f.score, reverse=True)
+        func = sorted(funcs, key=lambda f: f.score)
         p = [1 / (r + 1 + len(func)) for r in range(len(func))]
         p = np.array(p)
         p = p / np.sum(p)

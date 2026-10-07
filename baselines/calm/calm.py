@@ -111,7 +111,7 @@ class CALM:
         self._train_epoch = 0
         self._log_step = 0
         self._messages: List[List[dict]] = []
-        self._best_perf = -float('inf')
+        self._best_perf = float('inf')
 
         init_observability(self, max_consecutive_sample_failures=max_consecutive_sample_failures)
 
@@ -141,8 +141,8 @@ class CALM:
     @property
     def best_perf(self) -> float:
         if len(self._algos) > 0:
-            return float(np.max([a.perf for a in self._algos if a.perf is not None]))
-        return -float('inf')
+            return float(np.min([a.perf for a in self._algos if a.perf is not None]))
+        return float('inf')
 
     def matches_expected_signature(self, func) -> bool:
         if self._expected_signature is None:
@@ -182,7 +182,7 @@ class CALM:
         base_perfs = np.ravel(np.asarray(base_algo.perfs, dtype=float))
         if algo_perfs.shape != base_perfs.shape or algo_perfs.size == 0:
             return None
-        deltas = algo_perfs - base_perfs
+        deltas = base_perfs - algo_perfs
         if not np.all(np.isfinite(deltas)):
             return None
         scale = max(np.max(np.abs(base_perfs)), np.max(np.abs(algo_perfs)), 1e-10)
@@ -341,7 +341,7 @@ class CALM:
             parent_limit=len(self._seed_algos),
             source_label='INITIAL_NUMERIC_REFINE',
         )
-        if self._best_perf > old_best:
+        if self._best_perf < old_best:
             self._age_stuck = 0
         del refined
 
@@ -542,15 +542,15 @@ class CALM:
                         break
 
             is_new = algo not in self._algos
-            is_new_best = algo.perf > self.best_perf
+            is_new_best = algo.perf < self.best_perf
             if is_new:
                 self._algos.append(algo)
                 self._register_function(algo, counts_budget=False)
 
             if len(base_algos) == 0:
                 base_algos = self._seed_algos[:]
-            best_base_perf = float(np.max([a.perf for a in base_algos]))
-            is_better = algo.perf > best_base_perf
+            best_base_perf = float(np.min([a.perf for a in base_algos]))
+            is_better = algo.perf < best_base_perf
             prompt.record_trial({
                 'performance': float(algo.perf),
                 'n_epoch': self._train_epoch,
@@ -582,7 +582,7 @@ class CALM:
                     1.0,
                 )
                 if is_better:
-                    best_base_algo = max(base_algos, key=lambda a: a.perf)
+                    best_base_algo = min(base_algos, key=lambda a: a.perf)
                     profile_stats = self.profile_reward_stats(algo, best_base_algo)
                     if self.passes_profile_reward_gate(profile_stats):
                         reward = (
@@ -600,7 +600,7 @@ class CALM:
                                 f'Non-worse frac: {profile_stats["non_worse_fraction"]:.2f}'
                             )
                 else:
-                    if algo.perf >= best_base_perf:
+                    if algo.perf <= best_base_perf:
                         reward = 0.0
                     else:
                         reward = self._hp.reward_random_algorithm / 2 * (
@@ -639,10 +639,10 @@ class CALM:
             register_accepted=lambda a: self._register_function(a, counts_budget=False),
             on_new_best=self._save_best_if_needed,
         )
-        if self._best_perf > old_best:
+        if self._best_perf < old_best:
             self._age_stuck = 0
 
-        perfs = map(str, sorted([a.perf for a in self._algos if a.perf is not None])[::-1])
+        perfs = map(str, sorted([a.perf for a in self._algos if a.perf is not None]))
         self._log_info(f"Number of algos: {len(self._algos)}, Perfs: {','.join(perfs)}")
         return [0.0 if r is None else float(r) for r in res]
 

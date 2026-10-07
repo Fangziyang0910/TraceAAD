@@ -2,7 +2,7 @@
 
 usage: python -m experiments.diagnosis_v1016_develop.analyze
 
-Gains are relative to the run's training best before development (fitness: higher is
+Gains are relative to the run's training best before development (fitness: lower is
 better), so 0 means "reached the search best", and a new design above the ``best``
 arm's result means equal development took it past further development of the best.
 """
@@ -14,7 +14,7 @@ OUT = Path("experiments_result/diagnosis_v1016_develop")
 
 
 def rel(a, b):
-    return 100 * (a - b) / abs(b)
+    return 100 * (b - a) / abs(b)
 
 
 def main():
@@ -42,8 +42,8 @@ def main():
         print(f"{task:18} {run[-4:]}  " + " | ".join(cells))
     new = [(r, runs[(r["task"], r["run"])].get("best")) for r in records if r["arm"].startswith("new")]
     new = [(r, b) for r, b in new if b is not None]
-    above = sum(r["selection"]["reached"]["training"] > b["selection"]["reached"]["training"] for r, b in new)
-    past = sum(r["selection"]["reached"]["training"] > b["selection"]["start"]["training"] for r, b in new)
+    above = sum(r["selection"]["reached"]["training"] < b["selection"]["reached"]["training"] for r, b in new)
+    past = sum(r["selection"]["reached"]["training"] < b["selection"]["start"]["training"] for r, b in new)
     print(f"\nnew designs: {len(new)}; passed the search best: {past}; "
           f"ended above the developed best: {above}")
     for label, group in (("best", [r for r in records if r["arm"] == "best"]),

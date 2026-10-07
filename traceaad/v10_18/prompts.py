@@ -34,7 +34,7 @@ class PromptBuilder(MeasuredPrompts):
             raise ValueError("the current version does not descend from the exploration's source")
         sequence = sequence[ids.index(source["id"]) + 1:]
         sequence_ids = {p["id"] for p in sequence}
-        best = max((p for p in self.programs.values() if p["valid"]), key=lambda p: p["fitness"])
+        best = min((p for p in self.programs.values() if p["valid"]), key=lambda p: p["fitness"])
         origin = (f"[Where the Proposed Design Came From]\nThe current algorithm develops a design that an Explore "
                   f"step proposed from an algorithm scoring {score_text(source['score'])} "
                   f"(Design: {idea_view(source['idea'])}). "

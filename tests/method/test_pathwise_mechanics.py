@@ -93,7 +93,7 @@ class FakeEvaluation(Evaluation):
             task_description="Design a heuristic.",
             safe_evaluate=False,
         )
-        self.scores = list(scores or [])
+        self.scores = [-s if s is not None else None for s in (scores or [])]
         self.programs = []
 
     def evaluate_program(self, program_str, callable_func, **kwargs):
@@ -150,8 +150,8 @@ class PathWiseMechanicsTest(unittest.TestCase):
         method._initialize_population()
 
         self.assertEqual(method._tot_sample_nums, 3)
-        self.assertEqual([node.score for node in method._population.nodes], [3.0, 2.0])
-        self.assertEqual(method.best_node.score, 3.0)
+        self.assertEqual([node.score for node in method._population.nodes], [-3.0, -2.0])
+        self.assertEqual(method.best_node.score, -3.0)
         self.assertEqual(len(evaluation.programs), 3)
         self.assertTrue(all("import random" in program for program in evaluation.programs))
         self.assertTrue(all(kwargs == {"temperature": 1.3} for _, kwargs in llm.prompts))
@@ -169,7 +169,7 @@ class PathWiseMechanicsTest(unittest.TestCase):
         method._initialize_population()
 
         self.assertEqual(len(method._population.nodes), 3)
-        self.assertEqual([node.score for node in method._population.nodes], [7.0, 7.0, 7.0])
+        self.assertEqual([node.score for node in method._population.nodes], [-7.0, -7.0, -7.0])
         self.assertEqual(len({node.node_id for node in method._population.nodes}), 3)
         self.assertIn("duplicated", method._population.nodes[1].description)
 
@@ -208,9 +208,9 @@ class PathWiseMechanicsTest(unittest.TestCase):
         method.run()
 
         self.assertEqual(method._tot_sample_nums, 3)
-        self.assertEqual(method.best_node.score, 3.0)
+        self.assertEqual(method.best_node.score, -3.0)
         self.assertIn("return 3", str(method.best_function))
-        self.assertEqual([node.score for node in method._population.nodes], [3.0, 2.0])
+        self.assertEqual([node.score for node in method._population.nodes], [-3.0, -2.0])
         self.assertTrue(llm.closed)
 
     def test_population_update_keeps_leaf_before_discarded_and_roots(self):
@@ -234,7 +234,7 @@ class PathWiseMechanicsTest(unittest.TestCase):
 
         method.run()
 
-        self.assertEqual([node.score for node in method._population.nodes], [4.0, 3.0])
+        self.assertEqual([node.score for node in method._population.nodes], [-4.0, -3.0])
         self.assertEqual(method._policy_reflection_history, ["prefer second parent"])
         self.assertEqual(method._world_model_reflection_history, ["simplify the low score variant"])
 
@@ -258,8 +258,8 @@ class PathWiseMechanicsTest(unittest.TestCase):
         method.run()
 
         self.assertEqual(method._tot_sample_nums, 3)
-        self.assertEqual(method.best_node.score, 2.0)
-        self.assertEqual([node.score for node in method._population.nodes], [1.0, 2.0])
+        self.assertEqual(method.best_node.score, -2.0)
+        self.assertEqual([node.score for node in method._population.nodes], [-1.0, -2.0])
 
     def test_invalid_policy_parent_retries_before_accepting_action(self):
         llm = ScriptedLLM(
@@ -279,7 +279,7 @@ class PathWiseMechanicsTest(unittest.TestCase):
         method.run()
 
         self.assertEqual(method._tot_sample_nums, 3)
-        self.assertEqual(method.best_node.score, 3.0)
+        self.assertEqual(method.best_node.score, -3.0)
         policy_prompts = [prompt for prompt, _ in llm.prompts if "PathWise policy agent" in prompt]
         self.assertEqual(len(policy_prompts), 2)
 
@@ -301,8 +301,8 @@ class PathWiseMechanicsTest(unittest.TestCase):
 
         self.assertEqual(method._tot_sample_nums, 3)
         self.assertEqual(method._outer_iteration, 1)
-        self.assertEqual(method.best_node.score, 2.0)
-        self.assertEqual([node.score for node in method._population.nodes], [2.0, 1.0])
+        self.assertEqual(method.best_node.score, -2.0)
+        self.assertEqual([node.score for node in method._population.nodes], [-2.0, -1.0])
 
     def test_run_summary_marks_unhandled_exception_as_error(self):
         llm = ScriptedLLM(init_responses=[make_init_code(1), make_init_code(2)])

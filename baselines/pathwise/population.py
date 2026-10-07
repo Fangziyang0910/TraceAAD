@@ -50,7 +50,7 @@ class Population:
         unique = []
         seen_code = set()
         seen_score = set()
-        for node in sorted(nodes, key=lambda n: n.score, reverse=True):
+        for node in sorted(nodes, key=lambda n: n.score):
             if not self.is_valid_score(node.score):
                 continue
             code_key = str(node.function)

@@ -36,13 +36,13 @@ def main():
             kind = "error"
         elif r["status"] == "timeout" or r["seconds"] / local * item["parent_seconds"] > SEARCH_LIMIT:
             kind = "over_limit"
-        elif r["score"] > item["parent_fitness"] + 1e-9:
+        elif r["score"] < item["parent_fitness"] - 1e-9:
             kind = "improved"
         else:
             kind = "not_better"
         outcome[r["arm"]][r["item"]].append(kind)
         if kind in ("improved", "not_better"):
-            gaps[r["arm"]][r["item"]].append((r["score"] - item["parent_fitness"]) / abs(item["parent_fitness"]))
+            gaps[r["arm"]][r["item"]].append((item["parent_fitness"] - r["score"]) / abs(item["parent_fitness"]))
 
     kinds = ("improved", "not_better", "over_limit", "error", "invalid")
     print(f"items with a timed parent: {len(parent_seconds)}")

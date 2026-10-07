@@ -163,8 +163,7 @@ class Search:
                     fitness, failure = outcome["fitness"], outcome["failure"]
                     measured = {name: outcome[name] for name in ("seconds", "calls", "function_seconds")}
                 program = {"id": aid, "key": source_key, "code": code,
-                           "fitness": fitness, "score": fitness if self.prompts.higher_is_better else
-                           -fitness if fitness is not None else None,
+                           "fitness": fitness, "score": fitness,
                            "parent_id": attempt["parent_id"], "action": request["action"],
                            "reference_id": attempt["reference_id"], "idea": attempt["idea"],
                            "depth": parent["depth"] + 1 if parent else 0, "repaired": repair_of is not None,
@@ -291,7 +290,7 @@ class Search:
                 "proposed": proposed, "development": development, "best": best, "stalled": stalled}
 
     def _ranking(self):
-        return [n["id"] for n in sorted(self.archive.values(), key=lambda n: (-n["fitness"], n["id"]))]
+        return [n["id"] for n in sorted(self.archive.values(), key=lambda n: (n["fitness"], n["id"]))]
 
     def _freeze(self):
         self.progress.finalists = self._ranking()[:self.config.final_candidates]
@@ -319,7 +318,7 @@ class Search:
         if not valid:
             self.progress.phase = "selection_failed"
         else:
-            selected = max(valid, key=lambda r: (r["fitness"], -self.progress.finalists.index(r["node_id"])))
+            selected = min(valid, key=lambda r: (r["fitness"], self.progress.finalists.index(r["node_id"])))
             self.progress.selected_id = selected["node_id"]
             node = self.archive[selected["node_id"]]
             (self.run_dir / "best_program.py").write_text(node["code"], encoding="utf-8")
@@ -331,7 +330,7 @@ class Search:
 
     def _summary(self, status, error=None):
         best = (self.archive.get(self.progress.selected_id) if self.phase == "finished" else
-                max(self.archive.values(), key=lambda n: (n["fitness"], -n["id"]), default=None))
+                min(self.archive.values(), key=lambda n: (n["fitness"], n["id"]), default=None))
         if best is not None:
             best = {**{k: v for k, v in best.items() if k not in {"code", "failure"}},
                     "selection_fitness": next((r["fitness"] for r in self.progress.selection_results
@@ -421,7 +420,7 @@ class DevelopingSearch(Search):
 
     def _close_exploration(self, exploration, reason):
         proposal, proposed, best = exploration["proposal"], exploration["proposed"], exploration["best"]
-        search_best = max(self.archive.values(), key=lambda n: (n["fitness"], -n["id"]))
+        search_best = min(self.archive.values(), key=lambda n: (n["fitness"], n["id"]))
         record = {
             "id": exploration["id"], "start_id": proposal["parent_id"], "proposal_attempt": proposal["id"],
             "idea": proposal["idea"], "first_status": final_attempt(proposal, self.attempts_table)["status"],

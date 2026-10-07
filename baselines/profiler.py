@@ -145,10 +145,10 @@ class ProfilerBase:
         if program:
             config = read_json(self.run_dir/'run_config.json', {})
             meta = {'id': order, 'key': self._sources.add(program), 'fitness': fitness,
-                    'score': -fitness if fitness is not None and config.get('objective') == 'min' else fitness,
+                    'score': fitness,
                     'valid': valid, 'action': function.operator or 'unknown',
                     'idea': getattr(function, 'algorithm', '') or '', 'parent_id': None, 'depth': 0}
-            if valid and (self._canonical_best is None or fitness > self._canonical_best['fitness']):
+            if valid and (self._canonical_best is None or fitness < self._canonical_best['fitness']):
                 self._canonical_best = meta
         attempt = {'id': order, 'action': function.operator or 'unknown',
                    'idea': getattr(function, 'algorithm', '') or '', 'program_id': order if meta else None,

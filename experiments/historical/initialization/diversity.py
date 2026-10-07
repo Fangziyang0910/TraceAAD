@@ -118,9 +118,9 @@ def summarize_run(job: dict, profiles: dict) -> dict:
             panel_profiles, prefix_mode=job["task"] in core.PREFIX_TASKS)
     matrix = (matrices["A"] + matrices["B"]) / 2
     indices = list(range(len(valid)))
-    ranked = sorted(roots, key=lambda node: node["fitness"], reverse=True)
+    ranked = sorted(roots, key=lambda node: node["fitness"])
     cutoff = ranked[3]["fitness"]
-    top_ids = {node["id"] for node in roots if node["fitness"] >= cutoff}
+    top_ids = {node["id"] for node in roots if node["fitness"] <= cutoff}
     top_indices = [index for index, node in enumerate(valid) if node["id"] in top_ids]
     upper = np.triu_indices(len(valid), 1)
     pair_values = matrix[upper]
@@ -137,7 +137,7 @@ def summarize_run(job: dict, profiles: dict) -> dict:
     used_as_donor = Counter(event["reference_id"] for event in events
                             if event["operator"] != "Init" and event["reference_id"] in root_ids)
     by_id = {node["id"]: node for node in nodes}
-    best_id = max(nodes, key=lambda node: node["fitness"])["id"]
+    best_id = min(nodes, key=lambda node: node["fitness"])["id"]
     ancestor = by_id[best_id]
     while ancestor["parent_id"] is not None:
         ancestor = by_id[ancestor["parent_id"]]
@@ -147,7 +147,7 @@ def summarize_run(job: dict, profiles: dict) -> dict:
 
     return {"task": job["task"], "mode": job["mode"], "repeat": job["repeat"],
             "run_name": job["run_name"], "profile_valid": len(valid),
-            "profile_failures": failures, "root_best_train": max(n["fitness"] for n in roots),
+            "profile_failures": failures, "root_best_train": min(n["fitness"] for n in roots),
             "root_mean_train": mean(n["fitness"] for n in roots),
             "mean_pair_distance": pair_mean(matrix, indices),
             "high_quality_root_count": len(top_ids),
@@ -165,12 +165,12 @@ def summarize_run(job: dict, profiles: dict) -> dict:
             "roots_used_as_donor": len(used_as_donor),
             "best_lineage_root_id": ancestor["id"],
             "best_lineage_root_train": ancestor["fitness"],
-            "best_lineage_root_rank": 1 + sum(root["fitness"] > ancestor["fitness"]
+            "best_lineage_root_rank": 1 + sum(root["fitness"] < ancestor["fitness"]
                                                for root in roots),
             "best_is_root": best_id in root_ids,
             "root_completion_evaluation": report["root_completion_evaluation"],
             "init_prompt_tokens": prompt_tokens,
-            "development_gain_train": report["best_train_fitness"] - report["root_best_train_fitness"],
+            "development_gain_train": report["root_best_train_fitness"] - report["best_train_fitness"],
             "heldout_fitness": report["heldout_fitness"]}
 
 

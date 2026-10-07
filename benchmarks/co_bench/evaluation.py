@@ -6,8 +6,8 @@ Each instance is solved in its own forked process under a wall-clock limit
 (CO-Bench uses 10 s); an instance over the limit scores 0, as in CO-Bench.
 A solve that raises or returns an infeasible solution fails the evaluation
 with the error, so the search records it as a failed program and can repair it.
-The score is CO-Bench's: the mean over cases of the mean normalized score
-(best known / found for minimization, found / best known for maximization), higher is better.
+The minimized score is the negative of CO-Bench's mean normalized quality
+(best known / found for minimization, found / best known for maximization).
 
 Instances follow CO-Bench's development/test split (``get_dev``); ``limit``
 takes a fixed, deterministic subset that cycles over the cases so that every
@@ -122,8 +122,8 @@ class COBenchEvaluation(Evaluation):
             f"The program is evaluated on {len(order)} instances. `solve` is called once per instance in a "
             f"separate process; each call must return within {self.instance_seconds:g} seconds of wall-clock "
             f"time, otherwise that instance scores 0. A solution that violates a constraint, or an error, "
-            f"makes the whole evaluation fail. The score is the mean over instances of the solution quality "
-            f"relative to the best known solution (1 means equal to the best known); higher is better.")
+            f"makes the whole evaluation fail. The score is the negative mean over cases of the solution quality "
+            f"relative to the best known solution, with its sign reversed (-1 means equal to the best known); lower is better.")
 
     def instance_list(self):
         return [(case, index, self._instances[case][index]) for case, index in self.order]
@@ -189,4 +189,4 @@ class COBenchEvaluation(Evaluation):
         for case, (scores, _) in results.items():
             picked = [scores[index] for c, index in raw if c == case]
             per_case.append(sum(v if isinstance(v, (int, float)) else 0.0 for v in picked) / len(picked))
-        return sum(per_case) / len(per_case)
+        return -sum(per_case) / len(per_case)

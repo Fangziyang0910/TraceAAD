@@ -72,7 +72,7 @@ class ReEvo:
                  **kwargs):
         """Reflective Evolution following the original ReEvo mechanics.
 
-        LLM4AD evaluators use higher scores for better programs. Internally,
+        Task evaluators use lower scores for better programs. Internally,
         every better/worse comparison follows that score convention.
         """
         self._template_program_str = evaluation.template_program
@@ -144,7 +144,7 @@ class ReEvo:
     def _update_elite(self, func: Function):
         if not Population.is_valid_score(func.score):
             return
-        if self._elite_function is None or func.score > self._elite_function.score:
+        if self._elite_function is None or func.score < self._elite_function.score:
             self._elite_function = copy.deepcopy(func)
 
     def _evaluate_function(

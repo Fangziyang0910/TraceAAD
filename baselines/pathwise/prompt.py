@@ -123,7 +123,7 @@ Policy reflection:
 {reflection}{nudge}
 
 Available parent IDs: {available}
-Use only available IDs. Higher score is better.
+Use only available IDs. Lower score is better.
 
 Output exactly:
 PARENTS: [id_1, id_2]
@@ -162,7 +162,7 @@ Directive:
 World-model reflection:
 {reflection}{nudge}
 
-The new function must keep the same inputs and outputs. Higher score is better.
+The new function must keep the same inputs and outputs. Lower score is better.
 Implement the complete function using this signature:
 {self.blank_function(2)}
 
@@ -193,7 +193,7 @@ Current state:
 Action rollout results:
 {action_text}
 
-Higher score is better. Write concise guidance for the next policy step in under 80 words."""
+Lower score is better. Write concise guidance for the next policy step in under 80 words."""
 
     def world_model_critic_prompt(
             self,
@@ -217,4 +217,4 @@ Score: {worst.score:.6f}
 Code:
 {self._node_code(worst)}
 
-Higher score is better. Write concise guidance for the next world-model rollout in under 80 words."""
+Lower score is better. Write concise guidance for the next world-model rollout in under 80 words."""

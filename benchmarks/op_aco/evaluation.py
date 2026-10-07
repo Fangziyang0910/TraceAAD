@@ -167,7 +167,7 @@ class ACO:
 class OPACOEvaluation(Evaluation):
     """Evaluate an edge heuristic with the published OP-ACO framework.
 
-    Scores are mean collected prize (higher is better).
+    Scores are negative mean collected prize (lower is better).
     """
 
     def __init__(
@@ -182,7 +182,7 @@ class OPACOEvaluation(Evaluation):
     ):
         super().__init__(
             template_program=template_program,
-            task_description=task_description,
+            task_description=task_description + "\nThe evaluation objective is the negative mean collected prize; lower is better.",
             timeout_seconds=timeout_seconds,
         )
         self.design_notes = design_notes
@@ -271,7 +271,7 @@ class OPACOEvaluation(Evaluation):
                 processes=workers, initializer=set_kill_with_parent
             ) as pool:
                 objs = pool.map(_run_aco_job, jobs)
-        return float(np.mean(objs))
+        return -float(np.mean(objs))
 
     def evaluate_program(
         self, program_str: str, callable_func: Callable, **kwargs

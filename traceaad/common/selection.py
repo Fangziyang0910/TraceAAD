@@ -4,7 +4,7 @@ An expert keeps developing a strong design while attempts on it keep paying
 off, and moves on once many attempts have failed. Each valid program is its
 own candidate. Its weight is
 
-    exp(beta * (q_i - q_max)) * (k_i + s * r) / (n_i + s)
+    exp(-beta * (q_i - q_min)) * (k_i + s * r) / (n_i + s)
 
 where n_i attempts have started from program i and k_i of them produced a new
 program better than it, r is the run's pooled rate of such improvements and
@@ -32,7 +32,7 @@ OPERATORS = ("Refine", "Explore", "Crossover", "Develop", "Deepen")
 
 def better(child, parent):
     """Strictly better training fitness, up to the evaluation's floating-point noise."""
-    return child - parent > 1e-9 * max(1.0, abs(parent))
+    return parent - child > 1e-9 * max(1.0, abs(parent))
 
 
 def temperature(values):
@@ -45,10 +45,10 @@ def temperature(values):
     target = min(float(len(levels)), TARGET_ESS)
     if len(levels) <= TARGET_ESS:
         return 0.0, float(len(levels))
-    maximum = levels[-1]
+    minimum = levels[0]
 
     def ess(beta):
-        weights = [math.exp(beta * (q - maximum)) for q in levels]
+        weights = [math.exp(-beta * (q - minimum)) for q in levels]
         total = math.fsum(weights)
         return 1 / math.fsum((w / total) ** 2 for w in weights)
 
@@ -94,10 +94,10 @@ def weights(nodes, attempts, programs):
     beta, levels_ess = temperature([n["fitness"] for n in nodes])
     tried, improved = experience(attempts, programs)
     rate = (sum(improved.values()) + 1) / (sum(tried.values()) + 2)
-    maximum = max(n["fitness"] for n in nodes)
+    minimum = min(n["fitness"] for n in nodes)
     prospect = {n["id"]: (improved[n["id"]] + PRIOR_STRENGTH * rate) / (tried[n["id"]] + PRIOR_STRENGTH)
                 for n in nodes}
-    raw = [math.exp(beta * (n["fitness"] - maximum)) * prospect[n["id"]] for n in nodes]
+    raw = [math.exp(-beta * (n["fitness"] - minimum)) * prospect[n["id"]] for n in nodes]
     total = math.fsum(raw)
     return [w / total for w in raw], {"beta": beta, "levels_ess": levels_ess, "rate": rate,
                                       "tried": tried, "improved": improved, "prospect": prospect}
@@ -119,7 +119,7 @@ def choose_reference(parent, archive, rng):
     population = list(archive.values())
     median = statistics.median(n["fitness"] for n in population)
     pool = [n for n in population if n["id"] != parent["id"] and
-            n["key"] != parent["key"] and n["fitness"] >= median]
+            n["key"] != parent["key"] and n["fitness"] <= median]
     if not pool:
         return None, {"eligible": 0}
     scores = {n["id"]: similarity(parent["code"], n["code"]) for n in pool}

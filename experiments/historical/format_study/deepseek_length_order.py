@@ -217,7 +217,7 @@ def part_b(n_per_task=20):
         cards = [{**r, "idea": describe(task, r, length)} for r in refs]
         e, _ = evaluation(task)
         builder = prompts.PromptBuilder(TokenCounter(), task, e, archive, {}, Config())
-        best = max(n["score"] for n in archive.values())
+        best = min(n["score"] for n in archive.values())
         prompt = builder.build("Explore", parent, references=cards, best_score=best)["prompt"]
         content, finish, tokens = chat(prompt)
         rec = outcome(task, archive, parent, content, finish, tokens, True)

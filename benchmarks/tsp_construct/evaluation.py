@@ -167,7 +167,7 @@ class TSPEvaluation(Evaluation):
 
         ave_dis = np.average(dis)
         # print("average dis: ",ave_dis)
-        return -ave_dis
+        return ave_dis
 
 
 if __name__ == '__main__':

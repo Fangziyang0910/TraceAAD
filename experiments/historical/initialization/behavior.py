@@ -282,7 +282,7 @@ def _profile_tsp(function: Any) -> tuple[list[list[list[int]]], float]:
         states.append(route.copy())
         trajectories.append(_uniform_trajectory_sample(states, _GLOBAL_MAX_POINTS))
         costs.append(float(evaluator.tour_cost(coordinates, route, evaluator.problem_size)))
-    return trajectories, -float(np.mean(costs))
+    return trajectories, float(np.mean(costs))
 
 
 def _profile_obp(function: Any) -> tuple[list[list[list[int]]], float]:
@@ -311,7 +311,7 @@ def _profile_obp(function: Any) -> tuple[list[list[list[int]]], float]:
                 states.append(choices.copy())
         trajectories.append(states)
         used_bins.append(int(np.count_nonzero(bins != capacity)))
-    return trajectories, -float(np.mean(used_bins))
+    return trajectories, float(np.mean(used_bins))
 
 
 def _profile_vrptw(function: Any) -> tuple[list[list[list[int]]], float]:
@@ -403,7 +403,7 @@ def _profile_vrptw(function: Any) -> tuple[list[list[list[int]]], float]:
         costs.append(
             float(evaluator.tour_cost(distance_matrix, route, service_time, time_windows))
         )
-    return trajectories, -float(np.mean(costs))
+    return trajectories, float(np.mean(costs))
 
 
 def _trim_op_route(route: np.ndarray, dummy_node: int) -> list[int]:
@@ -464,7 +464,7 @@ def _profile_op_aco(function: Any) -> tuple[list[list[list[int]]], float]:
                 aco._update_pheromone(solutions.T, objectives)
             trajectories.append(_uniform_trajectory_sample(states, _GLOBAL_MAX_POINTS))
             final_scores.append(best_score)
-    return trajectories, float(np.mean(final_scores))
+    return trajectories, -float(np.mean(final_scores))
 
 
 def _profile_cvrp_aco(function: Any) -> tuple[list[list[list[int]]], float]:
@@ -508,7 +508,7 @@ def _profile_cvrp_aco(function: Any) -> tuple[list[list[list[int]]], float]:
                 aco._update_pheromone(paths, costs)
             trajectories.append(_uniform_trajectory_sample(states, _GLOBAL_MAX_POINTS))
             final_costs.append(best_cost)
-    return trajectories, -float(np.mean(final_costs))
+    return trajectories, float(np.mean(final_costs))
 
 
 def _profile_candidate(candidate: dict[str, Any]) -> dict[str, Any]:

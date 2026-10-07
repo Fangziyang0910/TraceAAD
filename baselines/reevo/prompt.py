@@ -31,7 +31,7 @@ Refer to the format of a trivial design above. Be very creative and give `{func_
     def _worse_better(cls, indivs: List[Function]) -> tuple[Function, Function]:
         assert len(indivs) == 2
         indivs = copy.deepcopy(indivs)
-        indivs.sort(key=lambda function: function.score)
+        indivs.sort(key=lambda function: function.score, reverse=True)
         return indivs[0], indivs[1]
 
     @classmethod

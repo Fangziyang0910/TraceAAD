@@ -22,7 +22,7 @@ class SelectionEvaluation(TinyEvaluation):
         self.offset = offset
 
     def evaluate_program(self, program_str, callable_func, **kwargs):
-        return callable_func(1) + self.offset
+        return -(callable_func(1) + self.offset)
 
 
 def method(tmp_path, *answers, budget=10, selection=False, **config):
@@ -49,8 +49,8 @@ def test_parent_distribution_is_over_programs_with_fixed_ess():
     # Few programs: ESS cannot exceed the program count, so sampling is uniform.
     assert probabilities([0.0, 1.0, 2.0])[0] == [1/3] * 3
     # Every program is its own candidate; programs with equal scores get equal weight.
-    nodes = [{'id': i, 'fitness': 2.0} for i in range(5)] + [
-        {'id': 5 + i, 'fitness': float(i) / 10} for i in range(10)]
+    nodes = [{'id': i, 'fitness': -2.0} for i in range(5)] + [
+        {'id': 5 + i, 'fitness': -(float(i) / 10)} for i in range(10)]
     p, beta, ess, _ = probabilities([n['fitness'] for n in nodes])
     assert beta > 0 and ess == pytest.approx(8)
     assert p[:5] == pytest.approx([p[0]] * 5) and all(q < p[0] for q in p[5:])
@@ -59,7 +59,7 @@ def test_parent_distribution_is_over_programs_with_fixed_ess():
     assert len({node['id'] for node, _ in draws}) > 5
     # More programs tied at the top than the target ESS: the limit is uniform over
     # them, without overflowing the temperature search.
-    tied = [2.0] * 10 + [1.0, 0.0]
+    tied = [-2.0] * 10 + [-1.0, 0.0]
     p, beta, ess, _ = probabilities(tied)
     assert beta is None and ess == 10 and p == [0.1] * 10 + [0.0, 0.0]
 
@@ -71,7 +71,7 @@ def test_finalists_are_the_best_programs(tmp_path):
     m = method(tmp_path, *answers, budget=11, selection=True)
     m.run()
     fitness = {n['id']: n['fitness'] for n in m.archive.values()}
-    assert sorted(fitness.values()).count(8) == 4
+    assert sorted(fitness.values()).count(-8) == 4
     assert m.progress.finalists == [8, 9, 10, 11, 7]
     same = [p for p in m.archive.values() if p['parent_id'] in m.archive and p['fitness'] == m.archive[p['parent_id']]['fitness']]
     assert all(m.archive[a['parent_id']]['fitness'] == a['fitness'] for a in same)
@@ -146,13 +146,15 @@ def test_whole_search_selects_on_independent_set_and_records_provenance(tmp_path
     assert result['budget_used'] == 10 and result['num_roots'] == 8
     assert result['num_nodes'] == 10 and result['selection_evaluations'] == 5
     assert result['search_evaluations'] == 10 and result['model_calls'] == 10
-    assert result['best']['fitness'] == 10 and result['best']['selection_fitness'] == 110
+    assert result['best']['fitness'] == -10 and result['best']['selection_fitness'] == -110
     assert m.facts.attempts[9]['parent_id'] in range(1, 9)
     assert m.facts.attempts[9]['status'] == 'valid'
     assert (tmp_path / 'best_program.py').exists()
     assert json.loads((tmp_path / 'selection.json').read_text())['selected_node'] == 10
-    assert '[Task]' in m.facts.attempts[9]['prompt']
-    assert '[Current Algorithm]' in m.facts.attempts[9]['prompt']
+    from traceaad.common.storage import rows
+    prompt = next(r['prompt'] for r in rows(tmp_path / 'calls.jsonl.gz') if r['request_id'] == 9)
+    assert '[Task]' in prompt
+    assert '[Current Algorithm]' in prompt
 
 
 def test_invalid_source_gets_exactly_one_paid_repair(tmp_path):
@@ -193,7 +195,7 @@ def test_initialization_cap_includes_repair_generations(tmp_path):
     assert result['status'] == 'no_valid_root'
     assert result['budget_used'] == result['init_attempts'] == 16
     assert result['search_evaluations'] == 0
-    assert sum(a['repair_of'] is not None for a in m.facts.attempts.values()) == 8
+    assert sum(a['repair_of'] is not None for a in m.facts.attempts.values()) == 1  # duplicate failing code is not repaired again
 
 
 def test_too_long_parent_is_removed_without_spending_budget(tmp_path):
@@ -201,7 +203,7 @@ def test_too_long_parent_is_removed_without_spending_budget(tmp_path):
                        run_dir=tmp_path, config=Config(budget=2, max_input_tokens=255))
     m._roots()
     assert m.attempts == 1
-    m.phase = 'search'
+    m.progress.phase = 'search'
     m.action_rng.choices = lambda *args, **kwargs: ['Refine']
     m._search()
     assert m.attempts == 1 and m.progress.too_long == [1]
@@ -242,10 +244,10 @@ def test_reference_choice_and_copy_status(tmp_path):
 
 def test_reference_pool_is_every_other_program_at_or_above_the_median():
     nodes = {
-        1: {'id': 1, 'parent_id': None, 'key': '1', 'code': 'def score(x): return x', 'fitness': 1},
-        2: {'id': 2, 'parent_id': 1, 'key': '2', 'code': 'def score(x): return x+1', 'fitness': 2},
-        3: {'id': 3, 'parent_id': 2, 'key': '3', 'code': 'def score(x): return x+2', 'fitness': 3},
-        4: {'id': 4, 'parent_id': None, 'key': '4', 'code': 'def score(x): return x*2', 'fitness': 4},
+        1: {'id': 1, 'parent_id': None, 'key': '1', 'code': 'def score(x): return x', 'fitness': -1},
+        2: {'id': 2, 'parent_id': 1, 'key': '2', 'code': 'def score(x): return x+1', 'fitness': -2},
+        3: {'id': 3, 'parent_id': 2, 'key': '3', 'code': 'def score(x): return x+2', 'fitness': -3},
+        4: {'id': 4, 'parent_id': None, 'key': '4', 'code': 'def score(x): return x*2', 'fitness': -4},
     }
     # Parent links carry no meaning here: the child 3 is in the pool with 4,
     # and the draw keeps the half whose code differs more from the parent.
@@ -302,18 +304,18 @@ def test_explore_references_keep_programs_with_equal_scores():
     for i, other in enumerate(others):
         other['idea'] = f'Distinct idea {i}.'
         other['code'] = f'def score(x):\n    return x + {i} * {i}\n'
-    others[1]['fitness'] = others[2]['fitness'] = 42.0  # an equal score is not the same algorithm
+    others[1]['fitness'] = others[2]['fitness'] = -42.0  # an equal score is not the same algorithm
     archive = {n['id']: n for n in [parent, *others]}
     references, _ = choose_explore_references(parent, archive, random.Random(0))
     assert len(references) == 4
-    assert [n['fitness'] for n in references].count(42.0) == 2
+    assert [n['fitness'] for n in references].count(-42.0) == 2
 
 
 def test_search_explore_displays_and_records_archive_references(tmp_path):
     m = method(tmp_path, *(response(i) for i in range(1, 10)), budget=9, explore_cards=4)
     for _ in range(8):
         m._roots()
-    m.phase = 'search'
+    m.progress.phase = 'search'
     m.action_rng.choices = lambda *args, **kwargs: ['Explore']
     m._search()
     request = m.facts.attempts[9]
@@ -321,7 +323,9 @@ def test_search_explore_displays_and_records_archive_references(tmp_path):
     assert len(request['explore_reference_ids']) == 4
     assert request['parent_id'] not in request['explore_reference_ids']
     assert attempt['explore_reference_ids'] == request['explore_reference_ids']
-    assert request['history_edge_ids'] == [] and 'Earlier Ideas' not in request['prompt']
+    from traceaad.common.storage import rows
+    prompt = next(r['prompt'] for r in rows(tmp_path / 'calls.jsonl') if r['request_id'] == 9)
+    assert request['history_edge_ids'] == [] and 'Earlier Ideas' not in prompt
     assert request['explore_reference_selection']['selected_ids'] == request['explore_reference_ids']
 
 
@@ -333,7 +337,7 @@ def test_distinct_selection_protocol_is_required(tmp_path):
 
 def test_prompt_contract_and_crossover_context_fallback():
     parent = {"id": 1, "key": "a", "code": "def score(x):\n    return x\n",
-              "score": 1, "fitness": 1, "parent_id": None,
+              "score": -1, "fitness": -1, "parent_id": None,
               "action": "Init", "idea": "Use the input.", "depth": 0}
     reference = {**parent, "id": 2, "key": "b", "code": "\n".join(
         [f"v{i} = {i}" for i in range(450)]) + "\ndef score(x): return x + v1\n"}

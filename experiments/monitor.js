@@ -61,9 +61,8 @@ const toneVar = {ok: "--ok", bad: "--bad", warn: "--warn", neutral: "--faint"};
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const seriesColor = i => `var(--s${i % 8 + 1})`;
 
-/* metric: fitness is always "higher is better"; value is the raw objective. */
-const shown = (fitness, task) => fitness == null ? null
-  : S.metric === "fitness" || task.direction === "max" ? fitness : -fitness;
+/* Every displayed score is a minimized objective. */
+const shown = (fitness, task) => fitness ?? null;
 function bestFitness(run) {
   const last = run.curve?.at(-1);
   return last?.fitness ?? run.best_fitness ?? null;
@@ -191,7 +190,7 @@ function buildTasks(tasks, structure) {
   root.innerHTML = tasks.map(task => `
     <article class="task" data-task="${esc(task.key)}">
       <header class="task-head">
-        <div><h2>${esc(task.label)}</h2><div class="dir">原始${esc(task.unit)} · ${task.direction === "min" ? "越低越好" : "越高越好"}</div></div>
+        <div><h2>${esc(task.label)}</h2><div class="dir">${esc(task.unit)} · ${task.direction === "min" ? "越低越好" : "越高越好"}</div></div>
         <div class="agg" data-agg></div>
       </header>
       <div class="chart-box"><canvas aria-label="${esc(task.label)} 各 rep 历史最优曲线"></canvas></div>
@@ -248,7 +247,7 @@ function updateTask(task) {
   if (bests.length) {
     const mean = bests.reduce((a, b) => a + b, 0) / bests.length;
     const sd = bests.length > 1 ? Math.sqrt(bests.reduce((a, b) => a + (b - mean) ** 2, 0) / (bests.length - 1)) : 0;
-    const better = S.metric === "fitness" || task.direction === "max" ? Math.max(...bests) : Math.min(...bests);
+    const better = Math.min(...bests);
     agg.innerHTML = `<b>${fmt(mean)} <span style="font-weight:500;color:var(--muted);font-size:12px">± ${fmt(sd, 3)}</span></b>最好 ${fmt(better)}`;
   } else agg.textContent = "暂无有效候选";
   const chart = S.charts.get(task.key);
@@ -440,8 +439,8 @@ function bindDetailHover(chart) {
       if (!best) { hideTip(); return; }
       const p = best.p, task = chart.task;
       tip.innerHTML = `<h4>${p.kind === "initial" ? "首个有效候选" : "刷新历史最优"}</h4>`
-        + `<div class="row"><span>${S.metric === "fitness" ? "Fitness" : `原始${esc(task.unit)}`}</span><strong>${fmt(shown(p.fitness, task), 6)}</strong></div>`
-        + (p.gain != null ? `<div class="row"><span>Fitness 改进</span><strong>+${fmt(p.gain, 6)}</strong></div>` : "")
+        + `<div class="row"><span>${S.metric === "fitness" ? "Fitness" : `${esc(task.unit)}`}</span><strong>${fmt(shown(p.fitness, task), 6)}</strong></div>`
+        + (p.gain != null ? `<div class="row"><span>目标值下降</span><strong>+${fmt(p.gain, 6)}</strong></div>` : "")
         + `<div class="row"><span>${esc(chart.xLabel || "已记录序号")}</span><strong>${p.evaluation}</strong></div>`
         + `<div class="row"><span>动作</span><strong>${esc(p.operator && p.operator !== "unknown" ? p.operator : "未记录")}</strong></div>`
         + (p.candidate != null ? `<div class="row"><span>候选 / 父代</span><strong>#${esc(p.candidate)}${p.parent_id != null ? ` ← #${esc(p.parent_id)}` : ""}</strong></div>` : "")
@@ -519,7 +518,7 @@ function renderDetail(run) {
   crumbs.forEach((p, i) => cards.push({key: `b${p.node_id}`, tag: i === 0 ? (selectedIsBest ? "搜索最优 · 最终选中" : "搜索最优") : p.parent_id == null && p.operator === "Init" ? "初始" : "", program: p}));
   const gainText = p => {
     if (p.gain == null || !Number.isFinite(p.fitness)) return "";
-    const before = p.fitness - p.gain;
+    const before = p.fitness + p.gain;
     return before ? `<em class="d up">+${(p.gain / Math.abs(before) * 100).toFixed(2)}%</em>` : "";
   };
   const ops = Object.entries(run.operators || {}).sort((a, b) => b[1] - a[1]);
@@ -655,7 +654,7 @@ function stat(values) {
   const sd = v.length > 1 ? Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / (v.length - 1)) : null;
   return {n: v.length, mean, sd};
 }
-const relGap = (m, ref) => (m - ref) / Math.abs(ref) * 100;  // fitness space: positive = better
+const relGap = (m, ref) => (ref - m) / Math.abs(ref) * 100;  // objective decrease: positive = better
 function delta(d) {
   if (d == null || !Number.isFinite(d)) return "";
   const cls = Math.abs(d) < 0.05 ? "same" : d > 0 ? "up" : "down";
@@ -689,7 +688,7 @@ function renderCompare() {
     for (const col of cols) {
       const cells = order.filter(id => M[id]?.[col.key]).map(id => [id, M[id][col.key].mean]);
       if (cells.length >= 2) {
-        const sorted = cells.map(([, m]) => m).sort((a, b) => b - a);
+        const sorted = cells.map(([, m]) => m).sort((a, b) => a - b);
         for (const [id, m] of cells) {
           const first = sorted.indexOf(m), last = sorted.lastIndexOf(m);
           acc[id][col.group].ranks.push((first + last) / 2 + 1);
@@ -736,7 +735,7 @@ function renderCompare() {
     }
     const best = Object.fromEntries(cols.map(col => {
       const means = ids.map(id => M[id][col.key]?.mean).filter(Number.isFinite);
-      return [col.key, means.length >= 2 ? Math.max(...means) : null];
+      return [col.key, means.length >= 2 ? Math.min(...means) : null];
     }));
     const rows = ids.map(id => {
       const cohort = task.cohorts.find(c => c.id === id);
@@ -767,7 +766,7 @@ function renderCompare() {
       return notes.length ? `${esc(label.get(cohort.id) || cohort.id)}：${notes.join("；")}` : "";
     }).filter(Boolean).join("；");
     return `<article class="panel cmp-task" data-task="${esc(task.key)}">
-      <div class="panel-head"><h2>${esc(task.label)}</h2><p>原始${esc(task.unit)} · ${task.direction === "min" ? "越低越好" : "越高越好"}</p></div>
+      <div class="panel-head"><h2>${esc(task.label)}</h2><p>${esc(task.unit)} · ${task.direction === "min" ? "越低越好" : "越高越好"}</p></div>
       <div class="tbl-wrap"><table class="cmp"><thead><tr><th rowspan="2">对象</th>${head1.join("")}</tr><tr>${head2.join("")}</tr></thead><tbody>${rows}</tbody></table></div>
       <div class="dots-head"><h3>各 rep 分布（向右 = 更好）</h3><div class="segctl small">${cols.map(col =>
         `<button type="button" data-col="${esc(col.key)}" aria-pressed="${col.key === pick}">${esc(col.label)}</button>`).join("")}</div></div>

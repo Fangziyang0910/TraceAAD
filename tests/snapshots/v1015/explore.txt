@@ -3,7 +3,7 @@ Return a numeric score.
 
 [Evaluation]
 Each program is evaluated on a fixed set of training instances.
-Score: the task fitness. Higher is better.
+Score: the task objective. Lower is better.
 The whole evaluation must finish within 20 seconds.
 
 [Target Function]
@@ -14,14 +14,14 @@ def score(x):
 Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses. Within the time limit, the function may perform any computation on its inputs.
 
 [Current Algorithm]
-Score: 2 · Evaluation time: about 1.5 s
+Score: -2 · Evaluation time: about 1.5 s
 ```python
 def score(x):
     return x + 2
 ```
 
 [Search Best]
-Best score found so far in this search: 3.
+Best score found so far in this search: -3.
 
 [Your Task: Explore]
 Write an algorithm that scores better than the best found so far by changing how the current algorithm makes its decisions, not by tuning it.

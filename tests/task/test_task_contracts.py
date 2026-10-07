@@ -36,6 +36,6 @@ def test_template_produces_a_valid_score(evaluation_type, kwargs, minimize):
     assert outcome.failure_kind is None, outcome.error
     assert np.isfinite(outcome.result)
     if minimize:
-        assert outcome.result < 0
+        assert outcome.result > 0
     else:
-        assert outcome.result >= 0
+        assert outcome.result <= 0

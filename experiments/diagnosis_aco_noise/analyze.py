@@ -8,7 +8,7 @@ usage: PYTHONPATH=. uv run python -m experiments.diagnosis_aco_noise.analyze
   controls (drawn at random);
 - real progress: for each run, the seed-mean of the best-so-far program at the end versus
   at budget 250 and 500, next to the archived (search-seed) change.
-Fitness is higher-is-better (CVRP fitness is the negative length).
+Fitness is lower-is-better (CVRP fitness is the route length).
 """
 
 import json
@@ -28,7 +28,7 @@ def main():
             others = [v for s, v in r["scores"].items() if s != "730241"]
             mean = st.fmean(others)
             noise.append(st.stdev(values) / abs(st.fmean(values)))
-            luck[r["kind"]].append((r["scores"]["730241"] - mean) / abs(mean))
+            luck[r["kind"]].append((mean - r["scores"]["730241"]) / abs(mean))
         progress = []
         for run in sorted({r["run"] for r in items}):
             frontier = sorted((r for r in items if r["run"] == run and r["kind"] == "frontier"), key=lambda r: r["id"])
@@ -44,8 +44,8 @@ def main():
                     continue
                 seed_mean = lambda r: st.fmean(v for s, v in r["scores"].items() if s != "730241")
                 progress.append({"run": run, "from": budget,
-                                 "archived_gain": (last["archived"] - start["archived"]) / abs(start["archived"]),
-                                 "seed_mean_gain": (seed_mean(last) - seed_mean(start)) / abs(seed_mean(start))})
+                                 "archived_gain": (start["archived"] - last["archived"]) / abs(start["archived"]),
+                                 "seed_mean_gain": (seed_mean(start) - seed_mean(last)) / abs(seed_mean(start))})
         out[task] = {
             "programs": len(items),
             "noise_sd_median": st.median(noise),

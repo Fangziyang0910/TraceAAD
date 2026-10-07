@@ -154,7 +154,7 @@ class ShinkaArchive:
         self.parent_selection_lambda = float(parent_selection_lambda)
         self.num_beams = int(num_beams)
         self.archive_selection_strategy = archive_selection_strategy
-        self.archive_criteria = dict(archive_criteria or {"combined_score": 1.0})
+        self.archive_criteria = dict(archive_criteria or {"combined_score": -1.0})
         self.enforce_island_separation = bool(enforce_island_separation)
         self.island_selection_strategy = island_selection_strategy
         self.migration_interval = int(migration_interval)
@@ -264,7 +264,7 @@ class ShinkaArchive:
     ) -> bool:
         if archive_context is not None and len(self.archive_criteria) > 1:
             return self._archive_rank_score(left, archive_context) > self._archive_rank_score(right, archive_context)
-        return float(left.combined_score or 0.0) > float(right.combined_score or 0.0)
+        return float(left.combined_score or 0.0) < float(right.combined_score or 0.0)
 
     def update_archive(self, program: ShinkaProgram) -> str | None:
         if self.archive_size <= 0 or not program.correct:
@@ -291,7 +291,7 @@ class ShinkaArchive:
         if len(self.archive_criteria) > 1:
             worst = min(archive_programs, key=lambda p: self._archive_rank_score(p, archive_programs))
         else:
-            worst = min(archive_programs, key=lambda p: p.combined_score)
+            worst = max(archive_programs, key=lambda p: p.combined_score)
         if self._is_better(program, worst, archive_programs):
             self.archive_ids.remove(worst.id)
             worst.in_archive = False
@@ -326,7 +326,7 @@ class ShinkaArchive:
             weights = []
             for idx in initialized:
                 best = self._best_in(self.correct_programs(idx))
-                weights.append(max(best.combined_score if best else 0.0, 0.0) + 1e-9)
+                weights.append(max(-best.combined_score if best else 0.0, 0.0) + 1e-9)
             return self.rng.choices(initialized, weights=weights, k=1)[0]
         return self.rng.choice(initialized)
 
@@ -353,7 +353,7 @@ class ShinkaArchive:
             candidates = self.correct_programs(None)
         if not candidates:
             raise ValueError("No correct programs available for power-law parent sampling.")
-        ranked = sorted(candidates, key=lambda p: p.combined_score, reverse=True)
+        ranked = sorted(candidates, key=lambda p: p.combined_score)
         alpha = self.exploitation_alpha
         if alpha == 0:
             return self.rng.choice(ranked)
@@ -370,7 +370,7 @@ class ShinkaArchive:
         scale_factor = max(mad, 1e-6)
         weights = []
         for program in candidates:
-            normalized_diff = (float(program.combined_score or 0.0) - median) / scale_factor
+            normalized_diff = (median - float(program.combined_score or 0.0)) / scale_factor
             performance = stable_sigmoid(self.parent_selection_lambda * normalized_diff)
             novelty = 1.0 / (1.0 + program.children_count)
             weights.append(performance * novelty)
@@ -402,7 +402,7 @@ class ShinkaArchive:
         candidates = self.correct_programs(island_idx) or self.correct_programs(None)
         if not candidates:
             raise ValueError("No correct programs available for beam-search parent sampling.")
-        best = max(candidates, key=lambda p: p.combined_score)
+        best = min(candidates, key=lambda p: p.combined_score)
         self.beam_parent_id = best.id
         return best
 
@@ -429,7 +429,7 @@ class ShinkaArchive:
                 seen.add(best.id)
         num_elites = max(0, int(n * self.elite_selection_ratio))
         if num_elites > 0 and len(inspirations) < n:
-            elites = sorted(self._eligible_archive_for_parent(parent), key=lambda p: p.combined_score, reverse=True)
+            elites = sorted(self._eligible_archive_for_parent(parent), key=lambda p: p.combined_score)
             for elite in elites:
                 if len(inspirations) >= n:
                     break
@@ -455,7 +455,7 @@ class ShinkaArchive:
         candidates = [program for program in self.archived_programs() if program.correct and program.id not in excluded]
         if self.enforce_island_separation:
             candidates = [program for program in candidates if program.island_idx == parent.island_idx]
-        return sorted(candidates, key=lambda p: p.combined_score, reverse=True)[:k]
+        return sorted(candidates, key=lambda p: p.combined_score)[:k]
 
     def compute_similarities(self, embedding: Sequence[float], island_idx: int | None) -> list[float]:
         programs = self.correct_programs(island_idx)
@@ -507,4 +507,4 @@ class ShinkaArchive:
     def _best_in(programs: list[ShinkaProgram]) -> ShinkaProgram | None:
         if not programs:
             return None
-        return max(programs, key=lambda p: p.combined_score)
+        return min(programs, key=lambda p: p.combined_score)

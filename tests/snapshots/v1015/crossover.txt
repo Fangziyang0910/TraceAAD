@@ -3,7 +3,7 @@ Return a numeric score.
 
 [Evaluation]
 Each program is evaluated on a fixed set of training instances.
-Score: the task fitness. Higher is better.
+Score: the task objective. Lower is better.
 The whole evaluation must finish within 20 seconds.
 
 [Target Function]
@@ -14,7 +14,7 @@ def score(x):
 Keep the function name, arguments and return contract exactly as shown. The program must be self-contained: include every import, constant and helper it uses. Within the time limit, the function may perform any computation on its inputs.
 
 [Current Algorithm]
-Score: 2 · Evaluation time: about 1.5 s
+Score: -2 · Evaluation time: about 1.5 s
 ```python
 def score(x):
     return x + 2
@@ -23,10 +23,10 @@ def score(x):
 [How the Current Algorithm Was Formed]
 The steps that produced the current algorithm, oldest first. Every version shown has been evaluated: each step gives the score change, the Design of the version it produced, and the code diff from the previous version.
 
-Start · initial algorithm · score 1
+Start · initial algorithm · score -1
   Design: Add 1 to the input.
 
-Step 1 (latest: produced the current algorithm) · Refine · score 1 → 2 (improved)
+Step 1 (latest: produced the current algorithm) · Refine · score -1 → -2 (improved)
   Design: Add 2 to the input.
   Code diff (previous → current):
 ```diff
@@ -38,7 +38,7 @@ Step 1 (latest: produced the current algorithm) · Refine · score 1 → 2 (impr
 
 [Reference Algorithm]
 Another evaluated algorithm from this search.
-Score: 3 · Evaluation time: about 1.5 s
+Score: -3 · Evaluation time: about 1.5 s
 Design: Add 3 to the input.
 ```python
 def score(x):

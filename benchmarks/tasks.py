@@ -12,7 +12,8 @@ from .op_aco import OPACOEvaluation
 
 TASKS = ('tsp_construct', 'cvrp_aco', 'op_aco', 'online_bin_packing', 'vrptw_construct')
 TASK_SHORT = dict(zip(TASKS, ('tsp', 'cvrp', 'op', 'obp', 'vrptw')))
-MINIMIZE = set(TASKS) - {'op_aco'}
+NATIVE_MINIMIZE = set(TASKS) - {'op_aco'}
+MINIMIZE = set(TASKS)  # Every evaluator returns a minimized scalar objective.
 CLASSES = dict(zip(TASKS, (TSPEvaluation, CVRPACOEvaluation, OPACOEvaluation, OBPEvaluation, VRPTWEvaluation)))
 SELECTION_SEED = 20260927
 DEFAULT_WORKERS = 4

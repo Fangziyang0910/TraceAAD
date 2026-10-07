@@ -43,10 +43,10 @@ MAX_SIMILARITY = 0.5
 
 def arms(run_dir):
     nodes = list(Facts(run_dir).valid.values())
-    best = max(nodes, key=lambda n: (n["fitness"], -n["id"]))
+    best = min(nodes, key=lambda n: (n["fitness"], n["id"]))
     late = [n for n in nodes if n["action"] == "Explore" and n["attempt_id"] > LATE
             and similarity(n["code"], best["code"]) <= MAX_SIMILARITY]
-    late.sort(key=lambda n: (-n["fitness"], n["id"]))
+    late.sort(key=lambda n: (n["fitness"], n["id"]))
     return [("best", best["id"])] + [(f"new{i + 1}", n["id"]) for i, n in enumerate(late[:2])]
 
 
@@ -88,7 +88,7 @@ def develop(source, arm, start_id, generations, backend):
             steps.append({"generation": aid - first, "action": attempt["action"], "parent": attempt["parent_id"],
                           "status": attempt["status"], "fitness": (method.programs.get(attempt["program_id"]) or {}).get("fitness")})
         reached = [method.archive[s] for s in range(first + 1, method.attempts + 1) if s in method.archive]
-        current = max([start] + reached, key=lambda n: (n["fitness"], -n["id"]))
+        current = min([start] + reached, key=lambda n: (n["fitness"], n["id"]))
     selection = {}
     for label, node in (("start", start), ("reached", current)):
         result = method.selection.evaluate(node["code"], node["key"])

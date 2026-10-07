@@ -45,7 +45,7 @@ class TraceAADV1015(Search):
         elif action == "Explore" and self.config.explore_cards:
             explore_references, explore_reference_selection = choose_explore_references(
                 parent, self.archive, self.reference_rng, self.config.explore_cards)
-        best_score = max(self.archive.values(), key=lambda n: n["fitness"])["score"]
+        best_score = min(self.archive.values(), key=lambda n: n["fitness"])["score"]
         try:
             request = self.prompts.build(action, parent, reference=reference,
                                          references=explore_references, best_score=best_score)

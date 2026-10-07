@@ -26,7 +26,7 @@ class Prompt:
         self.last_used_epoch = 0
         self.trials = {}
         self.feasible_algo_generated = False
-        self.best_generated_algo_perf = -float('inf')
+        self.best_generated_algo_perf = float('inf')
         self.statuses = []
 
     @property
@@ -85,7 +85,7 @@ class Prompt:
         self.trials.setdefault(n_epoch, []).append(trial)
         if not isinstance(trial['performance'], str):
             self.feasible_algo_generated = True
-            self.best_generated_algo_perf = max(self.best_generated_algo_perf, trial['performance'])
+            self.best_generated_algo_perf = min(self.best_generated_algo_perf, trial['performance'])
         self.statuses.append({
             'n_epoch': n_epoch,
             'status': self.status_str,
@@ -223,7 +223,7 @@ class PromptBuilder:
     def prompt_algo_details(self, algos: Sequence[HeuristicRecord]) -> str:
         if len(algos) == 0:
             return ''
-        sort_indices = np.argsort([a.perf for a in algos])[::-1]
+        sort_indices = np.argsort([a.perf for a in algos])
         algos = [algos[i] for i in sort_indices]
         algo_detail = ''
         train_epoch = self._train_epoch_getter()
@@ -247,7 +247,7 @@ class PromptBuilder:
             return 'not available'
         summary = (
             f'mean={np.mean(perfs):.6f}, std={np.std(perfs):.6f}, '
-            f'best={np.max(perfs):.6f}, worst={np.min(perfs):.6f}, n={len(perfs)}'
+            f'best={np.min(perfs):.6f}, worst={np.max(perfs):.6f}, n={len(perfs)}'
         )
         if len(perfs) <= 8:
             sample = perfs

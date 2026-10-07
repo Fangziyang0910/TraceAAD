@@ -214,7 +214,7 @@ def main():
                 v = out.result
                 if isinstance(v, dict) and isinstance(v.get("score"), float):
                     rec["status"] = "valid"
-                    rec["score"] = v["score"] if j["higher"] else -v["score"]
+                    rec["score"] = v["score"]
                 else:
                     rec["status"] = out.failure_kind or "invalid"
                     rec["error"] = (out.error or "")[:300] if hasattr(out, "error") else ""

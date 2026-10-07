@@ -433,9 +433,9 @@ class ShinkaEvo:
                 "archive_ids": list(self._archive.archive_ids),
             })
         baseline_program = self._archive.initial_program
-        baseline = max(parent.combined_score, baseline_program.combined_score if baseline_program else 0.0)
+        baseline = min(parent.combined_score, baseline_program.combined_score if baseline_program else 0.0)
         reward = program.combined_score if program.correct else None
-        update = self._bandit.update(arm, reward, baseline)
+        update = self._bandit.update(arm, -reward if reward is not None else None, -baseline)
         self._register_event("bandit_update", {
             "generation": generation,
             "arm": arm,

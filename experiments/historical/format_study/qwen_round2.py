@@ -165,7 +165,7 @@ def build(actions, arms, n_per_task, seed, path):
                 kwargs = {}
                 if action == "Explore":
                     refs, _ = choose_explore_references(parent, archive, random.Random(parent["id"]))
-                    kwargs = {"references": refs, "best_score": max(n["score"] for n in archive.values())}
+                    kwargs = {"references": refs, "best_score": min(n["score"] for n in archive.values())}
                 elif action == "Crossover":
                     ref, _ = choose_reference(parent, archive, random.Random(parent["id"]))
                     if ref is None:

@@ -16,7 +16,7 @@ from baselines.mcts_ahd.profiler import MAProfiler
 def make_function(label: int, score=None) -> Function:
     func = Function(name="heuristic", args="x", body=f"    return {label}")
     func.algorithm = f"algorithm-{label}"
-    func.score = score
+    func.score = -score if score is not None else None
     return func
 
 
@@ -43,12 +43,12 @@ def attach_node(parent: MCTSNode, func: Function, depth: int) -> MCTSNode:
     node = MCTSNode(
         func.algorithm,
         str(func),
-        -1 * func.score,
+        func.score,
         individual=func,
         parent=parent,
         depth=depth,
         visit=1,
-        Q=func.score,
+        Q=-func.score,
         raw_info=func,
     )
     parent.add_child(node)
@@ -86,7 +86,7 @@ class FailingSampler:
 
 class FakeEvaluator:
     def __init__(self, score):
-        self.score = score
+        self.score = -score if score is not None else None
 
     def evaluate_program_record_time(self, program):
         return self.score, 0.01
@@ -161,7 +161,7 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
         method.expand(mcts, [], leaf, "s1")
 
         self.assertEqual(len(leaf.children), 1)
-        self.assertEqual(leaf.children[0].individual.score, 3.0)
+        self.assertEqual(leaf.children[0].individual.score, -3.0)
 
     def test_eval_counter_increments_without_profiler(self):
         method = make_method()
@@ -172,7 +172,7 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
         func = method._sample_evaluate_register("prompt", func_only=True)
 
         self.assertEqual(method._tot_sample_nums, 1)
-        self.assertEqual(func.score, 3.5)
+        self.assertEqual(func.score, -3.5)
 
     def test_sample_register_sets_operator(self):
         method = make_method()
@@ -279,7 +279,7 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
 
         managed = method.population_management_s1([best, middle, worst], 3)
 
-        self.assertEqual([func.score for func in managed], [-10.0, -5.0, -1.0])
+        self.assertEqual([func.score for func in managed], [10.0, 5.0, 1.0])
 
     def test_e2_selects_reference_from_nodes_set_before_population(self):
         method = make_method()
@@ -326,9 +326,9 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
         brothers = method._initialize_mcts_root(mcts)
 
         self.assertEqual(calls, ["i1", "e1", "e1", "e1"])
-        self.assertEqual([func.score for func in brothers], [1.0, 2.0, 3.0, 4.0])
-        self.assertEqual([child.individual.score for child in mcts.root.children], [1.0, 2.0, 3.0, 4.0])
-        self.assertEqual([func.score for func in method._population.population], [4.0])
+        self.assertEqual([func.score for func in brothers], [-1.0, -2.0, -3.0, -4.0])
+        self.assertEqual([child.individual.score for child in mcts.root.children], [-1.0, -2.0, -3.0, -4.0])
+        self.assertEqual([func.score for func in method._population.population], [-4.0])
 
     def test_uct_with_equal_q_bounds_does_not_crash(self):
         mcts = MCTS("Root", alpha=0.5, lambad0=0.1)
@@ -360,8 +360,8 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
         method.expand(mcts, [], parent, "m1")
 
         self.assertIs(parent.children[-1].individual, low)
-        self.assertEqual(parent.children[-1].individual.score, 0.0)
-        self.assertEqual([func.score for func in method._population.population], [10.0])
+        self.assertEqual(parent.children[-1].individual.score, -0.0)
+        self.assertEqual([func.score for func in method._population.population], [-10.0])
 
     def test_e2_samples_pending_elite_before_survival(self):
         method = make_method()
@@ -418,7 +418,7 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
 
         self.assertEqual(state["phase"], "iteration_start")
         self.assertEqual(state["sample_order"], 3)
-        self.assertEqual(state["root_children"][0]["score"], 1.5)
+        self.assertEqual(state["root_children"][0]["score"], -1.5)
         self.assertEqual(state["root_children"][0]["subtree_size"], 1)
         self.assertEqual(event["operator"], "m1")
         self.assertEqual(event["status"], "scheduled")
@@ -445,8 +445,8 @@ class MCTSAHDMechanicsTest(unittest.TestCase):
         expanded = [event for event in events if event["event"] == "expand"]
         self.assertEqual(expanded[-1]["status"], "expanded")
         self.assertEqual(expanded[-1]["operator"], "m1")
-        self.assertEqual(expanded[-1]["parent_score"], 1.0)
-        self.assertEqual(expanded[-1]["child_score"], 2.0)
+        self.assertEqual(expanded[-1]["parent_score"], -1.0)
+        self.assertEqual(expanded[-1]["child_score"], -2.0)
 
 
 if __name__ == "__main__":

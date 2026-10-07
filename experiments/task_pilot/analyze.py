@@ -14,29 +14,28 @@ REFERENCE = {
     "cob_graph_colour": (0.868, 0.924), "cob_cwl": (0.698, 0.752), "cob_set_partition": (1.000, 0.932),
     "cob_tsp": (0.986, 0.940), "cob_flow_shop": (0.922, 0.940), "cob_mdmkp": (0.896, 0.908),
 }
+REFERENCE = {task: tuple(-v for v in values) for task, values in REFERENCE.items()}
 
 
 def run_summary(run_dir):
-    attempts, nodes = [], []
-    for line in (run_dir / "search.jsonl").read_text(encoding="utf-8").splitlines():
-        row = json.loads(line)
-        if row["kind"] == "attempt":
-            attempts.append(row["data"])
-        elif row["kind"] == "node":
-            nodes.append(row["data"])
+    from traceaad.common.state import Facts
+    facts = Facts(run_dir)
+    nodes = list(facts.valid.values())
+    attempts = [{**a, "score": facts.programs.get(a.get("program_id"), {}).get("fitness")}
+                for a in facts.attempts.values()]
     roots = [n["score"] for n in nodes if n["action"] in ("Init",) or (n["action"] == "Repair" and n["depth"] <= 1)]
-    best = max((n["score"] for n in nodes), default=None)
+    best = min((n["score"] for n in nodes), default=None)
     curve, running = [], None
     for a in sorted(attempts, key=lambda a: a["id"]):
-        if a["status"] == "valid":
-            running = a["score"] if running is None else max(running, a["score"])
+        if a["status"] == "valid" and a["score"] is not None:
+            running = a["score"] if running is None else min(running, a["score"])
         curve.append(running)
     out = {"attempts": len(attempts), "valid_rate": sum(a["status"] == "valid" for a in attempts) / max(1, len(attempts)),
            "timeout_or_error": sum(a["status"] in ("timeout", "runtime_error", "invalid_output") for a in attempts),
-           "root_best": max(roots) if roots else None, "train_best": best,
+           "root_best": min(roots) if roots else None, "train_best": best,
            "train_at_50": curve[49] if len(curve) >= 50 else None,
            "frontier_refreshes": sum(1 for i in range(1, len(curve)) if curve[i] is not None and
-                                     (curve[i - 1] is None or curve[i] > curve[i - 1] + 1e-12))}
+                                     (curve[i - 1] is None or curve[i] < curve[i - 1] - 1e-12))}
     heldout = run_dir / "heldout_test.json"
     if heldout.exists():
         out["test"] = json.loads(heldout.read_text())["score"]
@@ -47,7 +46,7 @@ def main():
     root = RESULTS_ROOT / "task_pilot"
     report = {}
     for task_dir in sorted(p for p in root.iterdir() if p.is_dir() and p.name.startswith("cob_")):
-        runs = {r.name: run_summary(r) for r in sorted(task_dir.iterdir()) if (r / "search.jsonl").exists()}
+        runs = {r.name: run_summary(r) for r in sorted(task_dir.iterdir()) if (r / "events.jsonl").exists()}
         tests = [r["test"] for r in runs.values() if r.get("test") is not None]
         trains = [r["train_best"] for r in runs.values() if r.get("train_best") is not None]
         classical, best_llm = REFERENCE.get(task_dir.name, (None, None))

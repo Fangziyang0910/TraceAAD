@@ -1,6 +1,6 @@
 # 搜索实验与结果格式
 
-当前结果统一为 `traceaad-results-v1`。运行目录仍是 `experiments_result/<实验>/<任务>/<运行>/`，例如 `traceaad_v10_17/tsp_construct/<运行>/`。实验条件保存在 `run_config.json`，实现改动用 revision 区分，当前科研实现为 `research-simple-v2-20261006`。
+当前结果统一为 `traceaad-results-v2`。运行目录仍是 `experiments_result/<实验>/<任务>/<运行>/`，例如 `traceaad_v10_17/tsp_construct/<运行>/`。实验条件保存在 `run_config.json`，实现改动用 revision 区分，当前科研实现为 `research-minimize-v3-20261007`。
 
 ## 文件各存一类事实
 
@@ -23,7 +23,7 @@
 
 `candidate` 事件记录 `candidate_id`、`budget_used`、`operator`、`status`、`fitness`、`valid`、`node_id` 和 `attempt`。`attempt` 保存父程序、参考程序、改动归属和 `call_ids`，通过调用编号查看原始请求和回复。新程序用 `program` 元数据引用 `programs.jsonl` 中的 `key`；重复尝试引用已有 `node_id`。评价和探索结束记录按发生时追加，不重写历史。
 
-源码身份是实际保存文本的 SHA-256。当前 TraceAAD 在交付时先规范化源码，再计算身份；历史迁移不改写已经执行的程序。`fitness` 始终是越大越好，`score` 为任务原方向的数值。选中程序的训练成绩与独立选择成绩分别保存。
+源码身份是实际保存文本的 SHA-256。当前 TraceAAD 在交付时先规范化源码，再计算身份；历史迁移不改写已经执行的程序。`fitness` 和 `score` 都是统一后的最小化目标值，越小越好。TSP、CVRP、VRPTW 用正路径长度，装箱用正箱数，OP 用负奖励，CO-Bench 用负归一化质量。`run_config.json` 的 `objective` 为 `min`，`native_objective` 另记原任务方向。改进量统一为原值减去新值，正数表示改善。选中程序的训练成绩与独立选择成绩分别保存。
 
 预算和候选编号分别记录。当前 V10.15–V10.19 的初始化、失败、重复和 Repair 都消耗一次候选预算。旧实验的评价调用、预算槽位和样本次数仍保留原口径；迁移不把不同的计数改成同一种含义。有效率使用有效候选记录数 / 全部候选记录数。
 
@@ -35,7 +35,7 @@
 
 ## 测试记录
 
-`heldout.json` 中每条记录至少有 `task`、`variant`、`scale`、`fitness` 和 `verification`。带程序身份的结果还保存 `key`、`node_id` 与评价配置。不同评价条件使用不同 `variant`；当前方法默认空名称。通用评价入口默认使用 `shared:research-simple-v2-20261006`；需要额外评价 TraceAAD 的种子条件时使用 `--condition traceaad`。旧 `shared` 成绩继续保留。
+`heldout.json` 中每条记录至少有 `task`、`variant`、`scale`、`fitness` 和 `verification`。带程序身份的结果还保存 `key`、`node_id` 与评价配置。不同评价条件使用不同 `variant`；当前方法默认空名称。通用评价入口默认使用 `shared:research-minimize-v3-20261007`；需要额外评价 TraceAAD 的种子条件时使用 `--condition traceaad`。旧 `shared` 成绩继续保留。
 
 `verified` 表示成绩对应冻结的最终程序。`legacy` 表示历史记录缺少程序身份；保留并展示原成绩及此状态。程序或任务不匹配的结果不进入比较汇总。迁移不补造原实验没有记录的身份或评价。
 
@@ -70,6 +70,15 @@ OBP 的规模写为 `1k_100,5k_500,10k_500`。未完成搜索必须显式使用 
 已经结束的初始化与格式研究集中在 [historical](../historical/README.md)。当前搜索基础设施不依赖这些历史分析；研究证据与原输入名保留。
 
 ## 历史迁移与原档案
+
+2026-10-07 已将本机 601 路已结束档案及 7,150 份诊断、汇总和历史数值文件切换为最小化。三路 V10.20 CVRP 的旧进程仍在运行；其 `.minimize/live.json` 标记只读最小化视图，原写入字节位置保持不变。后台 `traceaad_minimize_migration` 会在终局文件稳定后转换其事件、恢复点、选择与测试结果，再删除该标记。此次迁移只转换数值表示，没有重跑评价或重新选择程序。程序源码、模型原始请求与回复、任务实例、种子、预算、状态及身份保留原记录。过去实际送给模型的文字仍可从原始调用查看；新提示统一说明 Lower is better。原实验 revision 和协议身份继续指向当时条件，结果格式 v2 指明现在的数值方向。旧的未完成搜索不能把已转换的恢复点交给旧进程续写。
+
+数值备份与核验记录位于 `experiments_result/.archive/minimize_20261007/`，每路有 `.minimize/receipt.json`。迁移器支持重复执行，已完成的文件不会再次取负：
+
+```bash
+uv run python -m experiments.infra.migrations.minimize_results --root experiments_result --auxiliary
+```
+
 
 本机 30 个批次、564 路训练结果，以及 25 份用于诊断的搜索副本已转换。原来的日志、树快照、样本分片和测试文件先压缩存入 `experiments_result/.archive/storage_20261006/`，核对曲线、预算、候选计数和 held-out 成绩后，再从工作目录删除。每路 `.conversion/receipt.json` 和归档中的 `report.json` 保存迁移记录；它们不参与日常结果读取。
 

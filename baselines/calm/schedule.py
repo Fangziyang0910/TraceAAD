@@ -40,14 +40,14 @@ def prepare_round_messages(
         age_stuck = 0
         if len(algos) > 0:
             used_prompts = []
-            best_algo = algos[int(np.argmax([a.perf for a in algos]))]
+            best_algo = algos[int(np.argmin([a.perf for a in algos]))]
             log_info(f'During collapse, the best algo with perf {best_algo.perf} has been kept')
             algos = [best_algo]
             for seed_algo in seed_algos:
                 if seed_algo not in algos:
                     algos.append(seed_algo)
 
-    sorted_indices = np.argsort([a.perf for a in algos])[::-1]
+    sorted_indices = np.argsort([a.perf for a in algos])
     algos = [algos[i] for i in sorted_indices]
     algos_head = algos[:hp.population_size]
 
@@ -168,7 +168,7 @@ def prepare_round_messages(
         n_revisits = min(hp.ub_revisit, len(candidate_prompts))
         if n_revisits > 0:
             prompt_perfs = np.array([prompt.best_generated_algo_perf for prompt in candidate_prompts])
-            prompt_rank = 1 + np.argsort(np.argsort(-prompt_perfs))
+            prompt_rank = 1 + np.argsort(np.argsort(prompt_perfs))
             prompt_p = 1 / prompt_rank
             prompt_p = prompt_p / np.sum(prompt_p)
             revisit_indices = rs.choice(

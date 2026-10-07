@@ -81,7 +81,7 @@ def test_prize_over_distance_score_is_deterministic():
     first = evaluator.evaluate(prize_over_distance)
     second = evaluator.evaluate(prize_over_distance)
     assert first == second
-    assert first is not None and first > 0
+    assert first is not None and first < 0
 
 
 def test_aco_collects_finite_prize_and_respects_budget():

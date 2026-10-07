@@ -80,4 +80,4 @@ def test_vrptw_cost_includes_final_return_to_depot():
     def choose_only_customer(*args):
         return int(args[2][0])
 
-    assert evaluation.evaluate(choose_only_customer) == -4.0
+    assert evaluation.evaluate(choose_only_customer) == 4.0

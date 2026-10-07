@@ -64,7 +64,7 @@ def test_inverse_distance_score_is_deterministic():
     first = evaluator.evaluate(inverse_distance)
     second = evaluator.evaluate(inverse_distance)
     assert first == second
-    assert first is not None and first < 0
+    assert first is not None and first > 0
 
 
 def test_aco_routes_respect_capacity_visit_each_customer_and_close_at_depot():
@@ -144,4 +144,4 @@ def test_parallel_workers_match_serial_scores():
     parallel_score = parallel.evaluate(inverse_distance)
     assert serial_score is not None and parallel_score is not None
     assert serial_score == parallel_score
-    assert serial_score < 0
+    assert serial_score > 0

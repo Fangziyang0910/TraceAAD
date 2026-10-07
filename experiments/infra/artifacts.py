@@ -50,7 +50,7 @@ def pick_best_sample(run_dir, *, max_sample_order=None, sample_order=None, allow
             selected = {"sample_order": best["id"], "score": best["fitness"],
                         "program": best["code"], "operator": best["action"], "key": best["key"], "node_id": best["id"]}
     else:
-        selected = max(samples, key=lambda r: r["score"], default=None)
+        selected = min(samples, key=lambda r: r["score"], default=None)
     if selected is None:
         raise RuntimeError(f"no matching scored program: {run_dir}")
     selected = dict(selected)

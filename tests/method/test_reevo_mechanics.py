@@ -9,7 +9,7 @@ from baselines.reevo.reevo import ReEvo
 
 def make_function(label: int, score=None) -> Function:
     func = Function(name="heuristic", args="x", body=f"    return {label}")
-    func.score = score
+    func.score = -score if score is not None else None
     func.algorithm = f"algorithm-{label}"
     return func
 
@@ -66,7 +66,7 @@ class FakeEvaluation(Evaluation):
             task_description="Design a heuristic.",
             safe_evaluate=False,
         )
-        self.scores = list(scores or [])
+        self.scores = [-s if s is not None else None for s in (scores or [])]
         self.programs = []
 
     def evaluate_program(self, program_str, callable_func, **kwargs):
@@ -119,8 +119,8 @@ class ReEvoMechanicsTest(unittest.TestCase):
         method._initialize_population()
 
         self.assertEqual(method._tot_sample_nums, 4)
-        self.assertEqual(method._elite_function.score, 100.0)
-        self.assertEqual([func.score for func in method._population.population], [1.0, 2.0, 3.0])
+        self.assertEqual(method._elite_function.score, -100.0)
+        self.assertEqual([func.score for func in method._population.population], [-1.0, -2.0, -3.0])
         self.assertNotIn(100.0, [func.score for func in method._population.population])
         self.assertEqual(len(llm.prompts), 3)
         self.assertTrue(all("trivial design above" in prompt for prompt, _ in llm.prompts))
@@ -194,8 +194,8 @@ class ReEvoMechanicsTest(unittest.TestCase):
             choice.side_effect = [[parent_a, parent_b], [parent_b, parent_a]]
             method._run_evolution_generation()
 
-        self.assertEqual([func.score for func in method._population.population], [10.0, 11.0, 12.0])
-        self.assertEqual(method._elite_function.score, 12.0)
+        self.assertEqual([func.score for func in method._population.population], [-10.0, -11.0, -12.0])
+        self.assertEqual(method._elite_function.score, -12.0)
         self.assertEqual(method._tot_sample_nums, 3)
 
     def test_long_reflection_receives_all_current_short_reflections(self):
@@ -220,7 +220,7 @@ class ReEvoMechanicsTest(unittest.TestCase):
         method._initialize_population()
 
         self.assertEqual(method._tot_sample_nums, 3)
-        self.assertEqual([func.score for func in method._population.population], [3.0])
+        self.assertEqual([func.score for func in method._population.population], [-3.0])
         with self.assertRaisesRegex(RuntimeError, "fewer than two valid functions"):
             method._select_parent_pairs()
 

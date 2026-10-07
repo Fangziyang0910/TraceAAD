@@ -100,7 +100,8 @@ class Evaluation(ABC):
             program_str: The function in string. You can _ignore this argument when implementation. (See below).
             callable_func: The callable heuristic function. You can call it using `callable_func(args, kwargs)`.
         Return:
-            Returns the fitness value.
+            Returns the minimized fitness value (lower is better).
+            Maximization tasks return the negative of their original objective.
         """
         raise NotImplementedError('Must provide a evaluator for a function.')
 

@@ -98,7 +98,7 @@ class PromptBuilder(MeasuredPrompts):
         sequence = sequence[ids.index(source["id"]) + 1:]
         sequence_ids = {p["id"] for p in sequence}
         first = self.steps(sequence)[0][0]
-        best = max((p for p in self.programs.values() if p["valid"]), key=lambda p: p["fitness"])
+        best = min((p for p in self.programs.values() if p["valid"]), key=lambda p: p["fitness"])
         start = (f"[The Algorithm the Change Was Made To]\nAn Explore step changed this algorithm; the first "
                  f"version of the change scored {score_text(first['score'])} "
                  f"({COMPARED[verdict(source['score'], first['score'], self.higher_is_better)]} this algorithm). "

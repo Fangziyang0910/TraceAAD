@@ -38,7 +38,7 @@ class Population:
 
     @property
     def elite_function(self):
-        return copy.deepcopy(max(self.valid_functions(), key=lambda f: f.score))
+        return copy.deepcopy(min(self.valid_functions(), key=lambda f: f.score))
 
     @property
     def generation(self):

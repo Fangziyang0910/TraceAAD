@@ -27,7 +27,7 @@ def ranks(records, arm):
     out = {}
     for ctx, scores in by.items():
         arms = list(scores)
-        ordered = sorted(arms, key=lambda a: (scores[a] is None, -(scores[a] or 0)))
+        ordered = sorted(arms, key=lambda a: (scores[a] is None, (scores[a] or 0)))
         rank = {}
         i = 0
         while i < len(ordered):
@@ -68,7 +68,7 @@ def summary(records, arm, order):
         n = len(rs)
         valid = sum(r["status"] == "valid" for r in rs)
         dup = sum(r["status"] in ("undo", "duplicate") for r in rs)
-        imp = sum(r["status"] == "valid" and r["score"] > r["parent_fitness"] + 1e-9 for r in rs)
+        imp = sum(r["status"] == "valid" and r["score"] < r["parent_fitness"] - 1e-9 for r in rs)
         tok = st.median([r["output_tokens"] for r in rs if r.get("output_tokens")])
         words = st.median([r.get("design_words", 0) for r in rs])
         by_ctx = {c: v[a] for c, v in rk.items() if a in v}
@@ -87,9 +87,9 @@ def paired(records, arm, a, b, label, match=None):
                 ra, rb = arms[ka], arms[kb]
                 sa = ra.get("score") if ra["status"] == "valid" else None
                 sb = rb.get("score") if rb["status"] == "valid" else None
-                w = 0.5 if sa == sb else 1.0 if sb is None or (sa is not None and sa > sb) else 0.0
-                ia = ra["status"] == "valid" and ra["score"] > ra["parent_fitness"] + 1e-9
-                ib = rb["status"] == "valid" and rb["score"] > rb["parent_fitness"] + 1e-9
+                w = 0.5 if sa == sb else 1.0 if sb is None or (sa is not None and sa < sb) else 0.0
+                ia = ra["status"] == "valid" and ra["score"] < ra["parent_fitness"] - 1e-9
+                ib = rb["status"] == "valid" and rb["score"] < rb["parent_fitness"] - 1e-9
                 wins[(ctx, ka)] = w
                 imp[(ctx, ka)] = ia - ib
     print(f"  {label:34s} win rate {fmt_ci(boot_mean(wins), True):22s} improvement-rate diff {fmt_ci(boot_mean(imp), True)}  (pairs {len(wins)})")

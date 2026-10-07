@@ -141,8 +141,7 @@ def _distance_matrix(coordinates: np.ndarray) -> np.ndarray:
 class CVRPACOEvaluation(Evaluation):
     """Evaluate an edge heuristic with the published CVRP-ACO framework.
 
-    Scores are negative mean route lengths because LLM4AD methods maximize
-    fitness while CVRP minimizes distance.
+    Scores are mean route lengths; lower is better.
     """
 
     def __init__(
@@ -248,7 +247,7 @@ class CVRPACOEvaluation(Evaluation):
                 processes=workers, initializer=set_kill_with_parent
             ) as pool:
                 costs = pool.map(_run_aco_job, jobs)
-        return -float(np.mean(costs))
+        return float(np.mean(costs))
 
     def evaluate_program(
         self, program_str: str, callable_func: Callable, **kwargs

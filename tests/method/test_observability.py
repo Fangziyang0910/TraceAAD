@@ -15,7 +15,7 @@ def make_function(label: int, score: float) -> Function:
     func = Function(name="heuristic", args="x", body=f"    return {label}")
     func.algorithm = f"algorithm-{label}"
     func.operator = "test"
-    func.score = score
+    func.score = -score if score is not None else None
     func.sample_time = 0.01
     func.evaluate_time = 0.02
     return func
@@ -88,7 +88,7 @@ class ProfilerObservabilityTest(unittest.TestCase):
 
             samples = [json.loads(line) for line in (log_dir / "events.jsonl").read_text().splitlines()
                        if json.loads(line)["kind"] == "candidate"]
-            self.assertEqual([entry["fitness"] for entry in samples], [1.0, 2.0])
+            self.assertEqual([entry["fitness"] for entry in samples], [-1.0, -2.0])
             self.assertEqual([entry["candidate_id"] for entry in samples], [1, 2])
             sources = [json.loads(line) for line in (log_dir / "programs.jsonl").read_text().splitlines()]
             self.assertIn("program-1", [entry["code"] for entry in sources])
@@ -97,7 +97,7 @@ class ProfilerObservabilityTest(unittest.TestCase):
             summary = json.loads((log_dir / "summary.json").read_text())
             self.assertEqual(summary["status"], "finished")
             self.assertEqual(summary["budget_used"], 2)
-            self.assertEqual(summary["best"]["fitness"], 2.0)
+            self.assertEqual(summary["best"]["fitness"], -2.0)
             self.assertEqual(summary["model_calls"], 1)
             self.assertEqual(summary["error_count"], 1)
 

@@ -27,13 +27,13 @@ class HeuristicRecord:
     @property
     def perf_str(self) -> str:
         assert self.perf is not None
-        return str(np.floor(1000 * abs(self.perf)) / 1000)
+        return str(np.floor(1000 * self.perf) / 1000)
 
     @property
     def sid(self) -> str:
         assert self.perf is not None
         return (
-            f"{self.parent_prompt_type}(Perf={str(np.floor(1000 * abs(self.perf)) / 1000)}, "
+            f"{self.parent_prompt_type}(Perf={str(np.floor(1000 * self.perf) / 1000)}, "
             f"Step={self.birth}))"
         )
 

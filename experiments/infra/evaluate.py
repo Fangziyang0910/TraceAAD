@@ -12,7 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from benchmarks.tasks import TASKS, SPLITS, MINIMIZE, heldout_task, scale_of_split, split_of_scale
+from benchmarks.tasks import TASKS, SPLITS, heldout_task, scale_of_split, split_of_scale
 from traceaad.common.config import REVISION
 from traceaad.common.evaluation import ProgramEvaluator
 from traceaad.common.storage import heldout_identity, read_json, save_heldout, write_json
@@ -63,7 +63,7 @@ def evaluate_run(run_dir, splits, *, condition='shared', workers=4, timeout_seco
         result.update(condition=condition, revision=REVISION, protocol=evaluator.protocol,
                       evaluation_seeds=list(seeds), timeout_seconds=evaluation.timeout_seconds,
                       workers=getattr(evaluation, 'n_workers', 1), fitness=score,
-                      objective=-score if score is not None and task in MINIMIZE else score,
+                      objective=score,
                       seconds=sum(row['seconds'] for row in records), scores=[row['score'] for row in records if row['valid']],
                       failures=[{'kind': row['failure_kind'], 'error': row['error']} for row in records if not row['valid']],
                       search_status=summary['status'], sample_order=chosen['sample_order'], variant=variant)

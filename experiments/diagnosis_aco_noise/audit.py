@@ -40,7 +40,7 @@ def programs_to_audit(task):
             valid = sorted(facts.valid.values(), key=lambda p: p["id"])
             best, frontier = None, []
             for p in valid:
-                if best is None or p["fitness"] > best["fitness"]:
+                if best is None or p["fitness"] < best["fitness"]:
                     best = p
                     if p["id"] >= 50:
                         frontier.append(p)

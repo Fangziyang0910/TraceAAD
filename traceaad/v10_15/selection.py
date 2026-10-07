@@ -24,10 +24,10 @@ def probabilities(values):
     target = min(float(n), TARGET_ESS)
     if n == 1:
         return [1.0], 0.0, 1.0, target
-    maximum = max(values)
+    minimum = min(values)
 
     def weighted(beta):
-        weights = [math.exp(beta * (q - maximum)) for q in values]
+        weights = [math.exp(-beta * (q - minimum)) for q in values]
         total = math.fsum(weights)
         p = [w / total for w in weights]
         return p, 1 / math.fsum(x * x for x in p)
@@ -35,12 +35,12 @@ def probabilities(values):
     if weighted(0.0)[1] <= target:
         p, ess = weighted(0.0)
         return p, 0.0, ess, target
-    # ESS falls with beta towards the number of programs tied at the maximum;
+    # ESS falls with beta towards the number of programs tied at the minimum;
     # when that many already reach the target, the limit is uniform over them
     # (beta is unbounded and recorded as None).
-    top = sum(q == maximum for q in values)
+    top = sum(q == minimum for q in values)
     if top >= target:
-        return [1 / top if q == maximum else 0.0 for q in values], None, float(top), target
+        return [1 / top if q == minimum else 0.0 for q in values], None, float(top), target
     lo, hi = 0.0, 1.0
     while weighted(hi)[1] > target:
         hi *= 2
@@ -57,7 +57,7 @@ def probabilities(values):
 
 
 def sample_parent(nodes, rng):
-    """Draw one program with probability rising with its training fitness."""
+    """Draw one program with probability rising as its training fitness decreases."""
     nodes = sorted(nodes, key=lambda n: n["id"])
     p, beta, ess, target = probabilities([n["fitness"] for n in nodes])
     index = rng.choices(range(len(nodes)), weights=p, k=1)[0]
@@ -77,7 +77,7 @@ def choose_explore_references(parent, archive, rng, count=4):
             normalize(n.get("idea")) != parent_idea]
     # The best program per visible idea: reworded copies would fill several cards.
     ideas, unique = set(), []
-    for node in sorted(pool, key=lambda n: (-n["fitness"], n["id"])):
+    for node in sorted(pool, key=lambda n: (n["fitness"], n["id"])):
         idea = normalize(node["idea"])
         if idea not in ideas:
             ideas.add(idea)
@@ -94,7 +94,7 @@ def choose_explore_references(parent, archive, rng, count=4):
                                 for other in [parent, *chosen]) for n in unique}
         minimum = min(scores.values())
         diverse = [n for n in unique if scores[n["id"]] == minimum]
-        quality = max(n["fitness"] for n in diverse)
+        quality = min(n["fitness"] for n in diverse)
         picked = rng.choice([n for n in diverse if n["fitness"] == quality])
         chosen.append(picked)
         similarities.append(scores[picked["id"]])

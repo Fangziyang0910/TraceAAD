@@ -254,8 +254,8 @@ class OBPEvaluation(Evaluation):
             # unused. Count number of used bins.
             num_bins.append((bins_packed != capacity).sum())
         # Score of heuristic function is negative of average number of bins used
-        # across instances (as we want to minimize number of bins).
-        return -np.mean(num_bins)
+        # across instances (lower is better).
+        return float(np.mean(num_bins))
 
 
 if __name__ == '__main__':

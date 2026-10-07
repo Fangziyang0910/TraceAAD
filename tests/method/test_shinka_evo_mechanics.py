@@ -55,7 +55,7 @@ class FakeEvaluation(Evaluation):
             task_description="Design a heuristic.",
             safe_evaluate=False,
         )
-        self.results = list(results or [])
+        self.results = [-r if isinstance(r, (int, float)) else r for r in (results or [])]
         self.programs = []
 
     def evaluate_program(self, program_str, callable_func, **kwargs):
@@ -101,7 +101,7 @@ def make_program(label: int, *, score=1.0, island=0, correct=True, embedding=Non
         program,
         island_idx=island,
         generation=label,
-        combined_score=score,
+        combined_score=-score,
         correct=correct,
         embedding=embedding,
         program_id=f"p{label}",
@@ -129,7 +129,7 @@ class DeterministicRng:
 class ShinkaEvoMechanicsTest(unittest.TestCase):
     def test_seed_evaluated_once_and_dict_result_mapping(self):
         result = {
-            "combined_score": 3.5,
+            "combined_score": -3.5,
             "correct": True,
             "public_metrics": {"gap": 1.0},
             "private_metrics": {"hidden": 2.0},
@@ -142,7 +142,7 @@ class ShinkaEvoMechanicsTest(unittest.TestCase):
         self.assertEqual(method._tot_sample_nums, 1)
         self.assertEqual(len(evaluation.programs), 1)
         self.assertEqual(len(method._archive.all_programs()), 3)
-        self.assertEqual(seed.combined_score, 3.5)
+        self.assertEqual(seed.combined_score, -3.5)
         self.assertEqual(seed.public_metrics, {"gap": 1.0})
         self.assertEqual(seed.private_metrics, {"hidden": 2.0})
         self.assertEqual(seed.text_feedback, "stable")

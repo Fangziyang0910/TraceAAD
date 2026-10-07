@@ -10,12 +10,48 @@ import shutil
 from functools import lru_cache
 
 JOURNAL_NAME = "events.jsonl"
-RESULT_FORMAT = "traceaad-results-v1"
+RESULT_FORMAT = "traceaad-results-v2"
+
+
+def normalize_live_record(value, task):
+    """Read a legacy writer's snapshot as minimized objectives without rewriting it.
+
+    A writer already in memory must keep its byte offsets. Its three CVRP runs
+    are explicitly marked until completion; distances/counts are nonnegative,
+    so this also handles the prefix converted before the writer was detected.
+    """
+    if isinstance(value, list):
+        return [normalize_live_record(v, task) for v in value]
+    if not isinstance(value, dict):
+        return value
+    direction = -1 if task == "op_aco" or str(task).startswith("cob_") else 1
+
+    def metric(item):
+        if isinstance(item, (int, float)) and not isinstance(item, bool):
+            return direction * abs(item)
+        if isinstance(item, list):
+            return [metric(v) for v in item]
+        if isinstance(item, dict):
+            return {k: metric(v) for k, v in item.items()}
+        return item
+
+    return {k: metric(v) if k in {"fitness", "score", "scores", "selection_fitness",
+            "first_score", "start_score", "best_score", "search_best_score"}
+            else normalize_live_record(v, task) for k, v in value.items()}
+
+
+def live_snapshot(run_dir):
+    path = Path(run_dir) / ".minimize/live.json"
+    return json.loads(path.read_text()) if path.exists() else None
 
 
 def read_json(path, default=None):
     path = Path(path)
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
+    if not path.exists():
+        return default
+    value = json.loads(path.read_text(encoding="utf-8"))
+    live = live_snapshot(path.parent) if path.name in {"summary.json", "resume.json", "selection.json", "heldout.json"} else None
+    return normalize_live_record(value, live["task"]) if live else value
 
 
 def rows(path, limit=None):
@@ -41,7 +77,9 @@ def committed_size(run_dir, name=JOURNAL_NAME):
 
 
 def committed_rows(run_dir):
-    yield from rows(Path(run_dir) / JOURNAL_NAME, committed_size(run_dir))
+    live = live_snapshot(run_dir)
+    for row in rows(Path(run_dir) / JOURNAL_NAME, committed_size(run_dir)):
+        yield normalize_live_record(row, live["task"]) if live else row
 
 
 def selected_program(run_dir):

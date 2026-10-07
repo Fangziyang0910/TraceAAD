@@ -22,7 +22,7 @@ def node(identifier, *, parent=None, value=None):
     value = identifier if value is None else value
     return {"id": identifier, "key": str(identifier),
             "code": f"def score(x):\n    return x + {value}\n",
-            "score": float(value), "fitness": float(value),
+            "score": -(float(value)), "fitness": -(float(value)),
             "parent_id": parent["id"] if parent else None,
             "action": "Refine" if parent else "Init",
             "idea": f"Add {value} to the input.", "depth": parent["depth"] + 1 if parent else 0,
@@ -41,9 +41,9 @@ def rendered_prompts():
         "init_reference": builder.initial(roots)["prompt"],
         "refine_root": builder.build("Refine", root)["prompt"],
         "refine_history": builder.build("Refine", child)["prompt"],
-        "explore": builder.build("Explore", child, best_score=3)["prompt"],
+        "explore": builder.build("Explore", child, best_score=-3)["prompt"],
         "explore_cards": PromptBuilder(TokenLLM(), None, ContractEvaluation(), archive, {}, Config(explore_cards=4)).build(
-            "Explore", child, references=[donor], best_score=3)["prompt"],
+            "Explore", child, references=[donor], best_score=-3)["prompt"],
         "crossover": builder.build("Crossover", child, reference=donor)["prompt"],
         "repair": builder.repair({"code": "def score(x)\n return x", "idea": "Fix the signature.",
                                  "parent_id": root["id"], "failure": {"kind": "runtime_error",
@@ -112,21 +112,21 @@ def test_explore_uses_reference_ideas_without_history_or_reference_code():
     references = [node(i) for i in range(3, 7)]
     archive = {n["id"]: n for n in [root, parent, *references]}
     builder = PromptBuilder(TokenLLM(), None, ContractEvaluation(), archive, {}, Config(explore_cards=4))
-    request = builder.build("Explore", parent, references=references, best_score=6)
+    request = builder.build("Explore", parent, references=references, best_score=-6)
     assert request["explore_reference_ids"] == [3, 4, 5, 6]
     assert request["history_edge_ids"] == request["reference_history_edge_ids"] == []
-    assert "Reference 4 · Score 6 · Design: Add 6" in request["prompt"]
+    assert "Reference 4 · Score -6 · Design: Add 6" in request["prompt"]
     assert "Earlier Ideas" not in request["prompt"] and "Step 1" not in request["prompt"]
     assert "return x + 3" not in request["prompt"]
     assert request["prompt"].count("```python") == 3
     # A tight total budget removes cards and records exactly what was displayed.
-    one = builder.build("Explore", parent, references=references[:1], best_score=6)
+    one = builder.build("Explore", parent, references=references[:1], best_score=-6)
     tight = PromptBuilder(TokenLLM(), None, ContractEvaluation(), archive,
                           {}, Config(explore_cards=4, max_input_tokens=one["input_tokens"]))
-    trimmed = tight.build("Explore", parent, references=references, best_score=6)
+    trimmed = tight.build("Explore", parent, references=references, best_score=-6)
     assert trimmed["explore_reference_ids"] == [3]
     assert trimmed["trims"] == ["explore_reference:6", "explore_reference:5", "explore_reference:4"]
-    empty = tight.build("Explore", parent, best_score=6)
+    empty = tight.build("Explore", parent, best_score=-6)
     assert empty["action"] == "Explore" and empty["explore_reference_ids"] == []
 
 
@@ -136,18 +136,18 @@ def test_explore_shows_no_cards_by_default_and_each_program_states_its_cost():
     references = [node(i) for i in range(3, 7)]
     archive = {n["id"]: n for n in [root, parent, *references]}
     builder = PromptBuilder(TokenLLM(), None, ContractEvaluation(), archive, {}, Config())
-    request = builder.build("Explore", parent, references=references, best_score=6)
+    request = builder.build("Explore", parent, references=references, best_score=-6)
     prompt = request["prompt"]
     assert request["explore_reference_ids"] == []
     assert "Reference Designs" not in prompt and "[Search Best]" in prompt
     assert "keep the computation efficient" not in prompt and "Returning a previously" not in prompt
-    assert "[Current Algorithm]\nScore: 2 · Evaluation time: about 1.5 s" in prompt
+    assert "[Current Algorithm]\nScore: -2 · Evaluation time: about 1.5 s" in prompt
     crossover = builder.build("Crossover", parent, reference=references[0])["prompt"]
     assert crossover.count("Evaluation time: about 1.5 s") == 2  # current and reference
     unknown = dict(parent, eval_seconds=None)
     archive[2] = unknown
     assert "Evaluation time" not in PromptBuilder(TokenLLM(), None, ContractEvaluation(), archive, {}, Config()).build(
-        "Explore", unknown, best_score=6)["prompt"]
+        "Explore", unknown, best_score=-6)["prompt"]
 
 
 def test_crossover_renders_and_trims_both_histories_independently():
@@ -189,7 +189,7 @@ def test_initial_reference_trimming_keeps_latest_root():
     one_root = probe.initial(roots)['prompt'].split('[Algorithms Designed So Far]\n', 1)[1]
     one_root = '[Algorithms Designed So Far]\n' + one_root.split('\n\n[Your Task:', 1)[0]
     # The cap is chosen between one and two displayed roots.
-    single = '[Algorithms Designed So Far]\nAlgorithm 1 · Score: 4 · Evaluation time: about 1.5 s · Design: Add 4 to the input.\n'
+    single = '[Algorithms Designed So Far]\nAlgorithm 1 · Score: -4 · Evaluation time: about 1.5 s · Design: Add 4 to the input.\n'
     single += '```python\ndef score(x):\n    return x + 4\n```'
     assert llm.count_tokens(one_root) > llm.count_tokens(single)
     builder = PromptBuilder(llm, None, ContractEvaluation(), archive,

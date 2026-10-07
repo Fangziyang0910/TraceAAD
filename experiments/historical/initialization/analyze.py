@@ -25,7 +25,7 @@ def report_job(job):
     events = read_jsonl(directory / "events.jsonl")
     roots = [event for event in events if event["operator"] == "Init"
              and event["status"] == "ok"]
-    root_best = max(event["fitness"] for event in roots[:8]) if len(roots) >= 8 else None
+    root_best = min(event["fitness"] for event in roots[:8]) if len(roots) >= 8 else None
     first_eight = roots[7] if len(roots) >= 8 else None
     first_eight_attempt = first_eight["candidate_id"] if first_eight else None
     first_eight_evaluation = first_eight["evaluation_id"] if first_eight else None

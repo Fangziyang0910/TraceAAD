@@ -136,7 +136,7 @@ def test_a_deepen_proposal_counts_in_its_parent_experience_and_opens_an_explorat
     assert steps == [(10, "Refine", 9, {"id": 1, "step": 1}), (11, "Refine", 10, {"id": 1, "step": 2}),
                      (12, "Refine", 10, {"id": 1, "step": 3})]
     record = m.facts.explorations[1]
-    assert (record["first_score"], record["best_score"], record["development_attempts"]) == (30.5, 32.5, [10, 11, 12])
+    assert (record["first_score"], record["best_score"], record["development_attempts"]) == (-30.5, -32.5, [10, 11, 12])
     tried, improved = experience(m.attempts_table, m.programs)
     assert tried[proposal["parent_id"]] == 1 and improved[proposal["parent_id"]] == 1
     prompt = m.prompts.build("Refine", m.programs[proposal["parent_id"]])["prompt"]
@@ -196,7 +196,7 @@ def test_each_task_states_its_training_and_test_conditions(task):
     }[task]
     assert f"Each program is evaluated on {expected[0]}." in evaluation
     assert f"After the search, the final program is tested on {expected[1]};" in evaluation
-    program = {"score": 1.0, "eval_seconds": 2.04, "calls": 5, "function_seconds": 0.01}
+    program = {"score": -1.0, "eval_seconds": 2.04, "calls": 5, "function_seconds": 0.01}
     assert (f"Evaluation time: about 2.0 s of the {format(train.timeout_seconds, 'g')} s limit"
             in prompts.measured(program))
 

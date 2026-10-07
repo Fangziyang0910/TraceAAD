@@ -23,8 +23,8 @@ def make_run(tmp_path):
     write_json(run / "run_config.json", {"task": "tsp_construct", "budget": 4,
                "budget_axis": "评价次数", "method_params": {"budget": 4}})
     append_records(run / "events.jsonl", [
-        candidate(1, -12.0, operator="Init", idea="first", code="def f(): return 1"),
-        candidate(2, -10.0, operator="Refine", idea="best", code="def f(): return 2"),
+        candidate(1, 12.0, operator="Init", idea="first", code="def f(): return 1"),
+        candidate(2, 10.0, operator="Refine", idea="best", code="def f(): return 2"),
         candidate(3, None, operator="Tune")])
     return results, run_name
 
@@ -54,7 +54,7 @@ def test_active_run_ignores_stale_error_summary(tmp_path):
         "budget": 4,
         "budget_used": 1,
         "num_nodes": 1,
-        "best": {"fitness": -12.0},
+        "best": {"fitness": 12.0},
         "error": "old connection failure",
     })
 
@@ -140,7 +140,7 @@ def test_historical_budget_and_incomplete_node(tmp_path):
                "budget": 1000, "budget_axis": "预算槽位"})
     write_json(run / "summary.json", {"status": "finished", "budget": 1000,
                "budget_used": 1000, "evaluation_calls": 1097, "best": None})
-    append_records(run / "events.jsonl", [candidate(1, -9), candidate(2, -7)])
+    append_records(run / "events.jsonl", [candidate(1, 9), candidate(2, 7)])
     monitor = ResultsMonitor(tmp_path, "traceaad_v9_19")
     row = monitor.overview("traceaad_v9_19")["tasks"][0]["runs"][0]
     assert row["budget_used"] == row["budget"] == 1000
@@ -149,7 +149,7 @@ def test_historical_budget_and_incomplete_node(tmp_path):
         {"evaluation": 1, "value": 9.0}, {"evaluation": 2, "value": 7.0}]
     write_json(run / "summary.json", {"status": "unknown"})
     (run / "events.jsonl").unlink()
-    append_records(run / "events.jsonl", [candidate(1, -8, code="first"), candidate(2, -7, code="second")])
+    append_records(run / "events.jsonl", [candidate(1, 8, code="first"), candidate(2, 7, code="second")])
     detail = monitor.run_detail("traceaad_v9_19", "tsp_construct", "rep1")
     assert detail["status"] == "unknown"
     assert detail["best"]["code"] == "second"
@@ -160,7 +160,7 @@ def test_missing_final_summary_uses_recorded_evaluations(tmp_path):
     write_json(run / "run_config.json", {"task": "tsp_construct", "budget": 10,
                "budget_axis": "评价次数"})
     write_json(run / "summary.json", {"status": "unknown"})
-    append_records(run / "events.jsonl", [candidate(1, -9), candidate(3, -8, budget_used=2)])
+    append_records(run / "events.jsonl", [candidate(1, 9), candidate(3, 8, budget_used=2)])
     row = ResultsMonitor(tmp_path).overview("traceaad_v9_7")["tasks"][0]["runs"][0]
     assert (row["status"], row["budget_used"], row["valid_nodes"]) == ("unknown", 2, 2)
 
@@ -197,13 +197,13 @@ def candidate(index, fitness, **metadata):
 
 def test_breakthroughs_use_incumbent_not_parent_and_keep_operator_provenance(tmp_path):
     from experiments.infra.monitor_history import TrainingHistory
-    records = [candidate(1, -12, operator="Init"),
-               candidate(2, -10, operator="Refine · Transfer", channel="trial", parent_id=1, idea="真实修改"), candidate(3, -11), candidate(4, -10),
-               candidate(5, None), candidate(6, -9, operator="TRACE_RECHECK"), candidate(7, None)]
+    records = [candidate(1, 12, operator="Init"),
+               candidate(2, 10, operator="Refine · Transfer", channel="trial", parent_id=1, idea="真实修改"), candidate(3, 11), candidate(4, 10),
+               candidate(5, None), candidate(6, 9, operator="TRACE_RECHECK"), candidate(7, None)]
     append_records(tmp_path / "events.jsonl", records)
     points, recent, operators, outcomes = TrainingHistory(tmp_path, minimize=True).read()
     assert [p["evaluation"] for p in points] == [1, 2, 6, 7]
-    assert [p["fitness"] for p in points] == [-12, -10, -9, -9]
+    assert [p["fitness"] for p in points] == [12, 10, 9, 9]
     assert [p["value"] for p in points] == [12, 10, 9, 9]
     assert [p["kind"] for p in points] == ["initial", "breakthrough", "breakthrough", "progress"]
     assert points[0]["gain"] is None
@@ -218,7 +218,7 @@ def test_breakthroughs_use_incumbent_not_parent_and_keep_operator_provenance(tmp
 
 def test_all_breakthroughs_survive_beyond_old_240_point_limit(tmp_path):
     from experiments.infra.monitor_history import TrainingHistory
-    append_records(tmp_path / "events.jsonl", [candidate(i, i / 100) for i in range(1, 401)])
+    append_records(tmp_path / "events.jsonl", [candidate(i, -(i / 100)) for i in range(1, 401)])
     points, _, _, _ = TrainingHistory(tmp_path, minimize=False).read()
     assert len(points) == 400
     assert [p["candidate"] for p in points] == list(range(1, 401))
@@ -229,11 +229,11 @@ def test_all_breakthroughs_survive_beyond_old_240_point_limit(tmp_path):
 def test_live_history_retries_partial_utf8_tail_and_does_not_recount(tmp_path):
     from experiments.infra.monitor_history import TrainingHistory
     path = tmp_path / "events.jsonl"
-    append_records(path, [candidate(1, 1)])
+    append_records(path, [candidate(1, -1)])
     reader = TrainingHistory(tmp_path, minimize=False)
     first = reader.read()
     offset = reader.offset
-    payload = (json.dumps(candidate(2, 2, idea="改进", program=None), ensure_ascii=False) + "\n").encode()
+    payload = (json.dumps(candidate(2, -2, idea="改进", program=None), ensure_ascii=False) + "\n").encode()
     cut = payload.index("改".encode()) + 1
     with path.open("ab") as handle:
         handle.write(payload[:cut])
@@ -251,19 +251,19 @@ def test_live_history_retries_partial_utf8_tail_and_does_not_recount(tmp_path):
 def test_history_cache_resets_after_journal_replacement(tmp_path):
     from experiments.infra.monitor_history import TrainingHistory
     path = tmp_path / "events.jsonl"
-    append_records(path, [candidate(1, 1), candidate(2, 2)])
+    append_records(path, [candidate(1, -1), candidate(2, -2)])
     reader = TrainingHistory(tmp_path, minimize=False)
     assert len(reader.read()[0]) == 2
     replacement = tmp_path / "replacement.jsonl"
-    append_records(replacement, [candidate(1, 9)])
+    append_records(replacement, [candidate(1, -9)])
     replacement.replace(path)
-    assert [p["fitness"] for p in reader.read()[0]] == [9]
+    assert [p["fitness"] for p in reader.read()[0]] == [-9]
 
 
 def test_invalid_scores_never_create_breakthroughs(tmp_path):
     from experiments.infra.monitor_history import TrainingHistory
-    append_records(tmp_path / "events.jsonl", [candidate(1, None), candidate(2, float("nan")),
-                   candidate(3, float("inf")), candidate(4, 0), candidate(5, 0), candidate(6, -1)])
+    append_records(tmp_path / "events.jsonl", [candidate(1, None), candidate(2, -(float("nan"))),
+                   candidate(3, -(float("inf"))), candidate(4, 0), candidate(5, 0), candidate(6, 1)])
     points, _, _, _ = TrainingHistory(tmp_path, minimize=False).read()
     assert [(p["evaluation"], p["kind"]) for p in points] == [(4, "initial"), (6, "progress")]
     assert points[0]["fitness"] == 0
@@ -274,7 +274,7 @@ def test_overview_exposes_same_curve_as_detail_with_candidate_axis(tmp_path):
     write_json(run / "run_config.json", {"method": "v1014", "task": "op_aco", "repeat": 1})
     write_json(run / "summary.json", {"status": "running", "budget": 1000,
                "best": None})
-    append_records(run / "events.jsonl", [candidate(1, 1), candidate(2, 3)])
+    append_records(run / "events.jsonl", [candidate(1, -1), candidate(2, -3)])
     monitor = ResultsMonitor(tmp_path)
     row = monitor.overview("traceaad_v10_14")["tasks"][0]["runs"][0]
     detail = monitor.run_detail("traceaad_v10_14", "op_aco", "rep1")

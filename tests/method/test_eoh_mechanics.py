@@ -12,7 +12,7 @@ from baselines.eoh.population import Population
 def make_function(label: int, score=None) -> Function:
     func = Function(name="heuristic", args="x", body=f"    return {label}")
     func.algorithm = f"algorithm-{label}"
-    func.score = score
+    func.score = -score if score is not None else None
     return func
 
 
@@ -46,7 +46,7 @@ class FakeSampler:
 
 class FakeEvaluator:
     def __init__(self, scores):
-        self.scores = list(scores)
+        self.scores = [-s if s is not None else None for s in scores]
 
     def evaluate_program_record_time(self, program):
         if not self.scores:
@@ -114,7 +114,7 @@ class EoHMechanicsTest(unittest.TestCase):
 
         self.assertEqual(len(method._sampler.prompts), 4)
         self.assertTrue(all("describe your new algorithm" in p for p in method._sampler.prompts))
-        self.assertEqual([func.score for func in method._population.population], [3.0, 2.0])
+        self.assertEqual([func.score for func in method._population.population], [-3.0, -2.0])
         self.assertEqual(method._tot_sample_nums, 0)
         self.assertEqual(method._population.generation, 0)
 
@@ -128,7 +128,7 @@ class EoHMechanicsTest(unittest.TestCase):
 
         self.assertTrue(accepted)
         self.assertEqual(method._tot_sample_nums, 1)
-        self.assertEqual([func.score for func in method._population.population], [2.0])
+        self.assertEqual([func.score for func in method._population.population], [-2.0])
 
     def test_invalid_generation_or_score_does_not_count_or_enter_population(self):
         method = make_method(pop_size=2, funcs=[make_function(2)], scores=[None])
@@ -140,7 +140,7 @@ class EoHMechanicsTest(unittest.TestCase):
 
         self.assertFalse(accepted)
         self.assertEqual(method._tot_sample_nums, 0)
-        self.assertEqual([func.score for func in method._population.population], [1.0])
+        self.assertEqual([func.score for func in method._population.population], [-1.0])
         self.assertEqual(method._population.generation, 0)
 
     def test_operator_selection_uses_weighted_random_choice(self):

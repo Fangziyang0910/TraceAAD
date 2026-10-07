@@ -199,7 +199,7 @@ Make the program correct first; performance improvements are secondary.
         if not inspirations:
             return ""
         if self.inspiration_sort_order == "ascending":
-            inspirations = sorted(inspirations, key=lambda p: p.combined_score)
+            inspirations = sorted(inspirations, key=lambda p: p.combined_score, reverse=True)
         elif self.inspiration_sort_order == "chronological":
             inspirations = sorted(inspirations, key=lambda p: p.generation)
         blocks = ["# Inspiration Programs"]

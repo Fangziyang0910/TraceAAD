@@ -12,10 +12,12 @@ import shutil
 import tarfile
 import time
 
-from traceaad.common.storage import Programs, RESULT_FORMAT, append_jsonl, read_json, rows, write_json
+from traceaad.common.storage import Programs, RESULT_FORMAT as CURRENT_RESULT_FORMAT, append_jsonl, read_json, rows, write_json
 from .legacy_facts import Facts as LegacyFacts
 from .legacy_history import TrainingHistory as LegacyHistory
 from .legacy_results import load_batch_heldout, load_selection, selection_identity
+
+RESULT_FORMAT = "traceaad-results-v1"  # intermediate layout of the original maximized evidence
 
 ROOT = Path(__file__).resolve().parents[3]
 RESULTS = ROOT / "experiments_result"
@@ -93,6 +95,11 @@ def active_names():
 
 def convert_run(run_dir, heldout=None, active=False):
     run_dir = Path(run_dir).resolve()
+    if active:
+        raise ValueError("stop or finish the legacy writer before importing minimized results")
+    current = read_json(run_dir / "run_config.json", {})
+    if current.get("score_direction") == "min" and current.get("result_format") != CURRENT_RESULT_FORMAT:
+        raise ValueError("restore the original maximized archive before legacy import")
     work = run_dir / ".convert"
     stash = run_dir / ".conversion"
     stash.mkdir(exist_ok=True)
@@ -120,6 +127,12 @@ def convert_run(run_dir, heldout=None, active=False):
     history = LegacyHistory(run_dir, minimize)
     curve = history.read()[0]
     progress = history.progress_snapshot()
+    history_available = bool(progress)
+    if not history_available:
+        # Some remote evaluation inputs retain only the final summary/source.
+        # Import those facts without inventing a candidate trajectory.
+        progress = {"budget_used": 0, "x_label": config.get("budget_axis", "候选历史缺失"),
+                    "valid_nodes": 0, "candidate_count": 0, "valid_candidate_count": 0}
     clock = history.timing_snapshot()
     source_path = Path(history.identity[0]) if history.identity[0] != "samples" else None
     source_mtime = source_path.stat().st_mtime_ns if source_path and source_path.exists() else max(
@@ -279,6 +292,11 @@ def convert_run(run_dir, heldout=None, active=False):
                "budget_used": progress["budget_used"], "budget_axis": progress["x_label"],
                "num_nodes": progress["valid_nodes"], "best": best, "candidate_count": progress["candidate_count"],
                "valid_candidate_count": progress["valid_candidate_count"]}
+    if not history_available:
+        summary.update(history_available=False, budget_used=original.get("budget_used", 0),
+                       num_nodes=original.get("num_nodes", 0),
+                       candidate_count=original.get("candidate_count"),
+                       valid_candidate_count=original.get("valid_candidate_count"))
     if best_old.get("selection_fitness") is not None and best:
         summary["best"] = {**best, "selection_fitness": best_old["selection_fitness"]}
     write_json(work / "summary.json", summary)
@@ -307,11 +325,14 @@ def convert_run(run_dir, heldout=None, active=False):
     files = {p.name: p.stat().st_size for p in work.iterdir() if p.name in {
         "events.jsonl", "programs.jsonl", "calls.jsonl.gz"}}
     write_json(work / "resume.json", {"state": state, "files": files})
+    # Normalize the intermediate v1 numbers before the current reader sees them.
+    from .minimize_results import convert_run as minimize_run
+    minimize_run(work, work)
     # Compare the curve, counts and source identities before replacing any data.
     from experiments.infra.monitor_history import TrainingHistory
     normalized = TrainingHistory(work, minimize)
     normalized_curve = normalized.read()[0]
-    old_points = [(p["evaluation"], p["fitness"], p["kind"]) for p in curve]
+    old_points = [(p["evaluation"], -p["fitness"], p["kind"]) for p in curve]
     new_points = [(p["evaluation"], p["fitness"], p["kind"]) for p in normalized_curve]
     if old_points != new_points:
         raise ValueError(f"curve changed during conversion: {run_dir}")

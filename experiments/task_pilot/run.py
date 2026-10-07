@@ -42,7 +42,7 @@ def main(argv=None):
             "model": profile.model, "base_url": profile.base_url, "config": asdict(config),
             "search_instances": search.order, "selection_instances": selection.order,
             "instance_seconds": search.instance_seconds, "workers": args.workers,
-            "search_timeout": search.timeout_seconds})
+            "search_timeout": search.timeout_seconds, "objective": "min"})
     set_random_seed(args.seed)
     llm = build_llm_client(base_url=profile.base_url, model=profile.model, no_proxy=profile.no_proxy,
                            max_tokens=args.output_tokens)

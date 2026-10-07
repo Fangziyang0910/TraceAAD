@@ -20,7 +20,7 @@ from experiments.infra.monitor_results import (
     batch_result_files, load_batch_heldout, load_selection, rep_of)
 from benchmarks.tasks import SCALES, TEST_SCALES
 from experiments.infra.monitor_timing import batch_timing, search_timing
-from traceaad.common.storage import JOURNAL_NAME, selected_program
+from traceaad.common.storage import JOURNAL_NAME, live_snapshot, normalize_live_record, selected_program
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +41,8 @@ def _read_json(path: Path) -> dict[str, Any]:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
+    live = live_snapshot(path.parent) if path.name == "summary.json" else None
+    value = normalize_live_record(value, live["task"]) if live else value
     return value if isinstance(value, dict) else {}
 
 

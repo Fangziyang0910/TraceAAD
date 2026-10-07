@@ -10,7 +10,7 @@ from .history import code_diff, final_attempt, path, score_text, verdict
 SCORES = {
     "tsp_construct": ("the average length of the constructed tours", False),
     "cvrp_aco": ("the average total length of the best routes found by the ant colony", False),
-    "op_aco": ("the average total prize of the best tours found by the ant colony", True),
+    "op_aco": ("the negative average total prize of the best tours found by the ant colony", False),
     "online_bin_packing": ("the average number of bins used", False),
     "vrptw_construct": ("the average total travel distance of the constructed routes", False),
 }
@@ -109,7 +109,7 @@ class PromptBuilder:
         if task in SCORES:
             meaning, higher = SCORES[task]
         else:
-            meaning, higher = "the task fitness", True
+            meaning, higher = "the task objective", False
         self.higher_is_better = higher
         description = self.task_text(evaluation.task_description.strip())
         notes = getattr(evaluation, "design_notes", "")
@@ -335,7 +335,7 @@ class PromptBuilder:
         """Valid programs that set a new search best, after the first, oldest first."""
         best, result = None, []
         for program in sorted((p for p in self.programs.values() if p["valid"]), key=lambda p: p["id"]):
-            if best is None or program["fitness"] > best["fitness"]:
+            if best is None or program["fitness"] < best["fitness"]:
                 if best is not None:
                     result.append((best, program))
                 best = program

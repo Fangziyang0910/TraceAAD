@@ -48,4 +48,4 @@ def test_node_outside_the_feasible_set_names_the_condition():
 
 def test_a_completing_heuristic_keeps_its_score():
     result = outcome(capacity=10, return_value='int(unvisited_nodes[0])')
-    assert result.result == -3.0
+    assert result.result == 3.0

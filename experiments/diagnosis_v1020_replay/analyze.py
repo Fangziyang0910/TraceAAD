@@ -5,8 +5,7 @@ usage: PYTHONPATH=. uv run python -m experiments.diagnosis_v1020_replay.analyze
 Per task and arm: valid children, children better than the parent (against the parent
 measured again in the same pool), the median relative change of the score, the child's
 evaluation time relative to the parent's, and the code similarity to the parent (whether
-the parent's computation is kept). Fitness is higher-is-better on every task, so a positive
-change is an improvement.
+the parent's computation is kept). Fitness is lower-is-better on every task; a positive improvement is an objective decrease.
 """
 
 import json
@@ -33,7 +32,7 @@ def summary():
         for arm in ("R0", "R1", "D"):
             children = [r for r in rows if r["task"] == task and r["arm"] == arm]
             valid = [r for r in children if r.get("status") == "valid"]
-            change = [(r["fitness"] - parent_fitness) / abs(parent_fitness) for r in valid]
+            change = [(parent_fitness - r["fitness"]) / abs(parent_fitness) for r in valid]
             ratio = [r["eval_seconds"] / parent_seconds for r in valid]
             kept = [similarity(r["code"], code) for r in children if r.get("code")]
             table[task][arm] = {

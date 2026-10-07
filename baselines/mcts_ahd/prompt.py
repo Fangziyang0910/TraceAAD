@@ -73,7 +73,7 @@ Do not give additional explanations.'''
         indivs_prompt = ''
         for i, indi in enumerate(indivs):
             indi.docstring = ''
-            indivs_prompt += f"No.{i + 1} algorithm's description, its corresponding code and its objective value are:\n{indi.algorithm}\n{str(indi)}\nObjective value: {str(-indi.score)}\n\n"
+            indivs_prompt += f"No.{i + 1} algorithm's description, its corresponding code and its objective value are:\n{indi.algorithm}\n{str(indi)}\nObjective value: {str(indi.score)}\n\n"
         # create prmpt content
         prompt_content = f'''{task_prompt}
 I have {len(indivs)} existing algorithms with their codes as follows:
@@ -97,7 +97,7 @@ Do not give additional explanations.'''
         indivs_prompt = ''
         for i, indi in enumerate(indivs):
             indi.docstring = ''
-            indivs_prompt += f"No.{i + 1} algorithm's description, its corresponding code and its objective value are:\n{indi.algorithm}\n{str(indi)}\nObjective value: {str(-indi.score)}\n\n"
+            indivs_prompt += f"No.{i + 1} algorithm's description, its corresponding code and its objective value are:\n{indi.algorithm}\n{str(indi)}\nObjective value: {str(indi.score)}\n\n"
         # create prmpt content
         prompt_content = f'''{task_prompt}
 I have {len(indivs)} existing algorithms with their codes and objective values as follows:
@@ -161,7 +161,7 @@ Do not give additional explanations.'''
         indivs_prompt = ''
         for i, indi in enumerate(indivs):
             indi.docstring = ''
-            indivs_prompt += f"No.{i + 1} algorithm's description, its corresponding code and its objective value are:\n{indi.algorithm}\n{str(indi)}\nObjective value: {str(-indi.score)}\n\n"
+            indivs_prompt += f"No.{i + 1} algorithm's description, its corresponding code and its objective value are:\n{indi.algorithm}\n{str(indi)}\nObjective value: {str(indi.score)}\n\n"
         # create prmpt content
         prompt_content = f'''{task_prompt}
 I have {len(indivs)} existing algorithms with their codes and objective values as follows:

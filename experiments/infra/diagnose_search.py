@@ -33,7 +33,7 @@ def computation_stats(facts, attempts, time_limit, final_candidates):
     of the training time limit their evaluation took.
     """
     programs, archive = facts.programs, facts.valid
-    ranking = sorted(archive.values(), key=lambda n: (-n["fitness"], n["id"]))
+    ranking = sorted(archive.values(), key=lambda n: (n["fitness"], n["id"]))
     share = (lambda node: node["eval_seconds"] / time_limit
              if time_limit and node.get("eval_seconds") is not None else None)
     ratios = {}
@@ -73,13 +73,13 @@ def diagnostics(facts, budget, init_attempts, final_candidates=5, method="v1017"
         improved = sum(1 for a, p in started if p is not None and p["valid"] and better(programs[a["program_id"]]["fitness"], p["fitness"]))
         actions[name] = {"attempts": len(proposed), "new_valid": len(new), "improved_over_start": improved,
                          "improvement_per_attempt": improved / len(proposed) if proposed else None}
-    frontier, frontiers = -math.inf, Counter()
+    frontier, frontiers = math.inf, Counter()
     explore_late = 0
     for node in sorted(archive.values(), key=lambda n: n["id"]):
-        if node["fitness"] > frontier:
+        if node["fitness"] < frontier:
             frontiers[node["action"]] += 1
             explore_late += node["action"] == "Explore" and node["id"] > 300
-        frontier = max(frontier, node["fitness"])
+        frontier = min(frontier, node["fitness"])
     # How much of the budget went to programs that had already been tried
     # many times without improving (the waste experience should remove).
     tried, improved, on_tried_out = Counter(), Counter(), 0
@@ -105,7 +105,7 @@ def diagnostics(facts, budget, init_attempts, final_candidates=5, method="v1017"
     search = [e for e in facts.evaluations if e["role"] == "search"]
     cpu = sorted(e["cpu_seconds"] for e in search
                  if e["valid"] and isinstance(e.get("cpu_seconds"), (int, float)))
-    best = max(archive.values(), key=lambda n: (n["fitness"], -n["id"])) if archive else None
+    best = min(archive.values(), key=lambda n: (n["fitness"], n["id"])) if archive else None
     return {"status_counts": counts, "actions": actions,
             "repair_success": sum(a["status"] == "valid" for a in repairs.values()),
             "repair_attempts": len(repairs),
@@ -134,12 +134,12 @@ def random_development_stats(facts, attempts, init_attempts, final_candidates):
     gains, moved = [], []
     for e in developed:
         first, reached = programs[e["proposed_id"]], programs[e["best_id"]]
-        gains.append((reached["fitness"] - first["fitness"]) / max(abs(first["fitness"]), 1e-12))
+        gains.append((first["fitness"] - reached["fitness"]) / max(abs(first["fitness"]), 1e-12))
         start = programs.get(e["start_id"])
         if start is not None and reached["id"] != first["id"]:
             moved.append(similarity(reached["code"], start["code"]) - similarity(first["code"], start["code"]))
     produced = {a.get("program_id") for a in inside if a["status"] == "valid"}
-    top = [n["id"] for n in sorted(facts.valid.values(), key=lambda n: (-n["fitness"], n["id"]))][:final_candidates]
+    top = [n["id"] for n in sorted(facts.valid.values(), key=lambda n: (n["fitness"], n["id"]))][:final_candidates]
     # V10.20 opens explorations from Explore and Deepen proposals.
     by_action = {}
     for e, gain in zip(developed, gains):
@@ -162,7 +162,7 @@ def random_development_stats(facts, attempts, init_attempts, final_candidates):
 
 def v1018_development_stats(facts, attempts, init_attempts, final_candidates):
     programs = facts.programs
-    ranking = [p["id"] for p in sorted(facts.valid.values(), key=lambda p: (-p["fitness"], p["id"]))]
+    ranking = [p["id"] for p in sorted(facts.valid.values(), key=lambda p: (p["fitness"], p["id"]))]
     """How development used the budget, what it changed and where its designs ended."""
     records = sorted(facts.explorations.values(), key=lambda e: e["id"])
     tagged = {a["id"] for a in attempts if a.get("exploration") and a["exploration"]["step"] > 0}
@@ -173,7 +173,7 @@ def v1018_development_stats(facts, attempts, init_attempts, final_candidates):
     gains, moved = [], []
     for e in developed:
         first, reached = programs[e["proposed_id"]], programs[e["best_id"]]
-        gains.append((reached["fitness"] - first["fitness"]) / max(abs(first["fitness"]), 1e-12))
+        gains.append((first["fitness"] - reached["fitness"]) / max(abs(first["fitness"]), 1e-12))
         start = programs.get(e["start_id"])
         if start is not None and reached["id"] != first["id"]:
             moved.append(similarity(reached["code"], start["code"]) - similarity(first["code"], start["code"]))
@@ -201,7 +201,7 @@ def v1018_development_stats(facts, attempts, init_attempts, final_candidates):
 
 def v1019_development_stats(facts, attempts, init_attempts, final_candidates):
     programs = facts.programs
-    ranking = [p["id"] for p in sorted(facts.valid.values(), key=lambda p: (-p["fitness"], p["id"]))]
+    ranking = [p["id"] for p in sorted(facts.valid.values(), key=lambda p: (p["fitness"], p["id"]))]
     """How changes used the budget, what their development did and where they ended."""
     records = sorted(facts.explorations.values(), key=lambda e: e["id"])
     tagged = {a["id"] for a in attempts if a.get("exploration") and a["exploration"]["step"] > 0}

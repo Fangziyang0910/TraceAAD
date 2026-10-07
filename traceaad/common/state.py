@@ -27,6 +27,9 @@ class Progress:
 class Facts:
     def __init__(self, run_dir):
         self.run_dir = Path(run_dir)
+        config = read_json(self.run_dir / "run_config.json", {})
+        if config.get("result_format") == "traceaad-results-v1":
+            raise ValueError("migrate maximization results with minimize_results before reading or resuming")
         self.path = self.run_dir / "events.jsonl"
         self.summary_path = self.run_dir / "summary.json"
         self.checkpoint_path = self.run_dir / "resume.json"

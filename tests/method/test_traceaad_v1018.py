@@ -26,7 +26,7 @@ class SelectionEvaluation(TinyEvaluation):
         value = callable_func(1)
         if value in self.broken:
             raise ValueError("loops on the selection set")
-        return value + self.offset
+        return -(value + self.offset)
 
 
 class Reexecuting(TinyEvaluation):
@@ -38,7 +38,7 @@ class Reexecuting(TinyEvaluation):
             namespace = {}
             exec(program_str, namespace)
             total += namespace["score"](value)
-        return total
+        return -total
 
 
 def method(tmp_path, *answers, budget=10, selection=None, **options):
@@ -59,12 +59,12 @@ def test_evaluation_counts_outermost_calls_also_when_the_program_is_executed_aga
     recursive = "def score(x):\n    return x + 1 if x > 3 else score(x + 1)\n"
     seeded.reset()
     outcome = evaluator.evaluate_program_with_details(recursive, seed=1)
-    assert outcome.result == {"score": 5.0}
+    assert outcome.result == {"score": -5.0}
     assert seeded.measured()["calls"] == 1 and seeded.measured()["function_seconds"] >= 0
     again = SeededEvaluation(Reexecuting())
     again.reset()
     outcome = SecureEvaluator(again).evaluate_program_with_details('def score(x):\n    return x\n', seed=1)
-    assert outcome.result == {"score": 3.0} and again.measured()["calls"] == 3
+    assert outcome.result == {"score": -3.0} and again.measured()["calls"] == 3
 
 
 def test_a_call_still_running_at_the_limit_is_measured_and_stated(tmp_path):
@@ -110,7 +110,7 @@ def test_temperature_stays_finite_when_many_programs_share_the_top_score():
     beta, ess = temperature(values)
     assert 0 < beta < float("inf") and ess == pytest.approx(8)
     assert temperature([1.0, 2.0, 3.0]) == (0.0, 3.0)
-    nodes = [{"id": i, "fitness": v, "valid": True} for i, v in enumerate(values)]
+    nodes = [{"id": i, "fitness": -v, "valid": True} for i, v in enumerate(values)]
     programs = {n["id"]: n for n in nodes}
     p, _ = weights(nodes, {}, programs)
     assert p[:10] == pytest.approx([p[0]] * 10)
@@ -118,8 +118,8 @@ def test_temperature_stays_finite_when_many_programs_share_the_top_score():
 
 
 def test_programs_tried_many_times_without_improving_lose_weight():
-    programs = {1: {"id": 1, "fitness": 5.0, "valid": True}, 2: {"id": 2, "fitness": 5.0, "valid": True},
-                3: {"id": 3, "fitness": 9.0, "valid": True}}
+    programs = {1: {"id": 1, "fitness": -5.0, "valid": True}, 2: {"id": 2, "fitness": -5.0, "valid": True},
+                3: {"id": 3, "fitness": -9.0, "valid": True}}
     attempts = {i: {"id": i, "action": "Refine", "parent_id": 1, "repair_of": None,
                     "status": "duplicate", "program_id": 2} for i in range(10, 20)}
     attempts[20] = {"id": 20, "action": "Explore", "parent_id": 2, "repair_of": None,
@@ -134,8 +134,8 @@ def test_programs_tried_many_times_without_improving_lose_weight():
 
 
 def test_a_repair_counts_for_the_attempt_it_repairs():
-    programs = {1: {"id": 1, "fitness": 5.0, "valid": True}, 2: {"id": 2, "valid": False},
-                3: {"id": 3, "fitness": 6.0, "valid": True}}
+    programs = {1: {"id": 1, "fitness": -5.0, "valid": True}, 2: {"id": 2, "valid": False},
+                3: {"id": 3, "fitness": -6.0, "valid": True}}
     attempts = {2: {"id": 2, "action": "Refine", "parent_id": 1, "repair_of": None,
                     "status": "timeout", "program_id": 2},
                 3: {"id": 3, "action": "Repair", "parent_id": 2, "repair_of": 2,
@@ -158,12 +158,12 @@ def test_events_link_duplicates_failures_and_repairs(tmp_path):
     assert not m.programs[10]["valid"] and "boom" in m.programs[10]["failure"]["error"]
     assert repair["repair_of"] == 10 and repair["parent_id"] == 10 and repair["action"] == "Repair"
     repaired = m.archive[11]
-    assert repaired["parent_id"] == 10 and repaired["fitness"] == 20 and repaired["calls"] == 1
+    assert repaired["parent_id"] == 10 and repaired["fitness"] == -20 and repaired["calls"] == 1
     # The formation path folds the failed first version into its repaired step:
     # the failure and its line are stated, the diff goes to the repaired version.
     request = m.prompts.build("Refine", repaired)
     prompt = request["prompt"]
-    assert "Step 1 (latest: produced the current algorithm) · Refine, then Repair · score 8 → score 20 (improved)" in prompt
+    assert "Step 1 (latest: produced the current algorithm) · Refine, then Repair · score -8 → score -20 (improved)" in prompt
     assert "First version failed: runtime error: ValueError: boom at `raise ValueError('boom')`" in prompt
     assert "+    return 20" in prompt and "raise ValueError" not in prompt.split("Code diff")[1]
     assert request["history_edge_ids"] == [11]
@@ -172,8 +172,8 @@ def test_events_link_duplicates_failures_and_repairs(tmp_path):
     request = m.prompts.build("Refine", parent)
     assert request["attempt_ids"] == [9, 10]
     assert "2 attempts started from the current algorithm; 1 produced a new algorithm scoring better than it." in request["prompt"]
-    assert "the same code as an algorithm already evaluated in this search (score 3)" in request["prompt"]
-    assert ("failed: runtime error: ValueError: boom at `raise ValueError('boom')`; repaired: score 20 (improved)"
+    assert "the same code as an algorithm already evaluated in this search (score -3)" in request["prompt"]
+    assert ("failed: runtime error: ValueError: boom at `raise ValueError('boom')`; repaired: score -20 (improved)"
             in request["prompt"])
     assert "1 call to the function, under 0.1 s inside it" in m.prompts.measured(repaired)
     tried, improved = experience(m.attempts_table, m.programs)
@@ -202,7 +202,7 @@ def test_progress_credits_a_repaired_program_to_the_generation_it_repaired(tmp_p
     roots(m)
     m._attempt(m.prompts.build("Refine", m.archive[8]), parent=m.archive[8])
     prompt = m.prompts.build("Explore", m.archive[2])["prompt"]
-    assert "Attempt 9 · Refine, then Repair from an algorithm scoring 8 → 20 (previous best 8)" in prompt
+    assert "Attempt 9 · Refine, then Repair from an algorithm scoring -8 → -20 (previous best -8)" in prompt
 
 
 def test_explore_sees_how_the_search_best_improved(tmp_path):
@@ -212,9 +212,9 @@ def test_explore_sees_how_the_search_best_improved(tmp_path):
     request = m.prompts.build("Explore", m.archive[2])
     prompt = request["prompt"]
     assert "[How the Best Score Improved in This Search]" in prompt
-    assert "Attempt 9 · Refine from an algorithm scoring 8 → 20 (previous best 8)" in prompt
-    assert "Attempt 8 · Init as an initial algorithm → 8 (previous best 7)" in prompt
-    assert "Best score found so far in this search: 20." in prompt
+    assert "Attempt 9 · Refine from an algorithm scoring -8 → -20 (previous best -8)" in prompt
+    assert "Attempt 8 · Init as an initial algorithm → -8 (previous best -7)" in prompt
+    assert "Best score found so far in this search: -20." in prompt
     assert request["progress_ids"][-1] == 9 and len(request["progress_ids"]) == 8
     assert "[How the Current Algorithm Was Formed]" not in prompt
 
@@ -302,7 +302,7 @@ def test_a_weak_first_version_is_developed_from_the_best_version_it_reached(tmp_
         (9, tags(m)[0][1], "Explore", 0), (10, 9, "Develop", 1), (11, 10, "Develop", 2), (12, 10, "Develop", 3)]
     record = m.facts.explorations[1]
     assert record["reason"] == "stalled" and record["development_attempts"] == [10, 11, 12]
-    assert (record["first_score"], record["best_score"], record["best_id"]) == (2.5, 2.7, 10)
+    assert (record["first_score"], record["best_score"], record["best_id"]) == (-2.5, -2.7, 10)
     assert m._open_exploration() is None
 
 
@@ -330,7 +330,7 @@ def test_development_continues_while_it_improves_up_to_the_cap(tmp_path):
         m._search()
     record = m.facts.explorations[1]
     assert record["reason"] == "cap" and len(record["development_attempts"]) == 8
-    assert record["best_score"] == 2.58
+    assert record["best_score"] == -2.58
 
 
 def test_development_shares_the_explore_draws_and_blocks_new_proposals(tmp_path):
@@ -374,16 +374,16 @@ def test_the_develop_context_starts_at_the_design_and_lists_its_other_attempts(t
     source = opened["source"]
     request = m.prompts.develop(opened["best"], source, opened["development"])
     prompt = request["prompt"]
-    assert "[Current Algorithm]\nScore: 2.7" in prompt
+    assert "[Current Algorithm]\nScore: -2.7" in prompt
     assert (f"The current algorithm develops a design that an Explore step proposed from an algorithm scoring {source['score']:g} "
-            f"(Design: return {source['score']:g}). The best algorithm found so far in this search scores 8.") in prompt
+            f"(Design: return {-source['score']:g}). The best algorithm found so far in this search scores -8.") in prompt
     history = prompt.split("[How the Proposed Design Has Been Developed]")[1].split("[Other Development")[0]
-    assert "Start · first version of the proposed design · score 2.5" in history
-    assert "Step 1 (latest: produced the current algorithm) · Develop · score 2.5 → score 2.7 (improved)" in history
-    assert f"return {source['score']:g}" not in history  # the source is a stated fact, not a version on the path
+    assert "Start · first version of the proposed design · score -2.5" in history
+    assert "Step 1 (latest: produced the current algorithm) · Develop · score -2.5 → score -2.7 (improved)" in history
+    assert f"return {-source['score']:g}" not in history  # the source is a stated fact, not a version on the path
     assert ("1 development attempt did not produce a version on the path above. All are listed, oldest first"
             in prompt)
-    assert "Attempt 11 · Develop from the version scoring 2.7 · Design: return 2.6\n  → score 2.6 (worse)" in prompt
+    assert "Attempt 11 · Develop from the version scoring -2.7 · Design: return 2.6\n  → score -2.6 (worse)" in prompt
     assert ("Develop the proposed design further: make the computation it introduces work as intended and write a "
             "version that scores better than its current version. Every version and attempt shown above has "
             "already been evaluated.") in prompt

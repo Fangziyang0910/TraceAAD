@@ -3,7 +3,7 @@ Return a numeric score.
 
 [Evaluation]
 Each program is evaluated on a fixed set of training instances.
-Score: the task fitness. Higher is better.
+Score: the task objective. Lower is better.
 The whole evaluation must finish within 20 seconds.
 
 [Target Function]

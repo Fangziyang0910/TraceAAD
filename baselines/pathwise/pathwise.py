@@ -78,7 +78,7 @@ class PathWise:
         PathWise keeps the original mechanism's two-timescale search: a population
         anchors each outer iteration, and an entailment graph is expanded by policy
         actions, world-model rollouts, and critic reflections inside the iteration.
-        Scores follow LLM4AD's convention: higher is better.
+        Scores are minimized objectives: lower is better.
         """
         max_fe = kwargs.pop("max_fe", None)
         alias_num_actions = kwargs.pop("N_a", None)
@@ -220,7 +220,7 @@ class PathWise:
     def _update_best(self, node: PathWiseNode):
         if not self._valid_score(node.score):
             return
-        if self._best_node is None or node.score > self._best_node.score:
+        if self._best_node is None or node.score < self._best_node.score:
             self._best_node = copy.deepcopy(node)
 
     def _register_node(self, node: PathWiseNode, program: Program):
@@ -397,7 +397,7 @@ class PathWise:
                   node_ids=[node.node_id for node in self._population.nodes])
 
     def _fallback_action(self, state: list[PathWiseNode]) -> PathWiseAction:
-        best = max(state, key=lambda node: node.score)
+        best = min(state, key=lambda node: node.score)
         return PathWiseAction(
             parents=[best.node_id],
             rationale="Refine the best available heuristic by changing its core decision rule.",
@@ -472,7 +472,7 @@ class PathWise:
         parent_nodes = [node for node in state if node.node_id in action.parents]
         fallback_source = parent_nodes[0] if parent_nodes else (self._population.nodes[0] if self._population.nodes else None)
         if fallback_source is None:
-            return _Rollout(None, float("-inf"), reason, action, sample_time)
+            return _Rollout(None, float("inf"), reason, action, sample_time)
         description = (
             f"Fallback heuristic {rollout_idx} "
             f"(invalid LLM output after {self._max_world_model_retries} retries)."
@@ -487,7 +487,7 @@ class PathWise:
             graph=graph,
             sample_time=sample_time,
         )
-        score = node.score if node is not None else float("-inf")
+        score = node.score if node is not None else float("inf")
         if node is not None:
             log_event(self, event="world_model_fallback", method="pathwise", status="fallback",
                       sample_order=self._tot_sample_nums, action_idx=action_idx,
@@ -579,9 +579,9 @@ class PathWise:
                 graph=graph,
                 sample_time=sample_time,
             )
-            score = node.score if node is not None else float("-inf")
+            score = node.score if node is not None else float("inf")
             return _Rollout(node, score, description, action, sample_time)
-        return _Rollout(None, float("-inf"), "Invalid world-model rollout.", action, total_sample_time)
+        return _Rollout(None, float("inf"), "Invalid world-model rollout.", action, total_sample_time)
 
     def _run_world_model_rollouts(
             self,
@@ -672,8 +672,8 @@ class PathWise:
         valid = self._finite_rollouts(rollouts_per_action)
         if len(valid) < 2:
             return self._world_model_reflection
-        best = max(valid, key=lambda rollout: rollout.score).node
-        worst = min(valid, key=lambda rollout: rollout.score).node
+        best = min(valid, key=lambda rollout: rollout.score).node
+        worst = max(valid, key=lambda rollout: rollout.score).node
         if best.score == worst.score:
             return self._world_model_reflection
         prompt = self._prompt.world_model_critic_prompt(best, worst)
@@ -744,7 +744,7 @@ class PathWise:
         if not valid_rollouts:
             return None
 
-        selected = max(valid_rollouts, key=lambda rollout: rollout.score)
+        selected = min(valid_rollouts, key=lambda rollout: rollout.score)
         self._discarded_nodes.extend(
             copy.deepcopy(rollout.node)
             for rollout in valid_rollouts
@@ -799,7 +799,7 @@ class PathWise:
     def _fallback_final_node(self, graph: PathWiseGraph) -> PathWiseNode | None:
         if not self._population.nodes or not self._has_budget():
             return None
-        best = max(self._population.nodes, key=lambda node: node.score)
+        best = min(self._population.nodes, key=lambda node: node.score)
         node = self._evaluate_function(
             best.function,
             "fallback",
@@ -824,13 +824,13 @@ class PathWise:
             for node_id, node in graph.nodes.items()
             if node_id not in parent_ids and node_id not in self._root_node_ids
         ]
-        return sorted(leaves, key=lambda node: node.score, reverse=True)
+        return sorted(leaves, key=lambda node: node.score)
 
     def _rank_unique(self, nodes: list[PathWiseNode]) -> list[PathWiseNode]:
         unique = []
         seen_code = set()
         seen_score = set()
-        for node in sorted(nodes, key=lambda item: item.score, reverse=True):
+        for node in sorted(nodes, key=lambda item: item.score):
             if not self._valid_score(node.score):
                 continue
             code_key = str(node.function)

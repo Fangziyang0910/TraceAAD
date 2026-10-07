@@ -82,7 +82,7 @@ def run_dir(task):
 def decision_state(task):
     """The parent and the facts committed before the last Refine attempt that started from it."""
     facts = Facts(run_dir(task))
-    parent = max(facts.valid.values(), key=lambda p: (p["fitness"], -p["id"]))
+    parent = min(facts.valid.values(), key=lambda p: (p["fitness"], p["id"]))
     refines = [a["id"] for a in facts.attempts.values()
                if a["parent_id"] == parent["id"] and a["action"] == "Refine" and a.get("repair_of") is None]
     cutoff = max(refines) - 1 if refines else max(facts.attempts)

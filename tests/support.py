@@ -12,7 +12,7 @@ class TinyEvaluation(Evaluation):
         )
 
     def evaluate_program(self, program_str, callable_func, **kwargs):
-        return callable_func(1)
+        return -callable_func(1)
 
 
 class FakeLLM:

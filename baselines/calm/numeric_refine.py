@@ -149,7 +149,7 @@ def run_numeric_refinement(
         a for a in list(candidate_parents) + list(archive_parents)
         if getattr(a, 'perf', None) is not None
     ]
-    parent_pool = sorted(parent_pool, key=lambda a: a.perf, reverse=True)
+    parent_pool = sorted(parent_pool, key=lambda a: a.perf)
 
     unique_parents = []
     seen_parent_keys = set()
@@ -244,14 +244,14 @@ def run_numeric_refinement(
             )
             continue
         record_performance_profile(algo.perfs)
-        is_new_best = algo.perf > best_perf
+        is_new_best = algo.perf < best_perf
         is_new = algo not in algos
         if is_new:
             algos.append(algo)
             refined_algos.append(algo)
             if register_accepted is not None:
                 register_accepted(algo)
-        is_better = algo.perf > parent.perf
+        is_better = algo.perf < parent.perf
         log_info(
             f'{source_label} | Based on: [{parent.sid}] | Perf: {algo.perf:.6f} | '
             f'New Best: {is_new_best} | Better than parent: {is_better} | '

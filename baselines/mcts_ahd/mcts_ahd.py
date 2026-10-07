@@ -193,7 +193,7 @@ class MCTS_AHD:
             score = getattr(individual, 'score', None)
             if score is not None:
                 return score
-        return getattr(node, 'Q', None)
+        return -node.Q if getattr(node, 'Q', None) is not None else None
 
     def _adjust_pop_size(self):
         # adjust population size
@@ -353,7 +353,7 @@ class MCTS_AHD:
     def check_duplicate_obj(self, population, score):
         for ind in population:
             if isinstance(ind, MCTSNode):
-                ind_score = ind.individual.score if ind.individual is not None else ind.Q
+                ind_score = ind.individual.score if ind.individual is not None else -ind.Q
             else:
                 ind_score = ind.score
             if score == ind_score:
@@ -407,14 +407,14 @@ class MCTS_AHD:
                 unique_pop.append(individual)
                 unique_scores.append(individual.score)
 
-        return heapq.nlargest(size, unique_pop, key=lambda x: x.score)
+        return heapq.nsmallest(size, unique_pop, key=lambda x: x.score)
 
     def _current_elite_set(self):
         candidates = list(self._population.population) + list(self._population.next_gen_pop)
         unique_pop = []
         unique_scores = []
         for individual in candidates:
-            if individual.score is None or individual.score == float('-inf'):
+            if individual.score is None or individual.score == float('inf'):
                 continue
             if individual.score not in unique_scores:
                 unique_pop.append(individual)
@@ -423,7 +423,7 @@ class MCTS_AHD:
         pop_size = getattr(self, '_pop_size', None)
         if pop_size is None:
             pop_size = getattr(self._population, '_pop_size', len(unique_pop))
-        return heapq.nlargest(pop_size, unique_pop, key=lambda x: x.score)
+        return heapq.nsmallest(pop_size, unique_pop, key=lambda x: x.score)
 
     def _should_progressively_widen(self, mcts: MCTS, node: MCTSNode) -> bool:
         return int(node.visits ** mcts.alpha) > len(node.children)
@@ -446,15 +446,15 @@ class MCTS_AHD:
                 unique_algorithms.append(algorithm)
 
         # The reference code orders s1 paths with nlargest(objective). LLM4AD
-        # scores are sign-flipped objectives, so the equivalent order is
-        # nsmallest(score).
-        return heapq.nsmallest(size, unique_pop, key=lambda x: x.score)
+        # scores are minimized objectives, so the worst-first order is
+        # nlargest(score).
+        return heapq.nlargest(size, unique_pop, key=lambda x: x.score)
 
     def _select_e2_reference(self, node_set, father):
         candidates = []
         for entry in node_set:
             individual = self._individual_from_entry(entry)
-            if individual is not None and individual.score is not None and individual.score != float('-inf'):
+            if individual is not None and individual.score is not None and individual.score != float('inf'):
                 candidates.append(individual)
         if not candidates:
             candidates = self._current_elite_set()
@@ -463,13 +463,13 @@ class MCTS_AHD:
         if len(other) == 0:
             return None
 
-        other = sorted(other, key=lambda f: f.score, reverse=True)
+        other = sorted(other, key=lambda f: f.score)
         probs = [1 / (rank + 1 + len(other)) for rank in range(len(other))]
         return random.choices(other, weights=probs, k=1)[0]
 
     def _add_root_child(self, mcts: MCTS, func: Function):
-        now_node = MCTSNode(func.algorithm, str(func), -1 * func.score, individual=func,
-                            parent=mcts.root, depth=1, visit=1, Q=func.score, raw_info=func)
+        now_node = MCTSNode(func.algorithm, str(func), func.score, individual=func,
+                            parent=mcts.root, depth=1, visit=1, Q=-func.score, raw_info=func)
         mcts.root.add_child(now_node)
         mcts.backpropagate(now_node)
         now_node.subtree.append(now_node)
@@ -611,10 +611,10 @@ class MCTS_AHD:
                 return node_set
             parent_score = None
 
-        if is_valid_func and func.score != float('-inf'):
+        if is_valid_func and func.score != float('inf'):
             self._population.register_function(func)
-            now_node = MCTSNode(func.algorithm, str(func), -1 * func.score, individual=func,
-                                parent=cur_node, depth=cur_node.depth + 1, visit=1, Q=func.score, raw_info=func)
+            now_node = MCTSNode(func.algorithm, str(func), func.score, individual=func,
+                                parent=cur_node, depth=cur_node.depth + 1, visit=1, Q=-func.score, raw_info=func)
             if option == 'e1':
                 now_node.subtree.append(now_node)
             cur_node.add_child(now_node)
@@ -647,7 +647,7 @@ class MCTS_AHD:
             try:
                 prompt = MAPrompt.get_prompt_i1(self._task_description_str, self._function_to_evolve)
                 func = self._sample_evaluate_register(prompt, func_only=True, operator='i1')
-                if func is False or func.score is None or func.score == float('-inf'):
+                if func is False or func.score is None or func.score == float('inf'):
                     continue
                 brothers.append(func)
                 self._population.register_function(func)
@@ -665,7 +665,7 @@ class MCTS_AHD:
                     continue
                 prompt = MAPrompt.get_prompt_e1(self._task_description_str, indivs, self._function_to_evolve)
                 func = self._sample_evaluate_register(prompt, func_only=True, operator='e1')
-                if func is False or func.score is None or func.score == float('-inf'):
+                if func is False or func.score is None or func.score == float('inf'):
                     continue
                 if self.check_duplicate_obj(brothers, func.score) or self.check_duplicate(brothers, str(func)):
                     continue

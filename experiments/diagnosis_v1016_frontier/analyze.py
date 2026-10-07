@@ -10,8 +10,8 @@ OUT = "experiments_result/diagnosis_v1016_frontier"
 
 
 def rel(a, b):
-    """Relative improvement of fitness a over b (fitness: higher is better)."""
-    return (a - b) / abs(b)
+    """Relative improvement of fitness a over b (fitness: lower is better)."""
+    return (b - a) / abs(b)
 
 
 def main():
@@ -35,7 +35,7 @@ def main():
             last = [p for p in ps if p["t"] <= cut]
             if last:
                 at[run][cut] = (last[-1]["sel"], last[-1]["fitness"], ps[0]["ver"], ps[0]["task"])
-        best_sel = max(p["sel"] for p in ok)
+        best_sel = min(p["sel"] for p in ok)
         at[run]["best_sel"] = best_sel
 
     print("successive training-frontier steps: share whose selection score also improves")

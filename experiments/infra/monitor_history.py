@@ -6,7 +6,7 @@ from threading import RLock
 import json
 import math
 
-from traceaad.common.storage import Programs, committed_size, read_json, write_json
+from traceaad.common.storage import Programs, committed_size, live_snapshot, normalize_live_record, read_json, write_json
 
 
 def finite(value):
@@ -18,7 +18,7 @@ def finite(value):
 
 
 class TrainingHistory:
-    CACHE_VERSION = 2
+    CACHE_VERSION = 5
     CACHE_NAME = "history.json"
 
     def __init__(self, run_dir, minimize):
@@ -26,6 +26,7 @@ class TrainingHistory:
         self.lock = RLock()
         self.sources = Programs(run_dir)
         self.identity, self.offset, self.stamp = None, 0, None
+        self.boundary_tail = None
         self.streams, self.clock, self.node_offsets = {"events": []}, {}, {}
         self.programs = {}
         self.progress = {}
@@ -38,6 +39,7 @@ class TrainingHistory:
             self.streams["events"] = cached["events"]
             self.programs, self.node_offsets = cached["programs"], cached["node_offsets"]
             self.clock = cached["clock"]
+            self.boundary_tail = cached.get("boundary_tail")
 
     def read(self):
         with self.lock:
@@ -48,13 +50,21 @@ class TrainingHistory:
             committed = committed_size(self.run_dir)
             identity = (stat.st_dev, stat.st_ino)
             stamp = (committed, stat.st_mtime_ns)
-            if identity != self.identity or committed < self.offset:
+            # A rewritten journal may reuse its inode. Check the committed
+            # boundary before treating its contents as an appended tail.
+            with path.open("rb") as handle:
+                handle.seek(max(0, self.offset - 128))
+                tail = handle.read(min(128, self.offset)).hex()
+            replaced = self.boundary_tail is not None and tail != self.boundary_tail
+            if identity != self.identity or committed < self.offset or replaced:
                 self.offset, self.identity = 0, identity
                 self.streams, self.programs, self.node_offsets = {"events": []}, {}, {}
                 self.clock, self.stamp = {}, None
+                self.boundary_tail = None
             if stamp == self.stamp:
                 return self.result
             previous_offset = self.offset
+            live = live_snapshot(self.run_dir)
             with path.open("rb") as handle:
                 handle.seek(self.offset)
                 while handle.tell() < committed:
@@ -62,6 +72,8 @@ class TrainingHistory:
                     if not raw.endswith(b"\n"):
                         break
                     row = json.loads(raw)
+                    if live:
+                        row = normalize_live_record(row, live["task"])
                     if row.get("program"):
                         program = row["program"]
                         self.programs[str(program["id"])] = program
@@ -81,6 +93,8 @@ class TrainingHistory:
                                           "started_at": progress.get("started_at"), "completed_at": row["ts"]}
                         self.clock["phase"] = progress["phase"]
                     self.offset = handle.tell()
+                handle.seek(max(0, self.offset - 128))
+                self.boundary_tail = handle.read(min(128, self.offset)).hex()
             if self.stamp is not None and self.offset == previous_offset:
                 self.stamp = stamp
                 return self.result
@@ -89,7 +103,8 @@ class TrainingHistory:
             try:
                 write_json(self.run_dir / ".cache/history.json", {"version": self.CACHE_VERSION,
                     "identity": self.identity, "offset": self.offset, "events": self.streams["events"],
-                    "programs": self.programs, "node_offsets": self.node_offsets, "clock": self.clock})
+                    "programs": self.programs, "node_offsets": self.node_offsets, "clock": self.clock,
+                    "boundary_tail": self.boundary_tail})
             except OSError:
                 pass
             return self.result
@@ -134,12 +149,12 @@ class TrainingHistory:
             score = event["fitness"]
             operators[event["operator"]] += 1
             outcomes[str(event["status"])] += 1
-            value = (-score if self.minimize else score) if score is not None else None
+            value = score
             recent.append({**event, "value": value})
-            if score is not None and (best is None or score > best):
+            if score is not None and (best is None or score < best):
                 point = {**event, "value": value,
                          "kind": "initial" if best is None else "breakthrough",
-                         "gain": None if best is None else score - best}
+                         "gain": None if best is None else best - score}
                 points.append(point)
                 best = score
             last = event
@@ -147,6 +162,6 @@ class TrainingHistory:
         # misattributing its fitness/operator to the last candidate.
         if points and last["evaluation"] > points[-1]["evaluation"]:
             points.append({"evaluation": last["evaluation"], "fitness": best,
-                           "value": -best if self.minimize else best, "kind": "progress"})
+                           "value": best, "kind": "progress"})
         self.progress["best_fitness"] = best
         return points, recent[-12:][::-1], dict(operators), dict(outcomes)
