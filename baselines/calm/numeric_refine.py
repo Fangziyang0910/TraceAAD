@@ -124,7 +124,7 @@ def run_numeric_refinement(
         record_performance_profile: Callable,
         best_perf: float,
         log_info: Callable[[str], None],
-        register_accepted: Optional[Callable[[HeuristicRecord], None]] = None,
+        register_accepted: Optional[Callable[[HeuristicRecord, int], None]] = None,
         on_new_best: Optional[Callable[[HeuristicRecord], None]] = None,
         variants_per_parent=None,
         top_k=None,
@@ -218,9 +218,10 @@ def run_numeric_refinement(
     if not variant_algos:
         return [], evaluations_used, best_perf
 
+    batch_start = evaluations_used
     evaluations_used += len(variant_algos)
     refined_algos = []
-    for algo, parent in zip(variant_algos, variant_parents):
+    for position, (algo, parent) in enumerate(zip(variant_algos, variant_parents), batch_start + 1):
         score, perfs, status = evaluate_code(algo.code)
         if status == 'code_bug' or score is None:
             log_info(
@@ -250,7 +251,7 @@ def run_numeric_refinement(
             algos.append(algo)
             refined_algos.append(algo)
             if register_accepted is not None:
-                register_accepted(algo)
+                register_accepted(algo, position)
         is_better = algo.perf < parent.perf
         log_info(
             f'{source_label} | Based on: [{parent.sid}] | Perf: {algo.perf:.6f} | '

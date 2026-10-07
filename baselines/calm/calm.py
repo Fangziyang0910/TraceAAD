@@ -267,7 +267,11 @@ class CALM:
             *,
             sample_time: float | None = None,
             counts_budget: bool = True,
+            budget_used: int | None = None,
     ) -> None:
+        """Record an accepted program. CALM spends evaluations on candidates it rejects
+        (code bugs, random programs, duplicate profiles, unaccepted numeric variants), so
+        `budget_used` places the record at the evaluation that produced it."""
         func, program = self._code_to_program(algo.code)
         if func is None:
             return
@@ -279,7 +283,8 @@ class CALM:
         if counts_budget:
             self._tot_sample_nums += 1
         if self._profiler is not None:
-            self._profiler.register_function(func, program=str(program) if program else '')
+            self._profiler.register_function(func, program=str(program) if program else '',
+                                             budget_used=self._tot_sample_nums if budget_used is None else budget_used)
 
     def _save_best_if_needed(self, algo: HeuristicRecord) -> None:
         if self._profiler is not None:
@@ -312,10 +317,7 @@ class CALM:
         self._seed_algos = [algo]
         self._best_perf = algo.perf
         # Seed does not consume evaluation_budget in original CALM; still register for profiler.
-        self._register_function(algo, counts_budget=False)
-        if self._profiler is not None:
-            # Count seed as sample 0 visibility without advancing fair budget.
-            pass
+        self._register_function(algo, counts_budget=False, budget_used=0)
 
         old_best = self._best_perf
         refined, self._tot_sample_nums, self._best_perf = run_numeric_refinement(
@@ -334,7 +336,7 @@ class CALM:
             record_performance_profile=self.record_performance_profile,
             best_perf=self._best_perf,
             log_info=self._log_info,
-            register_accepted=lambda a: self._register_function(a, counts_budget=False),
+            register_accepted=lambda a, position: self._register_function(a, counts_budget=False, budget_used=position),
             on_new_best=self._save_best_if_needed,
             variants_per_parent=self._hp.numeric_refine_initial_variants,
             top_k=0,
@@ -489,9 +491,10 @@ class CALM:
             curr_algos_reward_idx = curr_algos_reward_idx[:max(remaining, 0)]
 
         # Count all evaluated candidates toward budget (CALM evaluations_used).
+        batch_start = self._tot_sample_nums
         self._tot_sample_nums += len(curr_algos)
 
-        for algo, curr_algo_i in zip(curr_algos, curr_algos_reward_idx):
+        for position, (algo, curr_algo_i) in enumerate(zip(curr_algos, curr_algos_reward_idx), batch_start + 1):
             prompt = curr_prompts[curr_algo_i]
             is_revisit = getattr(algo, 'born_from_revisit', False)
             score, perfs, status = self._evaluate_code(algo.code)
@@ -545,7 +548,7 @@ class CALM:
             is_new_best = algo.perf < self.best_perf
             if is_new:
                 self._algos.append(algo)
-                self._register_function(algo, counts_budget=False)
+                self._register_function(algo, counts_budget=False, budget_used=position)
 
             if len(base_algos) == 0:
                 base_algos = self._seed_algos[:]
@@ -636,7 +639,7 @@ class CALM:
             record_performance_profile=self.record_performance_profile,
             best_perf=self.best_perf,
             log_info=self._log_info,
-            register_accepted=lambda a: self._register_function(a, counts_budget=False),
+            register_accepted=lambda a, position: self._register_function(a, counts_budget=False, budget_used=position),
             on_new_best=self._save_best_if_needed,
         )
         if self._best_perf < old_best:
@@ -727,6 +730,7 @@ class CALM:
             )
         self._save_trace()
         if self._profiler is not None:
+            self._profiler.write_run_summary(status='finished', budget_used=self._tot_sample_nums)
             self._profiler.finish()
         log_state(
             self,

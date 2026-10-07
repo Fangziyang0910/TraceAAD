@@ -92,6 +92,7 @@ class ProfilerBase:
         self.run_dir = Path(run_dir) if run_dir else None
         self._log_dir = str(self.run_dir / 'logs') if self.run_dir else None
         self._num_samples = initial_num_samples
+        self._budget_used = initial_num_samples
         self._process_start_time = datetime.now(ZoneInfo('Asia/Shanghai'))
         self._artifact_lock = RLock()
         self._sources = Programs(self.run_dir) if self.run_dir else None
@@ -127,18 +128,22 @@ class ProfilerBase:
                 if hasattr(obj, field) and not callable(getattr(obj, field)):
                     self.log_message(f'  {field}: {str(getattr(obj, field))[:500]}')
 
-    def register_function(self, function, program=''):
+    def register_function(self, function, program='', *, budget_used=None):
+        """Record one candidate. `budget_used` places it on the budget axis when the method
+        spends evaluations on candidates it does not record; by default it is the record order."""
         with self._artifact_lock:
             self._num_samples += 1
+            position = self._num_samples if budget_used is None else int(budget_used)
+            self._budget_used = max(self._budget_used, position)
             valid = function.score is not None and math.isfinite(float(function.score))
             self._evaluate_success_program_num += valid
             self._evaluate_failed_program_num += not valid
             if self.run_dir:
-                self._write_json(function, program)
+                self._write_json(function, program, position)
             best = self._canonical_best['fitness'] if self._canonical_best else None
             print(f'Sample {self._num_samples}: {function.operator} score={function.score} best={best}', flush=True)
 
-    def _write_json(self, function, program):
+    def _write_json(self, function, program, position):
         fitness = float(function.score) if function.score is not None and math.isfinite(float(function.score)) else None
         order, valid = self._num_samples, fitness is not None
         meta = None
@@ -156,11 +161,11 @@ class ProfilerBase:
                    'sample_time': function.sample_time, 'evaluate_time': function.evaluate_time,
                    'status': 'valid' if valid else 'invalid_output', 'call_ids': []}
         self._append_jsonl(str(self.run_dir/'events.jsonl'), {
-            'kind': 'candidate', 'candidate_id': order, 'budget_used': order, 'x_label': '样本次数',
+            'kind': 'candidate', 'candidate_id': order, 'budget_used': position, 'x_label': '样本次数',
             'operator': attempt['action'], 'status': attempt['status'], 'fitness': fitness,
             'valid': valid, 'node_id': attempt['program_id'], 'attempt': attempt, 'program': meta,
             'ts': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(),
-            'progress': {'attempts': order, 'phase': 'search', 'elapsed': self._elapsed(),
+            'progress': {'attempts': position, 'phase': 'search', 'elapsed': self._elapsed(),
                          'started_at': self._process_start_time.isoformat()}})
 
     def register_population(self, pop):
@@ -241,7 +246,7 @@ class ProfilerBase:
             write_json(self._run_summary_path, {'status': status,
                 'phase': 'finished' if status == 'finished' else 'stopped',
                 'method': config.get('method'), 'budget': config.get('budget', 0),
-                'budget_axis': '样本次数', 'budget_used': self._num_samples,
+                'budget_axis': '样本次数', 'budget_used': self._budget_used,
                 'started_at': self._process_start_time.isoformat(),
                 'finished_at': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(), 'seconds': self._elapsed(),
                 'num_nodes': self._evaluate_success_program_num, 'candidate_count': self._num_samples,
