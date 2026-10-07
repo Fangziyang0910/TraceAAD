@@ -30,7 +30,7 @@ HTML_FILE = Path(__file__).with_name("monitor.html")
 TASKS = {
     "tsp_construct": {"label": "TSP 构造", "direction": "min", "unit": "距离"},
     "cvrp_aco": {"label": "CVRP-ACO", "direction": "min", "unit": "距离"},
-    "op_aco": {"label": "OP-ACO", "direction": "max", "unit": "收益"},
+    "op_aco": {"label": "OP-ACO", "direction": "min", "unit": "负收益"},
     "online_bin_packing": {"label": "在线装箱", "direction": "min", "unit": "箱数"},
     "vrptw_construct": {"label": "VRPTW 构造", "direction": "min", "unit": "距离"},
 }
@@ -101,7 +101,7 @@ def _json_bytes(payload: Any):
 def _objective(fitness: float | None, task: str) -> float | None:
     if fitness is None:
         return None
-    return -fitness if TASKS[task]["direction"] == "min" else fitness
+    return fitness
 
 
 @lru_cache(maxsize=128)
@@ -142,6 +142,35 @@ def _programs(run_dir, task, summary, curve):
                               "idea": view.get("idea") or p.get("idea") or ""})
     return {"search_best": search, "selected_best": selected, "best": selected or search,
             "breakthroughs": breakthroughs}
+
+
+def _merged_heldout(batch_dir):
+    """Held-out variants of one batch, with backfills merged into the cohort they complete.
+
+    A backfill tests runs of the batch that were left untested, so it joins the
+    cohort whose runs it does not overlap. Other variants are separate
+    conditions or arms and stay separate.
+    """
+    def cells(tasks):
+        return {(task, name) for task, data in tasks.items() for name in data["runs"]}
+
+    variants = load_batch_heldout(batch_dir)
+    groups = []
+    for name in sorted(variants, key=lambda v: (v.startswith("backfill"), v)):
+        tasks = variants[name]
+        target = (next((g for g in groups if not cells(g["tasks"]) & cells(tasks)), None)
+                  if name.startswith("backfill") else None)
+        if target is None:
+            groups.append({"names": [name], "tasks": {
+                task: {"source": data["source"], "runs": dict(data["runs"]),
+                       "verification": dict(data["verification"])} for task, data in tasks.items()}})
+            continue
+        target["names"].append(name)
+        for task, data in tasks.items():
+            merged = target["tasks"].setdefault(task, {"source": data["source"], "runs": {}, "verification": {}})
+            merged["runs"].update(data["runs"])
+            merged["verification"].update(data["verification"])
+    return {"" if "" in g["names"] else "+".join(g["names"]): g["tasks"] for g in groups}
 
 
 class ResultsMonitor:
@@ -337,7 +366,7 @@ class ResultsMonitor:
         """Comparable result sets: one per batch, or one per held-out variant."""
         items = []
         for batch in self.batches():
-            variants = load_batch_heldout(self.results_root / batch["id"])
+            variants = _merged_heldout(self.results_root / batch["id"])
             names = sorted(variants) or [""]
             for variant in names:
                 tasks = sorted(variants.get(variant, {}))
@@ -362,7 +391,7 @@ class ResultsMonitor:
         known = {item["id"]: item for item in self.cohorts()}
         chosen = [known[cohort] for cohort in cohort_ids if cohort in known]
         rows_by_batch = {item["batch"]: self._task_rows(item["batch"]) for item in chosen}
-        heldout_by_batch = {item["batch"]: load_batch_heldout(self.results_root / item["batch"]) for item in chosen}
+        heldout_by_batch = {item["batch"]: _merged_heldout(self.results_root / item["batch"]) for item in chosen}
         tasks = []
         for task, meta in TASKS.items():
             entries = []
@@ -373,7 +402,7 @@ class ResultsMonitor:
                 if named:
                     rows = [row for row in rows if row["name"] in named]
                 elif item["variant"]:
-                    rows = [row for row in rows if item["variant"] in row["name"]]
+                    rows = [row for row in rows if any(v in row["name"] for v in item["variant"].split("+"))]
                 runs = []
                 for row in rows:
                     selection = row.get("selection_info") or {}
