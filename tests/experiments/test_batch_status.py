@@ -36,6 +36,16 @@ def test_manifest_includes_unsynced_runs_without_claiming_they_are_running(tmp_p
     assert result["search_timing"]["eta_seconds"] is None
 
 
+def test_deliberate_stop_is_not_reported_as_a_failure(tmp_path):
+    manifest, directory = batch(tmp_path)
+    write(directory / 'summary.json', {'status': 'stopped', 'budget_used': 12,
+                                      'budget': 1000, 'stop_reason': 'task replaced'})
+    result = batch_status.collect(manifest)
+    assert result['runs'][0]['status'] == 'stopped'
+    assert result['summary']['stopped'] == 1
+    assert result['search_timing']['active_runs'] == 0
+
+
 def test_tail_ignores_partial_utf8_and_never_falls_back_to_full_journal(tmp_path, monkeypatch):
     monkeypatch.setattr(batch_status, "TAIL_BYTES", 300)
     path = tmp_path / "events.jsonl"

@@ -37,6 +37,7 @@ TASKS = {
     "mdmkp_search": {"label": "多需求多维背包", "direction": "min", "unit": "参考偏差 %"},
     "graph_colouring": {"label": "图着色", "direction": "min", "unit": "参考偏差 %"},
     "set_cover_construct": {"label": "集合覆盖", "direction": "min", "unit": "参考偏差 %"},
+    "jssp_construct": {"label": "作业车间调度", "direction": "min", "unit": "参考偏差 %"},
 }
 
 
@@ -290,13 +291,15 @@ class ResultsMonitor:
             journal_hot = self._journal_is_hot(run_dir)
             if raw_status == "finished":
                 status = "finished"
+            elif raw_status == "stopped" and not self._journal_newer_than_summary(run_dir):
+                status = "stopped"
             elif metadata.get("status") in {"running", "launching"} or raw_status == "running":
                 status = "running"
             elif raw_status == "unknown":
                 status = "unknown"
             elif journal_hot and (
                 not raw_status
-                or (raw_status == "service_unavailable" and self._journal_newer_than_summary(run_dir))
+                or (raw_status in {"service_unavailable", "stopped"} and self._journal_newer_than_summary(run_dir))
             ):
                 # A hot journal with no summary yet (summary written at
                 # completion), or one that kept growing past a service-pause
@@ -364,6 +367,7 @@ class ResultsMonitor:
                 "runs": len(runs), "finished": counts["finished"],
                 "running": counts["running"], "queued": counts["queued"],
                 "blocked": counts["blocked"], "unknown": counts["unknown"],
+                "stopped": counts["stopped"],
                 "budget_used": sum(row["budget_used"] for row in runs),
                 "budget": sum(row["budget"] for row in runs),
                 "valid_nodes": sum(row["valid_nodes"] for row in runs),

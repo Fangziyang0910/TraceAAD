@@ -13,18 +13,19 @@ from .fssp_gls import FSSPGLSEvaluation
 from .mdmkp_search import MDMKPEvaluation
 from .graph_colouring import GraphColouringEvaluation
 from .set_cover_construct import SetCoverEvaluation
+from .jssp_construct import JSSPEvaluation
 
-FIXED_TASKS = ('fssp_gls', 'mdmkp_search', 'graph_colouring', 'set_cover_construct')
+FIXED_TASKS = ('fssp_gls', 'mdmkp_search', 'graph_colouring', 'set_cover_construct', 'jssp_construct')
 TASKS = ('tsp_construct', 'cvrp_aco', 'op_aco', 'online_bin_packing', 'vrptw_construct')
 ALL_TASKS = TASKS + FIXED_TASKS
-CO_TASKS = ('tsp_construct', 'cvrp_aco') + FIXED_TASKS
+CO_TASKS = ('tsp_construct', 'cvrp_aco', 'fssp_gls', 'graph_colouring', 'jssp_construct', 'op_aco')
 SUITES = {'legacy': TASKS, 'co6': CO_TASKS}
 TASK_SHORT = dict(zip(TASKS, ('tsp', 'cvrp', 'op', 'obp', 'vrptw')))
-TASK_SHORT.update(dict(zip(FIXED_TASKS, ('fssp', 'mdmkp', 'gcol', 'scp'))))
+TASK_SHORT.update(dict(zip(FIXED_TASKS, ('fssp', 'mdmkp', 'gcol', 'scp', 'jssp'))))
 NATIVE_MINIMIZE = set(ALL_TASKS) - {'op_aco', 'mdmkp_search'}
 MINIMIZE = set(ALL_TASKS)  # Every evaluator returns a minimized scalar objective.
 CLASSES = dict(zip(ALL_TASKS, (TSPEvaluation, CVRPACOEvaluation, OPACOEvaluation, OBPEvaluation, VRPTWEvaluation,
-                                    FSSPGLSEvaluation, MDMKPEvaluation, GraphColouringEvaluation, SetCoverEvaluation)))
+                                    FSSPGLSEvaluation, MDMKPEvaluation, GraphColouringEvaluation, SetCoverEvaluation, JSSPEvaluation)))
 SELECTION_SEED = 20260927
 DEFAULT_WORKERS = 4
 TRAIN_TIMEOUT = {'online_bin_packing': 30, 'vrptw_construct': 30}

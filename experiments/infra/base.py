@@ -39,6 +39,7 @@ TaskName = Literal[
     "mdmkp_search",
     "graph_colouring",
     "set_cover_construct",
+    "jssp_construct",
 ]
 BackendName = Literal["local", "server1", "server3", "server3b"]
 

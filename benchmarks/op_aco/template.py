@@ -32,7 +32,8 @@ ACO combines the returned heuristic matrix with its pheromone matrix to sample
 feasible moves. The function receives node prizes, the pairwise distance
 matrix, and ``maxlen``. It must return a finite matrix with the same shape as
 the distance matrix. Larger entries indicate more promising directed edges.
-Use efficient NumPy operations because the function is evaluated many times.
+The function is called once per instance, before the ant colony starts.
+Its returned matrix is reused across all ants and iterations.
 """.strip()
 
 design_notes = """

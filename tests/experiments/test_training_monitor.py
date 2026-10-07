@@ -67,6 +67,18 @@ def test_active_run_ignores_stale_error_summary(tmp_path):
     assert run["error"] is None
 
 
+def test_intentionally_stopped_run_overrides_old_running_manifest(tmp_path):
+    results, name = make_run(tmp_path)
+    write_json(results / 'tsp_construct' / name / 'summary.json',
+               {'status': 'stopped', 'budget': 4, 'budget_used': 3,
+                'stop_reason': 'task replaced', 'best': {'fitness': 10.0}})
+    state = ResultsMonitor(results.parent, results.name).overview('results')
+    assert state['tasks'][0]['runs'][0]['status'] == 'stopped'
+    assert state['summary']['stopped'] == 1
+    assert state['summary']['running'] == state['summary']['blocked'] == 0
+    assert state['summary']['timing']['active_runs'] == 0
+
+
 def test_batch_list_exposes_experiment_with_legacy_manifests(tmp_path):
     results, _ = make_run(tmp_path)
     write_json(results / "batch_old.json", {

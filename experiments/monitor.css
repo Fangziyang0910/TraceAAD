@@ -103,6 +103,7 @@ main { max-width: 1480px; margin: 0 auto; padding: 18px 20px 64px; }
 .seg i { display: block; height: 100%; transition: width .4s ease; }
 .seg .finished { background: var(--info); } .seg .running { background: var(--ok); }
 .seg .queued, .seg .unknown { background: var(--warn); } .seg .blocked { background: var(--bad); }
+.seg .stopped { background: var(--muted); }
 
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 4px 2px 12px; }
 .toolbar p { margin: 0; color: var(--muted); font-size: 12px; }
@@ -143,6 +144,7 @@ main { max-width: 1480px; margin: 0 auto; padding: 18px 20px 64px; }
 .pill.running::before { animation: pulse 1.6s ease-in-out infinite; }
 .pill.queued, .pill.unknown { background: var(--warn-soft); color: var(--warn); }
 .pill.blocked { background: var(--bad-soft); color: var(--bad); }
+.pill.stopped { background: var(--info-soft); color: var(--muted); }
 @keyframes pulse { 50% { opacity: .3; } }
 .prog { min-width: 0; }
 .track { height: 5px; border-radius: 99px; background: var(--line-2); overflow: hidden; }

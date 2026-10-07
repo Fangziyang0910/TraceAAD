@@ -3,12 +3,20 @@
 import pytest
 
 from benchmarks.tasks import (CO_TASKS, PRIMARY_SPLITS, SCALES, SPLITS, heldout_task, training_task,
-                              FIXED_TASKS as TASKS)
+                              FIXED_TASKS)
 from experiments import launch
 from experiments.infra.search_host_launch import plan_for
 from traceaad.v10_20.prompts import PromptBuilder
 from traceaad.v10_20 import Config
 from tests.support import TokenLLM
+
+TASKS = tuple(task for task in CO_TASKS if task in FIXED_TASKS)
+
+
+def test_primary_suite_replaces_easy_tasks_with_jssp_and_op():
+    assert set(CO_TASKS) == {'tsp_construct', 'cvrp_aco', 'fssp_gls',
+                             'graph_colouring', 'jssp_construct', 'op_aco'}
+    assert 'mdmkp_search' not in CO_TASKS and 'set_cover_construct' not in CO_TASKS
 
 
 @pytest.mark.parametrize("method", launch.METHODS)

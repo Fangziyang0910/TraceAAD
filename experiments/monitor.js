@@ -1,6 +1,6 @@
 "use strict";
 const REFRESH_MS = 15000;
-const STATUS = {finished: "已完成", running: "运行中", queued: "排队中", blocked: "受阻", unknown: "未确认"};
+const STATUS = {finished: "已完成", running: "运行中", queued: "排队中", blocked: "受阻", unknown: "未确认", stopped: "已停止"};
 const OUTCOME = {
   valid: ["有效", "ok"], ok: ["有效", "ok"], expanded: ["有效", "ok"],
   improve: ["有效 · 提升", "ok"], regress: ["有效 · 退步", "ok"], plateau: ["有效 · 持平", "ok"],
@@ -162,9 +162,9 @@ function renderKPIs(data) {
   const s = data.summary || {};
   const runs = s.runs || 0;
   $("k-runs").innerHTML = `${s.finished ?? 0}<small>/ ${runs}</small>`;
-  $("k-seg").innerHTML = ["finished", "running", "queued", "blocked", "unknown"]
+  $("k-seg").innerHTML = ["finished", "running", "queued", "blocked", "unknown", "stopped"]
     .map(k => s[k] ? `<i class="${k}" style="width:${s[k] / runs * 100}%" title="${STATUS[k]} ${s[k]}"></i>` : "").join("");
-  $("k-runs-n").textContent = ["running", "queued", "blocked", "unknown"].filter(k => s[k]).map(k => `${s[k]} ${STATUS[k]}`).join(" · ") || "全部完成";
+  $("k-runs-n").textContent = ["running", "queued", "blocked", "unknown", "stopped"].filter(k => s[k]).map(k => `${s[k]} ${STATUS[k]}`).join(" · ") || "全部完成";
   const pct = s.budget ? s.budget_used / s.budget * 100 : 0;
   $("k-budget").innerHTML = `${pct >= 99.95 || pct === 0 ? pct.toFixed(0) : pct.toFixed(1)}<small>%</small>`;
   $("k-budget-bar").style.width = `${Math.min(100, pct)}%`;

@@ -84,6 +84,8 @@ def run_status(root, row, budget, now):
     resumed = modified is not None and summary_path.exists() and modified > summary_path.stat().st_mtime
     if raw == "finished":
         status = "finished"
+    elif raw == "stopped" and not resumed:
+        status = "stopped"
     elif raw and raw != "running" and not resumed:
         status = "blocked"
     elif checkpoint or candidate:
