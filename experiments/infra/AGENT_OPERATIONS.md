@@ -35,7 +35,7 @@ uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fz
 
 ## 等待、检索和同步
 
-训练可视化使用本地 `8765` 端口，V10.16 入口为 `http://127.0.0.1:8765/#b=traceaad_v10_16`。先检查该端口；服务未运行时，用 `uv run python -m experiments.monitor --host 0.0.0.0 --port 8765 --experiment traceaad_v10_16` 启动。页面读取本地档案，运行中路次显示最近同步的快照；文件变化会刷新缓存。核验 `/api/state?batch=traceaad_v10_16` 的路次数、曲线和 ETA，并用 `/api/compare?cohorts=traceaad_v10_16` 核验测试结果。
+训练可视化使用本地 `8765` 端口（`http://127.0.0.1:8765/`）。先检查该端口；服务未运行时，用 `uv run python -m experiments.monitor --host 0.0.0.0 --port 8765` 启动。不指定 `--experiment` 时默认展示最近更新的批次；版本对比默认选中该 TraceAAD 批次和全部基线方法。查看其他批次用链接中的 `#b=<批次>`。页面读取本地档案，运行中路次显示最近同步的快照；文件变化会刷新缓存。核验 `/api/state?batch=traceaad_v10_16` 的路次数、曲线和 ETA，并用 `/api/compare?cohorts=traceaad_v10_16` 核验测试结果。
 
 V10.15–V10.19 共用生成、评价和结果保存，各版本仍写到原版本目录。日常读取只使用 `events.jsonl`、`programs.jsonl`、`resume.json`、`summary.json`、`selection.json` 和平面的 `heldout.json`。原始模型请求与回复单独保存于 `calls.jsonl`，结束后压缩。诊断入口为 `uv run python -m experiments.traceaad_v10_17.diagnose --run-dir <目录>`，其他当前版本同样提供。格式、恢复条件和历史迁移见[实验与结果](SEARCH_FORMAT.md)。
 
@@ -43,7 +43,7 @@ V10.15–V10.19 共用生成、评价和结果保存，各版本仍写到原版�
 
 详情显示搜索最优和最终选中程序。源码按内容哈希从 `programs.jsonl` 读取。带身份的测试结果须与冻结的最终程序一致；不一致或无法核验的记录不进入比较。原实验没有身份记录的成绩保留 `legacy` 状态，与原来的比较口径一致。
 
-`.cache/history.json` 可以删除并重建。缓存只保存小型事件投影、程序元数据和读取位置，不重复源码、请求或回复。首次读取扫描轻量事件，后续只读追加字节；未完成的尾行下次重试。配置、恢复点、事件、程序、选择及批次清单变化会刷新 API 缓存；未完成路次的时间状态最多每 15 秒重算一次。页面每分钟更新批次列表，切换批次立即取消旧请求。`--experiment` 指定默认批次，链接中的 `#b=` 优先。修改 Python 后重启服务，修改 HTML、CSS 或 JS 后刷新页面。
+`.cache/history.json` 可以删除并重建。缓存只保存小型事件投影、程序元数据和读取位置，不重复源码、请求或回复。首次读取扫描轻量事件，后续只读追加字节；未完成的尾行下次重试。配置、恢复点、事件、程序、选择及批次清单变化会刷新 API 缓存；未完成路次的时间状态最多每 15 秒重算一次。页面每分钟更新批次列表，切换批次立即取消旧请求。`--experiment` 可固定默认批次，链接中的 `#b=` 优先。修改 Python 后重启服务，修改 HTML、CSS 或 JS 后刷新页面。
 
 2026-10-06 迁移时，两路 V10.19 仍由旧进程执行。临时快照转换器读取它们的旧日志，搜索完成后自动归档、清理并退出。需要排查时检查 `/tmp/traceaad-storage-migration-watch.pid` 和同名 `.log`；不重启搜索进程。
 

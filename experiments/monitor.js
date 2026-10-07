@@ -585,15 +585,10 @@ async function loadCohorts() {
   const known = new Set(CMP.cohorts.map(c => c.id));
   CMP.ids = CMP.ids.filter(id => known.has(id));
   if (!CMP.ids.length) {
-    const first = CMP.cohorts.find(c => c.batch === S.batch)?.id || CMP.cohorts[0]?.id;
-    // Previous version: the highest TraceAAD version below the current batch with held-out results.
-    const version = c => (c.batch.match(/_v(\d+(?:_\d+)*)/)?.[1] || "").split("_").map(Number);
-    const newer = (a, b) => { for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) return d; } return 0; };
-    const current = version(CMP.cohorts.find(c => c.id === first) || {batch: ""});
-    const prior = CMP.cohorts.filter(c => c.id !== first && isTrace(c) && c.heldout_tasks.length >= 4
-        && version(c).length && (!current.length || newer(version(c), current) < 0))
-      .sort((a, b) => newer(version(b), version(a)))[0]?.id;
-    CMP.ids = [first, prior, "eoh", "reevo"].filter((id, i, a) => id && known.has(id) && a.indexOf(id) === i);
+    // Default: the batch on view (the newest TraceAAD batch unless chosen otherwise) and every baseline method.
+    const current = CMP.cohorts.find(c => c.batch === S.batch && isTrace(c)) || CMP.cohorts.find(isTrace);
+    const baselines = CMP.cohorts.filter(c => !isTrace(c)).map(c => c.id);
+    CMP.ids = [current?.id, ...baselines].filter((id, i, a) => id && known.has(id) && a.indexOf(id) === i);
   }
   if (!CMP.ids.includes(CMP.ref)) CMP.ref = CMP.ids[0] || null;
 }
