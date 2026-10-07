@@ -4,6 +4,7 @@ from traceaad.common.prompts import PromptBuilder as MeasuredPrompts, ContextToo
 
 
 class PromptBuilder(MeasuredPrompts):
+    UNCHANGED_ROOT = "an initial design"
 
     def _current(self, node):
         return f"[Current Algorithm]\n{self.measured(node)}\n```python\n{node['code'].rstrip()}\n```"

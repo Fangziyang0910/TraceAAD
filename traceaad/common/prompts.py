@@ -1,4 +1,4 @@
-"""Measured program history and prompt trimming shared by V10.16–V10.19.
+"""Measured program history and prompt trimming shared by V10.16–V10.20.
 
 Version builders supply the goals and any development context. Facts stay
 next to the programs they describe; each instruction states one goal.
@@ -15,7 +15,7 @@ SCORES = {
     "vrptw_construct": ("the average total travel distance of the constructed routes", False),
 }
 
-OPERATORS = ("Refine", "Explore", "Crossover", "Develop")
+OPERATORS = ("Refine", "Explore", "Crossover", "Develop", "Deepen")
 
 INITIAL = """[Your Task: Design an Algorithm]
 Write an algorithm for this task that scores as well as possible, built on a clear core idea."""
@@ -92,6 +92,11 @@ def short_error(text):
 
 
 class PromptBuilder:
+    # The generation steps ``build`` writes; a version adds its own steps by
+    # extending ``build`` (V10.20: Deepen).
+    ACTIONS = ("Refine", "Explore", "Crossover")
+    # How an initial program without recorded changes is named (V10.16/V10.17: "an initial design").
+    UNCHANGED_ROOT = "the {origin}"
     REFINE = REFINE
     REFINE_ROOT = REFINE_ROOT
     EXPLORE = EXPLORE
@@ -106,22 +111,29 @@ class PromptBuilder:
         else:
             meaning, higher = "the task fitness", True
         self.higher_is_better = higher
-        description = evaluation.task_description.strip()
+        description = self.task_text(evaluation.task_description.strip())
         notes = getattr(evaluation, "design_notes", "")
         if notes:
             description += "\n\n" + notes.strip()
         self.timeout = evaluation.timeout_seconds
-        timeout = format(self.timeout, "g") if self.timeout is not None else "an unspecified number of"
         self.common = [
             "[Task]\n" + description,
-            "[Evaluation]\nEach program is evaluated on a fixed set of training instances.\n"
-            f"Score: {meaning}. {'Higher' if higher else 'Lower'} is better.\n"
-            f"The whole evaluation must finish within {timeout} seconds.",
+            self.evaluation_text(meaning, higher),
             "[Target Function]\n```python\n" + str(evaluation.template_program).strip() +
             "\n```\nKeep the function name, arguments and return contract exactly as shown. "
             "The program must be self-contained: include every import, constant and helper it uses. "
             "Within the time limit, the function may perform any computation on its inputs.",
         ]
+
+    def task_text(self, description):
+        """The task description as the version states it."""
+        return description
+
+    def evaluation_text(self, meaning, higher):
+        timeout = format(self.timeout, "g") if self.timeout is not None else "an unspecified number of"
+        return ("[Evaluation]\nEach program is evaluated on a fixed set of training instances.\n"
+                f"Score: {meaning}. {'Higher' if higher else 'Lower'} is better.\n"
+                f"The whole evaluation must finish within {timeout} seconds.")
 
     # ---------- facts about one program ----------
 
@@ -154,11 +166,14 @@ class PromptBuilder:
         """Score, evaluation time and calls of a valid program."""
         parts = [f"Score: {score_text(program['score'])}"]
         if program.get("eval_seconds"):
-            parts.append(f"Evaluation time: about {max(program['eval_seconds'], 0.1):.1f} s")
+            parts.append(f"Evaluation time: {self.evaluation_time(program['eval_seconds'])}")
         calls = self._calls(program.get("calls"), program.get("function_seconds") or 0.0)
         if calls:
             parts.append(calls)
         return " · ".join(parts)
+
+    def evaluation_time(self, seconds):
+        return f"about {max(seconds, 0.1):.1f} s"
 
     def failure(self, program):
         """What happened when a failed program was evaluated."""
@@ -231,7 +246,7 @@ class PromptBuilder:
         root, root_failed = steps[0]
         failed_note = f" (its first version failed: {self.failure(root_failed)})" if root_failed else ""
         if len(steps) == 1:
-            return (f"[{title}]\nThe {subject} algorithm is the {origin}{failed_note}; no changes have been "
+            return (f"[{title}]\nThe {subject} algorithm is {self.UNCHANGED_ROOT.format(origin=origin)}{failed_note}; no changes have been "
                     f"recorded yet.\nDesign: {idea_view(root['idea'])}"), []
         start = max(1, len(steps) - count)
         lines = [f"[{title}]", FORMATION_INTRO.replace("current algorithm", f"{subject} algorithm")]
@@ -379,7 +394,7 @@ class PromptBuilder:
         return result
 
     def build(self, action, parent, *, reference=None):
-        if action not in OPERATORS or action == "Develop":
+        if action not in self.ACTIONS:
             raise ValueError(action)
         sequence = path(parent, self.programs)
         sequence_ids = {p["id"] for p in sequence}

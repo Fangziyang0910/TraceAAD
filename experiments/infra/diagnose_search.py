@@ -5,6 +5,7 @@ from collections import Counter
 import json
 import math
 from pathlib import Path
+import re
 import statistics
 
 from traceaad.common.storage import write_json
@@ -15,16 +16,56 @@ from traceaad.common.selection import better
 from traceaad.common.state import Facts
 
 TRIED_OUT = 15
+# The generation steps each method samples; the others write Refine, Explore and Crossover.
+METHOD_ACTIONS = {"v1018": ("Refine", "Explore", "Crossover", "Develop"),
+                  "v1019": ("Refine", "Explore", "Crossover", "Develop"),
+                  "v1020": ("Refine", "Explore", "Crossover", "Deepen")}
+# A program whose work depends on the wall clock: its result depends on the host and its load.
+CLOCK = re.compile(r"\btime\.(time|perf_counter|monotonic|process_time)\s*\(|"
+                   r"\bfrom\s+time\s+import\b|\bdatetime\.now\s*\(")
 
 
-def diagnostics(facts, budget, init_attempts, final_candidates=5, method="v1017"):
+def computation_stats(facts, attempts, time_limit, final_candidates):
+    """How much of the time limit programs use, and what each step does to it.
+
+    For each step, the evaluation time of a valid new program relative to the
+    program it started from; for the best program and the top ones, the share
+    of the training time limit their evaluation took.
+    """
+    programs, archive = facts.programs, facts.valid
+    ranking = sorted(archive.values(), key=lambda n: (-n["fitness"], n["id"]))
+    share = (lambda node: node["eval_seconds"] / time_limit
+             if time_limit and node.get("eval_seconds") is not None else None)
+    ratios = {}
+    for attempt in attempts:
+        if attempt.get("repair_of") is not None or attempt["status"] != "valid":
+            continue
+        child, start = programs.get(attempt["program_id"]), programs.get(attempt["parent_id"])
+        if start is None or not start.get("valid") or not start.get("eval_seconds") or child.get("eval_seconds") is None:
+            continue
+        ratios.setdefault(attempt["action"], []).append(child["eval_seconds"] / start["eval_seconds"])
+    timeouts = Counter(a["action"] for a in attempts if a.get("repair_of") is None and a["status"] == "timeout")
+    top = ranking[:final_candidates]
+    return {"time_limit": time_limit,
+            "best_time_share": share(ranking[0]) if ranking else None,
+            "best_function_seconds": ranking[0].get("function_seconds") if ranking else None,
+            "top_time_share_median": statistics.median([s for s in map(share, top) if s is not None])
+            if any(share(n) is not None for n in top) else None,
+            "time_ratio_to_start_median": {action: statistics.median(values) for action, values in ratios.items()},
+            "time_ratio_to_start_above_5": {action: sum(v > 5 for v in values) for action, values in ratios.items()},
+            "timeouts_by_action": dict(timeouts),
+            "clock_programs": sum(bool(CLOCK.search(n["code"])) for n in archive.values()),
+            "clock_programs_in_top": sum(bool(CLOCK.search(n["code"])) for n in top)}
+
+
+def diagnostics(facts, budget, init_attempts, final_candidates=5, method="v1017", time_limit=None):
     programs, archive = facts.programs, facts.valid
     attempts_table = facts.attempts
     attempts = sorted(attempts_table.values(), key=lambda a: a["id"])
     counts = dict(Counter(a["status"] for a in attempts))
     repairs = {a["repair_of"]: a for a in attempts if a.get("repair_of") is not None}
     actions = {}
-    operators = OPERATORS if method in {"v1018", "v1019"} else OPERATORS[:3]
+    operators = METHOD_ACTIONS.get(method, ("Refine", "Explore", "Crossover"))
     for name in (*operators, "Repair"):
         proposed = [a for a in attempts if a["action"] == name]
         new = [a for a in proposed if a["status"] == "valid"]
@@ -79,6 +120,7 @@ def diagnostics(facts, budget, init_attempts, final_candidates=5, method="v1017"
                                   "max": cpu[-1]} if cpu else None,
             "best_training_depth": best["depth"] if best else None,
             "explorations": exploration_stats(facts, attempts, init_attempts, final_candidates, method),
+            "computation": computation_stats(facts, attempts, time_limit, final_candidates),
             "too_long_nodes": len((facts.state or {}).get("too_long", []))}
 
 def random_development_stats(facts, attempts, init_attempts, final_candidates):
@@ -98,7 +140,16 @@ def random_development_stats(facts, attempts, init_attempts, final_candidates):
             moved.append(similarity(reached["code"], start["code"]) - similarity(first["code"], start["code"]))
     produced = {a.get("program_id") for a in inside if a["status"] == "valid"}
     top = [n["id"] for n in sorted(facts.valid.values(), key=lambda n: (-n["fitness"], n["id"]))][:final_candidates]
+    # V10.20 opens explorations from Explore and Deepen proposals.
+    by_action = {}
+    for e, gain in zip(developed, gains):
+        by_action.setdefault(facts.attempts[e["proposal_attempt"]]["action"], []).append(gain)
+    proposals = Counter(facts.attempts[e["proposal_attempt"]]["action"] for e in records)
     return {"count": len(records), "new_programs": sum(e["proposed_id"] is not None for e in records),
+            "by_proposal_action": {action: {"count": proposals[action],
+                                            "developed": len(by_action.get(action, [])),
+                                            "development_improved": sum(g > 0 for g in by_action.get(action, []))}
+                                   for action in sorted(proposals)},
             "developed": len(developed),
             "development_generations": len(inside),
             "development_share_of_search_generations": len(inside) / len(search) if search else None,
@@ -215,7 +266,8 @@ def diagnose(run_dir):
     config = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8")) if (run_dir / "run_config.json").exists() else {}
     result = diagnostics(facts, summary["budget"], summary["init_attempts"],
                          config.get("method_params", {}).get("final_candidates", 5),
-                         summary.get("method", config.get("method", "v1017")))
+                         summary.get("method", config.get("method", "v1017")),
+                         (config.get("task_eval") or {}).get("timeout_seconds"))
     write_json(run_dir / "diagnostics.json", result)
     return result
 

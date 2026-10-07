@@ -162,7 +162,7 @@ def test_events_link_duplicates_failures_and_repairs(tmp_path):
     assert not m.programs[10]["valid"] and "boom" in m.programs[10]["failure"]["error"]
     assert repair["repair_of"] == 10 and repair["parent_id"] == 10 and repair["action"] == "Repair"
     repaired = m.archive[11]
-    assert repaired["parent_id"] == 10 and m.programs[repaired["program_id"]]["fitness"] == 20 and m.programs[repaired["program_id"]]["calls"] == 1
+    assert repaired["parent_id"] == 10 and repaired["fitness"] == 20 and repaired["calls"] == 1
     # The formation path folds the failed first version into its repaired step:
     # the failure and its line are stated, the diff goes to the repaired version.
     request = m.prompts.build("Refine", repaired)

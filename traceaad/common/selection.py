@@ -27,7 +27,7 @@ from .canonical import similarity
 
 TARGET_ESS = 8.0
 PRIOR_STRENGTH = 3.0
-OPERATORS = ("Refine", "Explore", "Crossover", "Develop")
+OPERATORS = ("Refine", "Explore", "Crossover", "Develop", "Deepen")
 
 
 def better(child, parent):

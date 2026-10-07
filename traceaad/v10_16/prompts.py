@@ -23,6 +23,7 @@ ANALYSIS = {
 }
 
 class PromptBuilder(MeasuredPrompts):
+    UNCHANGED_ROOT = "an initial design"
     REFINE = REFINE
     REFINE_ROOT = REFINE_ROOT
     CROSSOVER = CROSSOVER

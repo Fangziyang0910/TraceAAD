@@ -75,9 +75,10 @@ def main(config_class, experiment, module, method, argv=None):
 
 def implementation_files(module):
     version = module.split(".")[1].removeprefix("traceaad_")
-    folders = ("traceaad/common", "traceaad/" + version, "experiments/infra",
-               "experiments/traceaad_" + version, "core")
-    files = sorted({p for folder in folders for p in (REPO_ROOT / folder).glob("*.py")})
+    # A version may build on an earlier one (V10.20 on V10.17), so every method package is hashed.
+    folders = ("experiments/infra", "experiments/traceaad_" + version, "core")
+    files = sorted({p for folder in folders for p in (REPO_ROOT / folder).glob("*.py")}
+                   | set((REPO_ROOT / "traceaad").rglob("*.py")))
     files += sorted((REPO_ROOT / "benchmarks").rglob("*.py"))
     files += [REPO_ROOT / "pyproject.toml", REPO_ROOT / "uv.lock"]
     return {str(p.relative_to(REPO_ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}

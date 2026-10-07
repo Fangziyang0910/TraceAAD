@@ -1,4 +1,4 @@
-"""Execution, budget, evaluation and selection shared by V10.15–V10.19."""
+"""Execution, budget, evaluation and selection shared by V10.15–V10.20."""
 
 from dataclasses import asdict
 from datetime import datetime
@@ -29,6 +29,8 @@ def _tuple_tree(value):
 
 class Search:
     RECORD_EXPLORATIONS = False
+    # Steps whose proposals open an exploration when explorations are recorded.
+    EXPLORING = ("Explore",)
     MEASURE_CALLS = True
     REPLACE_FAILED_FINALISTS = True
 
@@ -252,7 +254,7 @@ class Search:
             flags.append("crossover_context_fallback")
         if self.RECORD_EXPLORATIONS:
             request['exploration'] = ({'id': len(self.facts.explorations) + 1, 'step': 0}
-                                      if request['action'] == 'Explore' else None)
+                                      if request['action'] in self.EXPLORING else None)
         request.update(sampled_action=sampled, fallbacks=flags, parent_id=parent["id"],
                        reference_id=reference["id"] if reference else None, selection=selection,
                        reference_selection=reference_selection)
