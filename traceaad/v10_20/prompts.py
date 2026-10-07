@@ -24,8 +24,7 @@ import re
 from benchmarks.cvrp_aco.dataset import get_split_spec as cvrp_split
 from benchmarks.generated_data_config import get_generated_task_kwargs
 from benchmarks.op_aco.dataset import get_split_spec as op_split
-from benchmarks.tasks import CLASSES, HELDOUT_TIMEOUT, PREPARED_TASKS, SCALES
-from benchmarks._prepared_data import read_records
+from benchmarks.tasks import CLASSES, HELDOUT_TIMEOUT, FIXED_TASKS, SCALES
 from traceaad.common.history import final_attempt
 from traceaad.common.prompts import ANALYSIS as SHARED_ANALYSIS, ContextTooLong, KNOWN
 from traceaad.v10_17.prompts import PromptBuilder as V1017Prompts
@@ -71,7 +70,7 @@ def corrected_description(task, description):
 
 def training_instances(task, evaluation):
     """The training set of the evaluation actually used, in words."""
-    if task in PREPARED_TASKS:
+    if task in FIXED_TASKS:
         return evaluation.instance_description
     if task == "online_bin_packing":
         specs = get_generated_task_kwargs(task, "train")["dataset_specs"]
@@ -84,9 +83,9 @@ def training_instances(task, evaluation):
 
 def test_sets(task):
     """The held-out sets the final program is tested on, in words."""
-    if task in PREPARED_TASKS:
+    if task in FIXED_TASKS:
         data = CLASSES[task].DATASET
-        return data.describe(read_records(data.DATA_ROOT, 'test', task=task))
+        return data.describe('test')
     if task == "online_bin_packing":
         specs = get_generated_task_kwargs(task, "eval")["dataset_specs"]
         counts = {s["n_instances"] for s in specs}
@@ -109,7 +108,7 @@ class PromptBuilder(V1017Prompts):
     ANALYSIS = ANALYSIS
 
     def __init__(self, llm, task, evaluation, programs, attempts, config):
-        if task in PREPARED_TASKS:
+        if task in FIXED_TASKS:
             self.ANALYSIS = {**type(self).ANALYSIS,
                             'Deepen': 'which decisions of the current algorithm a search guided by it could improve, and how much computation that search can use within the time limit on the training and independent same-scale test instances'}
         self.facts = task in HELDOUT_TIMEOUT

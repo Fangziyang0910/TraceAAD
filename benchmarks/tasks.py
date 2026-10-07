@@ -13,15 +13,14 @@ from .fssp_gls import FSSPGLSEvaluation
 from .mdmkp_search import MDMKPEvaluation
 from .graph_colouring import GraphColouringEvaluation
 from .set_cover_construct import SetCoverEvaluation
-from ._prepared_data import read_records
 
-PREPARED_TASKS = ('fssp_gls', 'mdmkp_search', 'graph_colouring', 'set_cover_construct')
+FIXED_TASKS = ('fssp_gls', 'mdmkp_search', 'graph_colouring', 'set_cover_construct')
 TASKS = ('tsp_construct', 'cvrp_aco', 'op_aco', 'online_bin_packing', 'vrptw_construct')
-ALL_TASKS = TASKS + PREPARED_TASKS
-CO_TASKS = ('tsp_construct', 'cvrp_aco') + PREPARED_TASKS
+ALL_TASKS = TASKS + FIXED_TASKS
+CO_TASKS = ('tsp_construct', 'cvrp_aco') + FIXED_TASKS
 SUITES = {'legacy': TASKS, 'co6': CO_TASKS}
 TASK_SHORT = dict(zip(TASKS, ('tsp', 'cvrp', 'op', 'obp', 'vrptw')))
-TASK_SHORT.update(dict(zip(PREPARED_TASKS, ('fssp', 'mdmkp', 'gcol', 'scp'))))
+TASK_SHORT.update(dict(zip(FIXED_TASKS, ('fssp', 'mdmkp', 'gcol', 'scp'))))
 NATIVE_MINIMIZE = set(ALL_TASKS) - {'op_aco', 'mdmkp_search'}
 MINIMIZE = set(ALL_TASKS)  # Every evaluator returns a minimized scalar objective.
 CLASSES = dict(zip(ALL_TASKS, (TSPEvaluation, CVRPACOEvaluation, OPACOEvaluation, OBPEvaluation, VRPTWEvaluation,
@@ -31,18 +30,18 @@ DEFAULT_WORKERS = 4
 TRAIN_TIMEOUT = {'online_bin_packing': 30, 'vrptw_construct': 30}
 HELDOUT_TIMEOUT = {'tsp_construct': 3000, 'vrptw_construct': 1000, 'online_bin_packing': 1000,
                    'cvrp_aco': 3600, 'op_aco': 3600}
-HELDOUT_TIMEOUT.update({task: 60 * CLASSES[task].DATASET.COUNTS['test'] / CLASSES[task].DATASET.COUNTS['train'] for task in PREPARED_TASKS})
+HELDOUT_TIMEOUT.update({task: 60 * CLASSES[task].DATASET.COUNTS['test'] / CLASSES[task].DATASET.COUNTS['train'] for task in FIXED_TASKS})
 SCALES = {'tsp_construct': (50, 100, 200), 'vrptw_construct': (50, 100, 200),
           'cvrp_aco': (20, 50, 100, 200), 'op_aco': (50, 100, 200),
           'online_bin_packing': ('1k_100', '1k_500', '5k_100', '5k_500', '10k_100', '10k_500')}
-SCALES.update({task: (CLASSES[task].DATASET.SCALE,) for task in PREPARED_TASKS})
+SCALES.update({task: (CLASSES[task].DATASET.SCALE,) for task in FIXED_TASKS})
 TEST_SCALES = {task: {50} for task in TASKS}
 TEST_SCALES['online_bin_packing'] = {'1k_100', '1k_500', '5k_100', '5k_500'}
-TEST_SCALES.update({task: {CLASSES[task].DATASET.SCALE} for task in PREPARED_TASKS})
+TEST_SCALES.update({task: {CLASSES[task].DATASET.SCALE} for task in FIXED_TASKS})
 
 
 def split_of_scale(task, scale):
-    if task in PREPARED_TASKS:
+    if task in FIXED_TASKS:
         return 'test_' + str(scale)
     if task == 'online_bin_packing':
         items, capacity = str(scale).split('k_')
@@ -51,7 +50,7 @@ def split_of_scale(task, scale):
 
 
 def scale_of_split(task, split):
-    if task in PREPARED_TASKS:
+    if task in FIXED_TASKS:
         if split == 'eval':
             return CLASSES[task].DATASET.SCALE
         if split not in SPLITS[task]:
@@ -84,7 +83,7 @@ def obp_scale(kwargs, n_items, capacity):
 
 
 def training_task(task, workers=None, *, condition='shared'):
-    if task in PREPARED_TASKS:
+    if task in FIXED_TASKS:
         kwargs = dict(split='train', timeout_seconds=60)
         return CLASSES[task](**kwargs), kwargs
     if task in {'cvrp_aco', 'op_aco'}:
@@ -100,7 +99,7 @@ def training_task(task, workers=None, *, condition='shared'):
 
 
 def selection_task(task, search):
-    if task in PREPARED_TASKS:
+    if task in FIXED_TASKS:
         raise ValueError('the six-task AHD data have no validation split; choose the training-best program')
     if task in {'cvrp_aco', 'op_aco'}:
         selected = CLASSES[task](split='val_50', timeout_seconds=search.timeout_seconds,
@@ -119,12 +118,12 @@ def heldout_task(task, split, workers=DEFAULT_WORKERS, timeout_seconds=None):
     timeout = HELDOUT_TIMEOUT[task] if timeout_seconds is None else timeout_seconds
     if workers < 1 or timeout <= 0 or not math.isfinite(timeout):
         raise ValueError('workers and timeout must be positive')
-    if task in PREPARED_TASKS:
+    if task in FIXED_TASKS:
         if split != 'eval' and split not in SPLITS[task]:
             raise ValueError(f'unknown {task} held-out split: {split}')
         actual_split = 'test' if split == 'eval' else split
         if timeout_seconds is None:
-            timeout = 60 * len(read_records(CLASSES[task].DATASET.DATA_ROOT, actual_split, task=task)) / CLASSES[task].DATASET.COUNTS['train']
+            timeout = 60 * CLASSES[task].DATASET.COUNTS['test'] / CLASSES[task].DATASET.COUNTS['train']
         return CLASSES[task](split=actual_split, timeout_seconds=timeout)
     if split not in SPLITS[task] and not (split == 'eval' and task not in {'cvrp_aco', 'op_aco'}):
         raise ValueError(f'unknown {task} held-out split: {split}')

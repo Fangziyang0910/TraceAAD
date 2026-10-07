@@ -6,16 +6,14 @@
 
 一个任务对应一个目录。TSP、CVRP 沿用既有目录；四项新增任务使用同样的组织方式。
 
-| 任务 | 问题说明与待进化函数 | 求解框架与评价器 | 数据准备 | 实例清单 |
-| --- | --- | --- | --- | --- |
-| FSSP | [template.py](../../benchmarks/fssp_gls/template.py) | [evaluation.py](../../benchmarks/fssp_gls/evaluation.py) | [prepare_data.py](../../benchmarks/fssp_gls/prepare_data.py) | [manifest.json](../../benchmarks/fssp_gls/data/manifest.json) |
-| MDMKP | [template.py](../../benchmarks/mdmkp_search/template.py) | [evaluation.py](../../benchmarks/mdmkp_search/evaluation.py) | [prepare_data.py](../../benchmarks/mdmkp_search/prepare_data.py) | [manifest.json](../../benchmarks/mdmkp_search/data/manifest.json) |
-| 图着色 | [template.py](../../benchmarks/graph_colouring/template.py) | [evaluation.py](../../benchmarks/graph_colouring/evaluation.py) | [prepare_data.py](../../benchmarks/graph_colouring/prepare_data.py) | [manifest.json](../../benchmarks/graph_colouring/data/manifest.json) |
-| 集合覆盖 | [template.py](../../benchmarks/set_cover_construct/template.py) | [evaluation.py](../../benchmarks/set_cover_construct/evaluation.py) | [prepare_data.py](../../benchmarks/set_cover_construct/prepare_data.py) | [manifest.json](../../benchmarks/set_cover_construct/data/manifest.json) |
+| 任务 | 问题说明与待进化函数 | 求解框架与评价器 | 数据规则与生成器 |
+| --- | --- | --- | --- |
+| FSSP | [template.py](../../benchmarks/fssp_gls/template.py) | [evaluation.py](../../benchmarks/fssp_gls/evaluation.py) | [dataset.py](../../benchmarks/fssp_gls/dataset.py) |
+| MDMKP | [template.py](../../benchmarks/mdmkp_search/template.py) | [evaluation.py](../../benchmarks/mdmkp_search/evaluation.py) | [dataset.py](../../benchmarks/mdmkp_search/dataset.py) |
+| 图着色 | [template.py](../../benchmarks/graph_colouring/template.py) | [evaluation.py](../../benchmarks/graph_colouring/evaluation.py) | [dataset.py](../../benchmarks/graph_colouring/dataset.py) |
+| 集合覆盖 | [template.py](../../benchmarks/set_cover_construct/template.py) | [evaluation.py](../../benchmarks/set_cover_construct/evaluation.py) | [dataset.py](../../benchmarks/set_cover_construct/dataset.py) |
 
-每项任务的 `dataset.py` 定义规模、数量和生成分布；`data/` 下按 `train/`、`test/` 存放实例。修改任务时可从该目录完成。
-
-`benchmarks/tasks.py` 注册任务与实验条件。两个内部共用模块只负责候选执行和计分、数据校验和准备，不包含按任务分派的求解逻辑。任务选择依据保存在研究文档，整套运行命令集中在本页。
+每项任务只包含模板、评价器和数据生成代码。`dataset.py` 定义规模、数量、生成分布与参考值计算。`benchmarks/tasks.py` 注册实验条件；共用代码只负责执行计分，以及固定种子和数据身份。
 
 ## 训练与独立测试数据
 
@@ -32,20 +30,17 @@ TraceAAD 实验入口默认 `--final-selection training`，不执行验证集评
 | `graph_colouring` | 300 顶点、边密度约 0.5 | 16 | 100 |
 | `set_cover_construct` | 200 元素、2000 集合、密度 0.02 | 16 | 100 |
 
-主数据采用本项目明确定义的生成分布，训练与测试分别从独立种子流生成。四项新增任务只保存训练与独立测试实例。TSP 与 CVRP 的既有数据数量、随机种子和求解预算沿用原配置。
+主数据采用本项目明确定义的生成分布，训练与测试分别从独立种子流生成。四项新增任务在创建评价器时按固定种子生成训练或测试实例，在内存中保留。TSP 与 CVRP 的既有数据数量、随机种子和求解预算沿用原配置。
 
-生成规则在各任务的 `prepare_data.py`，规模与分布在 `dataset.py`，实例身份与参考值在 `data/manifest.json`。[选择依据与分布说明](../../docs/04-研究认识与构想/2026-10-07-六个组合优化任务的设计.md)
+生成规则、规模、数量和参考值计算集中在各任务的 `dataset.py`。[选择依据与分布说明](../../docs/04-研究认识与构想/2026-10-07-六个组合优化任务的设计.md)
 
 MDMKP 训练、测试分别有 **9、54 个独立基础实例**；18、108 是包含收益变体的实例数。分析抽样不应把两个变体视为独立基础实例。这组数量是起步配置，不是统计功效保证；主实验还需要独立重复算法搜索。
 
-数据已压缩保存为可移植 NPZ，运行无需访问外部数据目录或网络。加载时核对 SHA256；manifest 记录尺寸、内容身份、基础实例组、参考值类型、生成种子及准备环境。各任务可独立复现数据：
+无需准备数据文件。创建评价器时，只生成指定划分的数据与参考值；它们在所有候选评价之间保持不变。初始化不计入候选评价时限。
 
-```bash
-uv run python -m benchmarks.fssp_gls.prepare_data
-uv run python -m benchmarks.mdmkp_search.prepare_data
-uv run python -m benchmarks.graph_colouring.prepare_data
-uv run python -m benchmarks.set_cover_construct.prepare_data
-```
+总种子为 `20261007`。每个基础实例的随机流由 `[总种子, 任务流, 划分流, 基础实例编号]` 定义；任务流依次为 FSSP=0、MDMKP=1、图着色=2、集合覆盖=3，训练流为0、测试流为2。它们独立于算法搜索种子和全局 NumPy 随机状态。MDMKP 的两个收益变体共享基础实例，始终位于同一划分。
+
+实例的内容哈希、种子和参考值参与评价身份计算；运行复现依靠固定生成代码和仓库的 `uv.lock` 依赖。数据协议为 `ahd-six-tasks-v4-seeded-runtime`，输入与参考值已逐项核对，与移除文件前的474个实例一致。
 
 ## 修改与评价范围
 

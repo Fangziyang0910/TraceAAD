@@ -3,7 +3,7 @@
 import pytest
 
 from benchmarks.tasks import (CO_TASKS, PRIMARY_SPLITS, SCALES, SPLITS, heldout_task, training_task,
-                              PREPARED_TASKS as TASKS)
+                              FIXED_TASKS as TASKS)
 from experiments import launch
 from experiments.infra.search_host_launch import plan_for
 from traceaad.v10_20.prompts import PromptBuilder

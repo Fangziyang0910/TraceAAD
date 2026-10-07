@@ -1,6 +1,5 @@
 """Independent feasibility oracles and the search/selection/held-out path."""
 
-import hashlib
 import itertools
 import json
 
@@ -11,8 +10,8 @@ from benchmarks.fssp_gls import evaluation as fssp
 from benchmarks.graph_colouring import evaluation as graph
 from benchmarks.mdmkp_search import evaluation as mdmkp
 from benchmarks.set_cover_construct import evaluation as set_cover
-from benchmarks.tasks import CLASSES, PREPARED_TASKS as TASKS
-from benchmarks._prepared_data import PROTOCOL, load_instance, read_manifest, read_records
+from benchmarks.tasks import CLASSES, FIXED_TASKS as TASKS
+from benchmarks._seeded_data import digest_arrays, generate_dataset
 from core import SecureEvaluator
 from core.evaluate import InvalidEvaluationResult
 
@@ -112,23 +111,33 @@ def test_candidate_mutations_do_not_change_covering_solver_inputs():
     assert all(np.array_equal(data[k], v) for k, v in original.items())
 
 
-def miniature_data(root):
-    data = {"coverage": np.array([[1, 0], [0, 1]], dtype=bool), "costs": np.array([2., 3.])}
-    rows = []
-    for split in ("train", "test"):
-        path = root / f"{split}.npz"
-        np.savez_compressed(path, **data)
-        rows.append({"id": split, "group": split, "split": split, "scale": 2,
-                     "dimensions": {"elements": 2, "sets": 2}, "content": split,
-                     "file": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                     "reference": 6., "reference_kind": "test reference"})
-    (root / "manifest.json").write_text(json.dumps({"protocol": PROTOCOL, "task": "set_cover_construct", "instances": rows}))
+def miniature_evaluation():
+    class TinyData:
+        TASK = 'set_cover_construct'
+        SCALE = 2
+        COUNTS = {'train': 1, 'test': 1}
+        DIMENSIONS = {'elements': 2, 'sets': 2}
+        DISTRIBUTION = 'two independent sets covering two elements'
+
+        @staticmethod
+        def describe(split, count=None):
+            return f"{count} fixed {split} instances with 2 elements and 2 sets"
+
+        @staticmethod
+        def generate_instances(split):
+            arrays = {'coverage': np.array([[1, 0], [0, 1]], dtype=bool), 'costs': np.array([2., 3.])}
+            yield arrays, {'id': split, 'group': split, 'scale': 2,
+                           'dimensions': TinyData.DIMENSIONS}, 6., 'test reference'
+
+    class TinySetCoverEvaluation(set_cover.SetCoverEvaluation):
+        DATASET = TinyData
+
+    return TinySetCoverEvaluation(safe_evaluate=False)
 
 
-def test_eval_isolates_module_state_and_measures_calls(tmp_path):
+def test_eval_isolates_module_state_and_measures_calls():
     from traceaad.common.evaluation import ProgramEvaluator
-    miniature_data(tmp_path)
-    evaluation = CLASSES["set_cover_construct"](data_root=tmp_path, safe_evaluate=False)
+    evaluation = miniature_evaluation()
     evaluation._rows *= 2
     evaluation._instances *= 2
     code = ('import numpy as np\n_calls = 0\n'
@@ -141,20 +150,44 @@ def test_eval_isolates_module_state_and_measures_calls(tmp_path):
     assert result["fitness"] == pytest.approx(-100/6)
 
 
-def test_invalid_scores_are_reported_as_invalid_output(tmp_path):
+def test_invalid_scores_are_reported_as_invalid_output():
     from traceaad.common.evaluation import ProgramEvaluator
-    miniature_data(tmp_path)
-    evaluation = CLASSES["set_cover_construct"](data_root=tmp_path, safe_evaluate=False)
+    evaluation = miniature_evaluation()
     result = ProgramEvaluator(evaluation).evaluate('def score_sets(*args):\n    return [float("nan")]\n', "bad")
     assert result["failure"]["kind"] == "invalid_output"
 
 
-def test_portable_data_hash_is_checked(tmp_path):
-    miniature_data(tmp_path)
-    row = read_records(tmp_path, "train", task="set_cover_construct")[0]
-    (tmp_path / row["file"]).write_bytes(b"changed")
-    with pytest.raises(ValueError, match="changed"):
-        load_instance(row, tmp_path)
+def test_candidates_reuse_initial_data_and_references(monkeypatch):
+    from traceaad.common.evaluation import ProgramEvaluator
+    evaluation = miniature_evaluation()
+    before = [digest_arrays(data) for data in evaluation._instances]
+
+    def unexpected_generation(split):
+        raise AssertionError('data generation must stay outside candidate evaluation')
+
+    monkeypatch.setattr(evaluation.DATASET, 'generate_instances', unexpected_generation)
+    runner = ProgramEvaluator(evaluation)
+    first = runner.evaluate(evaluation.template_program, 'first')
+    second = runner.evaluate(evaluation.template_program, 'second')
+    assert first['failure'] is second['failure'] is None
+    assert first['fitness'] == second['fitness'] == pytest.approx(-100/6)
+    assert [digest_arrays(data) for data in evaluation._instances] == before
+
+
+@pytest.mark.parametrize('task', TASKS)
+@pytest.mark.parametrize('split', ('train', 'test'))
+def test_fixed_data_ignore_global_rng_and_keep_the_same_prefix(task, split):
+    state = np.random.get_state()
+    try:
+        np.random.seed(1)
+        first = CLASSES[task](split=split, limit=1, safe_evaluate=False)
+        np.random.seed(991)
+        second = CLASSES[task](split=split, limit=2, safe_evaluate=False)
+    finally:
+        np.random.set_state(state)
+    assert first._datasets == second._datasets[:1]
+    assert all(np.array_equal(value, second._instances[0][key]) for key, value in first._instances[0].items())
+    assert first._rows[0]['seed_entropy'][2] == (0 if split == 'train' else 2)
 
 
 @pytest.mark.parametrize("task", TASKS)
@@ -167,7 +200,11 @@ def test_packaged_template_runs_through_secure_evaluation(task):
 
 def test_packaged_splits_have_no_base_group_or_content_overlap():
     for task in TASKS:
-        rows = read_manifest(CLASSES[task].DATASET.DATA_ROOT)["instances"]
+        data = CLASSES[task].DATASET
+        train, _ = generate_dataset(data, 'train')
+        test, _ = generate_dataset(data, 'test')
+        assert len(train) == data.COUNTS['train'] and len(test) == data.COUNTS['test']
+        rows = train + test
         for field in ("group", "content"):
             assert {r['split'] for r in rows} == {'train', 'test'}
             groups = {split: {r[field] for r in rows if r["split"] == split} for split in ("train", "test")}
@@ -180,10 +217,7 @@ def test_offline_training_winner_and_heldout_use_the_new_task(tmp_path):
     from tests.support import TokenLLM, text_candidate
     from traceaad.v10_20 import Config, TraceAADV1020
     from traceaad.common.storage import write_json
-    data = tmp_path / "data"
-    data.mkdir()
-    miniature_data(data)
-    evaluation = CLASSES["set_cover_construct"](data_root=data, safe_evaluate=False)
+    evaluation = miniature_evaluation()
     run = tmp_path / "run"
     llm = TokenLLM(text_candidate(code=evaluation.template_program))
     config = Config(budget=1, roots=1, final_candidates=1)

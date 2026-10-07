@@ -1,12 +1,10 @@
-"""Execution and score measurement shared by prepared fixed-framework tasks."""
-
-from pathlib import Path
+"""Execution and score measurement shared by seeded fixed-framework tasks."""
 
 import numpy as np
 
 from core import Evaluation
 from core.evaluate import InvalidEvaluationResult
-from ._prepared_data import PROTOCOL, load_instance, read_records
+from ._seeded_data import PROTOCOL, SEED, generate_dataset
 
 
 def scores(value, length, name):
@@ -20,29 +18,24 @@ def scores(value, length, name):
 
 
 class FixedEvaluation(Evaluation):
-    """Task modules supply their dataset, template, solver and fixed settings."""
+    """Task modules supply their generator, template, solver and fixed settings."""
 
     MAXIMIZE = False
 
-    def __init__(self, split='train', timeout_seconds=60, data_root=None, limit=None, settings=None, **kwargs):
+    def __init__(self, split='train', timeout_seconds=60, limit=None, settings=None, **kwargs):
         super().__init__(template_program=self.TEMPLATE, task_description=self.DESCRIPTION,
                          timeout_seconds=timeout_seconds, **kwargs)
         self.task, self.suite_protocol = self.DATASET.TASK, PROTOCOL
-        self._data_root = Path(data_root) if data_root is not None else self.DATASET.DATA_ROOT
-        rows = read_records(self._data_root, split, task=self.task)
+        self.seed = SEED
+        self.data_distribution = self.DATASET.DISTRIBUTION
+        rows, self._instances = generate_dataset(self.DATASET, split, limit)
         self.split = rows[0]['split']
-        if limit is not None:
-            if type(limit) is not int or limit < 1:
-                raise ValueError('limit must be a positive integer')
-            rows = rows[:limit]
         self._rows = rows
-        self._datasets = [{k: r[k] for k in ('id', 'group', 'scale', 'dimensions', 'content', 'sha256', 'reference', 'reference_kind')}
-                          for r in rows]
-        self._instances = [load_instance(row, self._data_root) for row in rows]
+        self._datasets = [dict(row) for row in rows]
         self.n_instance = len(rows)
         self.problem_size = max(r['scale'] for r in rows)
-        self.instance_description = self.DATASET.describe(rows)
-        self.score_meaning = 'the mean relative deviation from the stored reference, in percent (lower is better)'
+        self.instance_description = self.DATASET.describe(self.split, len(rows))
+        self.score_meaning = 'the mean relative deviation from the generated reference, in percent (lower is better)'
         settings = dict(self.DEFAULT_SETTINGS if settings is None else settings)
         if set(settings) != set(self.DEFAULT_SETTINGS) or any(type(v) is not int or v < 1 for v in settings.values()):
             raise ValueError('outer-solver settings must be the task iteration counts as positive integers')
@@ -52,6 +45,8 @@ class FixedEvaluation(Evaluation):
         references = ', '.join(sorted({r['reference_kind'] for r in rows}))
         self.design_notes = (
             f'Evaluation uses {self.instance_description}. The WHOLE dataset evaluation has {limit_text}. '
+            'Inputs and references are generated once at evaluator initialization with fixed split-specific seeds. '
+            'Dataset generation and reference computation are outside the candidate time limit. '
             f'The fixed outer-solver settings are {settings}. The target is called repeatedly inside this solver; '
             'its return is consumed exactly as specified in the template. The program is executed afresh '
             'for each instance, so candidate globals are reset between instances. Inputs passed to the '

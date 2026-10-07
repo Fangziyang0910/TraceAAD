@@ -2,11 +2,9 @@
 
 import numpy as np
 
-from .._fixed_evaluation import FixedEvaluation
+from .._fixed_evaluation import FixedEvaluation, scores
 from . import dataset
 from .template import function_name, task_description, template_program
-
-from .._fixed_evaluation import scores
 
 
 def conflict_counts(adjacency, colors, k):
