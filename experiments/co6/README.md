@@ -79,13 +79,13 @@ uv run python -m experiments.traceaad_v10_20.run --task fssp_gls --dry-run
 运行单任务：
 
 ```bash
-uv run python -m experiments.traceaad_v10_20.run --task fssp_gls --experiment traceaad_v10_20_co6 --run-name fssp_rep1 --repeat 1 --seed 0 --budget 1000
+uv run python -m experiments.traceaad_v10_20.run --task fssp_gls --experiment traceaad_v10_20 --run-name fssp_rep1 --repeat 1 --seed 0 --budget 1000
 ```
 
 生成六任务计划（默认仅打印计划；加 `--launch` 才启动）：
 
 ```bash
-uv run python -m experiments.traceaad_v10_20.launch_local --suite co6 --experiment traceaad_v10_20_co6 --batch co6_example --repeats 3 --budget 1000
+uv run python -m experiments.traceaad_v10_20.launch_local --suite co6 --experiment traceaad_v10_20 --batch co6_example --repeats 3 --budget 1000
 ```
 
 基线使用相同注册任务：
@@ -97,7 +97,7 @@ uv run python -m experiments.launch --method eoh --suite co6 --batch co6_example
 搜索结束后冻结训练成绩最好的程序，再运行同规模主测试：
 
 ```bash
-uv run python -m experiments.infra.evaluate experiments_result/traceaad_v10_20_co6/fssp_gls/fssp_rep1 --condition traceaad --primary
+uv run python -m experiments.infra.evaluate experiments_result/traceaad_v10_20/fssp_gls/fssp_rep1 --condition traceaad --primary
 ```
 
 TSP/CVRP 的跨规模测试仍可通过 `--units` 指定。原五任务批次使用 `--suite legacy`；既有默认保持该组，以免旧批次意外增加任务。
@@ -107,10 +107,10 @@ TSP/CVRP 的跨规模测试仍可通过 `--units` 指定。原五任务批次使
 
 四个新增任务的 V10.20 批次已于2026年10月7日在本机启动：`20261007_local_v1020_new4_seeded`。每项三路，种子0、1、2，每路1000次候选尝试。模型为 server3 两个端点的 `qwen3.8-27b-awq`，各分配六路；评价使用本机CPU。启动源码为 `bd4078dd`，完整条件与源码哈希保存在批次清单。
 
-[实时训练页面](http://127.0.0.1:8765/#b=traceaad_v10_20_co6)显示四项任务、共12路。批次清单为 `experiments_result/traceaad_v10_20_co6/batch_20261007_local_v1020_new4_seeded.json`。查询当前状态：
+[实时训练页面](http://127.0.0.1:8765/#b=traceaad_v10_20)统一展示已有任务和新增任务，共9项、27路；其中新增四项各三路。批次清单为 `experiments_result/traceaad_v10_20/batch_20261007_local_v1020_new4_seeded.json`。查询当前状态：
 
 ```bash
-uv run python -m experiments.infra.batch_status --manifest experiments_result/traceaad_v10_20_co6/batch_20261007_local_v1020_new4_seeded.json
+uv run python -m experiments.infra.batch_status --manifest experiments_result/traceaad_v10_20/batch_20261007_local_v1020_new4_seeded.json
 ```
 
 主测试在每路搜索结束、训练最佳程序冻结后执行。本次启动检查未评价独立测试集。

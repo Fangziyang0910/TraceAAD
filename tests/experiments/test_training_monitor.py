@@ -283,3 +283,22 @@ def test_overview_exposes_same_curve_as_detail_with_candidate_axis(tmp_path):
     assert row["curve"] == [{k: p[k] for k in fields if p.get(k) is not None} for p in detail["curve"]]
     assert row["x_label"] == detail["x_label"] == "候选尝试"
     assert row["curve"][-1]["gain"] == 2
+
+
+def test_live_path_aliases_do_not_duplicate_runs_or_experiments(tmp_path):
+    results, name = make_run(tmp_path)
+    run = results / "tsp_construct" / name
+    old_experiment = results.parent / "old_experiment"
+    old_experiment.symlink_to(results, target_is_directory=True)
+    old_run = run.parent / "old_run"
+    old_run.symlink_to(run, target_is_directory=True)
+    monitor = ResultsMonitor(results.parent)
+    assert monitor.batches() == [{"id": "results", "label": "results"}]
+    before = monitor.state_signature("results")
+    append_records(old_experiment / "tsp_construct" / "old_run" / "events.jsonl", [
+        candidate(4, 8.0, operator="Refine", idea="continued", code="def f(): return 4")])
+    state = monitor.overview("results")
+    assert state["summary"]["runs"] == 1 and state["summary"]["budget_used"] == 4
+    assert state["tasks"][0]["runs"][0]["name"] == name
+    assert state["tasks"][0]["runs"][0]["best_value"] == 8.0
+    assert monitor.state_signature("results") != before

@@ -40,6 +40,12 @@ TASKS = {
 }
 
 
+def _run_config_paths(directory: Path):
+    """List canonical runs, excluding temporary aliases used by live writers."""
+    return sorted(path for path in directory.glob("*/*/run_config.json")
+                  if not path.parent.is_symlink() and not path.parent.parent.is_symlink())
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -213,7 +219,7 @@ class ResultsMonitor:
         if not self.results_root.is_dir():
             return entries
         for directory in self.results_root.iterdir():
-            if directory.is_dir() and any(directory.glob("*/*/run_config.json")):
+            if directory.is_dir() and not directory.is_symlink() and _run_config_paths(directory):
                 entries.append((self._latest_activity(directory), directory.name))
         entries.sort(reverse=True)
         return [{"id": name, "label": name} for _, name in entries]
@@ -221,7 +227,8 @@ class ResultsMonitor:
     @staticmethod
     def _latest_activity(directory: Path) -> float:
         latest = 0.0
-        for journal in directory.glob("*/*/events.jsonl"):
+        for config in _run_config_paths(directory):
+            journal = config.parent / "events.jsonl"
             try:
                 latest = max(latest, journal.stat().st_mtime)
             except OSError:
@@ -239,7 +246,7 @@ class ResultsMonitor:
         experiment = experiment or self.default_batch()
         directory = self.results_root / experiment if experiment else self.results_root
         stamps, unfinished = [], False
-        for path in sorted(directory.glob("*/*/run_config.json")) if experiment else []:
+        for path in _run_config_paths(directory) if experiment else []:
             run_dir = path.parent
             stamps.append((str(run_dir.relative_to(directory)), _run_stamp(run_dir)))
             unfinished |= _read_json(run_dir / "summary.json").get("status") != "finished"
@@ -269,7 +276,7 @@ class ResultsMonitor:
         rows = []
         manifest_runs = self._manifest_runs(experiment)
         now = time.time()
-        for config_path in sorted((self.results_root / experiment).glob("*/*/run_config.json")):
+        for config_path in _run_config_paths(self.results_root / experiment):
             run_dir = config_path.parent
             if ((task_filter and run_dir.parent.name != task_filter)
                     or (name_filter and run_dir.name != name_filter)):
