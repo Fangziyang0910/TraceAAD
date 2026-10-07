@@ -6,6 +6,7 @@ import argparse
 from dataclasses import replace
 
 from experiments.infra.base import (
+    ALL_TASKS,
     TASKS,
     add_launch_parser_args,
     build_launch_plan,
@@ -13,6 +14,7 @@ from experiments.infra.base import (
     free_slots,
     watch_and_fill,
 )
+from benchmarks.tasks import SUITES
 
 METHODS = ("eoh", "funsearch", "reevo", "mcts_ahd", "pathwise", "calm", "shinka_evo")
 
@@ -20,7 +22,8 @@ METHODS = ("eoh", "funsearch", "reevo", "mcts_ahd", "pathwise", "calm", "shinka_
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--method", choices=METHODS, required=True)
-    parser.add_argument("--tasks", nargs="+", choices=TASKS)
+    parser.add_argument("--tasks", nargs="+", choices=ALL_TASKS)
+    parser.add_argument("--suite", choices=tuple(SUITES), default="legacy")
     parser.add_argument(
         "--run-arg", action="append", default=[],
         help="pass one additional argument to every method runner",

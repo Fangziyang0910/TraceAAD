@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 
 import numpy as np
 
-from benchmarks.tasks import TASKS, TASK_SHORT, DEFAULT_WORKERS, training_task
+from benchmarks.tasks import ALL_TASKS, TASKS, TASK_SHORT, SUITES, DEFAULT_WORKERS, training_task
 from .env import resolve_llm_api_key
 from core.llm import OpenAIAPI
 
@@ -35,12 +35,15 @@ TaskName = Literal[
     "op_aco",
     "online_bin_packing",
     "vrptw_construct",
+    "fssp_gls",
+    "mdmkp_search",
+    "graph_colouring",
+    "set_cover_construct",
 ]
 BackendName = Literal["local", "server1", "server3", "server3b"]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RESULTS_ROOT = REPO_ROOT / "experiments_result"
-ALL_TASKS = TASKS
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,7 +292,7 @@ def build_launch_plan(
 ) -> list[LaunchItem]:
     plan = []
     for repeat in range(1, args.repeats + 1):
-        for task in TASKS:
+        for task in (getattr(args, "tasks", None) or SUITES[getattr(args, "suite", "legacy")]):
             short = TASK_SHORT[task]
             run_name = f"{args.batch}_{short}_{method}_rep{repeat}"
             session = f"{args.session_prefix}_{short}_r{repeat}"

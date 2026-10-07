@@ -109,11 +109,11 @@ class PromptBuilder:
         if task in SCORES:
             meaning, higher = SCORES[task]
         else:
-            meaning, higher = "the task objective", False
+            meaning, higher = getattr(evaluation, "score_meaning", "the task objective"), False
         self.higher_is_better = higher
         description = self.task_text(evaluation.task_description.strip())
         notes = getattr(evaluation, "design_notes", "")
-        if notes:
+        if notes and notes.strip() not in description:
             description += "\n\n" + notes.strip()
         self.timeout = evaluation.timeout_seconds
         self.common = [

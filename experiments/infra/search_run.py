@@ -31,9 +31,10 @@ def main(method_class, config_class, experiment, description, argv=None):
                     evaluation_seeds=tuple(args.evaluation_seeds), seed=args.seed)
     if args.dry_run:
         evaluation, _ = training_task(args.task, args.eval_workers, condition="traceaad")
+        selection = selection_task(args.task, evaluation)
         print(json.dumps({"method": method_class.METHOD, "revision": REVISION, "task": args.task, "config": asdict(config),
             "search_timeout": evaluation.timeout_seconds,
-            "selection": "val_50" if args.task in {"cvrp_aco", "op_aco"} else {"seed": SELECTION_SEED},
+            "selection": getattr(selection, "instance_description", "val_50" if args.task in {"cvrp_aco", "op_aco"} else {"seed": SELECTION_SEED}),
             "test": "separate heldout.py after selection"}, indent=2))
         return
     if not args.experiment.replace("_", "").isalnum():

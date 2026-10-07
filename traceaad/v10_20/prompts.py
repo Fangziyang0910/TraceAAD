@@ -16,7 +16,7 @@ Three facts change against V10.17 for every step:
   sets the final program runs on, with their time limits.
 
 Every number comes from ``benchmarks``, so the text follows the protocol.
-Facts are added only for the five benchmark tasks; other tasks keep V10.17's text.
+The new fixed-scale tasks state their primary held-out data through the same interface.
 """
 
 import re
@@ -25,6 +25,7 @@ from benchmarks.cvrp_aco.dataset import get_split_spec as cvrp_split
 from benchmarks.generated_data_config import get_generated_task_kwargs
 from benchmarks.op_aco.dataset import get_split_spec as op_split
 from benchmarks.tasks import HELDOUT_TIMEOUT, SCALES
+from benchmarks.ahd_suite.dataset import TASKS as NEW_TASKS, describe as describe_ahd
 from traceaad.common.history import final_attempt
 from traceaad.common.prompts import ANALYSIS as SHARED_ANALYSIS, ContextTooLong, KNOWN
 from traceaad.v10_17.prompts import PromptBuilder as V1017Prompts
@@ -61,7 +62,7 @@ def corrected_description(task, description):
     """The task text with the facts about computation corrected."""
     if task in ACO_SPLITS:
         description, replaced = MANY_TIMES.subn(CALLED_ONCE, description)
-        if replaced != 1:
+        if replaced != 1 and CALLED_ONCE not in description:
             raise ValueError(f"{task}: the task text no longer has the sentence V10.20 corrects")
     if task == "vrptw_construct":
         description += "\n\n" + SERVICE
@@ -70,6 +71,8 @@ def corrected_description(task, description):
 
 def training_instances(task, evaluation):
     """The training set of the evaluation actually used, in words."""
+    if task in NEW_TASKS:
+        return evaluation.instance_description
     if task == "online_bin_packing":
         specs = get_generated_task_kwargs(task, "train")["dataset_specs"]
         count = sum(s["n_instances"] * len(s["capacities"]) for s in specs)
@@ -81,6 +84,8 @@ def training_instances(task, evaluation):
 
 def test_sets(task):
     """The held-out sets the final program is tested on, in words."""
+    if task in NEW_TASKS:
+        return describe_ahd(task, 'test')
     if task == "online_bin_packing":
         specs = get_generated_task_kwargs(task, "eval")["dataset_specs"]
         counts = {s["n_instances"] for s in specs}
@@ -103,6 +108,9 @@ class PromptBuilder(V1017Prompts):
     ANALYSIS = ANALYSIS
 
     def __init__(self, llm, task, evaluation, programs, attempts, config):
+        if task in NEW_TASKS:
+            self.ANALYSIS = {**type(self).ANALYSIS,
+                            'Deepen': 'which decisions of the current algorithm a search guided by it could improve, and how much computation that search can use within the time limit on the training and independent same-scale test instances'}
         self.facts = task in HELDOUT_TIMEOUT
         self.training_set = training_instances(task, evaluation) if self.facts else None
         super().__init__(llm, task, evaluation, programs, attempts, config)

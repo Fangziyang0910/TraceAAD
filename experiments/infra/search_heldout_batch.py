@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from benchmarks.tasks import SPLITS
+from benchmarks.tasks import PRIMARY_SPLITS, SPLITS
 
 from traceaad.common.storage import read_json, write_json
 
@@ -12,10 +12,10 @@ from .search_heldout import evaluate_run
 from .batch_status import run_path
 
 
-def jobs(manifest, root=None):
+def jobs(manifest, root=None, primary=False):
     plan = manifest["plan"]
     return [(row["task"], row["repeat"], (run_path(root, row) if root else Path(row["run_dir"])), split)
-            for row in plan for split in SPLITS[row["task"]]]
+            for row in plan for split in (PRIMARY_SPLITS if primary else SPLITS)[row["task"]]]
 
 
 def main(argv=None):
@@ -25,9 +25,10 @@ def main(argv=None):
     parser.add_argument("--timeout-seconds", type=float,
                         help="explicit limit for every held-out evaluation in this batch")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--primary", action="store_true", help="only primary same-scale tests for the six-task suite")
     args = parser.parse_args(argv)
     manifest = json.loads(args.batch_manifest.read_text(encoding="utf-8"))
-    plan = jobs(manifest, args.batch_manifest.parent)
+    plan = jobs(manifest, args.batch_manifest.parent, args.primary)
     report = []
     for task, repeat, run_dir, split in plan:
         summary_path = run_dir / "summary.json"

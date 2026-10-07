@@ -12,7 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from benchmarks.tasks import TASKS, SPLITS, heldout_task, scale_of_split, split_of_scale
+from benchmarks.tasks import ALL_TASKS, PRIMARY_SPLITS, SPLITS, heldout_task, scale_of_split, split_of_scale
 from traceaad.common.config import REVISION
 from traceaad.common.evaluation import ProgramEvaluator
 from traceaad.common.storage import heldout_identity, read_json, save_heldout, write_json
@@ -75,8 +75,9 @@ def evaluate_run(run_dir, splits, *, condition='shared', workers=4, timeout_seco
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('run_dirs', nargs='+', type=Path)
-    parser.add_argument('--task', choices=TASKS)
+    parser.add_argument('--task', choices=ALL_TASKS)
     parser.add_argument('--units')
+    parser.add_argument('--primary', action='store_true', help='only the six-task suite primary same-scale test')
     parser.add_argument('--timeout', type=float)
     parser.add_argument('--workers', type=int, default=4)
     parser.add_argument('--condition', choices=('shared', 'traceaad'), default='shared')
@@ -86,6 +87,8 @@ def main(argv=None):
     parser.add_argument('--allow-incomplete', action='store_true')
     parser.add_argument('--output-dir', type=Path)
     args = parser.parse_args(argv)
+    if args.primary and args.units:
+        raise ValueError('--primary and --units are alternatives')
     if args.sample_order is not None and len(args.run_dirs) != 1:
         raise ValueError('--sample-order requires one run directory')
     payload = []
@@ -93,7 +96,9 @@ def main(argv=None):
         task = read_json(run / 'run_config.json')['task']
         if args.task and task != args.task:
             raise ValueError(f'{run}: task is {task}, not {args.task}')
-        results = evaluate_run(run, parse_units(task, args.units), condition=args.condition,
+        if args.primary and task not in PRIMARY_SPLITS:
+            raise ValueError(f'{task} is not in the six-task suite')
+        results = evaluate_run(run, list(PRIMARY_SPLITS[task]) if args.primary else parse_units(task, args.units), condition=args.condition,
             workers=args.workers, timeout_seconds=args.timeout, sample_order=args.sample_order,
             max_sample_order=args.max_sample_order, allow_incomplete=args.allow_incomplete,
             variant=args.variant)

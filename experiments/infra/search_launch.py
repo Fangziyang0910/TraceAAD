@@ -14,7 +14,7 @@ from traceaad.common.config import REVISION
 from benchmarks.tasks import evaluation_limits
 
 
-def build_plan(previous, batch, experiment, module):
+def build_plan(previous, batch, experiment, module, budget=1000):
     source = previous["plan"]
     plan = []
     for item in source:
@@ -27,7 +27,7 @@ def build_plan(previous, batch, experiment, module):
         session = f"{batch}_{short}_{tag}_r{repeat}"
         command = ["uv", "run", "python", "-m", module,
                    "--task", task, "--backend", backend, "--repeat", str(repeat),
-                   "--seed", str(seed), "--run-name", name, "--budget=1000",
+                   "--seed", str(seed), "--run-name", name, f"--budget={budget}",
                    "--eval-workers=4", "--experiment", experiment]
         plan.append({"task": task, "repeat": repeat, "seed": seed, "backend": backend,
                      "session": session, "run_name": name,

@@ -1,4 +1,4 @@
-"""The five current tasks and their training, selection and held-out conditions."""
+"""Registered tasks, explicit six-task/legacy suites, and fixed evaluation conditions."""
 
 from copy import deepcopy
 import math
@@ -9,25 +9,38 @@ from .vrptw_construct import VRPTWEvaluation
 from .online_bin_packing import OBPEvaluation
 from .cvrp_aco import CVRPACOEvaluation
 from .op_aco import OPACOEvaluation
+from .ahd_suite import AHDEvaluation
+from .ahd_suite.dataset import TASKS as NEW_TASKS, SCALES as NEW_SCALES
+from .ahd_suite.dataset import records as ahd_records
+from .ahd_suite.generated import COUNTS as AHD_COUNTS
 
 TASKS = ('tsp_construct', 'cvrp_aco', 'op_aco', 'online_bin_packing', 'vrptw_construct')
+ALL_TASKS = TASKS + NEW_TASKS
+CO_TASKS = ('tsp_construct', 'cvrp_aco') + NEW_TASKS
+SUITES = {'legacy': TASKS, 'co6': CO_TASKS}
 TASK_SHORT = dict(zip(TASKS, ('tsp', 'cvrp', 'op', 'obp', 'vrptw')))
-NATIVE_MINIMIZE = set(TASKS) - {'op_aco'}
-MINIMIZE = set(TASKS)  # Every evaluator returns a minimized scalar objective.
+TASK_SHORT.update(dict(zip(NEW_TASKS, ('fssp', 'mdmkp', 'gcol', 'scp'))))
+NATIVE_MINIMIZE = set(ALL_TASKS) - {'op_aco', 'mdmkp_search'}
+MINIMIZE = set(ALL_TASKS)  # Every evaluator returns a minimized scalar objective.
 CLASSES = dict(zip(TASKS, (TSPEvaluation, CVRPACOEvaluation, OPACOEvaluation, OBPEvaluation, VRPTWEvaluation)))
 SELECTION_SEED = 20260927
 DEFAULT_WORKERS = 4
 TRAIN_TIMEOUT = {'online_bin_packing': 30, 'vrptw_construct': 30}
 HELDOUT_TIMEOUT = {'tsp_construct': 3000, 'vrptw_construct': 1000, 'online_bin_packing': 1000,
                    'cvrp_aco': 3600, 'op_aco': 3600}
+HELDOUT_TIMEOUT.update({task: 60 * AHD_COUNTS[task]['test'] / AHD_COUNTS[task]['train'] for task in NEW_TASKS})
 SCALES = {'tsp_construct': (50, 100, 200), 'vrptw_construct': (50, 100, 200),
           'cvrp_aco': (20, 50, 100, 200), 'op_aco': (50, 100, 200),
           'online_bin_packing': ('1k_100', '1k_500', '5k_100', '5k_500', '10k_100', '10k_500')}
+SCALES.update({task: scales + ('standard',) for task, scales in NEW_SCALES.items()})
 TEST_SCALES = {task: {50} for task in TASKS}
 TEST_SCALES['online_bin_packing'] = {'1k_100', '1k_500', '5k_100', '5k_500'}
+TEST_SCALES.update({task: set(scales) for task, scales in NEW_SCALES.items()})
 
 
 def split_of_scale(task, scale):
+    if task in NEW_TASKS:
+        return 'test_' + str(scale)
     if task == 'online_bin_packing':
         items, capacity = str(scale).split('k_')
         return f'eval_{int(items)*1000}_{capacity}'
@@ -35,6 +48,14 @@ def split_of_scale(task, scale):
 
 
 def scale_of_split(task, split):
+    if task in NEW_TASKS:
+        if split == 'test_standard':
+            return 'standard'
+        if split == 'eval':
+            return NEW_SCALES[task][0]
+        if split not in SPLITS[task]:
+            raise ValueError(f'unknown {task} held-out split: {split}')
+        return int(split.split('_')[-1])
     if split not in SPLITS[task] and not (split == 'eval' and task not in {'cvrp_aco', 'op_aco'}):
         raise ValueError(f'unknown {task} held-out split: {split}')
     if task == 'online_bin_packing':
@@ -45,7 +66,8 @@ def scale_of_split(task, split):
     return 50 if split == 'eval' else int(split.split('_')[-1])
 
 
-SPLITS = {task: tuple(split_of_scale(task, scale) for scale in SCALES[task]) for task in TASKS}
+SPLITS = {task: tuple(split_of_scale(task, scale) for scale in SCALES[task]) for task in ALL_TASKS}
+PRIMARY_SPLITS = {task: (split_of_scale(task, next(iter(TEST_SCALES[task]))),) for task in CO_TASKS}
 
 
 def obp_scale(kwargs, n_items, capacity):
@@ -61,6 +83,9 @@ def obp_scale(kwargs, n_items, capacity):
 
 
 def training_task(task, workers=None, *, condition='shared'):
+    if task in NEW_TASKS:
+        kwargs = dict(split='train', timeout_seconds=60)
+        return AHDEvaluation(task, **kwargs), kwargs
     if task in {'cvrp_aco', 'op_aco'}:
         cvrp = task == 'cvrp_aco'
         kwargs = dict(split='train', timeout_seconds=120 if cvrp else 60,
@@ -74,6 +99,11 @@ def training_task(task, workers=None, *, condition='shared'):
 
 
 def selection_task(task, search):
+    if task in NEW_TASKS:
+        selected = AHDEvaluation(task, split='val', timeout_seconds=search.timeout_seconds, settings=search.outer_settings)
+        if search.timeout_seconds is not None:
+            selected.timeout_seconds *= selected.n_instance / search.n_instance
+        return selected
     if task in {'cvrp_aco', 'op_aco'}:
         selected = CLASSES[task](split='val_50', timeout_seconds=search.timeout_seconds,
             n_ants=search.n_ants, n_iterations=search.n_iterations,
@@ -91,6 +121,13 @@ def heldout_task(task, split, workers=DEFAULT_WORKERS, timeout_seconds=None):
     timeout = HELDOUT_TIMEOUT[task] if timeout_seconds is None else timeout_seconds
     if workers < 1 or timeout <= 0 or not math.isfinite(timeout):
         raise ValueError('workers and timeout must be positive')
+    if task in NEW_TASKS:
+        if split != 'eval' and split not in SPLITS[task]:
+            raise ValueError(f'unknown {task} held-out split: {split}')
+        actual_split = 'test' if split == 'eval' else split
+        if timeout_seconds is None:
+            timeout = 60 * len(ahd_records(task, actual_split)) / AHD_COUNTS[task]['train']
+        return AHDEvaluation(task, split=actual_split, timeout_seconds=timeout)
     if split not in SPLITS[task] and not (split == 'eval' and task not in {'cvrp_aco', 'op_aco'}):
         raise ValueError(f'unknown {task} held-out split: {split}')
     if task in {'cvrp_aco', 'op_aco'}:
@@ -107,9 +144,9 @@ def heldout_task(task, split, workers=DEFAULT_WORKERS, timeout_seconds=None):
     return CLASSES[task](**kwargs)
 
 
-def evaluation_limits():
+def evaluation_limits(tasks=TASKS):
     output = {}
-    for task in TASKS:
+    for task in tasks:
         train, _ = training_task(task, condition='traceaad')
         output[task] = {'search': train.timeout_seconds,
                         'selection': selection_task(task, train).timeout_seconds,

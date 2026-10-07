@@ -5,13 +5,15 @@ def select_next_node(current_node: int, destination_node: int, unvisited_nodes: 
     Design a novel algorithm to select the next node in each step.
 
     Args:
-    current_node: ID of the current node.
-    destination_node: ID of the destination node.
-    unvisited_nodes: Array of IDs of unvisited nodes.
-    distance_matrix: Distance matrix of nodes.
+    current_node: Zero-based ID of the current node in the full graph.
+    destination_node: Zero-based ID of the starting node, which the tour returns to.
+    unvisited_nodes: 1-D integer array of unvisited full-graph node IDs,
+        sorted by increasing distance from current_node.
+    distance_matrix: Full symmetric Euclidean (n,n) matrix, with a zero diagonal.
 
     Return:
-    ID of the next node to visit.
+    A full-graph node ID contained in unvisited_nodes, not an array position.
+    The outer solver appends the final remaining node and return-to-start edge.
     """
     next_node = unvisited_nodes[0]
 
