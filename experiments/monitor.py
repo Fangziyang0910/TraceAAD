@@ -131,7 +131,17 @@ def _programs(run_dir, task, summary, curve):
         search = {**search, "fitness": point["fitness"]}
     selected = selected_program(run_dir)
     search, selected = _program_view(search, task), _program_view(selected, task)
-    return {"search_best": search, "selected_best": selected, "best": selected or search}
+    breakthroughs = []
+    for p in curve:
+        if p["kind"] not in {"initial", "breakthrough"} or p.get("node_id") is None:
+            continue
+        view = _program_view(history.node(p["node_id"], by_node=True), task) or {"id": p.get("candidate")}
+        breakthroughs.append({**view, "fitness": p["fitness"], "value": _objective(p["fitness"], task),
+                              "evaluation": p["evaluation"], "node_id": p["node_id"], "operator": p.get("operator"),
+                              "parent_id": p.get("parent_id"), "gain": p.get("gain"),
+                              "idea": view.get("idea") or p.get("idea") or ""})
+    return {"search_best": search, "selected_best": selected, "best": selected or search,
+            "breakthroughs": breakthroughs}
 
 
 class ResultsMonitor:

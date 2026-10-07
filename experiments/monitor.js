@@ -195,7 +195,6 @@ function buildTasks(tasks, structure) {
         <div class="agg" data-agg></div>
       </header>
       <div class="chart-box"><canvas aria-label="${esc(task.label)} 各 rep 历史最优曲线"></canvas></div>
-      <div class="chart-note" data-note></div>
       <div class="runs">
         <div class="run-head"><span>重复</span><span>状态</span><span>进度</span><span>搜索最优</span><span title="搜索结束后 top-5 在独立选择集上复评，选中程序的得分；cvrp/op 用 val_50，与搜索分不同尺度">选择分</span><span>后端</span></div>
         ${task.runs.map((run, i) => `
@@ -250,7 +249,7 @@ function updateTask(task) {
     const mean = bests.reduce((a, b) => a + b, 0) / bests.length;
     const sd = bests.length > 1 ? Math.sqrt(bests.reduce((a, b) => a + (b - mean) ** 2, 0) / (bests.length - 1)) : 0;
     const better = S.metric === "fitness" || task.direction === "max" ? Math.max(...bests) : Math.min(...bests);
-    agg.innerHTML = `<b>${fmt(mean)} <span style="font-weight:500;color:var(--muted);font-size:12px">± ${fmt(sd, 3)}</span></b>搜索最优 均值 ± 标准差 · 最好 ${fmt(better)}`;
+    agg.innerHTML = `<b>${fmt(mean)} <span style="font-weight:500;color:var(--muted);font-size:12px">± ${fmt(sd, 3)}</span></b>最好 ${fmt(better)}`;
   } else agg.textContent = "暂无有效候选";
   const chart = S.charts.get(task.key);
   const sig = S.metric + JSON.stringify(task.runs.map(r => [r.name, r.status, r.budget, r.budget_used, r.x_label, r.curve]));
@@ -316,12 +315,10 @@ function drawChart(chart) {
   const task = chart.task || {};
   const colors = {grid: cssVar("--grid"), text: cssVar("--faint"), ink: cssVar("--ink"), panel: cssVar("--panel")};
   const dom = yDomain(chart.series, chart.maxX);
-  const note = chart.card?.querySelector("[data-note]");
   ctx.font = "11px Inter, system-ui, sans-serif";
   if (!dom) {
     ctx.fillStyle = colors.text; ctx.textAlign = "center";
     ctx.fillText("暂无有效候选", W / 2, H / 2);
-    if (note) note.textContent = "";
     return;
   }
   const L = 58, R = 14, T = 10, B = 22;
@@ -382,7 +379,6 @@ function drawChart(chart) {
     ctx.beginPath(); ctx.moveTo(x(chart.hoverX) + .5, T); ctx.lineTo(x(chart.hoverX) + .5, H - B); ctx.stroke();
     ctx.setLineDash([]);
   }
-  if (note) note.textContent = dom.clipped ? "纵轴已按前 8% 预算之后的数值缩放，更早的较差值被裁掉" : "";
 }
 
 function placeTip(event) {
@@ -509,22 +505,25 @@ function renderDetail(run) {
   const task = {...run.task_meta, key: run.task};
   const body = $("d-body");
   const scroll = body.scrollTop;
-  const codeOpen = new Map([...body.querySelectorAll("[data-program]")].map(el => [el.dataset.program, el.querySelector("details.code")?.open]));
+  const openCards = new Set([...body.querySelectorAll("details.bt[open]")].map(el => el.dataset.id));
   const t = run.timing || {};
   const best = bestFitness(run);
   const outcomes = Object.entries(run.outcomes || {}).sort((a, b) => b[1] - a[1]);
   const total = run.candidate_count ?? outcomes.reduce((a, [, n]) => a + n, 0);
   const denominator = Math.max(1, total);
-  const programs = [];
-  const same = run.search_best?.code && run.search_best.code === run.selected_best?.code && run.search_best.fitness === run.selected_best.fitness;
-  if (same) programs.push({role: "search", title: "搜索最优 / 最终选中程序", program: run.search_best});
-  else {
-    if (run.search_best) programs.push({role: "search", title: "搜索最优程序", program: run.search_best});
-    if (run.selected_best) programs.push({role: "selected", title: "最终选中程序", program: run.selected_best});
-  }
+  const crumbs = (run.breakthroughs || []).slice().reverse();
+  const selected = run.selected_best;
+  const selectedIsBest = selected && crumbs[0] && selected.code && selected.code === crumbs[0].code;
+  const cards = [];
+  if (selected && !selectedIsBest) cards.push({key: "selected", tag: "最终选中", program: selected});
+  crumbs.forEach((p, i) => cards.push({key: `b${p.node_id}`, tag: i === 0 ? (selectedIsBest ? "搜索最优 · 最终选中" : "搜索最优") : p.parent_id == null && p.operator === "Init" ? "初始" : "", program: p}));
+  const gainText = p => {
+    if (p.gain == null || !Number.isFinite(p.fitness)) return "";
+    const before = p.fitness - p.gain;
+    return before ? `<em class="d up">+${(p.gain / Math.abs(before) * 100).toFixed(2)}%</em>` : "";
+  };
   const ops = Object.entries(run.operators || {}).sort((a, b) => b[1] - a[1]);
   const opMax = Math.max(1, ...ops.map(([, n]) => n));
-  const breakthroughs = (run.curve || []).filter(p => p.kind === "breakthrough").length;
   $("d-sub").innerHTML = `<span class="pill ${esc(run.status)}">${STATUS[run.status] || esc(run.status)}</span> · ${esc(run.backend || "–")} · seed ${esc(run.seed ?? "–")} · ${esc(run.name)}`;
   const tile = (k, v) => `<div class="tile"><small>${k}</small><strong>${v}</strong></div>`;
   body.innerHTML = `
@@ -538,7 +537,14 @@ function renderDetail(run) {
       ${tile("预计剩余", eta(t))}
       ${tile("预计完成", t.eta_at ? clock(t.eta_at) : run.updated_at ? `完成于 ${clock(run.updated_at)}` : "–")}
     </div>
-    <section class="sec"><h3>历史最优曲线<small>${breakthroughs} 次突破 · 悬停圆点查看候选</small></h3><div class="d-chart"><canvas></canvas></div></section>
+    <section class="sec"><h3>历史最优曲线</h3><div class="d-chart"><canvas></canvas></div></section>
+    <section class="sec"><h3>全局突破<small>${crumbs.length} 个 · 新 → 旧</small></h3>
+      <div class="bts">${cards.map(({key, tag, program: p}) => `<details class="bt" data-id="${esc(key)}" ${openCards.has(key) ? "open" : ""}>
+        <summary><span class="bt-id">#${esc(p.id ?? "–")}</span><span class="bt-op">${esc(p.operator && p.operator !== "unknown" ? p.operator : "–")}</span>
+          <span class="bt-at">${p.evaluation != null && String(p.evaluation) !== String(p.id) ? `@${esc(p.evaluation)} · ` : ""}${p.parent_id != null ? `← #${esc(p.parent_id)}` : ""}</span>
+          ${tag ? `<span class="bt-tag">${tag}</span>` : ""}<span class="bt-score">${fmt(shown(p.fitness, task), 5)}${gainText(p)}</span></summary>
+        <div class="bt-body"></div></details>`).join("") || '<p class="empty">无记录</p>'}</div>
+    </section>
     <section class="sec"><h3>候选结果<small>共 ${total} 条记录</small></h3>
       <div class="stack">${outcomes.map(([k, n]) => `<i style="width:${n / denominator * 100}%;background:var(${toneVar[tone(k)]});${tone(k) === "neutral" ? "opacity:.6" : ""}" title="${esc(outcomeLabel(k))} ${n}"></i>`).join("")}</div>
       <div class="legend">${outcomes.map(([k, n]) => `<span><i style="background:var(${toneVar[tone(k)]})"></i>${esc(outcomeLabel(k))} <b>${n}</b></span>`).join("")}</div>
@@ -550,18 +556,19 @@ function renderDetail(run) {
         <tbody>${(run.recent || []).map(r => `<tr><td class="num">${esc(r.evaluation)}</td><td>${esc(r.operator === "unknown" ? "–" : r.operator)}</td><td><span class="st ${tone(r.status) === "ok" ? "valid" : tone(r.status)}">${esc(outcomeLabel(r.status))}</span></td><td class="nr">${fmt(shown(r.fitness, task))}</td></tr>`).join("")}</tbody></table>
       </section>
     </div>
-    ${programs.map(({role, title, program}) => `<section class="sec" data-program="${role}"><h3>${title}<small>候选 #${esc(program.id ?? "–")} · 训练 ${S.metric === "fitness" ? "Fitness" : esc(task.unit)} ${fmt(shown(program.fitness, task), 5)}${program.operator ? ` · ${esc(program.operator)}` : ""}</small></h3>
-      <p class="idea"></p>
-      ${program.code ? `<details class="code" ${codeOpen.get(role) ? "open" : ""}><summary>查看代码</summary><pre></pre></details>` : '<p class="empty">历史记录未保存此候选的源码</p>'}</section>`).join("")}`;
-  for (const {role, program} of programs) {
-    const section = body.querySelector(`[data-program="${role}"]`);
-    section.querySelector(".idea").textContent = program.idea || "（无 idea 记录）";
-    const pre = section.querySelector("pre"), details = section.querySelector("details.code");
-    if (!pre || !details) continue;
-    const fill = () => { if (details.open && !pre.textContent) pre.textContent = program.code; };
-    if (details.open) fill();
-    details.addEventListener("toggle", fill);
-  }
+`;
+  body.querySelectorAll("details.bt").forEach(el => {
+    const p = cards.find(c => c.key === el.dataset.id).program;
+    const fill = () => {
+      if (!el.open || el.querySelector(".bt-body").childElementCount) return;
+      const box = el.querySelector(".bt-body");
+      const idea = document.createElement("p"); idea.className = "idea"; idea.textContent = p.idea || "（无 design 记录）";
+      box.append(idea);
+      if (p.code) { const pre = document.createElement("pre"); pre.textContent = p.code; box.append(pre); }
+      else { const e = document.createElement("p"); e.className = "empty"; e.textContent = "未保存源码"; box.append(e); }
+    };
+    fill(); el.addEventListener("toggle", fill);
+  });
   const canvas = body.querySelector(".d-chart canvas");
   if (S.detailChart) resizer.unobserve(S.detailChart.canvas.parentElement);
   S.detailChart = {
@@ -570,6 +577,13 @@ function renderDetail(run) {
       points: (run.curve || []).filter(p => Number.isFinite(p.fitness)).map(p => ({x: p.evaluation, f: p.fitness, p}))}],
   };
   bindDetailHover(S.detailChart);
+  canvas.addEventListener("click", () => {
+    const p = S.detailChart?.hoverPoint?.p;
+    const card = p && body.querySelector(`details.bt[data-id="b${CSS.escape(String(p.node_id))}"]`);
+    if (!card) return;
+    card.open = true;
+    card.scrollIntoView({behavior: "smooth", block: "start"});
+  });
   resizer.observe(canvas.parentElement);
   body.scrollTop = scroll;
 }
@@ -693,7 +707,7 @@ function renderCompare() {
   const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
   const bestRank = Object.fromEntries(groups.map(g => [g, Math.min(...order.map(id => avg(acc[id][g].ranks) ?? Infinity))]));
   $("cmp-summary").innerHTML = `
-    <div class="panel-head"><h2>总览</h2><p>平均名次：各任务各列按均值排名后取平均（越小越好）；Δ：相对参照的平均相对差（按 fitness，正 = 更好）</p></div>
+    <div class="panel-head"><h2 title="平均名次：各任务各列按均值排名后取平均（越小越好）；Δ：相对参照的平均相对差（正 = 更好）">总览</h2></div>
     <div class="tbl-wrap"><table class="cmp"><thead><tr><th>对象</th>${groups.map(g => `<th>${GROUP[g]}</th>`).join("")}</tr></thead><tbody>
     ${order.map(id => `<tr><td>${who(id)}</td>${groups.map(g => {
       const r = avg(acc[id][g].ranks), d = avg(acc[id][g].rels), n = acc[id][g].ranks.length;

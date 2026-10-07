@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TraceAAD 实验监控</title>
+<title>TraceAAD Monitor</title>
 <link rel="stylesheet" href="/monitor.css">
 </head>
 <body>
 <header class="top">
-  <div class="brand"><span class="mark"></span>TraceAAD 实验监控<small>只读 · 自动刷新</small></div>
+  <div class="brand"><span class="mark"></span>TraceAAD</div>
   <div class="segctl" role="group" aria-label="视图">
     <button type="button" data-view="monitor" aria-pressed="true">运行监控</button>
     <button type="button" data-view="compare" aria-pressed="false">结果对比</button>
@@ -32,21 +32,14 @@
     <div class="kpi"><div class="k">预计搜索剩余</div><div class="v" id="k-eta">–</div><div class="n" id="k-eta-n">–</div></div>
     <div class="kpi"><div class="k">有效候选</div><div class="v" id="k-nodes">–</div><div class="n" id="k-nodes-n">–</div></div>
   </section>
-  <div class="toolbar">
-    <p>曲线为各 rep 的历史最优（向上 = 更好），悬停查看同一预算下各 rep 的数值；点击某一行打开运行详情。</p>
-  </div>
   <div class="error" id="error" hidden></div>
   <section class="tasks" id="tasks"><div class="skeleton"></div><div class="skeleton"></div></section>
  </div>
  <div id="view-compare" hidden>
   <section class="panel">
-    <div class="panel-head"><h2>对比对象</h2><p>第一个 ★ 为参照，Δ 均相对参照；同一批次内的多个 held-out 变体分开列出</p></div>
+    <div class="panel-head"><h2 title="★ 为参照，Δ 相对参照。训练：最终程序的训练分；选择：独立选择集上的得分；测试：与训练同规模的 held-out；泛化：其他规模。各格为 rep 均值 ± 标准差。">对比对象</h2></div>
     <div class="chips" id="cmp-chips"></div>
   </section>
-  <div class="toolbar"><p>
-    <b>训练</b>＝最终程序在训练集上的得分 · <b>选择</b>＝top-5 在独立选择集复评后选中程序的得分（V10.14+）·
-    <b>测试</b>＝与训练同规模的 held-out · <b>泛化</b>＝其他规模的 held-out。各格为 rep 均值 ± 样本标准差。
-  </p></div>
   <div class="error" id="cmp-error" hidden></div>
   <section class="panel" id="cmp-summary"><div class="skeleton" style="height:120px;border:0"></div></section>
   <section class="cmp-tasks" id="cmp-tasks"></section>
