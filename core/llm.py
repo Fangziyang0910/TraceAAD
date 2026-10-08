@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import copy
+import itertools
 import time
 from threading import local
 from uuid import uuid4
@@ -83,10 +84,15 @@ class ModelCallError(RuntimeError):
         self.calls, self.transient = calls, transient
 
 
+# A model server that restarts (a crash, a reload) is back within minutes;
+# connection and server errors are retried with capped backoff for this long.
+SERVICE_WAIT_SECONDS = 900
+
+
 def generate(llm, prompt, **kwargs):
     """One generation request, including every physical request and retry."""
-    calls = []
-    for attempt in range(3):
+    calls, waited = [], 0.0
+    for attempt in itertools.count():
         started = time.monotonic()
         try:
             details = llm.draw_sample_with_details(prompt, **kwargs)
@@ -111,9 +117,11 @@ def generate(llm, prompt, **kwargs):
         transient = (status == 429 or isinstance(status, int) and status >= 500 or
                      isinstance(error, (openai.APIConnectionError, openai.APITimeoutError,
                                         ConnectionError, TimeoutError, OSError)))
-        if not transient or attempt == 2:
+        if not transient or waited >= SERVICE_WAIT_SECONDS:
             raise ModelCallError(error, calls, transient) from error
-        time.sleep(2 ** (attempt+1))
+        pause = min(60, 2 ** (attempt+1))
+        time.sleep(pause)
+        waited += pause
 
 
 class OpenAIAPI(LLM):

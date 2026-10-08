@@ -1,4 +1,4 @@
-"""V10.21 context: time in the unit a program spends it, and no ban on code comments.
+"""V10.21 context: time in the unit a program spends it.
 
 Time. V10.20 stated one limit for the whole training evaluation, while the
 function is called once per instance (ACO) or thousands of times per instance
@@ -9,9 +9,9 @@ out; Deepen, the step that spends more time, timed out most (8.7%). Time
 belongs to an instance, so the evaluation states the per-instance budget and
 every measurement states the time per instance and the calls per instance.
 
-Comments. Programs are stored as canonical source, which drops comments and
-docstrings, so the ban changed nothing kept or shown; it only removed the
-model's own notes while it writes code.
+Comments. The ban on code comments stays. Lifting it (V10.21's first
+launch) spent 21.6% of output tokens on comments, which canonical storage
+drops, and runtime errors did not fall.
 """
 
 from benchmarks.tasks import CO_TASKS, HELDOUT_TIMEOUT, INSTANCE_SECONDS
@@ -40,7 +40,6 @@ def duration(seconds):
 class PromptBuilder(V1020Prompts):
     ANALYSIS = ANALYSIS
     DEEPEN = DEEPEN
-    CLOSING = "Write nothing after the code block."
 
     def __init__(self, llm, task, evaluation, programs, attempts, config):
         self.instances = max(1, int(getattr(evaluation, "n_instance", 1) or 1))

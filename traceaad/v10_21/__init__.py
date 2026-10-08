@@ -1,4 +1,4 @@
-"""TraceAAD V10.21: V10.20 with time stated per instance and per call, and no ban on code comments."""
+"""TraceAAD V10.21: V10.20 with time stated per instance and per call."""
 
 from .config import Config
 from .traceaad import TraceAADV1021

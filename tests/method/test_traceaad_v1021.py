@@ -1,4 +1,4 @@
-"""V10.21: V10.20 with time stated per instance and per call, and no ban on code comments."""
+"""V10.21: V10.20 with time stated per instance and per call."""
 
 import pytest
 
@@ -46,7 +46,7 @@ def test_deepen_and_output_format():
     assert "per-instance time budget" in DEEPEN and prompts.DEEPEN == DEEPEN
     assert "computation per instance" in prompts.ANALYSIS["Deepen"]
     text = prompts.output_format("Deepen")
-    assert text.endswith("Write nothing after the code block.") and "comments" not in text
+    assert text.endswith("Write no comments or docstrings in the code, and nothing after the code block.")
 
 
 def test_comments_never_reach_the_stored_program():
@@ -61,4 +61,4 @@ def test_a_tiny_run_completes(tmp_path):
     summary = method.run()
     assert summary["status"] == "finished" and summary["method"] == "v1021"
     prompts = [prompt for prompt, _ in method.llm.calls]
-    assert len(prompts) == 14 and all("Write no comments" not in prompt for prompt in prompts)
+    assert len(prompts) == 14 and all("Write no comments or docstrings" in prompt for prompt in prompts)
