@@ -14,7 +14,8 @@ from traceaad.common.config import REVISION
 from benchmarks.tasks import evaluation_limits
 
 
-def build_plan(previous, batch, experiment, module, budget=1000):
+def build_plan(previous, batch, experiment, module, budget=1000, *, eval_workers=4, eval_timeout_seconds=None,
+               scheduler_socket=None):
     source = previous["plan"]
     plan = []
     for item in source:
@@ -28,11 +29,17 @@ def build_plan(previous, batch, experiment, module, budget=1000):
         command = ["uv", "run", "python", "-m", module,
                    "--task", task, "--backend", backend, "--repeat", str(repeat),
                    "--seed", str(seed), "--run-name", name, f"--budget={budget}",
-                   "--eval-workers=4", "--experiment", experiment]
+                   f"--eval-workers={eval_workers}", "--experiment", experiment]
+        if eval_timeout_seconds is not None:
+            command.append(f"--eval-timeout-seconds={eval_timeout_seconds:g}")
+        if scheduler_socket:
+            command.extend(['--scheduler-socket', str(scheduler_socket)])
         plan.append({"task": task, "repeat": repeat, "seed": seed, "backend": backend,
                      "session": session, "run_name": name,
                      "run_dir": str(RESULTS_ROOT / experiment / task / name),
                      "command": command, "status": "planned"})
+        if scheduler_socket:
+            plan[-1]['backend'] = 'scheduled'
     if len({item["run_name"] for item in plan}) != len(plan):
         raise ValueError("duplicate run identities")
     return plan

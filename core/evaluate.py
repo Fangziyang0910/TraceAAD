@@ -19,12 +19,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import multiprocessing
 import os
 import queue
 import resource
 import signal
 import sys
+import threading
 import time
 import traceback
 from abc import ABC, abstractmethod
@@ -34,6 +37,7 @@ from typing import Any, Literal
 from contextlib import contextmanager
 
 from .code import TextFunctionProgramConverter, Program
+from .scheduling import SchedulerError
 
 
 @dataclass(frozen=True)
@@ -231,6 +235,28 @@ def _stop_eval_process(process: multiprocessing.Process) -> None:
     process.join(timeout=5)
 
 
+_RECORD_LOCK = threading.Lock()
+
+
+def _append_evaluation(path, program, record):
+    """One line per evaluation: methods that keep no failure kind still leave it here."""
+    failed = next((r for r in record["instances"] if r["failure_kind"] not in (None, "cancelled")), None)
+    row = {"key": hashlib.sha256(program.encode()).hexdigest(), "valid": record["valid"],
+           "score": record["score"], "failure_kind": record["failure_kind"], "error_type": record["error_type"],
+           "error": (record["error"] or "")[:300] or None,
+           "instance_index": failed["instance_index"] if failed else None,
+           "instance_function_seconds": failed["function_seconds"] if failed else None,
+           "instance_function_cpu_seconds": failed["function_cpu_seconds"] if failed else None,
+           "instance_seconds": failed["seconds"] if failed else None,
+           "cpu_id": failed.get("cpu_id") if failed else None,
+           "seconds": record["seconds"], "function_seconds": record["function_seconds"],
+           "function_cpu_seconds": record["function_cpu_seconds"],
+           "timeout_seconds": record["timeout_seconds"], "function_seconds_limit": record["function_seconds_limit"],
+           "protocol": record["protocol"]}
+    with _RECORD_LOCK, open(path, "a", encoding="utf-8") as output:
+        output.write(json.dumps(row) + "\n")
+
+
 class SecureEvaluator:
     def __init__(self,
                  evaluator: Evaluation,
@@ -238,6 +264,7 @@ class SecureEvaluator:
                  **kwargs):
         self._evaluator = evaluator
         self._debug_mode = debug_mode
+        self.scheduler_error = None
         fork_proc = self._evaluator.fork_proc
 
         if self._evaluator.safe_evaluate:
@@ -271,6 +298,18 @@ class SecureEvaluator:
     ) -> EvaluationOutcome:
         try:
             program_str = str(program)
+            if execution := getattr(self._evaluator, "_instance_execution", None):
+                from traceaad.common.instance_evaluation import InstanceProgramEvaluator
+                options = {name: value for name, value in execution.items() if name != "record_path"}
+                evaluator = InstanceProgramEvaluator(self._evaluator,
+                    seeds=(kwargs.get("seed", EVALUATION_SEED),), **options)
+                result = evaluator.evaluate(program_str, "")
+                record = result["evaluations"][-1]
+                if execution.get("record_path"):
+                    _append_evaluation(execution["record_path"], program_str, record)
+                return EvaluationOutcome(result["fitness"],
+                    **{name: record[name] for name in ("failure_kind", "error_type", "error", "traceback")},
+                    cpu_seconds=sum(r["cpu_seconds"] for r in result["evaluations"]))
             function_name = self._target_function_name()
 
             if self._debug_mode:
@@ -295,6 +334,9 @@ class SecureEvaluator:
                 return self._evaluate_with_details(
                     program_str, function_name, **kwargs
                 )
+        except SchedulerError as exc:
+            self.scheduler_error = exc
+            raise
         except Exception as e:
             if self._debug_mode:
                 print("DEBUG: Exception occurred in evaluate_program:")
@@ -340,12 +382,14 @@ class SecureEvaluator:
 
     def _evaluate_with_details(self, program_str: str, function_name, **kwargs):
         with self._evaluator.program_context(program_str, function_name, **kwargs) as (code, task, task_kwargs):
-            try:
-                namespace = {}
-                exec(code, namespace)
-                function = namespace[function_name]
-            except Exception as exc:
-                return self._failure('exec_error', exc)
+            function = None
+            if not getattr(task, "executes_source", False):
+                try:
+                    namespace = {}
+                    exec(code, namespace)
+                    function = namespace[function_name]
+                except Exception as exc:
+                    return self._failure('exec_error', exc)
             try:
                 return self._outcome(task.evaluate_program(code, function, **task_kwargs))
             except InvalidEvaluationResult as exc:

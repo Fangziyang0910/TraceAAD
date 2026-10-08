@@ -9,6 +9,7 @@ import time
 
 from .storage import write_json
 from core.llm import generate, ModelCallError
+from core.scheduling import SchedulerError
 from .canonical import canonical, key
 from .config import REVISION
 from .delivery import DeliveryError, SourceError, extract_idea, parse_response
@@ -28,6 +29,7 @@ def _tuple_tree(value):
 
 
 class Search:
+    Evaluator = ProgramEvaluator
     RECORD_EXPLORATIONS = False
     # Steps whose proposals open an exploration when explorations are recorded.
     EXPLORING = ("Explore",)
@@ -45,8 +47,10 @@ class Search:
         self.facts = Facts(run_dir)
         self.programs, self.attempts_table = self.facts.programs, self.facts.attempts
         self.prompts = self.PromptBuilder(llm, task, evaluation, self.programs, self.attempts_table, self.config)
-        self.training = ProgramEvaluator(evaluation, self.config.evaluation_seeds, "search", measure_calls=self.MEASURE_CALLS)
-        self.selection = (ProgramEvaluator(selection_evaluation, self.config.evaluation_seeds, "selection", measure_calls=self.MEASURE_CALLS)
+        self.training = self.Evaluator(evaluation, self.config.evaluation_seeds, "search", measure_calls=self.MEASURE_CALLS,
+                                       **self._evaluation_options())
+        self.selection = (self.Evaluator(selection_evaluation, self.config.evaluation_seeds, "selection", measure_calls=self.MEASURE_CALLS,
+                                        **self._evaluation_options())
                           if selection_evaluation is not None else None)
         if self.selection:
             if str(selection_evaluation.template_program) != self.template:
@@ -60,11 +64,8 @@ class Search:
         self.identity = json.loads(json.dumps({"revision": REVISION, "config": asdict(self.config),
             "task": task, "protocol": self.training.protocol,
             "selection_protocol": self.selection.protocol if self.selection else None}))
+        # A resumed run continues under the current configuration and evaluator.
         saved = self.facts.state or {}
-        if saved and saved["phase"] in {"roots", "search", "freeze", "selection"}:
-            for name in ("config", "task", "protocol", "selection_protocol"):
-                if saved["identity"][name] != self.identity[name]:
-                    raise ValueError(f"resume changed {name}")
         self.progress = Progress(**{name: saved[name] for name in Progress.__dataclass_fields__ if name in saved})
         self.parent_rng = random.Random(f"{self.METHOD.replace('v10', 'v10.')}:{self.config.seed}:parent")
         self.action_rng = random.Random(f"{self.METHOD.replace('v10', 'v10.')}:{self.config.seed}:action")
@@ -76,6 +77,9 @@ class Search:
     @property
     def phase(self):
         return self.progress.phase
+
+    def _evaluation_options(self):
+        return {}
 
     @property
     def archive(self):
@@ -155,20 +159,29 @@ class Search:
                           "duplicate" if known["valid"] else "known_failure")
                 attempt.update(status=status, program_id=known["id"])
             else:
-                measured = {"seconds": None, "calls": None, "function_seconds": None}
+                measured = {"seconds": None, "wall_seconds": None, "calls": None, "function_seconds": None}
                 fitness = None
                 if failure is None:
-                    outcome = self.training.evaluate(code, source_key)
+                    try:
+                        outcome = self.training.evaluate(code, source_key, **self._evaluation_options())
+                    except SchedulerError:
+                        self._save(calls=calls)
+                        raise
                     evaluations = outcome["evaluations"]
                     fitness, failure = outcome["fitness"], outcome["failure"]
                     measured = {name: outcome[name] for name in ("seconds", "calls", "function_seconds")}
+                    measured["wall_seconds"] = outcome["seconds"]
+                    # Prompts describe per-instance computation, not the shorter
+                    # batch wall time obtained by running instances concurrently.
+                    measured["seconds"] = outcome.get("instance_seconds", outcome["seconds"])
                 program = {"id": aid, "key": source_key, "code": code,
                            "fitness": fitness, "score": fitness,
                            "parent_id": attempt["parent_id"], "action": request["action"],
                            "reference_id": attempt["reference_id"], "idea": attempt["idea"],
                            "depth": parent["depth"] + 1 if parent else 0, "repaired": repair_of is not None,
                            "valid": failure is None, "failure": failure,
-                           "eval_seconds": measured["seconds"], "calls": measured["calls"],
+                           "eval_seconds": measured["seconds"], "eval_wall_seconds": measured["wall_seconds"],
+                           "calls": measured["calls"],
                            "function_seconds": measured["function_seconds"], "attempt_id": aid}
                 attempt.update(status=failure["kind"] if failure else "valid", program_id=aid)
         needs_repair = (program is not None and not program["valid"] and repair_of is None
@@ -210,7 +223,13 @@ class Search:
             self.progress.phase = "search" if roots else "no_valid_root"
             self._save()
             return
-        self._attempt(self.prompts.initial(roots))
+        try:
+            request = self.prompts.initial(roots)
+        except ContextTooLong:
+            self.progress.phase = "search" if roots else "no_valid_root"
+            self._save()
+            return
+        self._attempt(request)
 
     def _choose_parent(self, eligible):
         return sample_parent(eligible, self.attempts_table, self.programs, self.parent_rng)
@@ -245,9 +264,14 @@ class Search:
         try:
             request = self.prompts.build(action, parent, reference=reference)
         except ContextTooLong:
-            self.progress.too_long.append(parent["id"])
-            self._save()
-            return
+            try:
+                request = self.prompts.build("Explore", parent)
+            except ContextTooLong:
+                self.progress.too_long.append(parent["id"])
+                self._save()
+                return
+            reference, reference_selection = None, None
+            flags.append("explore_context_fallback")
         if request["action"] == "Refine" and action == "Crossover":
             reference = None
             flags.append("crossover_context_fallback")
@@ -321,7 +345,7 @@ class Search:
         replacements as there are finalists."""
         if len(self.progress.selection_results) < len(self.progress.finalists):
             node = self.archive[self.progress.finalists[len(self.progress.selection_results)]]
-            outcome = self.selection.evaluate(node["code"], node["key"])
+            outcome = self.selection.evaluate(node["code"], node["key"], **self._evaluation_options())
             failure = outcome["failure"]
             self.progress.selection_results.append({"node_id": node["id"],
                                            **{k: v for k, v in outcome.items() if k != "evaluations"}})
@@ -348,6 +372,8 @@ class Search:
             best = {**{k: v for k, v in best.items() if k not in {"code", "failure"}},
                     "selection_fitness": next((r["fitness"] for r in self.progress.selection_results
                     if r["node_id"] == best["id"]), None)}
+            if self.phase == "finished" and self.selection is None and best["selection_fitness"] is not None:
+                best.update(fitness=best["selection_fitness"], score=best["selection_fitness"])
         summary = {"status": status, "phase": self.phase, "method": self.METHOD, "revision": REVISION,
                    "final_selection": "validation" if self.selection else "training",
                    "budget": self.config.budget, "budget_used": self.attempts, "budget_axis": "候选尝试",
@@ -381,6 +407,8 @@ class Search:
                     self._freeze()
                 else:
                     self._select()
+        except SchedulerError as exc:
+            return self._summary("service_unavailable", str(exc))
         except RuntimeError as exc:
             if "model service unavailable" in str(exc):
                 return self._summary("service_unavailable", str(exc))
@@ -424,7 +452,6 @@ class DevelopingSearch(Search):
         try:
             request = self.prompts.develop(best, exploration["source"], exploration["development"])
         except ContextTooLong:
-            self.progress.too_long.append(best["id"])
             self._close_exploration(exploration, "context")
             return
         request.update(sampled_action="Explore", fallbacks=[], parent_id=best["id"], reference_id=None,

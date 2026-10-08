@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from experiments.infra.base import (
+    scheduler_socket,
     ALL_TASKS,
     BACKENDS,
     RESULTS_ROOT,
@@ -27,7 +29,9 @@ from experiments.infra.base import (
     set_random_seed,
     write_run_config,
 )
-from benchmarks.tasks import NATIVE_MINIMIZE
+from benchmarks.tasks import CO_TASKS, FUNCTION_SECONDS, INSTANCE_SECONDS, NATIVE_MINIMIZE
+from core.evaluate import EVALUATION_SEED
+from traceaad.common.storage import read_json
 from core.llm import OpenAIAPI
 from traceaad.common.config import REVISION
 
@@ -109,9 +113,11 @@ def setup_experiment_run(
     budget_basis: str | None = None,
     condition: str = "shared",
     extra_config: dict | None = None,
+    llm_factory=None,
+    backend_profile=None,
 ) -> RunContext:
     """Set up the standard environment, LLM, task evaluation, and configuration."""
-    profile = resolve_backend(args.backend, args.base_url, args.model, args.no_proxy)
+    profile = backend_profile or resolve_backend(args.backend, args.base_url, args.model, args.no_proxy)
     task_root = (results_root or RESULTS_ROOT / method) / args.task
     run_dir, run_name, resumed = resolve_resumable_run_dir(task_root, args.run_name, resume_file)
     log_dir = run_dir / "logs"
@@ -123,12 +129,14 @@ def setup_experiment_run(
     if budget_basis:
         params["budget_basis"] = budget_basis
 
-    if not resumed:
-        evaluation, task_config = build_task(args.task, getattr(args, "eval_workers", None), condition=condition)
+    evaluation, task_config = build_task(args.task, getattr(args, "eval_workers", None), condition=condition)
+    saved = read_json(run_dir / "run_config.json", {})
+    phase = read_json(run_dir / "resume.json", {}).get("state", {}).get("phase")
+    if phase not in {"finished", "search_complete", "selection_failed", "no_valid_root"}:
         write_run_config(
             run_dir,
             {
-                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "created_at": saved.get("created_at", datetime.now().isoformat(timespec="seconds")),
                 "budget": getattr(args, "budget", params.get("max_sample_nums", 0)),
                 "objective": "min",
                 "native_objective": "min" if args.task in NATIVE_MINIMIZE else "max",
@@ -155,11 +163,8 @@ def setup_experiment_run(
                 **(extra_config or {}),
             },
         )
-    else:
-        evaluation, _ = build_task(args.task, getattr(args, "eval_workers", None), condition=condition)
-
     set_random_seed(args.seed)
-    llm = build_llm_client(
+    llm = (llm_factory or build_llm_client)(
         base_url=profile.base_url,
         model=profile.model,
         no_proxy=profile.no_proxy,
@@ -188,6 +193,8 @@ def run_baseline_experiment(spec, *, write_config, build_method, description: st
 
     run_dir, run_name = resolve_run_dir(spec.experiment_root, spec.run_name)
     log_dir = run_dir / "logs"
+    # Each evaluation's outcome, failure kind included, whatever the method records.
+    os.environ["TRACEAAD_EVALUATION_LOG"] = str(run_dir / "evaluations.jsonl")
     write_config(spec, run_dir, run_name)
     print(f"run_dir={run_dir}")
     run_in_tmux_log(
@@ -205,6 +212,11 @@ def baseline_run_config(spec, run_dir: Path, run_name: str, method: str,
                         extra: dict[str, Any] | None = None) -> dict[str, Any]:
     if task_config is None:
         _, task_config = build_task(spec.task, spec.eval_workers)
+    if spec.task in CO_TASKS:
+        method_params = {**method_params, "evaluation_seeds": [EVALUATION_SEED],
+                         "eval_timeout_seconds": INSTANCE_SECONDS, "function_seconds": FUNCTION_SECONDS,
+                         "eval_workers": 1 if spec.eval_workers is None else spec.eval_workers,
+                         "scheduler_socket": scheduler_socket()}
     return {
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "budget": method_params["max_sample_nums"],

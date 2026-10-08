@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 
 import numpy as np
 
-from benchmarks.tasks import ALL_TASKS, TASKS, TASK_SHORT, SUITES, DEFAULT_WORKERS, training_task
+from benchmarks.tasks import ALL_TASKS, CO_TASKS, TASKS, TASK_SHORT, SUITES, DEFAULT_WORKERS, INSTANCE_SECONDS, training_task
 from .env import resolve_llm_api_key
 from core.llm import OpenAIAPI
 
@@ -172,8 +172,19 @@ def build_llm_client(
     )
 
 
+def scheduler_socket():
+    """The host CPU scheduler a baseline's instances request cores from, if any."""
+    return os.environ.get("TRACEAAD_SCHEDULER_SOCKET") or None
+
+
 def build_task(task, eval_workers=None, *, condition='shared'):
-    return training_task(task, eval_workers, condition=condition)
+    evaluation, settings = training_task(task, eval_workers, condition=condition)
+    if task in CO_TASKS:
+        evaluation._instance_execution = {"timeout_seconds": INSTANCE_SECONDS,
+                                          "n_workers": 1 if eval_workers is None else eval_workers,
+                                          "scheduler_socket": scheduler_socket(),
+                                          "record_path": os.environ.get("TRACEAAD_EVALUATION_LOG") or None}
+    return evaluation, settings
 
 
 def llm_payload(

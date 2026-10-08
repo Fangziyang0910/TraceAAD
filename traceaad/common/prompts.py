@@ -102,6 +102,7 @@ class PromptBuilder:
     UNCHANGED_ROOT = "the {origin}"
     REFINE = REFINE
     REFINE_ROOT = REFINE_ROOT
+    REPAIR = REPAIR
     EXPLORE = EXPLORE
     CROSSOVER = CROSSOVER
     ANALYSIS = ANALYSIS
@@ -179,6 +180,10 @@ class PromptBuilder:
     def evaluation_time(self, seconds):
         return f"about {max(seconds, 0.1):.1f} s"
 
+    def _timed(self, seconds, separator):
+        text = self.elapsed(seconds)
+        return separator + text if text else ""
+
     def limit_text(self):
         return f"the {format(self.timeout, 'g')} s time limit" if self.timeout is not None else "the time limit"
 
@@ -242,7 +247,7 @@ class PromptBuilder:
         end = (f"score {score_text(child['score'])} "
                f"({verdict(parent['score'], child['score'], self.higher_is_better)})")
         if child.get("eval_seconds"):
-            end += ", " + self.elapsed(child["eval_seconds"])
+            end += self._timed(child["eval_seconds"], ", ")
         result = f"{heading} · {action} · score {score_text(parent['score'])} → {end}"
         if failed is not None:
             result += f"\n  First version failed: {self.failure(failed)}"
@@ -286,7 +291,7 @@ class PromptBuilder:
         if status == "valid":
             return (f"score {score_text(program['score'])} "
                     f"({verdict(start['score'], program['score'], self.higher_is_better)})"
-                    + (", " + self.elapsed(program["eval_seconds"]) if program.get("eval_seconds") else ""))
+                    + (self._timed(program["eval_seconds"], ", ") if program.get("eval_seconds") else ""))
         if status == "copied_reference":
             return "the same code as its reference algorithm"
         if status in {"duplicate", "known_failure"} and program is not None:
@@ -368,7 +373,7 @@ class PromptBuilder:
                     source = self.programs.get(source["parent_id"])
                 origin = ("as an initial algorithm" if source is None
                           else f"from an algorithm scoring {score_text(source['score'])}")
-                timing = " · " + self.elapsed(program["eval_seconds"]) if program.get("eval_seconds") else ""
+                timing = self._timed(program["eval_seconds"], " · ") if program.get("eval_seconds") else ""
                 entries.append(f"Attempt {event['id']} · {action} {origin} → "
                                f"{score_text(program['score'])} (previous best {score_text(previous['score'])})"
                                f"{timing}\n  Design: {idea_view(program['idea'])}")
@@ -497,15 +502,16 @@ class PromptBuilder:
             return text
         if failure["kind"] == "invalid_source":
             return f"The program could not be used: {failure['error']}"
+        # The evaluator's own traceback, without the harness frames; nothing is added to it.
         if failure["kind"] == "runtime_error":
-            return "\n".join((failure["error"] or "").splitlines()[-15:])[-1500:]
+            return (failure["error"] or "")[-4000:]
         return failure["error"] or "Invalid output"
 
     def repair(self, failed):
         """Repair a failed program; a timeout is stated as the measurement it is."""
         sections = list(self.common)
         failed_section = f"[Failed Program]\nDesign: {idea_view(failed['idea'])}\n```python\n{failed['code'].rstrip()}\n```"
-        sections += [failed_section, f"[Error]\n{self.error_text(failed)}", REPAIR, self.output_format("Repair")]
+        sections += [failed_section, f"[Error]\n{self.error_text(failed)}", self.REPAIR, self.output_format("Repair")]
         result = self._result(sections, "Repair")
         if result["input_tokens"] > self.config.max_input_tokens:
             raise ContextTooLong("repair prompt exceeds context")

@@ -21,6 +21,7 @@ class FixedEvaluation(Evaluation):
     """Task modules supply their generator, template, solver and fixed settings."""
 
     MAXIMIZE = False
+    executes_source = True
 
     def __init__(self, split='train', timeout_seconds=60, limit=None, settings=None, **kwargs):
         super().__init__(template_program=self.TEMPLATE, task_description=self.DESCRIPTION,
@@ -40,13 +41,12 @@ class FixedEvaluation(Evaluation):
         if set(settings) != set(self.DEFAULT_SETTINGS) or any(type(v) is not int or v < 1 for v in settings.values()):
             raise ValueError('outer-solver settings must be the task iteration counts as positive integers')
         self.outer_settings = settings
-        limit_text = f'{timeout_seconds:g} seconds' if timeout_seconds is not None else 'no configured limit'
         direction = '(reference - profit)' if self.MAXIMIZE else '(objective - reference)'
         references = ', '.join(sorted({r['reference_kind'] for r in rows}))
         self.design_notes = (
-            f'Evaluation uses {self.instance_description}. The WHOLE dataset evaluation has {limit_text}. '
+            f'Evaluation uses {self.instance_description}. '
             'Inputs and references are generated once at evaluator initialization with fixed split-specific seeds. '
-            'Dataset generation and reference computation are outside the candidate time limit. '
+            'Dataset generation and reference computation are not timed. '
             f'The fixed outer-solver settings are {settings}. The target is called repeatedly inside this solver; '
             'its return is consumed exactly as specified in the template. The program is executed afresh '
             'for each instance, so candidate globals are reset between instances. Inputs passed to the '

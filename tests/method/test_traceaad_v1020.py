@@ -6,7 +6,7 @@ import random
 import numpy as np
 import pytest
 
-from benchmarks.tasks import HELDOUT_TIMEOUT, TASKS, training_task
+from benchmarks.tasks import HELDOUT_TIMEOUT, TASKS, TRAIN_TIMEOUT, training_task
 from tests.support import TinyEvaluation, TokenLLM, response, small_task
 from traceaad.common.selection import experience
 from traceaad.v10_17 import Config as V1017Config, TraceAADV1017
@@ -165,7 +165,7 @@ def test_the_run_entry_states_the_v1020_configuration(capsys):
     run_main(["--task", "op_aco", "--run-name", "dry", "--budget", "1000", "--dry-run"])
     shown = json.loads(capsys.readouterr().out)
     assert shown["method"] == "v1020" and shown["config"]["operators"]["Deepen"] == 0.15
-    assert shown["search_timeout"] == 160
+    assert shown["search_timeout"] == TRAIN_TIMEOUT["op_aco"]
 
 
 # ---------- facts about computation ----------

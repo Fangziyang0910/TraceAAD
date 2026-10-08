@@ -6,6 +6,8 @@ import hashlib
 import json
 import math
 import multiprocessing
+import os
+from pathlib import Path
 import random
 import re
 import statistics
@@ -54,17 +56,33 @@ def protocol_identity(evaluation, seeds, role, measure_calls):
     return fingerprint({"environment": environment, "seeds": seeds, "role": role, "execution": REVISION, "measure_calls": measure_calls}), environment
 
 
-def clean_traceback(text):
-    """Drop the frames of the call counter, which wraps the candidate during evaluation."""
+FRAME = re.compile(r'^\s*File "([^"]*)", line (\d+)')
+HARNESS = tuple(str(Path(__file__).resolve().parents[2] / name) + os.sep for name in ("core", "traceaad"))
+
+
+def clean_traceback(text, code=None):
+    """Drop the evaluation's own frames, with their source and caret lines.
+
+    These are the core and TraceAAD layers and the call counter: its module
+    and the wrapper appended after the program (``<string>`` lines past the
+    program's last line). Task solver frames stay: they show how the function
+    was called.
+    """
+    limit = len(code.splitlines()) if code is not None else None
     lines, kept, skip = (text or "").splitlines(), [], False
     for index, line in enumerate(lines):
-        if skip:
-            skip = False
+        frame = FRAME.match(line)
+        if frame:
+            path, number = frame.group(1), int(frame.group(2))
+            following = lines[index + 1] if index + 1 < len(lines) else ""
+            skip = (path.startswith(HARNESS) or "probe.py" in path or "_traceaad_probe_" in following
+                    or path == "<string>" and limit is not None and number > limit)
+            if not skip:
+                kept.append(line)
             continue
-        following = lines[index + 1] if index + 1 < len(lines) else ""
-        if line.lstrip().startswith("File ") and ("probe.py" in line or "_traceaad_probe_" in following):
-            skip = True
+        if skip and line.startswith("    "):
             continue
+        skip = False
         kept.append(line)
     return "\n".join(kept)
 
@@ -78,6 +96,16 @@ def failing_line(error, code):
     lines = (code or "").splitlines()
     numbers = [int(n) for n in re.findall(r'File "<string>", line (\d+)', error or "") if 0 < int(n) <= len(lines)]
     return lines[numbers[-1] - 1].strip()[:160] if numbers else None
+
+
+def process_cpu_seconds(pid):
+    """CPU time of a running process over all its threads (time.process_time()
+    inside it), or None once it has exited."""
+    try:
+        return sum(int(Path(path).read_text().split()[0])
+                   for path in Path(f"/proc/{pid}/task").glob("*/schedstat")) / 1e9
+    except (OSError, ValueError, IndexError):
+        return None
 
 
 class SeededEvaluation(Evaluation):
@@ -98,22 +126,32 @@ class SeededEvaluation(Evaluation):
         self.calls = multiprocessing.RawValue("q", 0)
         self.function_seconds = multiprocessing.RawValue("d", 0.0)
         self.call_started = multiprocessing.RawValue("d", 0.0)
+        self.function_cpu_seconds = multiprocessing.RawValue("d", 0.0)
+        self.call_cpu_started = multiprocessing.RawValue("d", 0.0)
 
     def reset(self):
         self.calls.value = 0
         self.function_seconds.value = 0.0
         self.call_started.value = 0.0
+        self.function_cpu_seconds.value = 0.0
+        self.call_cpu_started.value = 0.0
 
-    def measured(self, until=None):
-        """Completed calls and time inside the function; a call still running
-        (the evaluation was stopped inside it) counts its time up to ``until``."""
+    def measured(self, until=None, pid=None):
+        """Completed calls, wall and CPU time inside the function. A call still
+        running (the evaluation was stopped inside it) counts its wall time up
+        to ``until`` and, given the evaluation process ``pid``, its CPU time so far."""
         if not self.measure_calls:
-            return {"calls": None, "function_seconds": None, "call_running": False}
+            return {"calls": None, "function_seconds": None, "function_cpu_seconds": None, "call_running": False}
         inside = float(self.function_seconds.value)
+        cpu = float(self.function_cpu_seconds.value)
         started = float(self.call_started.value)
         if started:
             inside += max(0.0, (until if until is not None else time.monotonic()) - started)
-        return {"calls": int(self.calls.value), "function_seconds": inside, "call_running": bool(started)}
+            now = process_cpu_seconds(pid) if pid is not None else None
+            if now is not None:
+                cpu += max(0.0, now - float(self.call_cpu_started.value))
+        return {"calls": int(self.calls.value), "function_seconds": inside,
+                "function_cpu_seconds": cpu, "call_running": bool(started)}
 
     @contextmanager
     def program_context(self, source, function_name, *, seed=EVALUATION_SEED):
@@ -122,7 +160,8 @@ class SeededEvaluation(Evaluation):
         try:
             if self.measure_calls:
                 source = probe.instrument(source, function_name)
-                probe.arm(self.calls, self.function_seconds, self.call_started)
+                probe.arm(self.calls, self.function_seconds, self.call_started,
+                          self.function_cpu_seconds, self.call_cpu_started)
             with seeded_random_state(EVALUATION_SEED if seed is None else seed):
                 yield source, _ScoredTask(copy.copy(self.inner)), {}
         finally:
@@ -135,6 +174,7 @@ class SeededEvaluation(Evaluation):
 class _ScoredTask:
     def __init__(self, inner):
         self.inner = inner
+        self.executes_source = getattr(inner, "executes_source", False)
 
     def evaluate_program(self, source, function):
         try:
@@ -183,7 +223,7 @@ class ProgramEvaluator:
             if not valid:
                 kind = ("timeout" if outcome.failure_kind == "timeout" else
                         "invalid_output" if outcome.failure_kind == "invalid_result" else "runtime_error")
-                error = clean_traceback(outcome.traceback or outcome.error or kind)
+                error = clean_traceback(outcome.traceback or outcome.error or kind, code)
                 return {"fitness": None, "failure": {"kind": kind, "error": error,
                         "line": failing_line(error, code), "seconds": elapsed, **measured},
                         "seconds": elapsed, **measured, "evaluations": records}

@@ -21,9 +21,10 @@ def jobs(manifest, root=None, primary=False):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch-manifest", type=Path, required=True)
-    parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--workers", type=int, help="defaults to each run's saved execution settings")
+    parser.add_argument('--scheduler-socket', help='override saved CPU scheduler; empty string disables it')
     parser.add_argument("--timeout-seconds", type=float,
-                        help="explicit limit for every held-out evaluation in this batch")
+                        help="per-instance limit for new V10.21 runs; total limit for legacy runs")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--primary", action="store_true", help="only primary same-scale tests for the six-task suite")
     args = parser.parse_args(argv)
@@ -43,7 +44,7 @@ def main(argv=None):
         else:
             outcome = {"status": "evaluated", **evaluate_run(
                 run_dir, split=split, workers=args.workers,
-                timeout_seconds=args.timeout_seconds)}
+                timeout_seconds=args.timeout_seconds, scheduler_socket=args.scheduler_socket)}
         report.append({"task": task, "repeat": repeat, "run_dir": str(run_dir),
                        "split": split, **outcome})
         if not args.dry_run:

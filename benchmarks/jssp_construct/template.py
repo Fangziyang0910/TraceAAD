@@ -35,6 +35,6 @@ The chosen operation starts at its earliest feasible time; the outer scheduler u
 job and machine completion times. It repeats until every operation is scheduled.
 The returned priority vector does not specify start times or change the machine order.
 You receive all processing times and machine routes, current progress and readiness,
-and the actual candidate list. You may compute future scheduling consequences to rank it.
+and the actual candidate list.
 The reference schedule is not an input. This is deterministic static makespan scheduling,
 not dynamic arrivals, fuzzy durations or a flexible-machine assignment problem.'''

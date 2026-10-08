@@ -20,7 +20,7 @@ TRIED_OUT = 15
 METHOD_ACTIONS = {"v1018": ("Refine", "Explore", "Crossover", "Develop"),
                   "v1019": ("Refine", "Explore", "Crossover", "Develop"),
                   "v1020": ("Refine", "Explore", "Crossover", "Deepen"),
-                  "v1021": ("Refine", "Explore", "Crossover", "Deepen")}
+                  "v1021": ("Refine", "Explore", "Crossover")}
 # A program whose work depends on the wall clock: its result depends on the host and its load.
 CLOCK = re.compile(r"\btime\.(time|perf_counter|monotonic|process_time)\s*\(|"
                    r"\bfrom\s+time\s+import\b|\bdatetime\.now\s*\(")
@@ -265,10 +265,15 @@ def diagnose(run_dir):
     facts = Facts(run_dir)
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
     config = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8")) if (run_dir / "run_config.json").exists() else {}
+    time_limit = (config.get("task_eval") or {}).get("timeout_seconds")
+    instance_record = next((r for r in facts.evaluations if r.get("role") == "search"
+                            and r.get("timeout_scope") == "instance"), None)
+    if instance_record:
+        time_limit = instance_record["timeout_seconds"] * instance_record["n_instances"]
     result = diagnostics(facts, summary["budget"], summary["init_attempts"],
                          config.get("method_params", {}).get("final_candidates", 5),
                          summary.get("method", config.get("method", "v1017")),
-                         (config.get("task_eval") or {}).get("timeout_seconds"))
+                         time_limit)
     write_json(run_dir / "diagnostics.json", result)
     return result
 

@@ -49,6 +49,7 @@ def pick_best_sample(run_dir, *, max_sample_order=None, sample_order=None, allow
         if selected is None:
             selected = {"sample_order": best["id"], "score": best["fitness"],
                         "program": best["code"], "operator": best["action"], "key": best["key"], "node_id": best["id"]}
+        selected["score"] = best["fitness"]
     else:
         selected = min(samples, key=lambda r: r["score"], default=None)
     if selected is None:

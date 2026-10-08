@@ -33,6 +33,20 @@ uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fz
 
 连接失败时再检查 `ssh -G B3-server3`；仓库或解释器不存在时再定位环境。已知入口可用时无需重新搜索目录、检查全部依赖或读取 SSH 配置。
 
+## 本机模型服务
+
+后端 `local`（`http://127.0.0.1:8001/v1`，模型名 `Qwen3.8-27B`，3 槽）由 tmux 会话 `qwen3_8-27b-mtp` 中的 llama-server 提供：`~/models/gguf/qwen3.8-27b/Qwen3.8-27B-UD-Q4_K_XL.gguf`，上下文 98304（3 槽各 32768），MTP 草稿 3 个 token，KV 缓存 q8_0，日志 `/tmp/llama-qwen38-restart.log`。先用 `curl -s --noproxy '*' 127.0.0.1:8001/health` 检查；会话不存在时按 `~/models/gguf/qwen3.8-27b/update_ud_q4_k_xl.sh` 末尾的同一组参数在该会话中启动。
+
+## 本机基线排队
+
+基线在本机排队运行：同时最多 3 路（本机模型的 3 个槽位），一路结束补下一路；每路一次评价一个实例，核心向本机 CPU 调度器申请，与 TraceAAD 同一核心池。调度池只含每个物理性能核的一个线程（`--cpus 0,2,4,6,8,10,12,14`）；本机 16–31 号是能效核，llama-server 用 `taskset -a -cp 16-31 <pid>` 固定在能效核，重启模型服务后要重新执行；能效核同时是平台对照中的一个评价平台，本机模型服务有请求时会与它争用。server3 的调度器在其 tmux 会话 `traceaad_scheduler` 中运行（socket `/tmp/traceaad-1005/scheduler.sock`，0–51 号各一个物理核）；同步代码前的工作区备份在 server3 的 `~/backups/`。基线的超时率读运行目录的 `evaluations.jsonl`，`events.jsonl` 不区分失败类型。排队器在 tmux 会话中运行，日志在 `experiments_result/<方法>/launch_logs/`。
+
+```bash
+uv run python -m experiments.infra.local_queue --method funsearch --suite co6 --batch 20261008_local --slots 3
+```
+
+排队器只在内存中记录在跑的路次；它中途退出时，等这些路次结束后再重启。
+
 ## 等待、检索和同步
 
 训练可视化使用本地 `8765` 端口（`http://127.0.0.1:8765/`）。先检查该端口；服务未运行时，用 `uv run python -m experiments.monitor --host 0.0.0.0 --port 8765` 启动。不指定 `--experiment` 时默认展示最近更新的批次；版本对比默认选中该 TraceAAD 批次和全部基线方法。查看其他批次用链接中的 `#b=<批次>`。页面读取本地档案，运行中路次显示最近同步的快照；文件变化会刷新缓存。核验 `/api/state?batch=traceaad_v10_16` 的路次数、曲线和 ETA，并用 `/api/compare?cohorts=traceaad_v10_16` 核验测试结果。
@@ -50,5 +64,7 @@ V10.15–V10.19 共用生成、评价和结果保存，各版本仍写到原版�
 读取会话日志先抽样确认结构，再按日期、工作目录和消息类型筛选。先输出计数和少量样例，需要完整证据时再展开。文件检索先用 `rg --files` 定位，再用 `rg -n` 和局部读取；文件枚举顺序不代表时间顺序。
 
 独立的本地读取和远端查询用 `Promise.allSettled` 并行，并检查每项结果。编辑、启动、同步和核验按依赖顺序执行。复杂远端 Python 通过 stdin 或脚本文件传递，命令参数用 shell quoting；避免层层嵌套引号。
+
+server3 是一次性的执行机：不保留 git、历史版本、备份或已拉回的结果，只保留统一配好的 `.venv` 和正在运行的批次。用 `uv run python -m experiments.infra.remote` 管理：`push` 把本机工作区镜像到 server3（删除那边多出的代码，保留 `.venv` 与 `experiments_result`；依赖文件变化时执行 `uv sync --frozen`）；`pull --batch <批次>` 拉回该批次的运行目录、清单和启动日志；`prune --batch <批次>` 删除 server3 上已结束、已有 held-out 且与本地逐字节一致的运行，最后一路删掉时连同清单和启动日志；`watch --batch <批次>` 每 60 秒拉取并清理，批次在 server3 上清空后退出。启动 server3 批次前先 `push`；运行期间在本机 tmux 中 `watch`。
 
 同步前固定已完成路次清单，再用 `rsync --files-from` 统一同步，随后对冻结文件核验哈希。新完成路次加入下一轮。运行中的日志可继续变化，应与冻结档案分开处理；不要因同步时日志增长而反复重传已冻结档案。批次全局汇总可能持续变化，不作为冻结路次的内容哈希依据。

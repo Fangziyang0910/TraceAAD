@@ -37,7 +37,7 @@ from .mcts import MCTS, MCTSNode
 from .profiler import MAProfiler
 from .prompt import MAPrompt
 from .sampler import MASampler
-from baselines.observability import close_sampler_llm, finish_profiler, shutdown_executor
+from baselines.observability import close_sampler_llm, finish_profiler, is_search_aborted, shutdown_executor
 from core import (
     Evaluation, LLM, Function, Program, TextFunctionProgramConverter, SecureEvaluator
 )
@@ -286,7 +286,7 @@ class MCTS_AHD:
         return True
 
     def _continue_loop(self) -> bool:
-        if getattr(self, '_search_aborted', False):
+        if is_search_aborted(self):
             return False
         if self._max_sample_nums is None:
             return True

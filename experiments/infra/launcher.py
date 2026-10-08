@@ -12,11 +12,11 @@ from .env import resolve_llm_api_key
 from traceaad.common.storage import write_json
 
 
-def served_models(backends, *, required=False, min_context=None):
+def served_models(backends, *, required=False, min_context=None, profiles=None):
     found = {}
     opener = build_opener(ProxyHandler({}))
     for name in sorted(set(backends)):
-        profile = BACKENDS[name]
+        profile = (profiles or BACKENDS)[name]
         key = resolve_llm_api_key(base_url=profile.base_url)
         headers = {'Authorization': 'Bearer '+key} if key and key != 'EMPTY' else {}
         record = {'endpoint': profile.base_url}
@@ -66,9 +66,21 @@ def launch_plan(path, manifest, *, min_context=None):
     for item in plan:
         if Path(item['run_dir']).exists() or is_session_alive(item['session']):
             raise ValueError(f'existing run or session: {item["run_name"]}')
-    models = served_models((item['backend'] for item in plan), required=True, min_context=min_context)
-    for name, record in models.items():
-        record['assigned_runs'] = sum(item['backend'] == name for item in plan)
+    if scheduler := manifest.get('resource_scheduler'):
+        from core.scheduling import scheduler_status
+        from .base import BackendProfile
+        current = scheduler_status(scheduler['socket'])
+        if current['instance_id'] != scheduler['instance_id']:
+            raise ValueError('scheduler changed after preparing this plan')
+        profiles = {str(i): BackendProfile(e['base_url'], e['model'], e.get('no_proxy', ''))
+                    for i, e in enumerate(current['endpoints'])}
+        models = served_models(profiles, profiles=profiles, required=True, min_context=min_context)
+        for name, record in models.items():
+            record['scheduled_slots'] = current['endpoints'][int(name)]['slots']
+    else:
+        models = served_models((item['backend'] for item in plan), required=True, min_context=min_context)
+        for name, record in models.items():
+            record['assigned_runs'] = sum(item['backend'] == name for item in plan)
     manifest.update(served_models=models, status='launching')
     write_json(path, manifest)
     for item in plan:

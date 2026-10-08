@@ -108,6 +108,9 @@ def generate(llm, prompt, **kwargs):
                              for name in ('max_tokens', 'temperature', 'top_p', 'enable_thinking')}}
         if 'messages' in kwargs:
             call['messages'] = kwargs['messages']
+        dispatch = details.get('scheduler') or getattr(llm, 'last_dispatch', None)
+        if dispatch is not None:
+            call['scheduler'] = dict(dispatch)
         calls.append(call)
         if hasattr(llm, '_requests'):
             llm._requests.calls = calls

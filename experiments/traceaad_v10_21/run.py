@@ -6,11 +6,11 @@ from traceaad.v10_21.config import EXPERIMENT
 
 
 def build_parser():
-    return _build_parser(EXPERIMENT)
+    return _build_parser(EXPERIMENT, Config)
 
 
 def main(argv=None):
-    return run(TraceAADV1021, Config, EXPERIMENT, "V10.21: V10.20 with time stated in the unit a program spends it (the per-instance budget in the evaluation section; time per instance, calls per instance and time per call in every measurement); Refine/Explore/Crossover/Deepen 0.40/0.25/0.20/0.15", argv)
+    return run(TraceAADV1021, Config, EXPERIMENT, "V10.21: Refine/Explore/Crossover 0.45/0.30/0.25; concise prompts and per-instance evaluation", argv)
 
 
 if __name__ == "__main__":

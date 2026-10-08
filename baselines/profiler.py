@@ -30,6 +30,8 @@ from datetime import datetime
 
 from pathlib import Path
 from traceaad.common.storage import Programs, append_jsonl, read_json, seal_calls, write_json
+from core.evaluate import EVALUATION_SEED
+from core.scheduling import SchedulerError
 
 # Fields that are safe to log from an LLM object (no secrets).
 _LLM_SAFE_FIELDS = frozenset(
@@ -101,6 +103,7 @@ class ProfilerBase:
         self._llm_call_count = self._method_event_count = self._method_state_count = self._error_count = 0
         self._finished = False
         self._llm = None
+        self._evaluation = self._method = None
         self._recorded_transport = set()
         self._logger_txt = logging.getLogger('traceaad.' + str(self.run_dir))
         for field, name in (('_llm_calls_path', 'calls.jsonl'), ('_method_events_path', 'events.jsonl'),
@@ -110,6 +113,7 @@ class ProfilerBase:
 
     def record_parameters(self, llm, prob, method):
         self._llm = llm
+        self._evaluation, self._method = prob, method
         if not self.run_dir:
             return
         Path(self._log_dir).mkdir(parents=True, exist_ok=True)
@@ -237,11 +241,60 @@ class ProfilerBase:
     def _elapsed(self):
         return (datetime.now(ZoneInfo('Asia/Shanghai'))-self._process_start_time).total_seconds()
 
+    def _freeze_training(self, config):
+        from traceaad.common.instance_evaluation import InstanceProgramEvaluator
+        from traceaad.common.state import Facts
+        nodes = sorted(Facts(self.run_dir).valid.values(), key=lambda n: (n['fitness'], n['id']))
+        candidates = {}
+        for node in nodes:
+            candidates.setdefault(node['key'], node)
+            if len(candidates) == 5:
+                break
+        evaluator = InstanceProgramEvaluator(self._evaluation,
+            seeds=config.get('method_params', {}).get('evaluation_seeds', [EVALUATION_SEED]),
+            **self._evaluation._instance_execution)
+        results = []
+        payload = {'final_selection': 'training', 'finalists': [n['id'] for n in candidates.values()]}
+        self._append_jsonl(self._method_events_path, {'kind': 'progress',
+            'ts': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(),
+            'progress': {'phase': 'freeze', 'elapsed': self._elapsed(), 'attempts': self._budget_used,
+                         'started_at': self._process_start_time.isoformat()}})
+        for node in candidates.values():
+            try:
+                outcome = evaluator.evaluate(node['code'], node['key'])
+            except SchedulerError as exc:
+                payload.update(status='aborted', error_type=type(exc).__name__, error=str(exc))
+                break
+            results.append({'node_id': node['id'], **{k: v for k, v in outcome.items() if k != 'evaluations'}})
+            self._append_jsonl(self._method_events_path, {'kind': 'progress', 'evaluations': outcome['evaluations'],
+                'ts': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(),
+                'progress': {'phase': 'freeze', 'elapsed': self._elapsed(), 'attempts': self._budget_used,
+                             'started_at': self._process_start_time.isoformat()}})
+        scored = [r for r in results if r['fitness'] is not None]
+        self._canonical_best = None
+        if scored and payload.get('status') != 'aborted':
+            chosen = min(scored, key=lambda r: (r['fitness'], payload['finalists'].index(r['node_id'])))
+            node = next(n for n in candidates.values() if n['id'] == chosen['node_id'])
+            self._canonical_best = {**{k: v for k, v in node.items() if k != 'code'},
+                                    'fitness': chosen['fitness'], 'score': chosen['fitness']}
+            (self.run_dir/'best_program.py').write_text(node['code'], encoding='utf-8')
+            write_json(self.run_dir/'selection.json', {'criterion': 'training', 'selection_protocol': None,
+                'finalists': payload['finalists'], 'results': results,
+                'selected_node': node['id'], 'selected_key': node['key']})
+        elif 'status' not in payload:
+            payload['status'] = 'selection_failed' if candidates else 'no_valid_root'
+        return {**payload, 'selection_results': results, 'selection_evaluations': len(results)}
+
     def write_run_summary(self, **payload):
         if not self.run_dir or self._finished:
             return
         with self._artifact_lock:
             config = read_json(self.run_dir/'run_config.json', {})
+            error = getattr(getattr(self._method, '_evaluator', None), 'scheduler_error', None)
+            if isinstance(error, SchedulerError):
+                payload.update(status='aborted', error_type=type(error).__name__, error=str(error))
+            if payload.get('status', 'finished') == 'finished' and getattr(self._evaluation, '_instance_execution', None):
+                payload.update(self._freeze_training(config))
             status = payload.pop('status', 'finished')
             write_json(self._run_summary_path, {'status': status,
                 'phase': 'finished' if status == 'finished' else 'stopped',
@@ -252,7 +305,8 @@ class ProfilerBase:
                 'num_nodes': self._evaluate_success_program_num, 'candidate_count': self._num_samples,
                 'valid_candidate_count': self._evaluate_success_program_num, 'best': self._canonical_best,
                 'model_calls': self._llm_call_count,
-                'evaluation_calls': self._evaluate_success_program_num+self._evaluate_failed_program_num,
+                'evaluation_calls': self._evaluate_success_program_num+self._evaluate_failed_program_num
+                                    +payload.get('selection_evaluations', 0),
                 'error_count': self._error_count, **payload})
             self._finished = True
 

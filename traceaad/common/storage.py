@@ -184,6 +184,12 @@ class Programs:
             return json.loads(handle.readline())["code"]
 
 
+def stored_heldout(run_dir, scale, variant=None):
+    matches = [r for r in read_json(Path(run_dir) / "heldout.json", [])
+               if str(r["scale"]) == str(scale) and (variant is None or r["variant"] == variant)]
+    return min(matches, key=lambda r: bool(r["variant"])) if matches else None
+
+
 def save_heldout(run_dir, result, variant=""):
     path = Path(run_dir) / "heldout.json"
     records = read_json(path, [])

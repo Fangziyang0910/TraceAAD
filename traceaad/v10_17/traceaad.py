@@ -45,7 +45,6 @@ class TraceAADV1017(Search):
         try:
             request = self.prompts.build("Refine", best)
         except ContextTooLong:
-            self.progress.too_long.append(best["id"])
             self._close_exploration(exploration)
             return
         request.update(sampled_action="Refine", fallbacks=[], parent_id=best["id"], reference_id=None,

@@ -114,6 +114,8 @@ class CALM:
         self._best_perf = float('inf')
 
         init_observability(self, max_consecutive_sample_failures=max_consecutive_sample_failures)
+        if self._profiler is not None:
+            self._profiler.record_parameters(llm, evaluation, self)
 
     # ------------------------------------------------------------------ #
     # Utilities

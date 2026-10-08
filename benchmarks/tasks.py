@@ -26,10 +26,13 @@ CLASSES = dict(zip(ALL_TASKS, (TSPEvaluation, CVRPACOEvaluation, OPACOEvaluation
                                     FSSPGLSEvaluation, GraphColouringEvaluation, JSSPEvaluation)))
 SELECTION_SEED = 20260927
 DEFAULT_WORKERS = 4
-# Six-task protocol: each instance gets the same wall-clock budget, solver
-# included. Instances run one after another, so a split's limit is its
-# instance count times INSTANCE_SECONDS, on training and same-scale test alike.
-INSTANCE_SECONDS = 10
+# Six-task protocol: the candidate function may spend FUNCTION_SECONDS per
+# instance, summed over its calls. The fixed solver's time does not count: it
+# is the same for every candidate and varies with the core, not the candidate.
+# INSTANCE_SECONDS bounds a whole instance (start, solver and function) and
+# only stops programs that hang. The evaluator enforces both; prompts do not state them.
+FUNCTION_SECONDS = 2
+INSTANCE_SECONDS = 20
 TRAIN_INSTANCES, TEST_INSTANCES = 16, 50
 TRAIN_TIMEOUT = {'online_bin_packing': 30, 'vrptw_construct': 30}
 TRAIN_TIMEOUT.update({task: TRAIN_INSTANCES * INSTANCE_SECONDS for task in CO_TASKS})

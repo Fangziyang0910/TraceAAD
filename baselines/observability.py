@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 from typing import Any
+from core.scheduling import SchedulerError
 
 
 def init_observability(target: Any, max_consecutive_sample_failures: int = 20) -> None:
@@ -17,6 +18,9 @@ def reset_sample_failures(target: Any) -> None:
 
 
 def is_search_aborted(target: Any) -> bool:
+    error = getattr(getattr(target, "_evaluator", None), "scheduler_error", None)
+    if isinstance(error, SchedulerError):
+        target._search_aborted = True
     return bool(getattr(target, "_search_aborted", False))
 
 
@@ -158,6 +162,8 @@ def shutdown_executor(executor: Any) -> None:
 
 
 def finish_profiler(method: Any, *, status: str = "finished", **payload) -> None:
+    if is_search_aborted(method):
+        status = "aborted"
     profiler = _profiler(method)
     writer = getattr(profiler, "write_run_summary", None)
     if callable(writer):
