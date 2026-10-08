@@ -44,7 +44,7 @@ def test_overview_reads_v1013_progress(tmp_path):
         "budget": 4,
         "valid_nodes": 2,
     }
-    assert state["tasks"][0]["runs"][0]["best_value"] == 10.0
+    assert state["tasks"][0]["runs"][0]["best_fitness"] == 10.0
 
 
 def test_active_run_ignores_stale_error_summary(tmp_path):
@@ -63,7 +63,7 @@ def test_active_run_ignores_stale_error_summary(tmp_path):
     assert run["status"] == "running"
     assert run["budget_used"] == 3
     assert run["valid_nodes"] == 2
-    assert run["best_value"] == 10.0
+    assert run["best_fitness"] == 10.0
     assert run["error"] is None
 
 
@@ -96,14 +96,14 @@ def test_run_detail_builds_minimization_curve_and_best_program(tmp_path):
     detail = ResultsMonitor(results.parent, results.name).run_detail("results", "tsp_construct", run_name)
 
     assert detail is not None
-    assert [{k: p[k] for k in ("evaluation", "value")} for p in detail["curve"]] == [
-        {"evaluation": 1, "value": 12.0},
-        {"evaluation": 2, "value": 10.0},
-        {"evaluation": 3, "value": 10.0},
+    assert [{k: p[k] for k in ("evaluation", "fitness")} for p in detail["curve"]] == [
+        {"evaluation": 1, "fitness": 12.0},
+        {"evaluation": 2, "fitness": 10.0},
+        {"evaluation": 3, "fitness": 10.0},
     ]
     assert detail["operators"] == {"Init": 1, "Refine": 1, "Tune": 1}
     assert detail["best"]["idea"] == "best"
-    assert detail["best"]["value"] == 10.0
+    assert detail["best"]["fitness"] == 10.0
 
 
 def test_finished_run_uses_summary_and_journal(tmp_path):
@@ -141,7 +141,7 @@ def test_unified_monitor_lists_experiments_and_reads_summary(tmp_path):
     assert monitor.batches() == [{"id": "comparison", "label": "comparison"}]
     overview = monitor.overview("comparison")
     assert overview["summary"]["finished"] == 1
-    assert overview["tasks"][0]["runs"][0]["best_value"] == 10
+    assert overview["tasks"][0]["runs"][0]["best_fitness"] == 10
     assert monitor.run_detail("comparison", "tsp_construct", run_name)["best"]["code"] == "def f(): return 2"
     assert monitor.run_detail("comparison", "tsp_construct", "missing") is None
 
@@ -157,8 +157,8 @@ def test_historical_budget_and_incomplete_node(tmp_path):
     row = monitor.overview("traceaad_v9_19")["tasks"][0]["runs"][0]
     assert row["budget_used"] == row["budget"] == 1000
     curve = monitor.run_detail("traceaad_v9_19", "tsp_construct", "rep1")["curve"]
-    assert [{k: p[k] for k in ("evaluation", "value")} for p in curve] == [
-        {"evaluation": 1, "value": 9.0}, {"evaluation": 2, "value": 7.0}]
+    assert [{k: p[k] for k in ("evaluation", "fitness")} for p in curve] == [
+        {"evaluation": 1, "fitness": 9.0}, {"evaluation": 2, "fitness": 7.0}]
     write_json(run / "summary.json", {"status": "unknown"})
     (run / "events.jsonl").unlink()
     append_records(run / "events.jsonl", [candidate(1, 8, code="first"), candidate(2, 7, code="second")])
@@ -216,7 +216,6 @@ def test_breakthroughs_use_incumbent_not_parent_and_keep_operator_provenance(tmp
     points, recent, operators, outcomes = TrainingHistory(tmp_path, minimize=True).read()
     assert [p["evaluation"] for p in points] == [1, 2, 6, 7]
     assert [p["fitness"] for p in points] == [12, 10, 9, 9]
-    assert [p["value"] for p in points] == [12, 10, 9, 9]
     assert [p["kind"] for p in points] == ["initial", "breakthrough", "breakthrough", "progress"]
     assert points[0]["gain"] is None
     assert points[1]["gain"] == 2 and points[2]["gain"] == 1
@@ -235,7 +234,6 @@ def test_all_breakthroughs_survive_beyond_old_240_point_limit(tmp_path):
     assert len(points) == 400
     assert [p["candidate"] for p in points] == list(range(1, 401))
     assert sum(p["kind"] == "breakthrough" for p in points) == 399
-    assert all(p["fitness"] == p["value"] for p in points)
 
 
 def test_live_history_retries_partial_utf8_tail_and_does_not_recount(tmp_path):
@@ -291,7 +289,7 @@ def test_overview_exposes_same_curve_as_detail_with_candidate_axis(tmp_path):
     row = monitor.overview("traceaad_v10_14")["tasks"][0]["runs"][0]
     detail = monitor.run_detail("traceaad_v10_14", "op_aco", "rep1")
     # The overview carries a slim projection of the detail curve.
-    fields = ("evaluation", "fitness", "value", "kind", "gain", "candidate", "operator")
+    fields = ("evaluation", "fitness", "kind", "gain", "candidate", "operator")
     assert row["curve"] == [{k: p[k] for k in fields if p.get(k) is not None} for p in detail["curve"]]
     assert row["x_label"] == detail["x_label"] == "候选尝试"
     assert row["curve"][-1]["gain"] == 2
@@ -312,5 +310,5 @@ def test_live_path_aliases_do_not_duplicate_runs_or_experiments(tmp_path):
     state = monitor.overview("results")
     assert state["summary"]["runs"] == 1 and state["summary"]["budget_used"] == 4
     assert state["tasks"][0]["runs"][0]["name"] == name
-    assert state["tasks"][0]["runs"][0]["best_value"] == 8.0
+    assert state["tasks"][0]["runs"][0]["best_fitness"] == 8.0
     assert monitor.state_signature("results") != before

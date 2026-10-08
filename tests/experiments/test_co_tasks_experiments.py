@@ -2,8 +2,8 @@
 
 import pytest
 
-from benchmarks.tasks import (CO_TASKS, PRIMARY_SPLITS, SCALES, SPLITS, heldout_task, training_task,
-                              FIXED_TASKS)
+from benchmarks.tasks import (CO_TASKS, PRIMARY_SPLITS, SCALES, SPLITS, TEST_INSTANCES, heldout_task,
+                              training_task, FIXED_TASKS)
 from experiments import launch
 from experiments.infra.search_host_launch import plan_for
 from traceaad.v10_20.prompts import PromptBuilder
@@ -36,13 +36,13 @@ def test_task_conditions_and_prompt_match_primary_data(task):
     training, _ = training_task(task)
     testing = heldout_task(task, PRIMARY_SPLITS[task][0])
     assert testing.outer_settings == training.outer_settings
-    assert testing.n_instance == 100
+    assert testing.n_instance == TEST_INSTANCES
     assert testing.timeout_seconds / testing.n_instance == training.timeout_seconds / training.n_instance
     assert SCALES[task] == (training.problem_size,)
     assert SPLITS[task] == PRIMARY_SPLITS[task]
     text = "\n".join(PromptBuilder(TokenLLM(), task, training, {}, {}, Config()).common)
     assert training.instance_description in text
-    assert "100 fixed generated test" in text or "108 fixed generated test" in text
+    assert f"{TEST_INSTANCES} fixed generated test" in text
     assert "Lower is better" in text
     assert text.count(training.design_notes) == 1
 

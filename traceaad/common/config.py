@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-REVISION = "research-minimize-v3-20261007"
+REVISION = "research-protocol-v4-20261008"
 
 
 @dataclass

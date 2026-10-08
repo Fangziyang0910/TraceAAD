@@ -165,7 +165,7 @@ def test_the_run_entry_states_the_v1020_configuration(capsys):
     run_main(["--task", "op_aco", "--run-name", "dry", "--budget", "1000", "--dry-run"])
     shown = json.loads(capsys.readouterr().out)
     assert shown["method"] == "v1020" and shown["config"]["operators"]["Deepen"] == 0.15
-    assert shown["search_timeout"] == 60
+    assert shown["search_timeout"] == 160
 
 
 # ---------- facts about computation ----------
@@ -185,10 +185,9 @@ def test_each_task_states_its_training_and_test_conditions(task):
     assert (f"each test set must finish within {format(HELDOUT_TIMEOUT[task], 'g')} seconds."
             in evaluation)
     expected = {
-        "tsp_construct": ("16 training instances with 50 nodes", "16 instances each with 50, 100 and 200 nodes"),
-        "cvrp_aco": ("10 training instances with 50 customers",
-                     "64 instances each with 20, 50, 100 and 200 customers"),
-        "op_aco": ("5 training instances with 50 nodes", "64 instances each with 50, 100 and 200 nodes"),
+        "tsp_construct": ("16 training instances with 50 nodes", "50 instances with 50 nodes"),
+        "cvrp_aco": ("16 training instances with 50 customers", "50 instances with 50 customers"),
+        "op_aco": ("16 training instances with 50 nodes", "50 instances with 50 nodes"),
         "vrptw_construct": ("16 training instances with 50 customers",
                             "16 instances each with 50, 100 and 200 customers"),
         "online_bin_packing": ("4 training instances: 1,000 and 5,000 items, each with bin capacities 100 and 500",

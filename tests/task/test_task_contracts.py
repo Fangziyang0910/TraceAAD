@@ -39,3 +39,14 @@ def test_template_produces_a_valid_score(evaluation_type, kwargs, minimize):
         assert outcome.result > 0
     else:
         assert outcome.result <= 0
+
+
+@pytest.mark.parametrize("bad_choice", [-1, "visited"])
+def test_tsp_rejects_a_node_outside_the_unvisited_candidates(bad_choice):
+    evaluator = TSPEvaluation(n_instance=1, problem_size=6)
+
+    def choose(current, destination, unvisited, distances):
+        return 0 if bad_choice == "visited" else bad_choice
+
+    assert evaluator.evaluate(choose) is None
+    assert evaluator.evaluate(lambda c, d, unvisited, m: unvisited[0]) > 0

@@ -57,11 +57,30 @@ class InvalidEvaluationResult(Exception):
     """
 
 
+# Every method evaluates a candidate from the same Python/NumPy random state.
+EVALUATION_SEED = 730241
+
+
+@contextmanager
+def seeded_random_state(seed=EVALUATION_SEED):
+    import random
+    import numpy as np
+    py_state, np_state = random.getstate(), np.random.get_state()
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        yield
+    finally:
+        random.setstate(py_state)
+        np.random.set_state(np_state)
+
+
 class Evaluation(ABC):
     @contextmanager
     def program_context(self, source, function_name, **kwargs):
-        """Prepare execution; ordinary tasks use the source as supplied."""
-        yield source, self, kwargs
+        """Run the source as supplied, from the fixed evaluation random state."""
+        with seeded_random_state():
+            yield source, self, kwargs
 
     def __init__(
             self,

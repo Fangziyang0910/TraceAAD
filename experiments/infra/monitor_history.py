@@ -149,10 +149,9 @@ class TrainingHistory:
             score = event["fitness"]
             operators[event["operator"]] += 1
             outcomes[str(event["status"])] += 1
-            value = score
-            recent.append({**event, "value": value})
+            recent.append(event)
             if score is not None and (best is None or score < best):
-                point = {**event, "value": value,
+                point = {**event,
                          "kind": "initial" if best is None else "breakthrough",
                          "gain": None if best is None else best - score}
                 points.append(point)
@@ -161,7 +160,6 @@ class TrainingHistory:
         # Extend the incumbent through failures and regressions, without
         # misattributing its fitness/operator to the last candidate.
         if points and last["evaluation"] > points[-1]["evaluation"]:
-            points.append({"evaluation": last["evaluation"], "fitness": best,
-                           "value": best, "kind": "progress"})
+            points.append({"evaluation": last["evaluation"], "fitness": best, "kind": "progress"})
         self.progress["best_fitness"] = best
         return points, recent[-12:][::-1], dict(operators), dict(outcomes)

@@ -4,7 +4,7 @@ from .._seeded_data import canonical_split, rng_for
 
 TASK = 'jssp_construct'
 SCALE = 20
-COUNTS = {'train': 16, 'test': 100}
+COUNTS = {'train': 16, 'test': 50}
 DIMENSIONS = {'jobs': 20, 'machines': 20, 'operations': 400}
 DISTRIBUTION = ('Static 20 jobs x 20 machines. Each job independently visits a uniformly '
                 'random permutation of all 20 machines; durations are independent integers '

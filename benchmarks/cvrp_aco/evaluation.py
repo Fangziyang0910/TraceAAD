@@ -53,6 +53,11 @@ class ACO:
         rng: np.random.Generator,
     ):
         self.distances = np.asarray(distances, dtype=np.float64)
+        # Ants that finish early wait at the depot until the colony finishes;
+        # those depot-to-depot steps are not travel, so route costs use a zero
+        # diagonal whatever diagonal the heuristic received.
+        self.edge_lengths = self.distances.copy()
+        np.fill_diagonal(self.edge_lengths, 0.0)
         self.demands = np.asarray(demands, dtype=np.float64)
         self.heuristic = np.asarray(heuristic, dtype=np.float64)
         self.capacity = int(capacity)
@@ -119,7 +124,7 @@ class ACO:
     def _path_costs(self, paths: np.ndarray) -> np.ndarray:
         routes = paths.T
         next_nodes = np.roll(routes, shift=-1, axis=1)
-        return np.sum(self.distances[routes[:, :-1], next_nodes[:, :-1]], axis=1)
+        return np.sum(self.edge_lengths[routes[:, :-1], next_nodes[:, :-1]], axis=1)
 
     def _update_pheromone(self, paths: np.ndarray, costs: np.ndarray) -> None:
         self.pheromone *= self.decay
@@ -179,6 +184,9 @@ class CVRPACOEvaluation(Evaluation):
         self.n_iterations = n_iterations
         self.aco_seed = int(aco_seed)
         self.n_workers = n_workers
+        # Part of the evaluation identity: records scored before depot waiting
+        # became free do not match this protocol.
+        self.route_cost = "travel between distinct nodes"
 
     def _build_prior(
         self, instance: np.ndarray, heuristic: Callable

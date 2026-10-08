@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlparse
 
 from experiments.infra.monitor_history import TrainingHistory, finite
 from experiments.infra.monitor_results import (
-    batch_result_files, load_batch_heldout, load_selection, rep_of)
+    batch_result_files, load_batch_heldout, rep_of)
 from benchmarks.tasks import SCALES, TEST_SCALES
 from experiments.infra.monitor_timing import batch_timing, search_timing
 from traceaad.common.storage import JOURNAL_NAME, live_snapshot, normalize_live_record, selected_program
@@ -28,14 +28,14 @@ DEFAULT_RESULTS_ROOT = REPO_ROOT / "experiments_result"
 HTML_FILE = Path(__file__).with_name("monitor.html")
 
 TASKS = {
-    "tsp_construct": {"label": "TSP 构造", "direction": "min", "unit": "距离"},
-    "cvrp_aco": {"label": "CVRP-ACO", "direction": "min", "unit": "距离"},
-    "op_aco": {"label": "OP-ACO", "direction": "min", "unit": "负收益"},
-    "online_bin_packing": {"label": "在线装箱", "direction": "min", "unit": "箱数"},
-    "vrptw_construct": {"label": "VRPTW 构造", "direction": "min", "unit": "距离"},
-    "fssp_gls": {"label": "FSSP-GLS", "direction": "min", "unit": "参考偏差 %"},
-    "graph_colouring": {"label": "图着色", "direction": "min", "unit": "参考偏差 %"},
-    "jssp_construct": {"label": "作业车间调度", "direction": "min", "unit": "参考偏差 %"},
+    "tsp_construct": {"label": "TSP 构造", "unit": "距离"},
+    "cvrp_aco": {"label": "CVRP-ACO", "unit": "距离"},
+    "op_aco": {"label": "OP-ACO", "unit": "负收益"},
+    "online_bin_packing": {"label": "在线装箱", "unit": "箱数"},
+    "vrptw_construct": {"label": "VRPTW 构造", "unit": "距离"},
+    "fssp_gls": {"label": "FSSP-GLS", "unit": "参考偏差 %"},
+    "graph_colouring": {"label": "图着色", "unit": "参考偏差 %"},
+    "jssp_construct": {"label": "作业车间调度", "unit": "参考偏差 %"},
 }
 
 
@@ -95,7 +95,7 @@ def _compact_curve(points, cap: int = 200):
     return [points[index] for index in sorted(keep)]
 
 
-LIST_POINT_FIELDS = ("evaluation", "fitness", "value", "kind", "gain", "candidate", "operator")
+LIST_POINT_FIELDS = ("evaluation", "fitness", "kind", "gain", "candidate", "operator")
 
 
 def _list_curve(points):
@@ -109,15 +109,9 @@ def _json_bytes(payload: Any):
         payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
 
 
-def _objective(fitness: float | None, task: str) -> float | None:
-    if fitness is None:
-        return None
-    return fitness
-
-
 @lru_cache(maxsize=128)
 def _history(run_dir: Path, task: str):
-    return TrainingHistory(run_dir, minimize=TASKS[task]["direction"] == "min")
+    return TrainingHistory(run_dir, minimize=True)
 
 
 def _search_trend(run_dir: Path, task: str):
@@ -129,7 +123,6 @@ def _program_view(program, task):
         return None
     score = finite(program.get("fitness"))
     return {"id": program.get("id"), "fitness": score,
-            "value": _objective(score, task),
             "operator": program.get("action"),
             "idea": program.get("idea") or "", "code": program.get("code") or ""}
 
@@ -147,7 +140,7 @@ def _programs(run_dir, task, summary, curve):
         if p["kind"] not in {"initial", "breakthrough"} or p.get("node_id") is None:
             continue
         view = _program_view(history.node(p["node_id"], by_node=True), task) or {"id": p.get("candidate")}
-        breakthroughs.append({**view, "fitness": p["fitness"], "value": _objective(p["fitness"], task),
+        breakthroughs.append({**view, "fitness": p["fitness"],
                               "evaluation": p["evaluation"], "node_id": p["node_id"], "operator": p.get("operator"),
                               "parent_id": p.get("parent_id"), "gain": p.get("gain"),
                               "idea": view.get("idea") or p.get("idea") or ""})
@@ -309,7 +302,6 @@ class ResultsMonitor:
             if not isinstance(best, dict):
                 best = {}
             score = finite(best.get("fitness"))
-            selection = finite(best.get("selection_fitness"))
             budget = summary.get("budget", config.get("budget", 0))
             used = summary.get("budget_used", 0)
             nodes = summary.get("num_nodes", 0)
@@ -330,11 +322,9 @@ class ResultsMonitor:
                 "seed": config.get("seed", metadata.get("seed")), "backend": config.get("backend", metadata.get("backend")),
                 "status": status, "raw_status": raw_status, "budget": int(budget or 0),
                 "budget_used": int(used or 0), "valid_nodes": int(nodes or 0),
-                "best_fitness": score, "best_value": _objective(score, task),
-                "selection_fitness": selection, "selection_value": _objective(selection, task),
+                "best_fitness": score,
                 "updated_at": summary.get("finished_at") or history.clock.get("completed_at") or metadata.get("started_at"), "run_dir": run_dir,
                 "error": None if status == "running" else summary.get("error") or metadata.get("last_error"),
-                "selection_info": load_selection(run_dir),
                 "curve": _list_curve(curve),
                 **{k: progress.get(k, 0) for k in ("candidate_count", "valid_candidate_count")},
                 "valid_rate": progress.get("valid_rate"),
@@ -420,23 +410,19 @@ class ResultsMonitor:
                     rows = [row for row in rows if any(v in row["name"] for v in item["variant"].split("+"))]
                 runs = []
                 for row in rows:
-                    selection = row.get("selection_info") or {}
                     runs.append({
                         "name": row["name"], "rep": row.get("repeat") or rep_of(row["name"]),
                         "status": row.get("status"),
                         # the final program's training score (selected node for V10.14+)
                         "train": row.get("best_fitness") if row.get("status") == "finished"
                         else (row.get("curve") or [{}])[-1].get("fitness", row.get("best_fitness")),
-                        "selection": selection.get("fitness") if selection.get("fitness") is not None else row.get("selection_fitness"),
-                        "ties": selection.get("ties"), "finalists": selection.get("finalists"),
                         "heldout": {str(k): v for k, v in named.get(row["name"], {}).items()},
-                        "heldout_verification": heldout.get("verification", {}).get(row["name"], {}),
                     })
                 present = {run["name"] for run in runs}
                 for name, scores in named.items():  # held-out results whose run dir is gone
                     if name not in present:
                         runs.append({"name": name, "rep": rep_of(name), "status": None, "train": None,
-                                     "selection": None, "heldout": {str(k): v for k, v in scores.items()}})
+                                     "heldout": {str(k): v for k, v in scores.items()}})
                 if runs:
                     runs.sort(key=lambda run: (run["rep"] is None, run["rep"] or 0, run["name"]))
                     entries.append({"id": item["id"], "source": heldout.get("source"), "runs": runs})

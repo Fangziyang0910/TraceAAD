@@ -6,7 +6,8 @@ const OUTCOME = {
   improve: ["有效 · 提升", "ok"], regress: ["有效 · 退步", "ok"], plateau: ["有效 · 持平", "ok"],
   eval_failed: ["评测失败", "bad"], evaluation_failed: ["评测失败", "bad"],
   exec_error: ["执行错误", "bad"], invalid: ["候选无效", "bad"],
-  duplicate: ["重复", "neutral"], runtime_error: ["运行错误", "bad"],
+  duplicate: ["重复", "neutral"], duplicate_code: ["重复", "neutral"], copied_reference: ["复制参照", "neutral"],
+  runtime_error: ["运行错误", "bad"],
   timeout: ["超时", "warn"], invalid_output: ["输出无效", "bad"], invalid_result: ["结果无效", "bad"],
   invalid_source: ["源码无效", "bad"], known_failure: ["已知失败", "neutral"], delivery_failed: ["未交付", "warn"],
 };
@@ -14,7 +15,7 @@ const $ = id => document.getElementById(id);
 const tip = $("tip");
 
 const S = {
-  batch: "", metric: (() => { try { return localStorage.getItem("monitor.metric") || "value"; } catch { return "value"; } })(),
+  batch: "",
   view: "monitor", data: null, fetchedAt: 0, structure: "", charts: new Map(), run: null, detail: null,
   timer: null, inflight: false, request: null,
 };
@@ -55,14 +56,13 @@ function eta(t) {
   return {finished: "已完成", search_complete: "搜索结束", warming_up: "积累中", stale: "久未推进",
           inactive: "等待", partial: "部分可估", unavailable: "暂无估算"}[t.state] || "–";
 }
-const tone = s => (OUTCOME[s] || [s, s === "valid" ? "ok" : "neutral"])[1];
+const tone = s => (OUTCOME[s] || [s, "neutral"])[1];
 const outcomeLabel = s => (OUTCOME[s] || [s])[0];
 const toneVar = {ok: "--ok", bad: "--bad", warn: "--warn", neutral: "--faint"};
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const seriesColor = i => `var(--s${i % 8 + 1})`;
 
 /* Every displayed score is a minimized objective. */
-const shown = (fitness, task) => fitness ?? null;
 function bestFitness(run) {
   const last = run.curve?.at(-1);
   return last?.fitness ?? run.best_fitness ?? null;
@@ -190,19 +190,18 @@ function buildTasks(tasks, structure) {
   root.innerHTML = tasks.map(task => `
     <article class="task" data-task="${esc(task.key)}">
       <header class="task-head">
-        <div><h2>${esc(task.label)}</h2><div class="dir">${esc(task.unit)} · ${task.direction === "min" ? "越低越好" : "越高越好"}</div></div>
+        <div><h2>${esc(task.label)}</h2><div class="dir">${esc(task.unit)} · 越低越好</div></div>
         <div class="agg" data-agg></div>
       </header>
       <div class="chart-box"><canvas aria-label="${esc(task.label)} 各 rep 历史最优曲线"></canvas></div>
       <div class="runs">
-        <div class="run-head"><span>重复</span><span>状态</span><span>进度</span><span>搜索最优</span><span title="搜索结束后 top-5 在独立选择集上复评，选中程序的得分；cvrp/op 用 val_50，与搜索分不同尺度">选择分</span><span>后端</span></div>
+        <div class="run-head"><span>重复</span><span>状态</span><span>进度</span><span>搜索最优</span><span>后端</span></div>
         ${task.runs.map((run, i) => `
           <button class="run" type="button" data-run="${esc(run.name)}" style="--c:${seriesColor(i)}">
             <span class="rep"><span class="sw"></span>${run.repeat == null ? esc(run.name) : `Rep ${esc(run.repeat)}`}</span>
             <span class="pill" data-status></span>
             <span class="prog"><span class="track"><i data-bar></i></span><span class="pm"><span data-used></span><span data-eta></span></span></span>
             <span class="r-num" data-best></span>
-            <span class="r-num dim" data-sel></span>
             <span class="r-be">${esc(run.backend || "–")}</span>
           </button>`).join("")}
       </div>
@@ -235,14 +234,10 @@ function updateTask(task) {
       ? `<span class="over" title="消耗超过预算：可能有重复计数或续跑">${run.budget_used}/${run.budget}</span>` : `${run.budget_used}/${run.budget}`;
     row.querySelector("[data-eta]").textContent = run.status === "running"
       ? (t?.state === "estimated" ? `剩 ${dur(t.eta_seconds)}` : speed(t)) : "";
-    row.querySelector("[data-best]").textContent = fmt(shown(bestFitness(run), task));
-    const info = run.selection_info;
-    const tied = info && info.finalists - info.failed > 1 && info.distinct === 1;
-    row.querySelector("[data-sel]").innerHTML = esc(fmt(shown(run.selection_fitness, task)))
-      + (tied ? `<span class="flag" title="${info.finalists - info.failed} 个 finalist 的选择分完全相同：选择阶段没有区分力">并列</span>` : "");
+    row.querySelector("[data-best]").textContent = fmt(bestFitness(run));
     row.title = `${run.name}\nseed ${run.seed ?? "–"} · 有效候选 ${run.valid_nodes} · ${speed(t)}`;
   });
-  const bests = task.runs.map(bestFitness).filter(v => v != null).map(v => shown(v, task));
+  const bests = task.runs.map(bestFitness).filter(v => v != null);
   const agg = card.querySelector("[data-agg]");
   if (bests.length) {
     const mean = bests.reduce((a, b) => a + b, 0) / bests.length;
@@ -251,10 +246,9 @@ function updateTask(task) {
     agg.innerHTML = `<b>${fmt(mean)} <span style="font-weight:500;color:var(--muted);font-size:12px">± ${fmt(sd, 3)}</span></b>最好 ${fmt(better)}`;
   } else agg.textContent = "暂无有效候选";
   const chart = S.charts.get(task.key);
-  const sig = S.metric + JSON.stringify(task.runs.map(r => [r.name, r.status, r.budget, r.budget_used, r.x_label, r.curve]));
+  const sig = JSON.stringify(task.runs.map(r => [r.name, r.status, r.budget, r.budget_used, r.x_label, r.curve]));
   if (chart && chart.sig !== sig) {
     chart.sig = sig;
-    chart.task = task;
     chart.series = task.runs.map((run, i) => ({
       name: run.repeat == null ? run.name : `Rep ${run.repeat}`, color: i,
       live: run.status === "running",
@@ -311,7 +305,6 @@ function drawChart(chart) {
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  const task = chart.task || {};
   const colors = {grid: cssVar("--grid"), text: cssVar("--faint"), ink: cssVar("--ink"), panel: cssVar("--panel")};
   const dom = yDomain(chart.series, chart.maxX);
   ctx.font = "11px Inter, system-ui, sans-serif";
@@ -324,14 +317,14 @@ function drawChart(chart) {
   const x = v => L + v / chart.maxX * (W - L - R);
   const y = v => T + (dom.hi - v) / (dom.hi - dom.lo) * (H - T - B);
   chart.geom = {L, R, T, B, W, H, x, y, dom};
-  // grid + axis labels (in the chosen display metric)
+  // grid + axis labels
   ctx.textAlign = "right"; ctx.textBaseline = "middle";
   for (let i = 0; i <= 3; i++) {
     const f = dom.lo + (dom.hi - dom.lo) * i / 3, py = y(f);
     ctx.strokeStyle = colors.grid; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(L, Math.round(py) + .5); ctx.lineTo(W - R, Math.round(py) + .5); ctx.stroke();
     ctx.fillStyle = colors.text;
-    ctx.fillText(axisFmt(shown(f, task), dom.hi - dom.lo), L - 7, py);
+    ctx.fillText(axisFmt(f, dom.hi - dom.lo), L - 7, py);
   }
   ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
   ctx.fillText("0", L, H - 6);
@@ -404,11 +397,10 @@ function bindOverlayHover(chart) {
       const xv = Math.round((px - g.L) / (g.W - g.L - g.R) * chart.maxX);
       chart.hoverX = xv;
       drawChart(chart);
-      const task = chart.task;
       const rows = chart.series.map(s => {
         const end = s.points.at(-1);
         const at = end && xv <= end.x ? stepAt(s.points, xv) : null;
-        return `<div class="row"><span><i class="sw" style="--c:${seriesColor(s.color)}"></i>${esc(s.name)}</span><strong>${at ? fmt(shown(at.f, task)) : "–"}</strong></div>`;
+        return `<div class="row"><span><i class="sw" style="--c:${seriesColor(s.color)}"></i>${esc(s.name)}</span><strong>${at ? fmt(at.f) : "–"}</strong></div>`;
       }).join("");
       tip.innerHTML = `<h4>${esc(chart.xLabel || "已记录序号")} ${xv}</h4>${rows}`;
       placeTip(event);
@@ -439,7 +431,7 @@ function bindDetailHover(chart) {
       if (!best) { hideTip(); return; }
       const p = best.p, task = chart.task;
       tip.innerHTML = `<h4>${p.kind === "initial" ? "首个有效候选" : "刷新历史最优"}</h4>`
-        + `<div class="row"><span>${S.metric === "fitness" ? "Fitness" : `${esc(task.unit)}`}</span><strong>${fmt(shown(p.fitness, task), 6)}</strong></div>`
+        + `<div class="row"><span>${esc(task.unit)}</span><strong>${fmt(p.fitness, 6)}</strong></div>`
         + (p.gain != null ? `<div class="row"><span>目标值下降</span><strong>+${fmt(p.gain, 6)}</strong></div>` : "")
         + `<div class="row"><span>${esc(chart.xLabel || "已记录序号")}</span><strong>${p.evaluation}</strong></div>`
         + `<div class="row"><span>动作</span><strong>${esc(p.operator && p.operator !== "unknown" ? p.operator : "未记录")}</strong></div>`
@@ -529,8 +521,7 @@ function renderDetail(run) {
     <div class="tiles">
       ${tile("进度", `${run.budget_used} / ${run.budget}`)}
       ${tile("记录有效率", run.valid_rate != null ? `${(run.valid_rate * 100).toFixed(1)}% <span style="color:var(--muted);font-weight:500;font-size:12px">(${run.valid_candidate_count}/${total})</span>` : "–")}
-      ${tile(`搜索最优 ${S.metric === "fitness" ? "Fitness" : esc(task.unit)}`, fmt(shown(best, task), 5))}
-      ${tile("选择分", fmt(shown(run.selection_fitness, task), 5))}
+      ${tile(`搜索最优 ${esc(task.unit)}`, fmt(best, 5))}
       ${tile("平均速度", speed(t))}
       ${tile(t.basis === "active_time" ? "累计搜索耗时" : "墙钟耗时", dur(t.elapsed_seconds))}
       ${tile("预计剩余", eta(t))}
@@ -541,7 +532,7 @@ function renderDetail(run) {
       <div class="bts">${cards.map(({key, tag, program: p}) => `<details class="bt" data-id="${esc(key)}" ${openCards.has(key) ? "open" : ""}>
         <summary><span class="bt-id">#${esc(p.id ?? "–")}</span><span class="bt-op">${esc(p.operator && p.operator !== "unknown" ? p.operator : "–")}</span>
           <span class="bt-at">${p.evaluation != null && String(p.evaluation) !== String(p.id) ? `@${esc(p.evaluation)} · ` : ""}${p.parent_id != null ? `← #${esc(p.parent_id)}` : ""}</span>
-          ${tag ? `<span class="bt-tag">${tag}</span>` : ""}<span class="bt-score">${fmt(shown(p.fitness, task), 5)}${gainText(p)}</span></summary>
+          ${tag ? `<span class="bt-tag">${tag}</span>` : ""}<span class="bt-score">${fmt(p.fitness, 5)}${gainText(p)}</span></summary>
         <div class="bt-body"></div></details>`).join("") || '<p class="empty">无记录</p>'}</div>
     </section>
     <section class="sec"><h3>候选结果<small>共 ${total} 条记录</small></h3>
@@ -551,8 +542,8 @@ function renderDetail(run) {
     <div class="two">
       <section class="sec"><h3>动作分布</h3><div class="bars">${ops.map(([k, n]) => `<div class="bar-row"><span>${esc(k)}</span><span class="track"><i style="width:${n / opMax * 100}%;--c:var(--accent)"></i></span><b>${n}</b></div>`).join("") || '<span class="empty">–</span>'}</div></section>
       <section class="sec"><h3>最近候选</h3>
-        <table class="recent"><thead><tr><th>${esc(run.x_label || "序号")}</th><th>动作</th><th>结果</th><th class="nr">${S.metric === "fitness" ? "Fitness" : esc(task.unit)}</th></tr></thead>
-        <tbody>${(run.recent || []).map(r => `<tr><td class="num">${esc(r.evaluation)}</td><td>${esc(r.operator === "unknown" ? "–" : r.operator)}</td><td><span class="st ${tone(r.status) === "ok" ? "valid" : tone(r.status)}">${esc(outcomeLabel(r.status))}</span></td><td class="nr">${fmt(shown(r.fitness, task))}</td></tr>`).join("")}</tbody></table>
+        <table class="recent"><thead><tr><th>${esc(run.x_label || "序号")}</th><th>动作</th><th>结果</th><th class="nr">${esc(task.unit)}</th></tr></thead>
+        <tbody>${(run.recent || []).map(r => `<tr><td class="num">${esc(r.evaluation)}</td><td>${esc(r.operator === "unknown" ? "–" : r.operator)}</td><td><span class="st ${tone(r.status) === "ok" ? "valid" : tone(r.status)}">${esc(outcomeLabel(r.status))}</span></td><td class="nr">${fmt(r.fitness)}</td></tr>`).join("")}</tbody></table>
       </section>
     </div>
 `;
@@ -589,7 +580,7 @@ function renderDetail(run) {
 
 /* ---------- cross-batch comparison ---------- */
 const CMP = {cohorts: [], ids: [], ref: null, data: null, col: {}};
-const GROUP = {train: "训练", selection: "选择", test: "测试 · 训练规模", gen: "泛化 · 其他规模"};
+const GROUP = {train: "训练", test: "测试 · 训练规模", gen: "泛化 · 其他规模"};
 const isTrace = c => c.batch.startsWith("traceaad");
 
 async function loadCohorts() {
@@ -614,7 +605,7 @@ function renderChips() {
       <button type="button" data-remove="${esc(id)}" title="移除" aria-label="移除 ${esc(id)}">×</button></span>`).join("");
   const rest = CMP.cohorts.filter(c => !CMP.ids.includes(c.id));
   const group = (label, items) => items.length ? `<optgroup label="${label}">${items.map(c =>
-    `<option value="${esc(c.id)}">${esc(c.label)}${c.heldout_tasks.length ? ` · held-out ${c.heldout_tasks.length}/5` : " · 无 held-out"}</option>`).join("")}</optgroup>` : "";
+    `<option value="${esc(c.id)}">${esc(c.label)}${c.heldout_tasks.length ? ` · 测试 ${c.heldout_tasks.length} 个任务` : " · 无测试"}</option>`).join("")}</optgroup>` : "";
   $("cmp-chips").innerHTML = chips + (CMP.ids.length < 12 ? `<select class="ctl chip-add" id="cmp-add" aria-label="添加对比对象">
     <option value="">＋ 添加对比对象…</option>${group("TraceAAD", rest.filter(isTrace))}${group("基线方法", rest.filter(c => !isTrace(c)))}</select>` : "");
 }
@@ -640,10 +631,10 @@ async function loadCompare({force = false} = {}) {
   }
 }
 
-const colValue = (run, col) => col.key === "train" ? run.train : col.key === "selection" ? run.selection : run.heldout?.[col.scale];
+const colValue = (run, col) => col.key === "train" ? run.train : run.heldout?.[col.scale];
 const scaleLabel = (task, key) => task === "online_bin_packing" ? key.replace("_", " · C") : `n=${key}`;
 function columns(task) {
-  const cols = [{key: "train", label: "训练", group: "train"}, {key: "selection", label: "选择", group: "selection"}];
+  const cols = [{key: "train", label: "训练", group: "train"}];
   for (const s of task.scales) cols.push({key: `h:${s.key}`, scale: s.key, label: scaleLabel(task.key, s.key), group: s.test ? "test" : "gen"});
   return cols.filter(col => task.cohorts.some(c => c.runs.some(r => Number.isFinite(colValue(r, col)))));
 }
@@ -716,17 +707,14 @@ function renderCompare() {
     </tbody></table></div>`;
 
   $("cmp-tasks").innerHTML = perTask.map(({task, cols, M}) => {
-    if (!cols.length) {
-      const rejected = task.cohorts.flatMap(c => c.runs).flatMap(r => Object.values(r.heldout_verification || {}))
-        .filter(state => !["verified", "legacy"].includes(state)).length;
-      return `<article class="panel"><div class="panel-head"><h2>${esc(task.label)}</h2></div><div class="empty">暂无可用成绩${rejected ? `；${rejected} 项测试结果未通过程序身份核验，已排除` : ""}</div></article>`;
-    }
+    if (!cols.length)
+      return `<article class="panel"><div class="panel-head"><h2>${esc(task.label)}</h2></div><div class="empty">暂无可用成绩</div></article>`;
     const ids = order.filter(id => task.cohorts.some(c => c.id === id));
     const head1 = [], head2 = [];
     for (let i = 0; i < cols.length;) {
       const g = cols[i].group;
       let j = i; while (j < cols.length && cols[j].group === g) j++;
-      if (g === "train" || g === "selection") head1.push(`<th rowspan="2">${GROUP[g]}</th>`);
+      if (g === "train") head1.push(`<th rowspan="2">${GROUP[g]}</th>`);
       else {
         head1.push(`<th class="grp ${g}" colspan="${j - i}"><span>${GROUP[g]}</span></th>`);
         for (let k = i; k < j; k++) head2.push(`<th>${esc(cols[k].label)}</th>`);
@@ -745,11 +733,7 @@ function renderCompare() {
         const ref = M[CMP.ref]?.[col.key];
         let note = "";
         if (col.key === "train" && cohort.runs.some(r => r.status === "running")) note = '<span class="flag" title="含未完成的运行：训练分仍会变化">运行中</span>';
-        if (col.key === "selection") {
-          const tied = cohort.runs.filter(r => r.finalists > 1 && r.ties === r.finalists).length;
-          if (tied) note = `<span class="flag" title="${tied} 路的 top-5 选择分完全相同">${tied} 路并列</span>`;
-        }
-        return `<td class="${st.mean === best[col.key] ? "best" : ""}"><b>${fmt(shown(st.mean, task))}</b>${note}
+        return `<td class="${st.mean === best[col.key] ? "best" : ""}"><b>${fmt(st.mean)}</b>${note}
           <small>${st.sd == null ? "" : `± ${fmt(st.sd, 3)} · `}n=${st.n}</small>${id !== CMP.ref && ref ? delta(relGap(st.mean, ref.mean)) : ""}</td>`;
       }).join("")}</tr>`;
     }).join("");
@@ -757,22 +741,13 @@ function renderCompare() {
       : (cols.find(c => c.group === "test") || cols[0]).key;
     CMP.col[task.key] = pick;
     const sources = task.cohorts.filter(c => c.source).map(c => `${esc(label.get(c.id) || c.id)}：${esc(c.source)}`).join("；");
-    const identityNotes = task.cohorts.map(cohort => {
-      const checks = cohort.runs.flatMap(run => Object.values(run.heldout_verification || {}));
-      const rejected = checks.filter(state => !["verified", "legacy"].includes(state)).length;
-      const legacy = checks.filter(state => state === "legacy").length;
-      const notes = [rejected ? `${rejected} 项测试结果与最终程序不一致或无法核验，已排除` : "",
-        legacy ? `${legacy} 项历史测试结果未记录程序身份` : ""].filter(Boolean);
-      return notes.length ? `${esc(label.get(cohort.id) || cohort.id)}：${notes.join("；")}` : "";
-    }).filter(Boolean).join("；");
     return `<article class="panel cmp-task" data-task="${esc(task.key)}">
-      <div class="panel-head"><h2>${esc(task.label)}</h2><p>${esc(task.unit)} · ${task.direction === "min" ? "越低越好" : "越高越好"}</p></div>
+      <div class="panel-head"><h2>${esc(task.label)}</h2><p>${esc(task.unit)} · 越低越好</p></div>
       <div class="tbl-wrap"><table class="cmp"><thead><tr><th rowspan="2">对象</th>${head1.join("")}</tr><tr>${head2.join("")}</tr></thead><tbody>${rows}</tbody></table></div>
       <div class="dots-head"><h3>各 rep 分布（向右 = 更好）</h3><div class="segctl small">${cols.map(col =>
         `<button type="button" data-col="${esc(col.key)}" aria-pressed="${col.key === pick}">${esc(col.label)}</button>`).join("")}</div></div>
       <svg class="dots"></svg>
       ${sources ? `<div class="src">held-out 来源 · ${sources}</div>` : ""}
-      ${identityNotes ? `<div class="src">${identityNotes}</div>` : ""}
     </article>`;
   }).join("");
   drawAllDots();
@@ -809,15 +784,15 @@ function drawDots(svg, task, colKey) {
   for (let i = 0; i <= 4; i++) {
     const v = lo + (hi - lo) * i / 4, px = x(v);
     out.push(`<line class="axis" x1="${px}" x2="${px}" y1="${top}" y2="${H - bottom}"/>`,
-      `<text x="${px}" y="${H - 8}" text-anchor="${i === 0 ? "start" : i === 4 ? "end" : "middle"}">${axisFmt(shown(v, task), hi - lo)}</text>`);
+      `<text x="${px}" y="${H - 8}" text-anchor="${i === 0 ? "start" : i === 4 ? "end" : "middle"}">${axisFmt(v, hi - lo)}</text>`);
   }
   series.forEach((s, i) => {
     const cy = top + i * rowH + rowH / 2, c = cssVar(`--s${CMP.ids.indexOf(s.id) % 8 + 1}`);
     const text = s.label.length > 30 ? s.label.slice(0, 29) + "…" : s.label;
     out.push(`<text class="lab" x="0" y="${cy + 4}">${esc(text)}</text>`);
     if (s.st?.sd != null) out.push(`<line x1="${x(s.st.mean - s.st.sd)}" x2="${x(s.st.mean + s.st.sd)}" y1="${cy}" y2="${cy}" stroke="${c}" stroke-width="4" stroke-linecap="round" opacity=".28"/>`);
-    for (const p of s.pts) out.push(`<circle cx="${x(p.v)}" cy="${cy}" r="4.5" fill="${c}" fill-opacity=".85"><title>${esc(s.label)} · Rep ${esc(p.rep ?? "?")}：${fmt(shown(p.v, task), 5)}</title></circle>`);
-    if (s.st) out.push(`<line class="mean" x1="${x(s.st.mean)}" x2="${x(s.st.mean)}" y1="${cy - 8}" y2="${cy + 8}"><title>均值 ${fmt(shown(s.st.mean, task), 5)}</title></line>`);
+    for (const p of s.pts) out.push(`<circle cx="${x(p.v)}" cy="${cy}" r="4.5" fill="${c}" fill-opacity=".85"><title>${esc(s.label)} · Rep ${esc(p.rep ?? "?")}：${fmt(p.v, 5)}</title></circle>`);
+    if (s.st) out.push(`<line class="mean" x1="${x(s.st.mean)}" x2="${x(s.st.mean)}" y1="${cy - 8}" y2="${cy + 8}"><title>均值 ${fmt(s.st.mean, 5)}</title></line>`);
   });
   svg.innerHTML = out.join("");
 }
@@ -903,16 +878,6 @@ $("batch").addEventListener("change", event => {
   setLive("", "读取中");
   refresh();
 });
-function setMetric(metric) {
-  S.metric = metric;
-  try { localStorage.setItem("monitor.metric", metric); } catch {}
-  document.querySelectorAll("[data-metric]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.metric === metric)));
-  if (S.data) for (const task of S.data.tasks) updateTask(task);
-  if (S.detail) renderDetail(S.detail);
-  if (S.view === "compare" && CMP.data) renderCompare();
-}
-document.querySelectorAll("[data-metric]").forEach(b => b.addEventListener("click", () => setMetric(b.dataset.metric)));
-
 const THEMES = ["auto", "light", "dark"];
 function applyTheme(theme) {
   if (theme === "auto") delete document.documentElement.dataset.theme;
@@ -957,7 +922,6 @@ document.addEventListener("visibilitychange", () => {
 
 (async function start() {
   applyTheme(theme);
-  setMetric(S.metric === "fitness" ? "fitness" : "value");
   try {
     await loadBatches();
     const hash = hashParams();

@@ -16,18 +16,15 @@
 | 保留当前规则、用它引导搜索，首版是否不劣于父代？ | [固定父代重放](diagnosis_v1020_replay/README.md) |
 | ACO 训练成绩有多少是种子噪声？后期提升是否真实？ | [ACO 噪声审计](diagnosis_aco_noise/README.md) |
 | 更正计算事实并增加 Deepen，能否把时限换成质量？ | [当前规则引导的搜索](traceaad_v10_20/README.md) |
+| 按实例陈述时间预算，能否减少超时、把预算用在计算上？ | [按实例陈述计算预算](traceaad_v10_21/README.md) |
 
 ## 搜索与独立测试
 
-新实验默认在训练集上进化，冻结训练成绩最好的程序，再执行独立测试；不使用验证集筛选。旧五任务的验证条件可用 `--final-selection validation` 显式复现。
+所有实验遵守[实验准则](PROTOCOL.md)：六个任务、训练16例与同规模测试50例、每实例10秒、每方法每任务3路、按训练成绩冻结最终程序后测试。[六任务入口](co6/README.md)给出任务接口与命令。
 
-[六任务 AHD 实验](co6/README.md)提供 TSP、CVRP、FSSP、图着色、JSSP与OP的任务说明、函数契约、固定种子的数据生成规则和运行命令。启动计划用 `--suite co6`；通用评价用 `--primary` 只执行同规模主测试。FSSP、图着色与JSSP使用固定种子生成的训练集和同规模独立测试集；TSP/CVRP/OP沿用既有数据与跨规模条件。旧批次默认仍使用 `legacy`。
+[按实例陈述计算预算](traceaad_v10_21/README.md)、[当前规则引导的搜索](traceaad_v10_20/README.md)、[改动检验搜索](traceaad_v10_19/README.md)、[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)各自提供运行命令，并共用[实验与结果实现](infra/SEARCH_FORMAT.md)。代码目录保留实现标识，文档按研究对象命名。
 
-[当前规则引导的搜索](traceaad_v10_20/README.md)、[改动检验搜索](traceaad_v10_19/README.md)、[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)各自提供运行、选择和 held-out 命令，并共用[实验与结果实现](infra/SEARCH_FORMAT.md)。代码目录保留实现标识，文档按研究对象命名。V10.13–V10.14 的说明见[历史研究脚本](historical/README.md)，历史结果继续可视化。
-
-模型、采样、时限与实例隔离见各入口的配置。评价使用单线程 BLAS/OpenMP，墙钟超时；装箱按实例重新执行候选程序，VRPTW 接口明确 depot 返回规则。
-
-任务条件集中在 `benchmarks/tasks.py`。基线和 TraceAAD 的候选种子条件分别记录，详见[评价与保存说明](infra/SEARCH_FORMAT.md#评价条件与执行)。通用 held-out 命令为 `uv run python -m experiments.infra.evaluate <运行目录>`，额外条件通过 `--condition` 与 `--variant` 明确记录。
+任务条件集中在 `benchmarks/tasks.py`。通用测试命令为 `uv run python -m experiments.infra.evaluate <运行目录> --primary`。
 
 ## 状态与结果
 

@@ -6,7 +6,7 @@ from .._seeded_data import canonical_split, rng_for
 
 TASK = 'graph_colouring'
 SCALE = 300
-COUNTS = {'train': 16, 'test': 100}
+COUNTS = {'train': 16, 'test': 50}
 DIMENSIONS = {'vertices': 300}
 DISTRIBUTION = 'G(300,0.5): each undirected edge independently present with probability 0.5; reference is deterministic DSATUR construction'
 

@@ -67,7 +67,7 @@ def best_neighbor(sequence, times, jobs):
     return best, best_cost
 
 
-def solve(data, heuristic, iterations=10, local_passes=3):
+def solve(data, heuristic, iterations=200, local_passes=3):
     times = np.asarray(data["processing_times"], dtype=np.float64)
     sequence = neh(times)
     all_jobs = np.arange(len(sequence), dtype=np.int64)
@@ -107,7 +107,7 @@ class FSSPGLSEvaluation(FixedEvaluation):
     DESCRIPTION = task_description
     FUNCTION_NAME = function_name
     SOLVER = staticmethod(solve)
-    DEFAULT_SETTINGS = {'iterations': 10, 'local_passes': 3}
+    DEFAULT_SETTINGS = {'iterations': 200, 'local_passes': 3}
 
     def __init__(self, **kwargs):
         # Warm the fixed kernels before candidate timing.

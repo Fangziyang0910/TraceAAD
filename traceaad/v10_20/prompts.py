@@ -24,7 +24,8 @@ import re
 from benchmarks.cvrp_aco.dataset import get_split_spec as cvrp_split
 from benchmarks.generated_data_config import get_generated_task_kwargs
 from benchmarks.op_aco.dataset import get_split_spec as op_split
-from benchmarks.tasks import CLASSES, HELDOUT_TIMEOUT, FIXED_TASKS, SCALES
+from benchmarks.tasks import (CLASSES, CO_TASKS, HELDOUT_TIMEOUT, FIXED_TASKS, SCALES, TEST_INSTANCES,
+                              TEST_SCALES)
 from traceaad.common.history import final_attempt
 from traceaad.common.prompts import ANALYSIS as SHARED_ANALYSIS, ContextTooLong, KNOWN
 from traceaad.v10_17.prompts import PromptBuilder as V1017Prompts
@@ -86,6 +87,11 @@ def test_sets(task):
     if task in FIXED_TASKS:
         data = CLASSES[task].DATASET
         return data.describe('test')
+    if task in CO_TASKS:
+        # The six-task protocol tests only at the training scale.
+        scale = next(iter(TEST_SCALES[task]))
+        count = ACO_SPLITS[task](f"test_{scale}").n_instances if task in ACO_SPLITS else TEST_INSTANCES
+        return f"{count} instances with {scale} {UNITS[task]}"
     if task == "online_bin_packing":
         specs = get_generated_task_kwargs(task, "eval")["dataset_specs"]
         counts = {s["n_instances"] for s in specs}
@@ -106,6 +112,7 @@ def test_sets(task):
 class PromptBuilder(V1017Prompts):
     ACTIONS = ("Refine", "Explore", "Crossover", "Deepen")
     ANALYSIS = ANALYSIS
+    DEEPEN = DEEPEN
 
     def __init__(self, llm, task, evaluation, programs, attempts, config):
         if task in FIXED_TASKS:
@@ -138,7 +145,7 @@ class PromptBuilder(V1017Prompts):
         shown, trims = min(self.config.attempts_shown, len(tried)), []
         while True:
             section, ids = self._deepen_attempts(parent, tried, shown)
-            sections = self.common + [self._current(parent), section, DEEPEN, self.output_format("Deepen")]
+            sections = self.common + [self._current(parent), section, self.DEEPEN, self.output_format("Deepen")]
             result = self._result(sections, "Deepen", trims=trims)
             result["attempt_ids"] = ids
             if result["input_tokens"] <= self.config.max_input_tokens:

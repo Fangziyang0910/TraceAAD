@@ -73,7 +73,10 @@ ANALYSIS = {
 }
 
 
-def output_format(action, analysis=ANALYSIS):
+CLOSING = "Write no comments or docstrings in the code, and nothing after the code block."
+
+
+def output_format(action, analysis=ANALYSIS, closing=CLOSING):
     lines = ["[Output Format]"]
     if analysis[action]:
         lines += ["Reply in this order:",
@@ -82,7 +85,7 @@ def output_format(action, analysis=ANALYSIS):
         lines.append("Reply with a Design followed by one Python code block:")
     lines += ["Design: <one or two sentences (at most 60 words) stating the core idea of the algorithm you will implement>",
               "Code:\n```python\n<the complete program>\n```",
-              "Write no comments or docstrings in the code, and nothing after the code block."]
+              closing]
     return "\n".join(lines)
 
 
@@ -102,6 +105,7 @@ class PromptBuilder:
     EXPLORE = EXPLORE
     CROSSOVER = CROSSOVER
     ANALYSIS = ANALYSIS
+    CLOSING = CLOSING
 
     def __init__(self, llm, task, evaluation, programs, attempts, config):
         self.llm, self.task, self.evaluation = llm, task, evaluation
@@ -175,13 +179,19 @@ class PromptBuilder:
     def evaluation_time(self, seconds):
         return f"about {max(seconds, 0.1):.1f} s"
 
+    def limit_text(self):
+        return f"the {format(self.timeout, 'g')} s time limit" if self.timeout is not None else "the time limit"
+
+    def elapsed(self, seconds):
+        """The time of a program in history and attempt lines."""
+        return f"evaluation time about {max(seconds, 0.1):.1f} s"
+
     def failure(self, program):
         """What happened when a failed program was evaluated."""
         failure = program["failure"]
         kind = failure["kind"]
         if kind == "timeout":
-            limit = (f"the {format(self.timeout, 'g')} s time limit" if self.timeout is not None
-                     else "the time limit")
+            limit = self.limit_text()
             calls, inside = failure.get("calls"), failure.get("function_seconds") or 0.0
             if calls is None:
                 return f"stopped at {limit}"
@@ -232,7 +242,7 @@ class PromptBuilder:
         end = (f"score {score_text(child['score'])} "
                f"({verdict(parent['score'], child['score'], self.higher_is_better)})")
         if child.get("eval_seconds"):
-            end += f", evaluation time about {max(child['eval_seconds'], 0.1):.1f} s"
+            end += ", " + self.elapsed(child["eval_seconds"])
         result = f"{heading} · {action} · score {score_text(parent['score'])} → {end}"
         if failed is not None:
             result += f"\n  First version failed: {self.failure(failed)}"
@@ -276,8 +286,7 @@ class PromptBuilder:
         if status == "valid":
             return (f"score {score_text(program['score'])} "
                     f"({verdict(start['score'], program['score'], self.higher_is_better)})"
-                    + (f", evaluation time about {max(program['eval_seconds'], 0.1):.1f} s"
-                       if program.get("eval_seconds") else ""))
+                    + (", " + self.elapsed(program["eval_seconds"]) if program.get("eval_seconds") else ""))
         if status == "copied_reference":
             return "the same code as its reference algorithm"
         if status in {"duplicate", "known_failure"} and program is not None:
@@ -359,8 +368,7 @@ class PromptBuilder:
                     source = self.programs.get(source["parent_id"])
                 origin = ("as an initial algorithm" if source is None
                           else f"from an algorithm scoring {score_text(source['score'])}")
-                timing = (f" · evaluation time about {max(program['eval_seconds'], 0.1):.1f} s"
-                          if program.get("eval_seconds") else "")
+                timing = " · " + self.elapsed(program["eval_seconds"]) if program.get("eval_seconds") else ""
                 entries.append(f"Attempt {event['id']} · {action} {origin} → "
                                f"{score_text(program['score'])} (previous best {score_text(previous['score'])})"
                                f"{timing}\n  Design: {idea_view(program['idea'])}")
@@ -475,7 +483,7 @@ class PromptBuilder:
 
 
     def output_format(self, action):
-        return output_format(action, self.ANALYSIS)
+        return output_format(action, self.ANALYSIS, self.CLOSING)
 
     def error_text(self, failed):
         failure = failed["failure"]

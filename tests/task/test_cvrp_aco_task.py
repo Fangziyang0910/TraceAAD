@@ -8,7 +8,7 @@ from benchmarks.cvrp_aco import (
     get_split_spec,
     load_split_instances,
 )
-from benchmarks.cvrp_aco.evaluation import ACO
+from benchmarks.cvrp_aco.evaluation import ACO, _distance_matrix
 
 
 def inverse_distance(distance_matrix, coordinates, demands, capacity):
@@ -20,10 +20,10 @@ def test_train_split_matches_published_protocol_and_is_reproducible():
     second, _ = load_split_instances("train")
 
     assert metadata["problem_size"] == 50
-    assert metadata["n_instances"] == 10
+    assert metadata["n_instances"] == 16
     assert metadata["capacity"] == 50
     assert metadata["seed"] == 1234
-    assert first.shape == (10, 51, 3)
+    assert first.shape == (16, 51, 3)
     assert np.array_equal(first, second)
     assert np.all(first[:, 0, 0] == 0)
     assert np.all(first[:, 0, 1:] == [0.5, 0.5])
@@ -38,7 +38,7 @@ def test_train_split_matches_published_protocol_and_is_reproducible():
         ("val_50", 50, 64),
         ("val_100", 100, 64),
         ("test_20", 20, 64),
-        ("test_50", 50, 64),
+        ("test_50", 50, 50),
         ("test_100", 100, 64),
         ("test_200", 200, 64),
         ("paper_test_50", 50, 250),
@@ -93,6 +93,21 @@ def test_aco_routes_respect_capacity_visit_each_customer_and_close_at_depot():
     costs = aco._path_costs(paths)
     aco._update_pheromone(paths, costs)
     assert np.any(aco.pheromone > original * aco.decay)
+
+
+def test_waiting_at_the_depot_after_finishing_is_not_charged():
+    coordinates = np.array([[0.0, 0.0], [0.1, 0.0], [0.2, 0.0], [0.3, 0.0]])
+    aco = ACO(
+        distances=_distance_matrix(coordinates),
+        demands=np.array([0.0, 1.0, 1.0, 1.0]),
+        heuristic=np.ones((4, 4), dtype=float),
+        capacity=3,
+        n_ants=2,
+        rng=np.random.default_rng(0),
+    )
+    # One route that then waits at the depot, and three routes.
+    paths = np.array([[0, 1, 2, 3, 0, 0, 0], [0, 1, 0, 2, 0, 3, 0]]).T
+    assert np.allclose(aco._path_costs(paths), [0.6, 1.2])
 
 
 def _customer_legs(route):

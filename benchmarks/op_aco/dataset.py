@@ -18,14 +18,14 @@ class OPACODataset:
     seed: int
 
 
-# Protocol matches ReEvo / HSEvo / PathWise / CALM OP-ACO:
-# train: 5 × OP50 (seed 1234); val/test: 64 × {50,100,200} (seeds 3456 / 4567).
+# Six-task protocol: 16 training and 50 same-scale test OP50 instances
+# (seeds 1234 / 4567); other validation and cross-scale splits keep 64.
 SPLIT_SPECS = {
-    "train": OPACODataset("train", 50, 5, TRAIN_SEED),
+    "train": OPACODataset("train", 50, 16, TRAIN_SEED),
     "val_50": OPACODataset("validation", 50, 64, VAL_SEED),
     "val_100": OPACODataset("validation", 100, 64, VAL_SEED),
     "val_200": OPACODataset("validation", 200, 64, VAL_SEED),
-    "test_50": OPACODataset("test", 50, 64, TEST_SEED),
+    "test_50": OPACODataset("test", 50, 50, TEST_SEED),
     "test_100": OPACODataset("test", 100, 64, TEST_SEED),
     "test_200": OPACODataset("test", 200, 64, TEST_SEED),
 }
@@ -89,8 +89,8 @@ def load_split_instances(split: str = DEFAULT_SPLIT):
         **asdict(spec),
         "max_len": get_max_len(spec.problem_size),
         "protocol": (
-            "ReEvo/HSEvo/PathWise/CALM OP-ACO: train seed=1234 (5×OP50); "
-            "val seed=3456 / test seed=4567 (64×OP50/100/200); "
+            "OP-ACO six-task protocol: train seed=1234 (16×OP50); "
+            "test seed=4567 (50×OP50; 64×OP100/200); val seed=3456 (64×OP50/100/200); "
             "maxlen={3,4,5}; ACO 20 ants × 50 iterations"
         ),
     }

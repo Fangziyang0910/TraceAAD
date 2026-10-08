@@ -22,4 +22,4 @@
 
 研究讨论先读[当前问题与认识](docs/04-研究认识与构想/研究主线与问题.md)，再按问题查阅[研究文档](docs/README.md)。代码与论文位于 `/home/fang/code/LLM4AD/reference_code/` 和 `/home/fang/code/LLM4AD/papers/`。
 
-实验运行见[实验入口](experiments/README.md)。查询状态、远端操作或结果同步时，读[执行入口](experiments/infra/AGENT_OPERATIONS.md)，复用已有命令和环境。
+实验条件以[实验准则](experiments/PROTOCOL.md)为准，评价器与协议固定不变。实验运行见[实验入口](experiments/README.md)。查询状态、远端操作或结果同步时，读[执行入口](experiments/infra/AGENT_OPERATIONS.md)，复用已有命令和环境。

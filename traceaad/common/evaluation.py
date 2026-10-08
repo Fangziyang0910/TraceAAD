@@ -14,7 +14,7 @@ import time
 import numpy as np
 
 from core import Evaluation, SecureEvaluator
-from core.evaluate import InvalidEvaluationResult
+from core.evaluate import EVALUATION_SEED, InvalidEvaluationResult, seeded_random_state
 
 from . import probe
 from .config import REVISION
@@ -116,23 +116,17 @@ class SeededEvaluation(Evaluation):
         return {"calls": int(self.calls.value), "function_seconds": inside, "call_running": bool(started)}
 
     @contextmanager
-    def program_context(self, source, function_name, *, seed=730241):
-        py_state, np_state = random.getstate(), np.random.get_state()
+    def program_context(self, source, function_name, *, seed=EVALUATION_SEED):
+        # The task's own solver randomness (the ACO seed) is part of the task and
+        # identical for every method; the seed sets only the candidate's random state.
         try:
             if self.measure_calls:
                 source = probe.instrument(source, function_name)
                 probe.arm(self.calls, self.function_seconds, self.call_started)
-            if seed is not None:
-                random.seed(seed)
-                np.random.seed(seed)
-            evaluator = copy.copy(self.inner)
-            if seed is not None and hasattr(evaluator, "aco_seed"):
-                evaluator.aco_seed += seed
-            yield source, _ScoredTask(evaluator), {}
+            with seeded_random_state(EVALUATION_SEED if seed is None else seed):
+                yield source, _ScoredTask(copy.copy(self.inner)), {}
         finally:
             probe.arm(None, None, None)
-            random.setstate(py_state)
-            np.random.set_state(np_state)
 
     def evaluate_program(self, source, function):
         return _ScoredTask(self.inner).evaluate_program(source, function)

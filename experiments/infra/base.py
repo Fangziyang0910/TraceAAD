@@ -111,9 +111,8 @@ def sampling_controls(enable_thinking: bool, **overrides: float | None) -> dict[
 
 
 LLM_TIMEOUT_SECONDS = 600
-# Local ACO parallelism only; seeded scores do not depend on this count.
-# Sized for 18 concurrent searches on a 32-core host: 4 workers cover
-# CVRP's 10 train instances in three rounds without the old 10-worker pileup.
+# ACO parallelism for cross-scale held-out only; training and the primary test
+# run instances in turn because the time limit is a per-instance budget.
 DEFAULT_ACO_EVAL_WORKERS = DEFAULT_WORKERS
 
 

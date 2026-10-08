@@ -2,7 +2,7 @@ import json
 import pytest
 from traceaad.common.storage import save_heldout
 
-from experiments.infra.monitor_results import load_batch_heldout, load_selection
+from experiments.infra.monitor_results import load_batch_heldout
 from benchmarks.tasks import scale_of_split
 from experiments.monitor import ResultsMonitor
 
@@ -40,13 +40,10 @@ def test_heldout_variants_formats_and_skipped_sources(tmp_path):
     assert heldout[""]["online_bin_packing"]["runs"] == {"c_rep1": {"1k_100": -412}}
 
 
-def test_native_heldout_and_selection_ties(tmp_path):
+def test_native_heldout(tmp_path):
     run = tmp_path / "b" / "op_aco" / "r_rep1"
     save_heldout(run, {"task": "op_aco", "scale": "100", "fitness": 30.5, "verification": "legacy"})
     assert load_batch_heldout(tmp_path / "b")[""]["op_aco"]["runs"] == {"r_rep1": {100: 30.5}}
-    write_json(run / "selection.json", {"selected_node": 2, "results": [
-        {"node_id": 1, "fitness": 15.0}, {"node_id": 2, "fitness": 15.0}, {"node_id": 3, "fitness": None}]})
-    assert load_selection(run) == {"fitness": 15.0, "finalists": 3, "failed": 1, "ties": 2, "distinct": 1}
 
 
 def test_state_signature_tracks_journal_changes(tmp_path):

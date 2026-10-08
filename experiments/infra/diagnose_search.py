@@ -19,7 +19,8 @@ TRIED_OUT = 15
 # The generation steps each method samples; the others write Refine, Explore and Crossover.
 METHOD_ACTIONS = {"v1018": ("Refine", "Explore", "Crossover", "Develop"),
                   "v1019": ("Refine", "Explore", "Crossover", "Develop"),
-                  "v1020": ("Refine", "Explore", "Crossover", "Deepen")}
+                  "v1020": ("Refine", "Explore", "Crossover", "Deepen"),
+                  "v1021": ("Refine", "Explore", "Crossover", "Deepen")}
 # A program whose work depends on the wall clock: its result depends on the host and its load.
 CLOCK = re.compile(r"\btime\.(time|perf_counter|monotonic|process_time)\s*\(|"
                    r"\bfrom\s+time\s+import\b|\bdatetime\.now\s*\(")

@@ -140,8 +140,9 @@ class TSPEvaluation(Evaluation):
 
                 next_node = eva(current_node, destination_node, unvisited_near_nodes, distance_matrix)
 
-                if next_node in route:
-                    # print("wrong algorithm select duplicate node, retrying ...")
+                # Only an offered unvisited ID is valid; a negative ID would
+                # otherwise index from the end and yield an invalid tour.
+                if next_node not in unvisited_near_nodes:
                     return None
 
                 current_node = next_node

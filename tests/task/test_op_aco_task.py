@@ -23,10 +23,10 @@ def test_train_split_matches_published_protocol_and_is_reproducible():
     second, _ = load_split_instances("train")
 
     assert metadata["problem_size"] == 50
-    assert metadata["n_instances"] == 5
+    assert metadata["n_instances"] == 16
     assert metadata["seed"] == 1234
     assert metadata["max_len"] == 3.0
-    assert first.shape == (5, 50, 2)
+    assert first.shape == (16, 50, 2)
     assert np.array_equal(first, second)
 
 
@@ -44,7 +44,7 @@ def test_task_exposes_evaluator_semantics_as_design_notes():
         ("val_50", 50, 64, 3456, 3.0),
         ("val_100", 100, 64, 3456, 4.0),
         ("val_200", 200, 64, 3456, 5.0),
-        ("test_50", 50, 64, 4567, 3.0),
+        ("test_50", 50, 50, 4567, 3.0),
         ("test_100", 100, 64, 4567, 4.0),
         ("test_200", 200, 64, 4567, 5.0),
     ],

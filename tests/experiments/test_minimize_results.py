@@ -45,7 +45,7 @@ def test_migration_preserves_winner_offsets_and_source(tmp_path, task, old_fitne
     checkpoint = read_json(run / "resume.json")
     assert checkpoint["state"]["selected_id"] == 1
     assert checkpoint["files"]["events.jsonl"] == len((json.dumps(events[0], ensure_ascii=False, separators=(",", ":")) + "\n").encode())
-    assert TrainingHistory(run, minimize=True).read()[0][0]["value"] == -old_fitness
+    assert TrainingHistory(run, minimize=True).read()[0][0]["fitness"] == -old_fitness
     assert {f: (run / f).read_bytes() for f in untouched} == untouched
     assert convert_run(run, tmp_path) is None  # no double negation
 

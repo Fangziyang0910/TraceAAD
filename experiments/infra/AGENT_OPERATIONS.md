@@ -25,7 +25,7 @@ uv run python -m experiments.infra.batch_status --manifest experiments_result/tr
 | 远端 Python | 仓库内 `.venv/bin/python` |
 | 实验档案 | 仓库内 `experiments_result/` |
 
-通过本地命令执行一次远端查询；读取器经 stdin 发送，不需部署新文件。远端需要当前 `benchmarks.tasks`、`monitor_timing`、`traceaad.common.storage` 模块，并已转换为当前结果格式。旧格式主机需先完成迁移，再使用此查询入口。
+通过本地命令执行一次远端查询；读取器经 stdin 发送，不需部署新文件。远端需要当前 `benchmarks.tasks`、`monitor_timing`、`traceaad.common.storage` 模块。
 
 ```bash
 uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD --manifest experiments_result/traceaad_v10_16/batch_20261003_server3_v1016.json
@@ -39,13 +39,11 @@ uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fz
 
 V10.15–V10.19 共用生成、评价和结果保存，各版本仍写到原版本目录。日常读取只使用 `events.jsonl`、`programs.jsonl`、`resume.json`、`summary.json`、`selection.json` 和平面的 `heldout.json`。原始模型请求与回复单独保存于 `calls.jsonl`，结束后压缩。诊断入口为 `uv run python -m experiments.traceaad_v10_17.diagnose --run-dir <目录>`，其他当前版本同样提供。格式、恢复条件和历史迁移见[实验与结果](SEARCH_FORMAT.md)。
 
-历史版本已经转换为同一种事件结构。横轴单位来自 `run_config.json` 的 `budget_axis`，候选编号和实际预算分别保留。曲线显示迄今最佳训练成绩，并延伸到最后一条已记录的预算位置。列表、最近候选、有效率和预算共用一个增量投影；有效率的分母是全部候选记录数。
+横轴单位来自 `run_config.json` 的 `budget_axis`，候选编号和实际预算分别保留。曲线显示迄今最佳训练成绩，并延伸到最后一条已记录的预算位置。列表、最近候选、有效率和预算共用一个增量投影；有效率的分母是全部候选记录数。
 
-详情显示搜索最优和最终选中程序。源码按内容哈希从 `programs.jsonl` 读取。带身份的测试结果须与冻结的最终程序一致；不一致或无法核验的记录不进入比较。原实验没有身份记录的成绩保留 `legacy` 状态，与原来的比较口径一致。
+详情显示搜索最优和最终选中程序。源码按内容哈希从 `programs.jsonl` 读取。带身份的测试结果须与冻结的最终程序一致；不一致或无法核验的记录不进入比较。
 
 `.cache/history.json` 可以删除并重建。缓存只保存小型事件投影、程序元数据和读取位置，不重复源码、请求或回复。首次读取扫描轻量事件，后续只读追加字节；未完成的尾行下次重试。配置、恢复点、事件、程序、选择及批次清单变化会刷新 API 缓存；未完成路次的时间状态最多每 15 秒重算一次。页面每分钟更新批次列表，切换批次立即取消旧请求。`--experiment` 可固定默认批次，链接中的 `#b=` 优先。修改 Python 后重启服务，修改 HTML、CSS 或 JS 后刷新页面。
-
-2026-10-06 迁移时，两路 V10.19 仍由旧进程执行。临时快照转换器读取它们的旧日志，搜索完成后自动归档、清理并退出。需要排查时检查 `/tmp/traceaad-storage-migration-watch.pid` 和同名 `.log`；不重启搜索进程。
 
 等待状态变化使用 `--wait-seconds 45`，默认每 10 秒在同一进程中检查，变化或到期后返回一次。时间戳和 ETA 自身变化不会唤醒调用方。每次最多等待 60 秒，之后可汇报状态或处理其他工作。普通快速查询直接等待返回；后台长任务按进度检查，避免每秒调用 `write_stdin`。
 
@@ -53,13 +51,4 @@ V10.15–V10.19 共用生成、评价和结果保存，各版本仍写到原版�
 
 独立的本地读取和远端查询用 `Promise.allSettled` 并行，并检查每项结果。编辑、启动、同步和核验按依赖顺序执行。复杂远端 Python 通过 stdin 或脚本文件传递，命令参数用 shell quoting；避免层层嵌套引号。
 
-同步前固定已完成路次清单，再用 `rsync --files-from` 统一同步，随后对冻结文件核验哈希。旧格式档案先同步到独立暂存实验目录，显式运行迁移工具后再纳入本地读取；不要覆盖已转换的运行目录。新完成路次加入下一轮。运行中的日志可继续变化，应与冻结档案分开处理；不要因同步时日志增长而反复重传已冻结档案。批次全局汇总可能持续变化，不作为冻结路次的内容哈希依据。
-
-2026-10-07 已统一为最小化目标。三路运行中的 V10.20 CVRP 暂由 `.minimize/live.json` 标记只读转换，旧进程继续按原条件运行。完成迁移的后台会话为 `traceaad_minimize_migration`，日志在 `/tmp/traceaad-minimize-live.log`；可用 `tmux has-session -t traceaad_minimize_migration` 检查。它只在搜索终局文件稳定后改写分数和恢复字节位置，不中断实验。监控已重新加载；五个任务均标记为 `min`。
-
-
-2026-10-07，主套件为TSP、CVRP、FSSP、图着色、JSSP与OP。FSSP／图着色六路使用`batch_20261007_local_v1020_new4_seeded.json`，JSSP三路使用`batch_20261007_local_v1020_replacement.json`，均归入`traceaad_v10_20`。OP复用`20261006_local_v1020`已完成的原三路搜索；训练最好节点与哈希保存在后一个清单的`reused_runs`。原OP rep1与旧选中程序相同，rep2、rep3不同；只复用程序身份一致的测试记录，不覆盖历史验证选择。
-
-已停止的九路及启动日志、清单条目、废弃任务代码已删除。当前FSSP／图着色／JSSP九路分配server3五路、server3b四路。训练页面：`http://127.0.0.1:8765/#b=traceaad_v10_20`。
-
-FSSP和图着色进程仍持有旧路径，`traceaad_v10_20_co6/`仅保留这两个任务的写入转接。任务目录内旧名称的符号链接不是额外实验，监控不计入。自动清理会话`traceaad_v1020_path_cleanup`读取`/tmp/traceaad-v1020-path-aliases.json`，目前只登记六个活动写入别名。对应原进程退出后移除链接，全部退出后删除旧路径容器。运行期间不要删除这些活动链接。
+同步前固定已完成路次清单，再用 `rsync --files-from` 统一同步，随后对冻结文件核验哈希。新完成路次加入下一轮。运行中的日志可继续变化，应与冻结档案分开处理；不要因同步时日志增长而反复重传已冻结档案。批次全局汇总可能持续变化，不作为冻结路次的内容哈希依据。

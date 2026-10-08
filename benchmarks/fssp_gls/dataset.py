@@ -4,7 +4,7 @@ from .._seeded_data import canonical_split, rng_for
 
 TASK = 'fssp_gls'
 SCALE = 50
-COUNTS = {'train': 16, 'test': 100}
+COUNTS = {'train': 16, 'test': 50}
 DIMENSIONS = {'jobs': 50, 'machines': 20}
 DISTRIBUTION = '50 jobs x 20 machines; independent integer processing times uniform in 1..99; reference is NEH makespan'
 

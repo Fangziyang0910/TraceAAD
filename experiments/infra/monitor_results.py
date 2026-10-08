@@ -34,15 +34,3 @@ def load_batch_heldout(batch_dir):
             if status in {"verified", "legacy"}:
                 values[int(scale) if scale.isdigit() else scale] = finite(result["fitness"])
     return output
-
-
-def load_selection(run_dir):
-    payload = read_json(Path(run_dir) / "selection.json", {})
-    results = payload.get("results", [])
-    if not results:
-        return None
-    winner = next((r["fitness"] for r in results if r["node_id"] == payload["selected_node"]), None)
-    values = [finite(r["fitness"]) for r in results]
-    return {"fitness": winner, "finalists": len(results), "failed": sum(v is None for v in values),
-            "ties": sum(v is not None and winner is not None and abs(v-winner) <= 1e-9*max(1,abs(winner)) for v in values),
-            "distinct": len({round(v,9) for v in values if v is not None})}
