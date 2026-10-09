@@ -1,0 +1,7 @@
+unsloth[huggingface] @ https://github.com/unslothai/unsloth/archive/d94ca0ee6b54891378c6de65af9eba48f1afae59.tar.gz
+unsloth-zoo==2026.10.3
+transformers==5.17.0
+torch==2.11.0
+bitsandbytes==0.50.2
+xformers==0.0.35
+modelscope==1.40.1

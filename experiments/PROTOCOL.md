@@ -11,7 +11,7 @@
 | `tsp_construct` | TSP，50节点，单位正方形均匀坐标 | `select_next_node` | 逐步构造：每步给出当前节点、起点、按距离排序的未访问节点和距离矩阵，函数返回其中一个节点；最后一个节点与回程由框架补全 | 平均回路长度 |
 | `cvrp_aco` | CVRP，50客户，容量50，需求1–9，仓库(0.5,0.5) | `heuristics` | 每实例开始前调用一次，返回边先验；ACO 30只蚂蚁×100轮，衰减0.9，α=β=1 | 平均最好路线总长，只计不同节点之间的移动 |
 | `fssp_gls` | 置换流水车间，50作业×20机器，时长1–99 | `get_matrix_and_jobs` | NEH初始化；200轮，每轮至多3步真实交换／插入下降，再调用一次函数，在扰动矩阵上对返回的1–5个作业做一步最好改进；保留真实最好解 | 相对NEH的平均makespan偏差（%） |
-| `graph_colouring` | G(300, 0.5) | `score_coloring_moves` | 构造时对“未着色顶点＋最小可用颜色”排序；随后至多4次减色，每次修复100步，7步禁忌 | 相对DSATUR构造的平均颜色数偏差（%） |
+| `graph_colouring` | G(300, 0.5) | `score_coloring_moves` | 构造时对“未着色顶点＋最小可用颜色”排序；随后至多4次减色，每次修复100步，7步禁忌，修复时对冲突顶点的改色排序 | 相对DSATUR构造的平均颜色数偏差（%） |
 | `jssp_construct` | 作业车间，20作业×20机器，每个作业随机机器顺序，时长1–99 | `score_operations` | Giffler–Thompson构造，函数对冲突集合排序 | 相对MWKR调度的平均makespan偏差（%） |
 | `op_aco` | OP，50节点，路程预算3，奖励按到仓库距离 | `heuristics` | 每实例开始前调用一次，返回边先验；ACO 20只蚂蚁×50轮 | 负的平均最好奖励 |
 
@@ -26,15 +26,15 @@
 ## 3. 评价
 
 - **计算预算：候选函数每个实例最多使用 2 秒 CPU 时间，按该实例上全部调用累计；函数之外的时间不计入。** 预算由调用探针实时计量（进程 CPU 时间，纳秒精度），超出即判为超时。固定框架的耗时对所有候选相同，却随核心与负载相差约 3 倍，所以不计入；用 CPU 时间而不是墙钟时间，进程被其他程序抢占、等待的时间不计入。
-- **安全上限：每个实例 20 秒墙钟**，包含进程启动、固定框架与候选函数，只用来终止卡死的程序。等待 CPU 的时间不计入。
+- **安全上限：每个实例 20 秒墙钟**，包含进程启动、固定框架与候选函数，只用来终止卡死的程序。从实例进程启动时计时，等待调度器分配核心的时间不计入。
 - 任一实例超时、报错或违反返回契约，该次评价失败，没有分数；成功时按实例等权平均。
-- 各实例在独立进程中运行，全局变量互不共享。不同实例可以并行，由所在机器的 CPU 调度器分配核心，每个实例绑定一个核心。评价可在本机（性能核 0、2、…、14 号）或 server3（0–51 号物理核）进行，两者视为同一评价条件。
-- 每次评价的结果（含失败类型）写入运行目录的 `evaluations.jsonl`，基线也一样，超时率按此统计。
+- 各实例在独立进程中运行，全局变量互不共享。不同实例可以并行，由所在机器的 CPU 调度器分配核心，每个实例绑定一个核心。评价可在本机（性能核 0、2、…、14 号）或 server3（0–51 号物理核）进行，不同机器的 CPU 核心视为同一评价条件。
+- 每次评价的结果（含失败类型与每个实例的计时）写入运行目录：TraceAAD 在 `events.jsonl`，基线在 `evaluations.jsonl`。超时率按此统计。
 - 分数只由最终可行解的质量决定；时间只作约束。
 - BLAS／OpenMP 单线程。
 - 所有方法在训练与测试中使用同一评价条件：相同数据；ACO 种子为 `1234 + 实例编号`；候选的 Python／NumPy 随机种子为 `(730241 + 实例编号) % 2**32`。
 
-本机资源由调度器统一分配：CPU 调度器管理 8 个性能核（每个物理核一个线程），GPU 调度器管理 server3 两个端点共 18 个请求槽。server3 的 vLLM 0.31.0 开启 MTP，每次预测 2 个 token，服务退出后自动重启。入口见 [V10.21 实验入口](traceaad_v10_21/README.md)。
+资源由调度器统一分配：CPU 调度器管理所在机器的评价核心（每个物理核一个线程），GPU 调度器管理 server3 两个端点共 18 个请求槽。server3 的 vLLM 0.31.0 开启 MTP，每次预测 2 个 token，服务退出后自动重启。运行与远端操作见[实验入口](README.md)。
 
 ## 4. 搜索与最终程序
 
@@ -51,9 +51,9 @@
 
 ```bash
 # TraceAAD：打印计划，加 --launch 才启动
-uv run python -m experiments.traceaad_v10_21.launch_local --suite co6 --batch <批次> --repeats 3 --budget 1000
-# 基线
-uv run python -m experiments.launch --method <eoh|reevo|mcts_ahd|pathwise|calm|funsearch|shinka_evo> --suite co6 --batch <批次> --repeats 3
+uv run python -m experiments.traceaad_<版本>.launch_local --suite co6 --batch <批次> --repeats 3 --budget 1000
+# 基线：经本机 CPU 调度器排队运行
+uv run python -m experiments.infra.local_queue --method <eoh|reevo|mcts_ahd|pathwise|calm|funsearch|shinka_evo> --suite co6 --batch <批次> --slots 3
 # 冻结后的同规模测试
 uv run python -m experiments.infra.evaluate <运行目录> --primary
 ```

@@ -31,7 +31,7 @@ uv run python -m experiments.traceaad_v10_20.launch_local --suite co6 --experime
 启动入口默认仅打印计划；加 `--launch` 才启动。各基线使用同一任务注册：
 
 ```bash
-uv run python -m experiments.launch --method eoh --suite co6 --batch <批次> --dry-run
+uv run python -m experiments.infra.local_queue --method eoh --suite co6 --batch <批次> --slots 3 --dry-run
 ```
 
 冻结后运行同规模测试：
