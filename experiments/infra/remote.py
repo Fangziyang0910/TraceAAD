@@ -21,8 +21,15 @@ CODE_EXCLUDES = (".git/", ".venv/", "experiments_result/", "__pycache__/", ".pyt
 TERMINAL = {"finished", "search_complete", "selection_failed", "no_valid_root"}
 
 
-def run(*command):
-    return subprocess.run(command, check=True, capture_output=True, text=True).stdout
+def run(*command, ok=(0,)):
+    done = subprocess.run(command, capture_output=True, text=True)
+    if done.returncode not in ok:
+        raise subprocess.CalledProcessError(done.returncode, command, done.stdout, done.stderr)
+    return done.stdout
+
+
+# rsync exit 24: files vanished while copying, e.g. a running search replacing its checkpoint.
+VANISHED = (0, 24)
 
 
 def push():
@@ -43,7 +50,7 @@ def pull(experiment, batch):
     local.mkdir(parents=True, exist_ok=True)
     run("rsync", "-az", "--prune-empty-dirs", "--exclude=.cache/", f"--include=batch_{batch}.json",
         f"--include=launch_logs/{batch}_*", "--include=*/", f"--include=*/{batch}_*/***", "--exclude=*",
-        remote, f"{local}/")
+        remote, f"{local}/", ok=VANISHED)
 
 
 def prune(experiment, batch, heldout=True):
@@ -57,8 +64,11 @@ def prune(experiment, batch, heldout=True):
         summary = path / "summary.json"
         status = json.loads(summary.read_text()).get("status") if summary.exists() else None
         complete = status in TERMINAL and (not heldout or (path / "heldout.json").exists())
+        if not complete:
+            left.append(relative)
+            continue
         differs = run("rsync", "-anc", "--itemize-changes", "--exclude=.cache/", f"{remote}{relative}/", f"{path}/")
-        if not complete or differs.strip():
+        if differs.strip():
             left.append(relative)
             continue
         run("ssh", HOST, f"rm -rf {REMOTE}/experiments_result/{experiment}/{relative}")

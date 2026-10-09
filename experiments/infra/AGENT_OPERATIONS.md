@@ -39,7 +39,7 @@ uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fz
 
 ## 本机基线排队
 
-基线在本机排队运行：同时最多 3 路（本机模型的 3 个槽位），一路结束补下一路；每路一次评价一个实例，核心向本机 CPU 调度器申请，与 TraceAAD 同一核心池。调度池只含每个物理性能核的一个线程（`--cpus 0,2,4,6,8,10,12,14`）；本机 16–31 号是能效核，llama-server 用 `taskset -a -cp 16-31 <pid>` 固定在能效核，重启模型服务后要重新执行；能效核同时是平台对照中的一个评价平台，本机模型服务有请求时会与它争用。server3 的调度器在其 tmux 会话 `traceaad_scheduler` 中运行（socket `/tmp/traceaad-1005/scheduler.sock`，0–51 号各一个物理核）；同步代码前的工作区备份在 server3 的 `~/backups/`。基线的超时率读运行目录的 `evaluations.jsonl`，`events.jsonl` 不区分失败类型。排队器在 tmux 会话中运行，日志在 `experiments_result/<方法>/launch_logs/`。
+基线在本机排队运行：同时最多 3 路（本机模型的 3 个槽位），一路结束补下一路；每路一次评价一个实例，核心向本机 CPU 调度器申请，与 TraceAAD 同一核心池。调度池只含每个物理性能核的一个线程（`--cpus 0,2,4,6,8,10,12,14`）；本机 16–31 号是能效核，llama-server 用 `taskset -a -cp 16-31 <pid>` 固定在能效核，重启模型服务后要重新执行；能效核同时是平台对照中的一个评价平台，本机模型服务有请求时会与它争用。server3 的调度器在其 tmux 会话 `traceaad_scheduler` 中运行（socket `/tmp/traceaad-1005/scheduler.sock`，0–51 号各一个物理核，两个模型端点各 9 个槽位；结束会话不会删除 socket 文件，确认没有调度器进程后先删掉它再重启）；同步代码前的工作区备份在 server3 的 `~/backups/`。基线的超时率读运行目录的 `evaluations.jsonl`，`events.jsonl` 不区分失败类型。排队器在 tmux 会话中运行，日志在 `experiments_result/<方法>/launch_logs/`。
 
 ```bash
 uv run python -m experiments.infra.local_queue --method funsearch --suite co6 --batch 20261008_local --slots 3

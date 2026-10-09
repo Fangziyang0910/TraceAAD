@@ -100,6 +100,8 @@ class PromptBuilder:
     ACTIONS = ("Refine", "Explore", "Crossover")
     # How an initial program without recorded changes is named (V10.16/V10.17: "an initial design").
     UNCHANGED_ROOT = "the {origin}"
+    INITIAL = INITIAL
+    ANOTHER_INITIAL = ANOTHER_INITIAL
     REFINE = REFINE
     REFINE_ROOT = REFINE_ROOT
     REPAIR = REPAIR
@@ -397,7 +399,7 @@ class PromptBuilder:
             while len(shown) > 1 and self.block_count(root_section()) > self.config.root_tokens:
                 trims.append(f"root:{shown.pop(0)['id']}")
             sections.append(root_section())
-        sections.extend([ANOTHER_INITIAL if shown else INITIAL, self.output_format("Init")])
+        sections.extend([self.ANOTHER_INITIAL if shown else self.INITIAL, self.output_format("Init")])
         while shown and len(shown) > 1 and self.count(self._render(sections)) > self.config.max_input_tokens:
             trims.append(f"root:{shown.pop(0)['id']}")
             sections[3] = root_section()

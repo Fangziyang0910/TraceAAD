@@ -15,14 +15,17 @@
 | 改动在原算法上检验，能否让新计算成立？ | [改动检验搜索](traceaad_v10_19/README.md) |
 | 保留当前规则、用它引导搜索，首版是否不劣于父代？ | [固定父代重放](diagnosis_v1020_replay/README.md) |
 | ACO 训练成绩有多少是种子噪声？后期提升是否真实？ | [ACO 噪声审计](diagnosis_aco_noise/README.md) |
+| Explore 反复提出失败方向，是因为看不到失败吗？ | [Explore 上下文重放](diagnosis_explore_context/README.md) |
+| 起点提示能否让不同的决策结构进入搜索？ | [起点提示重放](diagnosis_init_prompt/README.md) |
 | 更正计算事实并增加 Deepen，能否把时限换成质量？ | [当前规则引导的搜索](traceaad_v10_20/README.md) |
 | 只交代问题与一条效率规则，能否减少超时、保持成绩？ | [精简提示与效率规则](traceaad_v10_21/README.md) |
+| Explore 从精确输出出发分析，能否引入新的决策结构？ | [从精确输出出发的探索](traceaad_v10_22/README.md) |
 
 ## 搜索与独立测试
 
 所有实验遵守[实验准则](PROTOCOL.md)：六个任务、训练16例与同规模测试50例、每实例10秒、每方法每任务3路、按训练成绩冻结最终程序后测试。[六任务入口](co6/README.md)给出任务接口与命令。
 
-[精简提示与效率规则](traceaad_v10_21/README.md)、[当前规则引导的搜索](traceaad_v10_20/README.md)、[改动检验搜索](traceaad_v10_19/README.md)、[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)各自提供运行命令，并共用[实验与结果实现](infra/SEARCH_FORMAT.md)。代码目录保留实现标识，文档按研究对象命名。
+[从精确输出出发的探索](traceaad_v10_22/README.md)、[精简提示与效率规则](traceaad_v10_21/README.md)、[当前规则引导的搜索](traceaad_v10_20/README.md)、[改动检验搜索](traceaad_v10_19/README.md)、[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)各自提供运行命令，并共用[实验与结果实现](infra/SEARCH_FORMAT.md)。代码目录保留实现标识，文档按研究对象命名。
 
 任务条件集中在 `benchmarks/tasks.py`。通用测试命令为 `uv run python -m experiments.infra.evaluate <运行目录> --primary`。
 
