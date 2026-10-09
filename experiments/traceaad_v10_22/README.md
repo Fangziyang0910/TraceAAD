@@ -12,5 +12,3 @@ uv run python -m experiments.infra.evaluate experiments_result/traceaad_v10_22/<
 # 诊断
 uv run python -m experiments.traceaad_v10_22.diagnose --run-dir experiments_result/traceaad_v10_22/<任务>/<运行>
 ```
-
-当前批次 `20261009_server3_v1022`（10 月 9 日 12:17 启动）：六任务各 3 路，种子 0–2，在 server3 运行，调度器管 0–51 号物理核和两个端点各 9 个模型槽位，每次评价至多 8 个实例并行。本机 tmux 会话 `watch_v1022` 每分钟拉取结果，日志在 `experiments_result/traceaad_v10_22/launch_logs/watch_20261009_server3_v1022.log`。
