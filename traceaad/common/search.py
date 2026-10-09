@@ -35,6 +35,7 @@ class Search:
     EXPLORING = ("Explore",)
     MEASURE_CALLS = True
     REPLACE_FAILED_FINALISTS = True
+    AUTO_REPAIR = True
 
     def __init__(self, *, evaluation, llm, run_dir, config=None, task=None,
                  selection_evaluation=None):
@@ -124,8 +125,22 @@ class Search:
             raise failed
         return calls[-1]['request_id'], details, calls
 
+    def _prepare_attempt(self, request, details, parent):
+        """Resolve version-specific response metadata before evaluating code."""
+        return parent
+
+    def _parse_candidate(self, request, details, parent):
+        return parse_response(details.get("content", ""), details.get("finish_reason"), self.template)
+
+    def _normalize_source(self, code):
+        return canonical(code)
+
+    def _known_program(self, code, source_key):
+        return self.facts.by_key.get(source_key)
+
     def _attempt(self, request, *, parent=None, reference=None, repair_of=None):
         rid, details, calls = self._generate(request)
+        parent = self._prepare_attempt(request, details, parent)
         aid = self.attempts + 1
         if self.phase == "roots":
             self.progress.init_attempts += 1
@@ -138,8 +153,7 @@ class Search:
                    "error": None, "calls": calls, "created_at": now()}
         code, failure, evaluations = None, None, []
         try:
-            code, attempt["idea"], attempt["delivery"] = parse_response(
-                response, details.get("finish_reason"), self.template)
+            code, attempt["idea"], attempt["delivery"] = self._parse_candidate(request, details, parent)
         except DeliveryError as exc:
             attempt.update(status="delivery_failed", error=str(exc))
         except SourceError as exc:
@@ -149,11 +163,11 @@ class Search:
         program = None
         if code is not None:
             try:
-                code = canonical(code)
+                code = self._normalize_source(code)
             except (SyntaxError, ValueError):
                 code = code.rstrip() + "\n"
             source_key = key(code)
-            known = self.facts.by_key.get(source_key)
+            known = self._known_program(code, source_key)
             if known is not None:
                 status = ("copied_reference" if reference and known["id"] == reference["id"] else
                           "duplicate" if known["valid"] else "known_failure")
@@ -185,6 +199,7 @@ class Search:
                            "function_seconds": measured["function_seconds"], "attempt_id": aid}
                 attempt.update(status=failure["kind"] if failure else "valid", program_id=aid)
         needs_repair = (program is not None and not program["valid"] and repair_of is None
+                        and (self.AUTO_REPAIR or self.phase == "roots")
                         and aid < self.config.budget
                         and (self.phase != "roots" or self.progress.init_attempts < self.config.init_attempt_limit))
         self.progress.repair_id = aid if needs_repair else None

@@ -22,6 +22,7 @@ METHOD_ACTIONS = {"v1018": ("Refine", "Explore", "Crossover", "Develop"),
                   "v1020": ("Refine", "Explore", "Crossover", "Deepen"),
                   "v1021": ("Refine", "Explore", "Crossover"),
                   "v1022": ("Refine", "Explore", "Crossover")}
+METHOD_ACTIONS["v1024"] = ("Refine", "Explore", "Crossover", "Develop")
 # A program whose work depends on the wall clock: its result depends on the host and its load.
 CLOCK = re.compile(r"\btime\.(time|perf_counter|monotonic|process_time)\s*\(|"
                    r"\bfrom\s+time\s+import\b|\bdatetime\.now\s*\(")
@@ -254,6 +255,9 @@ def v1019_development_stats(facts, attempts, init_attempts, final_candidates):
 
 
 def exploration_stats(facts, attempts, init_attempts, final_candidates, method):
+    if method == "v1024":
+        from traceaad.v10_24.diagnostics import development_stats
+        return development_stats(facts)
     if method == "v1018":
         return v1018_development_stats(facts, attempts, init_attempts, final_candidates)
     if method == "v1019":

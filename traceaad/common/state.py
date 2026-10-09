@@ -60,7 +60,8 @@ class Facts:
     def by_key(self):
         return {p["key"]: p for p in self.programs.values()}
 
-    def commit(self, state, *, attempt=None, program=None, evaluations=(), calls=(), exploration=None):
+    def commit(self, state, *, attempt=None, program=None, evaluations=(), calls=(), exploration=None,
+               development=None):
         # Reading never changes files. A resumed writer discards uncommitted tails.
         for name, size in self.files.items():
             path = self.run_dir / name
@@ -92,6 +93,8 @@ class Facts:
             row["evaluations"] = list(evaluations)
         if exploration:
             row["exploration"] = exploration
+        if development is not None:
+            row["development"] = development
         row["progress"] = {k: state[k] for k in ("phase", "attempts", "elapsed", "started_at",
                                                 "model_calls", "input_tokens", "output_tokens")}
         row["ts"] = datetime.now().astimezone().isoformat(timespec="seconds")
