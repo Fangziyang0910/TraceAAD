@@ -1,17 +1,17 @@
-"""Finite development commitments over the existing evaluator and candidate archive."""
+"""Shared finite development over the existing evaluator and candidate archive."""
 
 from collections import Counter
 import re
 
-from traceaad.common.delivery import DeliveryError, SourceError, target
+from traceaad.common.delivery import DeliveryError
 from traceaad.common.canonical import canonical, key
 from traceaad.common.history import code_diff
 from traceaad.common.prompts import ContextTooLong
 from traceaad.common.search import Search
 from traceaad.v10_21.traceaad import TraceAADV1021
 from .config import Config
-from .policy import AXES, PURPOSES, declarations, frontier, score_vector, stable_key, two_block_plan, values
-from .prompts import PromptBuilder
+from .policy import SOURCES, declarations, frontier, score_vector, stable_key, values
+from .prompts import BaseContextTooLong, PromptBuilder
 from .delivery import clean_response, edit_design, mode, parse_candidate
 
 
@@ -25,12 +25,12 @@ class TraceAADV1024(TraceAADV1021):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.identity['delivery_protocol'] = 'v1024-atomic-edit-1'
+        self.identity['development_protocol'] = 'v1024-shared-development-3'
         saved = self.facts.state or {}
         if saved and (saved.get('identity') != self.identity or 'v1024' not in saved):
             raise ValueError('V10.24 resume requires the same configuration, task and protocol')
         self.policy = saved.get('v1024', {
-            'units': [], 'blocks': [], 'active': None, 'reserved': 0,
-            'slot': 0, 'quota': self.config.block_size, 'reflow': False, 'excluded': [],
+            'units': [], 'blocks': [], 'active': None, 'next_decision': 'new', 'excluded': [],
         })
         self.source_ids = {self._source_identity(p['code']): p['id'] for p in self.programs.values()}
 
@@ -103,7 +103,7 @@ class TraceAADV1024(TraceAADV1021):
     def _parent(self, groups):
         weights = [1 / g['rank'] for g in groups]
         group = self.parent_rng.choices(groups, weights)[0]
-        counts = Counter(u['anchor_id'] for u in self.policy['units'] if u['purpose'].startswith('front_'))
+        counts = Counter(u['anchor_id'] for u in self.policy['units'])
         lowest = min(counts[pid] for pid in group['members'])
         members = [pid for pid in group['members'] if counts[pid] == lowest]
         pid = self.parent_rng.choice(members)
@@ -123,7 +123,9 @@ class TraceAADV1024(TraceAADV1021):
                 raise ValueError('donor and anchor must use the same training instances')
             complement[p['id']] = sum(max(a - b, 0) for a, b in zip(base, scores)) / len(base)
         ranked = sorted(complement, key=lambda i: (-complement[i], stable_key(self.config.seed, i)))
-        top, rest = ranked[:3], ranked[3:]
+        cutoff = complement[ranked[min(3, len(ranked)) - 1]]
+        top = [i for i in ranked if complement[i] >= cutoff]
+        rest = [i for i in ranked if complement[i] < cutoff]
         pool = self.reference_rng.choice([top, rest]) if rest else top
         pid = self.reference_rng.choice(pool)
         return pid, {'complementarity': {str(i): c for i, c in complement.items()},
@@ -131,74 +133,63 @@ class TraceAADV1024(TraceAADV1021):
                      'member_probability': 1 / len(pool)}
 
     def _allocate(self):
-        groups = self._frontier()
-        if not groups:
+        remaining = self.config.budget - self.attempts
+        if remaining <= 0:
             self.progress.phase = 'freeze'
             self._save()
             return
-        remaining = self.config.budget - self.attempts
-        nominal = PURPOSES[self.policy['slot'] % 4]
-        limit = min(self.policy['quota'], remaining)
-        purpose, unit = nominal, None
-        admitted = {pid for g in groups for pid in g['members']}
-        waiting = [u for u in self.policy['units'] if u['status'] == 'waiting' and len(u['block_ids']) < 2]
-        promised = [u for u in waiting if u['promised']]
-        eligible_ids = [u['id'] for u in waiting if u['promised'] or u['champion_id'] in admitted]
-        reason = None
-        if purpose == 'continuation' and not self.policy['reflow']:
-            eligible = promised or [u for u in waiting if u['champion_id'] in admitted]
-            if eligible and limit == self.config.block_size:
-                unit = min(eligible, key=lambda u: (u['waiting_since'], stable_key(self.config.seed, u['id'])))
-                reason = 'precommitted' if unit['promised'] else 'current_frontier'
-            else:
-                purpose = 'front_refine' if (self.policy['slot'] // 4) % 2 == 0 else 'new_question'
-                reason = 'no_eligible_continuation'
-        if self.policy['reflow']:
-            purpose, reason = 'front_refine', 'unused_allocation'
-        if unit is None:
-            limit = min(limit, remaining - self.policy['reserved'])
-            if limit <= 0:
-                # Only a promised second block can own all remaining candidates.
-                unit = promised[0]
-                purpose, limit, reason = 'continuation', min(remaining, self.config.block_size), 'reserved_tail'
-            elif limit < self.config.block_size:
-                purpose, reason = 'front_refine', reason or 'short_tail'
-                if remaining - self.policy['reserved'] < self.config.block_size:
-                    limit, reason = 1, 'short_tail'
-        if unit is None:
+        groups = self._frontier()
+        waiting = [u for u in self.policy['units'] if u['status'] == 'waiting']
+        # A local opener that cannot fit blocks only this source/base pair, not the program.
+        blocked = {(u['source'], u['anchor_id']) for u in self.policy['units']
+                   if not u['trial_ids'] and u['closure_reason'] == 'local_context_too_long'}
+        source = None
+        for offset in range(len(SOURCES)):
+            candidate = SOURCES[(len(self.policy['units']) + offset) % len(SOURCES)]
+            available = [{**g, 'members': [pid for pid in g['members'] if (candidate, pid) not in blocked]}
+                         for g in groups]
+            available = [g for g in available if g['members']]
+            if available:
+                source, groups = candidate, available
+                break
+        if source is None:
+            groups = []
+        if not groups and not waiting:
+            self.progress.phase = 'freeze'
+            self._save()
+            return
+        preferred = self.policy['next_decision']
+        continuing = bool(waiting) and (preferred == 'continuation' or not groups)
+        purpose = 'continuation' if continuing else 'new'
+        if continuing:
+            unit = min(waiting, key=lambda u: (u['waiting_since'], u['id']))
+            reason = 'oldest_waiting'
+        else:
             anchor, selection = self._parent(groups)
-            donor, donor_selection = self._donor(anchor) if purpose == 'front_transfer' else (None, None)
-            axis = None
-            if purpose == 'new_question':
-                counts = Counter(u['axis'] for u in self.policy['units'] if u['purpose'] == 'new_question')
-                least = min(counts[i] for i in range(len(AXES)))
-                choices = [i for i in range(len(AXES)) if counts[i] == least]
-                axis = self.action_rng.choice(choices)
-                selection.update(axis_candidates=choices, axis_probability=1 / len(choices))
-            linked = [u['id'] for u in self.policy['units'] if anchor in
-                      (u['anchor_id'], u['champion_id'], u['worktip_id']) or
-                      axis is not None and u['axis'] == axis]
-            unit = {'id': len(self.policy['units']) + 1, 'purpose': purpose, 'axis': axis,
-                    'request_key': f'{self.task}:{target(self.template).name}:{axis if axis is not None else purpose}',
-                    'question': AXES[axis] if axis is not None else 'Improve one concrete computation in the supplied anchor.',
+            donor, donor_selection = self._donor(anchor) if source == 'Crossover' else (None, None)
+            # The producer precedes other units that merely used the same program.
+            linked = [u for u in self.policy['units'] if any(
+                self.attempts_table[i]['program_id'] == anchor for i in u['trial_ids'])
+                or u['anchor_id'] == anchor]
+            linked.sort(key=lambda u: (self.programs[anchor]['attempt_id'] not in u['trial_ids'], -u['id']))
+            unit = {'id': len(self.policy['units']) + 1, 'source': source,
+                    'request_key': f'{self.task}:unit:{len(self.policy["units"]) + 1}',
+                    'question': None,
                     'anchor_id': anchor, 'proposal_id': None, 'champion_id': None, 'worktip_id': anchor,
                     'pending_failure': None, 'donor_id': donor, 'trial_ids': [], 'block_ids': [],
-                    'linked_unit_ids': linked, 'status': 'active', 'promised': False, 'blocks_authorized': 1,
+                    'linked_unit_ids': [u['id'] for u in linked], 'status': 'active',
                     'selection': selection, 'donor_selection': donor_selection,
                     'closure_reason': None, 'waiting_since': None, 'events': {}}
             self.policy['units'].append(unit)
-            if purpose == 'front_transfer' and donor is None:
-                reason = 'no_distinct_reference'
-        elif unit['promised']:
-            self.policy['reserved'] -= self.config.block_size
-            unit['promised'] = False
+            reason = 'source_cycle' if source != 'Crossover' or donor else 'no_distinct_reference'
+        self.policy['next_decision'] = 'new' if continuing else 'continuation'
         unit['status'] = 'active'
-        unit['blocks_authorized'] = max(unit['blocks_authorized'], len(unit['block_ids']) + 1)
-        block = {'id': len(self.policy['blocks']) + 1, 'unit_id': unit['id'], 'nominal': nominal,
-                 'purpose': purpose, 'allocation_reason': reason, 'limit': limit, 'spent': 0,
+        block = {'id': len(self.policy['blocks']) + 1, 'unit_id': unit['id'],
+                 'purpose': purpose, 'preferred': preferred, 'allocation_reason': reason,
+                 'limit': min(self.config.block_size, remaining), 'spent': 0,
                  'start_frontier': min(p['fitness'] for p in self.archive.values()), 'best_new_id': None,
                  'start_after': self.attempts, 'closed_after': None, 'frontier_gain': None,
-                 'eligible_units': eligible_ids}
+                 'eligible_units': [u['id'] for u in waiting]}
         self.policy['blocks'].append(block)
         self.policy['active'] = block['id']
         unit['block_ids'].append(block['id'])
@@ -217,58 +208,36 @@ class TraceAADV1024(TraceAADV1021):
         pid = int(declared) if re.fullmatch(r'\d+', declared) else None
         chosen = pid if pid in request['available_bases'] else request['system_default_base_id']
         if request['delivery_mode'] == 'edit':
-            request['edit_base_mismatch'] = pid in request['available_bases'] and pid != request['system_default_base_id']
+            request['edit_base_mismatch'] = pid is not None and pid != request['system_default_base_id']
             chosen = request['system_default_base_id']
         request['edit_base_id'] = chosen if request['delivery_mode'] == 'edit' else None
         request.update(declared_base_id=pid, base_fallback_reason=None if chosen == pid else 'missing_or_unavailable_base',
                        control=fields, recorded_diff_base_id=chosen)
-        # Decision made before code evaluation; persisted atomically with this candidate.
-        first = not self.unit['trial_ids'] and request['action'] == 'Explore' and self.unit['purpose'] == 'new_question'
-        has_proposal = False
-        if first and two_block_plan(fields):
-            try:
-                self._parse_candidate(request, details, self.programs[chosen])
-                has_proposal = True
-            except SourceError:
-                has_proposal = True
-            except DeliveryError:
-                pass
-        admitted = (first and has_proposal and two_block_plan(fields)
-                    and self.policy['reserved'] == 0
-                    and self.block['limit'] == self.config.block_size
-                    and self.config.budget - self.attempts - (self.block['limit'] - self.block['spent'])
-                    >= self.config.block_size)
-        request['plan_admission'] = 'accepted_before_evaluation' if admitted else 'single_block'
         return self.programs[chosen]
 
     def _record_trial(self, a, new, evaluations):
         unit, block = self.unit, self.block
         assert a['unit_id'] == unit['id'] and block['spent'] < block['limit']
-        first = not unit['trial_ids']
         unit['trial_ids'].append(a['id'])
         block['spent'] += 1
         p = new or self.programs.get(a['program_id'])
         fields = a['control']
-        if first:
-            unit['proposal_id'] = p['id'] if p else None
-            if fields.get('change') and fields.get('effect'):
-                unit['question'] = fields['change'] + ' -> ' + fields['effect']
-            unit['events']['first_proposal'] = a['id']
-        elif unit['proposal_id'] is None and p:
-            unit['proposal_id'] = p['id']
-        if a['plan_admission'] == 'accepted_before_evaluation':
-            unit.update(promised=True, blocks_authorized=2, plan=fields)
-            self.policy['reserved'] += self.config.block_size
+        if not unit['question']:
+            unit['question'] = fields.get('question') or fields.get('effect')
+        if unit['proposal_id'] is None:
+            if p:
+                unit['proposal_id'] = p['id']
+                unit['events']['first_proposal'] = a['id']
         if p:
             base = self.programs[a['parent_id']]
             a['actual_diff'] = code_diff(base['code'], p['code'])
-            if new and p['valid']:
+            if p['valid']:
                 unit['worktip_id'] = p['id']
                 champion = self.programs.get(unit['champion_id'])
                 if champion is None or p['fitness'] < champion['fitness']:
                     unit['champion_id'] = p['id']
                 best = self.programs.get(block['best_new_id'])
-                if best is None or p['fitness'] < best['fitness']:
+                if new and (best is None or p['fitness'] < best['fitness']):
                     block['best_new_id'] = p['id']
                 unit['events'].setdefault('first_valid', a['id'])
                 if p['fitness'] < self.programs[unit['anchor_id']]['fitness']:
@@ -276,17 +245,15 @@ class TraceAADV1024(TraceAADV1021):
                 if p['fitness'] < block['start_frontier']:
                     unit['events'].setdefault('first_global_gain', a['id'])
                 roots = [p['id'] for p in self.archive.values() if self._is_root(p)]
-                groups = frontier({**self.programs, new['id']: new}, self.facts.evaluations + evaluations,
+                groups = frontier({**self.programs, p['id']: p}, self.facts.evaluations + evaluations,
                                   roots, self.policy['units'], self.config.frontier_groups,
                                   self.config.seed, self.policy['excluded'])
                 if any(unit['champion_id'] in g['members'] for g in groups):
                     unit['events'].setdefault('first_frontier', a['id'])
                 unit['pending_failure'] = None
-            elif new:
-                unit['pending_failure'] = p['id']
             else:
-                # A duplicate is paid evidence, not a new champion or a free repair.
-                unit['pending_failure'] = None
+                unit['pending_failure'] = p['id']
+            if not new:
                 a['duplicate_of'] = p['id']
                 related = [u['id'] for u in self.policy['units'] if u['id'] != unit['id'] and p['id'] in
                            (u['anchor_id'], u['proposal_id'], u['champion_id'], u['worktip_id'])]
@@ -306,27 +273,12 @@ class TraceAADV1024(TraceAADV1021):
         if unit['champion_id'] in admitted:
             unit['events'].setdefault('first_frontier', self.attempts)
         terminal = unit['status'] == 'closed' or reason != 'block_complete' or len(unit['block_ids']) >= 2
-        if terminal or unit['purpose'] != 'new_question':
-            unit.update(status='closed', closure_reason=unit['closure_reason'] or reason)
-            if unit['promised']:
-                self.policy['reserved'] -= self.config.block_size
-                unit['promised'] = False
+        if terminal:
+            unit.update(status='closed', closure_reason=unit['closure_reason'] or
+                        ('unit_limit' if len(unit['block_ids']) >= 2 and reason == 'block_complete' else reason))
         else:
             unit.update(status='waiting', waiting_since=self.attempts)
-        # A reserved final block may span a partially consumed nominal slot.
-        uncharged = block['spent']
-        block['nominal_allocations'] = []
-        while uncharged:
-            charged = min(uncharged, self.policy['quota'])
-            block['nominal_allocations'].append({'slot': self.policy['slot'],
-                'purpose': PURPOSES[self.policy['slot'] % 4], 'spent': charged})
-            uncharged -= charged
-            self.policy['quota'] -= charged
-            if self.policy['quota'] == 0:
-                self.policy.update(slot=self.policy['slot'] + 1, quota=self.config.block_size)
-        self.policy['reflow'] = self.policy['quota'] != self.config.block_size or block['spent'] == 0
         self.policy['active'] = None
-        assert 0 <= self.policy['reserved'] <= self.config.budget - self.attempts
         self._save()
 
     def _search(self):
@@ -348,31 +300,30 @@ class TraceAADV1024(TraceAADV1021):
         failed = unit['pending_failure']
         first = not unit['trial_ids']
         action = ('Repair' if failed else
-                  'Explore' if first and unit['purpose'] == 'new_question' else
-                  'Crossover' if first and unit['donor_id'] else
+                  unit['source'] if first and (unit['source'] != 'Crossover' or unit['donor_id']) else
                   'Refine' if first else 'Develop')
         if unit['trial_ids'] and self.attempts_table[unit['trial_ids'][-1]]['status'] == 'delivery_failed' and not failed:
             action = self.attempts_table[unit['trial_ids'][-1]]['action']
         default = failed or unit['worktip_id']
-        linked = [self.policy['units'][i - 1] for i in unit['linked_unit_ids'][-3:]]
+        linked = [self.policy['units'][i - 1] for i in unit['linked_unit_ids']]
+        linked.sort(key=lambda u: (self.programs[unit['anchor_id']]['attempt_id'] not in u['trial_ids'], -u['id']))
         paired = ([values(score_vector(self.programs[pid], self.facts.evaluations))
                    for pid in (unit['anchor_id'], unit['donor_id'])] if unit['donor_id'] else None)
         try:
             request = self.prompts.request(unit, block, action, default, linked, paired)
+        except BaseContextTooLong:
+            if default not in self.policy['excluded']:
+                self.policy['excluded'].append(default)
+            self._close_block('base_context_too_long')
+            return
         except ContextTooLong:
-            if unit['donor_id'] and first:
-                unit['donor_id'] = None
-                block['allocation_reason'] = 'reference_context_fallback'
-                self._save()
-                return
-            if not block['spent']:
-                self.policy['excluded'].append(unit['anchor_id'])
-            self._close_block('required_context_too_long')
+            self._close_block('local_context_too_long')
             return
         request.update(unit_id=unit['id'], block_id=block['id'], resource_purpose=block['purpose'],
                        request_key=unit['request_key'], request_statement=unit['question'])
         self._attempt(request, parent=self.programs[default],
-                      reference=self.programs.get(unit['donor_id']), repair_of=failed)
+                      reference=self.programs.get(unit['donor_id']) if unit['donor_id'] in request['material_ids'] else None,
+                      repair_of=failed)
 
     def _summary(self, status, error=None):
         summary = Search._summary(self, status, error)
@@ -381,9 +332,10 @@ class TraceAADV1024(TraceAADV1021):
             costs[b['purpose']] += b['spent']
         summary['development'] = {
             'units': len(self.policy['units']), 'blocks': len(self.policy['blocks']),
-            'candidate_cost_by_purpose': dict(costs), 'reserved': self.policy['reserved'],
+            'candidate_cost_by_purpose': dict(costs),
+            'remaining_candidates': self.config.budget - self.attempts,
             'frontier_gain': sum(b['frontier_gain'] or 0 for b in self.policy['blocks']),
-            'new_question_proposals': sum(u['purpose'] == 'new_question' and bool(u['trial_ids']) for u in self.policy['units']),
+            'new_question_proposals': sum(u['source'] == 'Explore' and bool(u['trial_ids']) for u in self.policy['units']),
         }
         self.facts.save_summary(summary)
         return summary

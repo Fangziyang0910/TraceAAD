@@ -19,15 +19,16 @@ TASK_CARDS = {
 GOALS = {
     "Init": "Create a complete useful starting implementation. Use the supplied solver facts to explain how its output affects the final solution. Avoid repeating the concrete computations shown without a reason.",
     "Refine": "Refine one concrete part of the anchor's computation. A parameter, representation, implementation or output mapping can be the right target. Complete all edits needed for this one change and preserve independent useful computations. Explain the downstream effect, not the edit size.",
-    "Explore": "Investigate the supplied solver-effect question. Choose one concrete mechanism and implement its first test on the anchor, keeping mature independent parts. A small change with a meaningful effect is valid. Completion, simulation and local improvement are also allowed. If ranking, normalization, masking or unavailable state cancels the proposed effect, choose a compatible implementation.",
+    "Explore": "Identify and investigate one concrete solver-effect question. Choose one concrete mechanism and implement its first test on the anchor, keeping mature independent parts. A small change with a meaningful effect is valid. Completion, simulation and local improvement are also allowed. If ranking, normalization, masking or unavailable state cancels the proposed effect, choose a compatible implementation.",
     "Crossover": "Identify one concrete computation in the reference that could help the anchor. Explain its connection point, required inputs/state and downstream effect. Implement the integration and resolve normalization, filtering and return-contract interactions. Paired scores suggest complementarity but do not identify the causal component. A weaker reference can still help.",
-    "Develop": "Continue the same concrete request. Identify which requested computations exist in the working implementation, which were removed, and which remain unconnected to its return. Choose a supplied base and complete the next coherent change. Temporary score loss within the block is allowed. Replacing an implementation is not evidence that the original mechanism matured; explain the actual change.",
+    "Develop": "Investigate the current solver-effect question using the observed trials. The first Change was a tested hypothesis, not an instruction to repeat. Explain what the results support or contradict, which useful computations remain, and what the next change will test. Temporary score loss is allowed; the host separately retains the best result. A rollback may support a different next test, but returning to a known program produces no new evidence. Do not cycle between tested alternatives. If the question is resolved or you have no justified next test, declare change_request to close this unit; you may return the unchanged bound program. Replacing an implementation does not show that the original mechanism matured.",
     "Repair": "Repair the failed implementation using the actual failure evidence. For execution failure inspect repeated work, shared/batched/incremental computations and the placement of internal search. Retain the intended output effect where feasible. State which computations you retain, change or remove. Replacing code can serve the same question; explicitly declare change_request if you abandon that question. Call progress does not estimate an overshoot factor.",
 }
 
 OUTPUT = """[Output Format]
 Analysis: (about 120 words total)
 Base: <one ID from available_bases; explain a return to anchor/champion in Evidence>
+Question: <solver behavior to investigate, separate from this particular implementation>
 Change: <one concrete computation and code location>
 Effect: <how the returned value changes the solver's behavior>
 Evidence: <relevant observation, base choice and remaining uncertainty>
@@ -42,10 +43,11 @@ Write no comments or docstrings in the code, and nothing after the code block.
 # Escape marker starts so Git does not treat the prompt as an unresolved merge.
 EDIT_OUTPUT = """[Output Format]
 Analysis: (about 120 words total)
+Question: <on the first trial, the solver-effect question; on later trials, retain that question>
 Change: <one solver-effect change, including all code locations that must change together>
 Effect: <how the returned value changes the solver's behavior>
 Evidence: <observed results and what remains uncertain>
-Status: <continue_request or change_request, with a reason>
+Status: <continue_request for another test; change_request to close a resolved or abandoned question, with a reason>
 Design: <at most 60 words describing the resulting algorithm>
 Edits:
 \x3c<<<<<< SEARCH
@@ -67,17 +69,14 @@ If the program is short or a broad rewrite is clearer, use Code: followed by one
 complete Python code block INSTEAD of Edits. Only for complete Code, an optional
 Base: ID in Analysis may select another fully supplied base; explain it in Evidence.
 Edits always target the host-bound base: omit Base, and do not copy a hash.
+Copy SEARCH from that current source, never from a historical diff or failed edit.
+Prefer short unique SEARCH fragments to copying long unchanged bodies. Preserve
+all source whitespace in SEARCH. Check that the replacement is not already present.
 Keep the original interface and include required imports/helpers. Add no comments
 or docstrings. Formatting wrappers are optional; return only one delivery mode.
 """
-PLAN = """Only the first new-question proposal may optionally add these separate Analysis lines (about 80 words):
-Plan: two blocks
-Stage 1: <concrete first work>
-Stage 2: <dependent second work>
-Dependency: <why the second requires the first>
-Location: <actual code locations>
-Otherwise omit Plan or write Plan: single block. Admission is decided before this candidate is scored.
-"""
+class BaseContextTooLong(ContextTooLong):
+    """The task contract and this complete edit base alone cannot fit."""
 
 
 class PromptBuilder(PreviousPrompts):
@@ -98,7 +97,7 @@ class PromptBuilder(PreviousPrompts):
         shown = list(roots[-2:])
         while True:
             result = self._result(self.common + [self.code(p["id"], "Earlier root") for p in shown]
-                + ["[Your Task: Init]\n" + GOALS["Init"], "Requested angle: " + AXES[len(roots) % len(AXES)], OUTPUT], "Init")
+                + ["[Your Task: Init]\n" + GOALS["Init"], "Optional thinking aids (choose only if useful): " + "\n".join(AXES), OUTPUT], "Init")
             if result["input_tokens"] <= self.config.max_input_tokens:
                 return result
             if not shown:
@@ -114,57 +113,116 @@ class PromptBuilder(PreviousPrompts):
             raise ContextTooLong("failed initial source exceeds context")
         return result
 
-    def trial(self, a):
+    def trial(self, a, *, detail=True):
         p = self.programs.get(a.get("program_id"))
         before = self.programs.get(a.get("parent_id"))
+        outcome = self.failure(p) if p and not p["valid"] else p["fitness"] if p else a.get("error")
+        text = (f"Trial {a['id']}: {a['action']}, base={a.get('parent_id')}, code={a.get('program_id')}, "
+                f"repair_of={a.get('repair_of')}, status={a['status']}, result={outcome}")
+        if not detail:
+            return text
         diff = a.get("actual_diff")
         if diff is None and p and before:
             diff = code_diff(before["code"], p["code"])
-        outcome = self.failure(p) if p and not p["valid"] else p["fitness"] if p else a.get("error")
-        return (f"Trial {a['id']}: {a['action']}, base={a.get('parent_id')}, code={a.get('program_id')}, "
-                f"repair_of={a.get('repair_of')}, status={a['status']}, result={outcome}\n"
-                f"Actual diff:\n{diff or '(no source change available)'}" +
+        return (text + "\nReported reasoning (not verified): " + a.get('control', {}).get('analysis', '') +
+                f"\nActual diff:\n{diff or '(no source change available)'}" +
                 ("\nUnapplied edit submission (not program state):\n" + a['failed_edit_submission']
                  if a.get('failed_edit_submission') else ''))
 
     def request(self, unit, block, action, default, linked, paired=None):
-        roles = [(default, 'Host-bound editing base'), (unit['anchor_id'], 'Anchor'), (unit['worktip_id'], 'Working implementation'),
-                 (unit['champion_id'], 'Best NEW implementation'), (unit['proposal_id'], 'Original proposal'),
-                 (unit['pending_failure'], 'Failed implementation'), (unit['donor_id'], 'Reference')]
-        ids = list(dict.fromkeys(pid for pid, _ in roles if pid is not None))
-        bases = [pid for pid in ids if pid != unit['donor_id'] or pid == default]
-        sections = self.common + [
-            "[Current Request]\n" + json.dumps({"id": unit['id'], "purpose": block['purpose'],
-                "question": unit['question'], "axis": unit['axis'], "block": len(unit['block_ids']),
-                "blocks_authorized": unit['blocks_authorized'], "spent_on_request": len(unit['trial_ids']),
-                "attempts_remaining": block['limit'] - block['spent']}, ensure_ascii=False),
-            "[Committed Dependency Plan]\n" + json.dumps({k: unit.get('plan', {}).get(k)
-                for k in ('stage_1', 'stage_2', 'dependency', 'location')}) if unit.get('plan') else '',
-            "[Code Roles]\n" + json.dumps({role: pid for pid, role in roles}) +
-                f"\navailable_bases={bases}; system_default_base={default}",
-            *[self.code(pid, 'HOST-BOUND EDITING BASE' if pid == default else 'Supplied reference snapshot') for pid in ids],
-            "[Complete Request Ledger]\n" + "\n\n".join(self.trial(self.attempts[i]) for i in unit['trial_ids']),
-            "Use the actual code changes and outcomes to decide what to try next. Prior Design text and "
-            "the dependency plan are hypotheses, not proof of implementation or benefit. Avoid repeating "
-            "the same tested change under the same conditions without new evidence. When opening a "
-            "request from related work, state a concrete next problem rather than renaming the old one.",
-        ]
-        if paired:
-            sections.append("[Paired training outcomes: anchor, donor]\n" + json.dumps(paired))
-        extras = list(linked)
-        trims = []
-        while True:
-            history = [f"[Related request {u['id']} / cost {len(u['trial_ids'])} / question {u['question']}]\n" +
-                       "\n\n".join(self.trial(self.attempts[i]) for i in u['trial_ids']) for u in extras]
-            result = self._result(sections + history + ["[Your Task: " + action + "]\n" + GOALS[action],
-                PLAN if unit['purpose'] == 'new_question' and not unit['trial_ids'] else '', EDIT_OUTPUT], action, trims=trims)
-            if result['input_tokens'] <= self.config.max_input_tokens:
-                result.update(available_bases=bases, system_default_base_id=default,
-                    material_ids=ids, attempt_ids=list(unit['trial_ids']),
-                    related_trial_ids=[i for u in extras for i in u['trial_ids']],
-                    linked_unit_ids=unit['linked_unit_ids'], context_version='v1024-edit-1',
-                    prompt_hash=stable_key('prompt', result['prompt']))
+        # Archive completeness and prompt completeness have different responsibilities.
+        sections = self.common + [self.code(default, 'HOST-BOUND EDITING BASE'),
+            f"available_bases={[default]}; system_default_base={default}. "
+            "Only this complete source may be selected as a base. Historical diffs are evidence, not editable snapshots."]
+        ending = ["[Your Task: " + action + "]\n" + GOALS[action],
+                  f"[Delivery target] Edit code {default}, the complete HOST-BOUND EDITING BASE above. "
+                  "Historical changes and failed submissions are observations, not current instructions or source.", EDIT_OUTPUT]
+        def render(extra=()):
+            return self._result(sections + list(extra) + ending, action)
+        if self._result(sections + [EDIT_OUTPUT], action)['input_tokens'] > self.config.max_input_tokens:
+            raise BaseContextTooLong('task contract and complete editing base exceed context')
+        current = "[Current Request]\n" + json.dumps({
+            "id": unit['id'], "source": unit['source'], "purpose": block['purpose'],
+            "question": unit['question'], "block": len(unit['block_ids']),
+            "max_blocks": 2, "spent_on_request": len(unit['trial_ids']),
+            "attempts_remaining": block['limit'] - block['spent'],
+            "future_block": "unallocated" if len(unit['block_ids']) < 2 else "none",
+            "roles": {k: unit[k] for k in ('anchor_id', 'worktip_id', 'champion_id', 'proposal_id', 'pending_failure', 'donor_id')}
+        }, ensure_ascii=False)
+        latest = unit['trial_ids'][-1:]
+        required = [current] + [self.trial(self.attempts[i], detail=False) for i in unit['trial_ids']]
+        if render(required)['input_tokens'] > self.config.max_input_tokens:
+            raise ContextTooLong('current question and latest feedback exceed local context')
+        sections += required
+        shown_trials, related_trials = list(unit['trial_ids']), []
+        materials, excerpts, omitted = [default], [], []
+
+        def include(label, text):
+            if render([text])['input_tokens'] <= self.config.max_input_tokens:
+                sections.append(text)
+                return True
+            omitted.append(label)
+            return False
+
+        # A transfer needs actual donor code; if it cannot fit, record a refinement fallback.
+        donor = unit['donor_id']
+        if action == 'Crossover' and donor is not None:
+            if include(f'donor:{donor}', self.code(donor, 'REFERENCE ONLY')):
+                materials.append(donor)
+                if paired:
+                    include('paired_scores', '[Paired training outcomes: anchor, donor]\n' + json.dumps(paired))
+            else:
+                result = self.request(unit, block, 'Refine', default, linked)
+                result['trims'].append('donor_unavailable:refine_fallback')
                 return result
-            if not extras:
-                raise ContextTooLong('required code roles and complete request ledger exceed context')
-            trims.append(f"related_unit:{extras.pop(0)['id']}")
+
+        # Recent transitions, the original proposal and repair removals precede other history.
+        ids = list(dict.fromkeys(list(reversed(unit['trial_ids'][-2:])) + unit['trial_ids'][:1] +
+                   [i for i in reversed(unit['trial_ids']) if self.attempts[i].get('repair_of')] +
+                   list(reversed(unit['trial_ids']))))
+        for i in ids:
+            a = self.attempts[i]
+            if include(f'trial_detail:{i}', self.trial(a)):
+                if i not in shown_trials:
+                    shown_trials.append(i)
+            else:
+                if i not in shown_trials and include(f'trial_outcome:{i}', self.trial(a, detail=False)):
+                    shown_trials.append(i)
+                # Keep complete diff hunks rather than cut arbitrary code lines.
+                diff = a.get('actual_diff', '')
+                for n, hunk in enumerate(diff.split('\n@@')):
+                    if hunk and include(f'trial_hunk:{i}:{n}',
+                            f'[Trial {i}: partial diff, other hunks may be omitted]\n' +
+                            ('@@' if n else '') + hunk):
+                        excerpts.append({'trial_id': i, 'hunk': n})
+
+        related_budget = self.config.history_depth
+        for u in linked:
+            producer = self.programs[unit['anchor_id']]['attempt_id']
+            related_ids = sorted(u['trial_ids'], key=lambda i: (i != producer, -i))
+            for i in related_ids[:related_budget]:
+                related_budget -= 1
+                heading = f'[Source-related request {u["id"]}]\n'
+                if (i == producer and include(f'producer_detail:{i}', heading + self.trial(self.attempts[i]))
+                        or include(f'related:{u["id"]}:{i}', heading + self.trial(self.attempts[i], detail=False))):
+                    related_trials.append(i)
+        seen = {default}
+        for role in ('proposal_id', 'champion_id', 'anchor_id', 'worktip_id', 'donor_id'):
+            pid = unit[role]
+            if pid is None or pid in seen or pid in materials:
+                continue
+            seen.add(pid)
+            p = self.programs[pid]
+            outcome = p['fitness'] if p['valid'] else self.failure(p)
+            diff = code_diff(self.programs[default]['code'], p['code'])
+            include(f'role_diff:{role}:{pid}',
+                    f'[{role}: code {pid}, result={outcome}, diff FROM editing base {default}; not a selectable base]\n' + diff)
+        if action == 'Explore':
+            include('thinking_aids', '[Optional thinking aids; no required axis or quota]\n' + '\n'.join(AXES))
+        result = render()
+        result.update(available_bases=[default], system_default_base_id=default,
+            material_ids=materials, attempt_ids=shown_trials, related_trial_ids=related_trials,
+            evidence_excerpts=excerpts, omitted_materials=omitted, trims=omitted,
+            linked_unit_ids=[u['id'] for u in linked], context_version='v1024-context-3',
+            prompt_hash=stable_key('prompt', result['prompt']))
+        return result

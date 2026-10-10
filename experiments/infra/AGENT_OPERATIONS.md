@@ -49,11 +49,13 @@ uv run python -m experiments.infra.local_queue --method funsearch --suite co6 --
 
 ## 等待、检索和同步
 
-训练可视化使用本地 `8765` 端口（`http://127.0.0.1:8765/`）。先检查该端口；服务未运行时，用 `uv run python -m experiments.monitor --host 0.0.0.0 --port 8765` 启动。不指定 `--experiment` 时默认展示最近更新的批次；版本对比默认选中该 TraceAAD 批次和全部基线方法。查看其他批次用链接中的 `#b=<批次>`。页面读取本地档案，运行中路次显示最近同步的快照；文件变化会刷新缓存。核验 `/api/state?batch=traceaad_v10_16` 的路次数、曲线和 ETA，并用 `/api/compare?cohorts=traceaad_v10_16` 核验测试结果。
+训练可视化使用本地 `8765` 端口（`http://127.0.0.1:8765/`）。先检查该端口；服务未运行时，用 `uv run python -m experiments.monitor --host 0.0.0.0 --port 8765` 启动。不指定 `--experiment` 时默认展示最近更新的批次；版本对比默认选中该 TraceAAD 批次和全部基线方法。查看其他方法用链接中的 `#b=<方法目录>`。运行监控默认筛选该方法的最新启动批次，也可选全部或具体批次；`#b=<方法目录>&rb=<启动批次>`固定条件，`rb=latest`跟随最新批次。API用`/api/state?batch=<方法目录>&run_batch=<启动批次或latest>`筛选，不传run_batch则返回全部。页面读取本地档案，运行中路次显示最近同步的快照；文件变化会刷新缓存。核验 `/api/state?batch=traceaad_v10_16` 的路次数、曲线和 ETA，并用 `/api/compare?cohorts=traceaad_v10_16` 核验测试结果。
 
 V10.15–V10.19 共用生成、评价和结果保存，各版本仍写到原版本目录。日常读取只使用 `events.jsonl`、`programs.jsonl`、`resume.json`、`summary.json`、`selection.json` 和平面的 `heldout.json`。原始模型请求与回复单独保存于 `calls.jsonl`，结束后压缩。诊断入口为 `uv run python -m experiments.traceaad_v10_17.diagnose --run-dir <目录>`，其他当前版本同样提供。格式、恢复条件和历史迁移见[实验与结果](SEARCH_FORMAT.md)。
 
 横轴单位来自 `run_config.json` 的 `budget_axis`，候选编号和实际预算分别保留。曲线显示迄今最佳训练成绩，并延伸到最后一条已记录的预算位置。列表、最近候选、有效率和预算共用一个增量投影；有效率的分母是全部候选记录数。
+
+V10.24详情还显示开发问题、工作版／单元最好版、分段实际支出、逐次结果，以及edit/full评价、缓存和交付失败统计。显式停止的批次以清单停止标记为准，不被旧运行总结覆盖。
 
 详情显示搜索最优和最终选中程序。源码按内容哈希从 `programs.jsonl` 读取。带身份的测试结果须与冻结的最终程序一致；不一致或无法核验的记录不进入比较。
 

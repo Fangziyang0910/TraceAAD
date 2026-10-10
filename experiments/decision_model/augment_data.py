@@ -2,6 +2,7 @@
 
 import experiments  # noqa: F401
 import argparse
+from collections import Counter
 import hashlib
 import json
 from pathlib import Path
@@ -41,6 +42,8 @@ def main():
         (args.output / f"{split}.jsonl").write_text(''.join(json.dumps(row, ensure_ascii=False) + '\n' for row in values))
     load_splits(args.output)
     metadata.update(rows={s: len(v) for s, v in rows.items()},
+        sources=[{"run_id": run, "split": split, "rows": count}
+                 for split, values in rows.items() for run, count in Counter(r["run_id"] for r in values).items()],
         augmentation="independent repeated labels replace historical samples at the same selected state; training enrichment only",
         source_datasets=[str(p) for p in (args.observed, args.pilot, args.enriched)],
         reward_support={"2": reward_support(rows["train"])},

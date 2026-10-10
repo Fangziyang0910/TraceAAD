@@ -7,16 +7,10 @@ Usage, from the repository root:
     CUDA_VISIBLE_DEVICES=0 python experiments/decision_model/train.py DATA OUTPUT
     CUDA_VISIBLE_DEVICES=0 python experiments/decision_model/train.py DATA SMOKE --max-steps 10
 
-DATA contains train.jsonl, calibration.jsonl and test.jsonl. Each row has:
-    {"run_id": "task/batch/rep0", "state": "code and past results",
-     "questions": {"operator": {"type": "choice", "instructions": "Choose the next step",
-        "criteria": {"Refine": "Keep the core computation and improve it",
-                     "Explore": "Change the core computation",
-                     "Crossover": "Borrow computation from the supplied reference"}}},
-     "gold": {"operator": "Refine"}}
-
-This is a format example, not a labeled observation. Gold labels must come from
-measured comparisons. Split entire search runs before writing the three files.
+DATA contains train.jsonl, calibration.jsonl and test.jsonl. Current questions
+predict frontier_gain and repair_used for an ordinary operator plus automatic
+Repair. Gold comes from measured outcomes, including soft distributions from
+independent repeated trials. Split entire source runs before writing the files.
 Short smoke runs validate execution, not decision quality. Inputs that would be
 truncated are rejected; shorten the state deliberately or raise --max-seq-length.
 """
@@ -102,6 +96,11 @@ def main():
             model, r=16, lora_alpha=16, lora_dropout=0,
             use_gradient_checkpointing="unsloth", random_state=args.seed,
         )
+    trainable = {"encoder_lora": sum(p.numel() for name, p in model.encoder.named_parameters()
+                                    if "lora_" in name and p.requires_grad),
+                 "decision_head": sum(p.numel() for p in model.head.parameters() if p.requires_grad)}
+    if not all(trainable.values()):
+        raise RuntimeError(f"both LoRA and the decision head must be trainable: {trainable}")
     items = {}
     for name, split in rows.items():
         items[name], report = FastDecisionModel.build_dataset(split, tokenizer, model)
@@ -125,9 +124,10 @@ def main():
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     run_config = {"arguments": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
+                  "training_script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                   "data_sha256": {f"{name}.jsonl": hashlib.sha256((args.data_dir / f"{name}.jsonl").read_bytes()).hexdigest()
                                   for name in rows},
-                  "model_config": model.encoder.config.to_dict()}
+                  "model_config": model.encoder.config.to_dict(), "trainable_parameters": trainable}
     config_path = args.output_dir / "run_config.json"
     if args.resume and config_path.exists():
         old = json.loads(config_path.read_text())

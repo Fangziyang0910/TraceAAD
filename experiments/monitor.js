@@ -16,6 +16,7 @@ const tip = $("tip");
 
 const S = {
   batch: "",
+  runBatch: new URLSearchParams(location.hash.slice(1)).get('rb') || 'latest',
   view: "monitor", data: null, fetchedAt: 0, structure: "", charts: new Map(), run: null, detail: null,
   timer: null, inflight: false, request: null,
 };
@@ -84,6 +85,7 @@ async function getJSON(url, {signal} = {}) {
 function hashParams() { return new URLSearchParams(location.hash.slice(1)); }
 function writeHash() {
   const params = new URLSearchParams({b: S.batch});
+  params.set('rb', S.runBatch);
   if (S.run) params.set("r", `${S.run.task}/${S.run.name}`);
   if (S.view === "compare") {
     params.set("v", "compare");
@@ -92,7 +94,7 @@ function writeHash() {
   }
   history.replaceState(null, "", `#${params}`);
 }
-const stateURL = b => `/api/state?batch=${encodeURIComponent(b)}`;
+const stateURL = b => `/api/state?batch=${encodeURIComponent(b)}` + (S.runBatch === 'all' ? '' : `&run_batch=${encodeURIComponent(S.runBatch)}`);
 const runURL = r => `/api/run?batch=${encodeURIComponent(r.batch)}&task=${encodeURIComponent(r.task)}&name=${encodeURIComponent(r.name)}`;
 
 function setLive(mode, text) {
@@ -151,6 +153,10 @@ async function refresh({force = false} = {}) {
 
 /* ---------- overview rendering (incremental) ---------- */
 function render(data) {
+  const select = $('run-batch');
+  select.replaceChildren(new Option('最新批次', 'latest'), new Option('全部批次', 'all'),
+    ...(data.run_batches || []).map(b => new Option(b, b)));
+  select.value = S.runBatch;
   renderKPIs(data);
   const tasks = data.tasks || [];
   const structure = tasks.map(t => `${t.key}:${t.runs.map(r => r.name).join(",")}`).join("|");
@@ -492,11 +498,36 @@ async function loadDetail() {
   }
 }
 
+function developmentHTML(dev, openUnits) {
+  if (!dev) return '';
+  const labels = {initialization: '初始化', new: '新开段', continuation: '续投段'};
+  const states = {active: '开发中', waiting: '待续投', closed: '已关闭'};
+  const reasons = {change_request: '模型结束问题', unit_limit: '达到两段上限',
+    budget_exhausted: '预算用尽', local_context_too_long: '局部材料超长', base_context_too_long: '完整基底超长'};
+  const total = Object.values(dev.costs).reduce((a, n) => a + n, 0);
+  const role = p => p ? `#${esc(p.id)} · ${p.valid ? fmt(p.fitness, 5) : '无效'}` : '–';
+  return `<section class="sec development"><h3>连续开发<small>${dev.units.length} 个单元 · 按新 → 旧展开</small></h3>
+    <div class="stack">${Object.entries(dev.costs).map(([k, n], i) => `<i style="width:${n / Math.max(1, total) * 100}%;background:${seriesColor(i)}" title="${esc(labels[k] || k)} ${n}"></i>`).join('')}</div>
+    <div class="legend">${Object.entries(dev.costs).map(([k, n]) => `<span>${esc(labels[k] || k)} <b>${n}</b></span>`).join('')}</div>
+    <p class="candidate-context">按已消耗候选计费；缓存回退与交付失败也占预算。工作版可暂时差于最好版。</p>
+    <table class="recent"><thead><tr><th>交付</th><th>尝试</th><th>进入评价</th><th>复用缓存</th><th>未交付</th></tr></thead><tbody>
+    ${Object.entries(dev.delivery).map(([mode, d]) => `<tr><td>${esc(mode)}</td><td>${d.attempts}</td><td>${d.evaluated}</td><td>${d.cached}</td><td>${d.failed}</td></tr>`).join('')}</tbody></table>
+    <div class="dev-units">${dev.units.slice().reverse().map(u => `<details class="dev-unit" data-id="${u.id}" ${openUnits.has(String(u.id)) || u.status === 'active' ? 'open' : ''}>
+      <summary><b>单元 ${u.id} · ${esc(u.source)}</b><span>${esc(states[u.status] || u.status)} · ${u.trial_ids.length} 次 / ${u.block_ids.length} 段</span></summary>
+      <p class="idea">${esc(u.question || '尚未形成问题')}</p>
+      <div class="legend"><span>起点 ${role(u.anchor)}</span><span>工作版 ${role(u.worktip)}</span><span>单元最好 ${role(u.champion)}</span>${u.pending_failure ? `<span>待修复 ${role(u.pending_failure)}</span>` : ''}</div>
+      <p class="candidate-context">${u.blocks.map((b, i) => `第 ${i + 1} 段（${esc(labels[b.purpose] || b.purpose)}）${b.spent}/${b.limit} 次`).join(' · ')}${u.closure_reason ? ` · ${esc(reasons[u.closure_reason] || u.closure_reason)}` : ''}</p>
+      <table class="recent"><thead><tr><th>候选 ← 基底</th><th>动作 / 交付</th><th>结果</th><th class="nr">成绩</th></tr></thead><tbody>
+      ${u.trials.map(t => `<tr><td>#${t.candidate} ← #${t.parent_id}</td><td>${esc(t.operator)} / ${esc(t.delivery_mode || '–')}</td><td>${esc(outcomeLabel(t.status))}${t.node_id != null ? ` → #${t.node_id}` : ''}</td><td class="nr">${fmt(t.result)}</td></tr>`).join('')}</tbody></table>
+    </details>`).join('')}</div></section>`;
+}
+
 function renderDetail(run) {
   const task = {...run.task_meta, key: run.task};
   const body = $("d-body");
   const scroll = body.scrollTop;
   const openCards = new Set([...body.querySelectorAll("details.bt[open]")].map(el => el.dataset.id));
+  const openUnits = new Set([...body.querySelectorAll('details.dev-unit[open]')].map(el => el.dataset.id));
   const t = run.timing || {};
   const best = bestFitness(run);
   const outcomes = Object.entries(run.outcomes || {}).sort((a, b) => b[1] - a[1]);
@@ -528,6 +559,7 @@ function renderDetail(run) {
       ${tile("预计完成", t.eta_at ? clock(t.eta_at) : run.updated_at ? `完成于 ${clock(run.updated_at)}` : "–")}
     </div>
     <section class="sec"><h3>历史最优曲线</h3><div class="d-chart"><canvas></canvas></div></section>
+    ${developmentHTML(run.development, openUnits)}
     <section class="sec"><h3>全局突破<small>${crumbs.length} 个 · 新 → 旧</small></h3>
       <div class="bts">${cards.map(({key, tag, program: p}) => `<details class="bt" data-id="${esc(key)}" ${openCards.has(key) ? "open" : ""}>
         <summary><span class="bt-id">#${esc(p.id ?? "–")}</span><span class="bt-op">${esc(p.operator && p.operator !== "unknown" ? p.operator : "–")}</span>
@@ -543,7 +575,7 @@ function renderDetail(run) {
       <section class="sec"><h3>动作分布</h3><div class="bars">${ops.map(([k, n]) => `<div class="bar-row"><span>${esc(k)}</span><span class="track"><i style="width:${n / opMax * 100}%;--c:var(--accent)"></i></span><b>${n}</b></div>`).join("") || '<span class="empty">–</span>'}</div></section>
       <section class="sec"><h3>最近候选</h3>
         <table class="recent"><thead><tr><th>${esc(run.x_label || "序号")}</th><th>动作</th><th>结果</th><th class="nr">${esc(task.unit)}</th></tr></thead>
-        <tbody>${(run.recent || []).map(r => `<tr><td class="num">${esc(r.evaluation)}</td><td>${esc(r.operator === "unknown" ? "–" : r.operator)}</td><td><span class="st ${tone(r.status) === "ok" ? "valid" : tone(r.status)}">${esc(outcomeLabel(r.status))}</span></td><td class="nr">${fmt(r.fitness)}</td></tr>`).join("")}</tbody></table>
+        <tbody>${(run.recent || []).map(r => `<tr><td class="num">${esc(r.evaluation)}</td><td>${esc(r.operator === "unknown" ? "–" : r.operator)}${r.unit_id != null ? `<small class="candidate-context">单元 ${esc(r.unit_id)} · ${r.resource_purpose === 'continuation' ? '续投' : '新开'} · ${esc(r.delivery_mode || '–')}</small>` : ''}</td><td><span class="st ${tone(r.status) === "ok" ? "valid" : tone(r.status)}">${esc(outcomeLabel(r.status))}</span></td><td class="nr">${fmt(r.fitness)}</td></tr>`).join("")}</tbody></table>
       </section>
     </div>
 `;
@@ -872,11 +904,19 @@ $("refresh").addEventListener("click", () => {
 $("batch").addEventListener("change", event => {
   closeRun();
   S.batch = event.target.value;
+  S.runBatch = 'latest';
   writeHash();
   S.data = null; S.structure = "";
   $("tasks").innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
   setLive("", "读取中");
   refresh();
+});
+$('run-batch').addEventListener('change', event => {
+  closeRun();
+  S.runBatch = event.target.value;
+  S.data = null; S.structure = '';
+  writeHash();
+  refresh({force: true});
 });
 const THEMES = ["auto", "light", "dark"];
 function applyTheme(theme) {

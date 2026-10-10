@@ -12,9 +12,18 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 from experiments.infra.search_run import main as run_search
 from traceaad.common.selection import choose_reference
+from traceaad.common.config import REVISION
 from traceaad.common.storage import append_jsonl
 from traceaad.v10_23 import Config as BaseConfig, TraceAADV1023
 from .data import ACTIONS, request_state
+from .collect import prompt_identity
+
+
+def check_model_conditions(metadata):
+    if metadata["prompt_policy"] != "v1023" or metadata["revision"] != REVISION:
+        raise ValueError("decision model generation or evaluation conditions differ")
+    if metadata["prompt_sources_sha256"] != prompt_identity("v1023"):
+        raise ValueError("decision model prompt sources differ from the running generator")
 
 
 @dataclass
@@ -50,8 +59,7 @@ class TraceAADDecision(TraceAADV1023):
         if metadata is None:
             metadata = self._api("/metadata")
             self._decision_metadata = metadata
-        if metadata["prompt_policy"] != "v1023":
-            raise ValueError("decision model was trained for a different generation policy")
+        check_model_conditions(metadata)
         horizon = metadata["decision_horizon"]
         if horizon not in (1, 2):
             raise ValueError("ordinary selection requires a first-candidate or automatic-repair model")
@@ -86,7 +94,7 @@ class TraceAADDecision(TraceAADV1023):
         started = time.monotonic()
         record = {"before_attempt": self.attempts + 1, "parent_id": parent["id"], "guided": False}
         try:
-            if self.action_rng.random() < self.config.decision_fraction:
+            if self.config.decision_fraction > 0 and self.action_rng.random() < self.config.decision_fraction:
                 try:
                     sampled, choices = self._action_from_model(parent)
                     record.update(guided=True, choices=choices)

@@ -112,6 +112,8 @@ def main():
     parser.add_argument("--split", choices=("calibration", "test"), default="calibration")
     parser.add_argument("--load-in-4bit", action="store_true")
     args = parser.parse_args()
+    if args.output.exists():
+        parser.error("choose a new output file")
     metadata = json.loads((args.dataset / "metadata.json").read_text())
     horizon = metadata.get("decision_horizon", 1)
     if horizon not in (1, 2):
@@ -122,8 +124,9 @@ def main():
     comparisons = list(map(json.loads, (args.dataset / "comparisons.jsonl").read_text().splitlines()))
     training_path = args.training_data or args.dataset
     training_metadata = json.loads((training_path / "metadata.json").read_text())
-    if training_metadata["prompt_policy"] != metadata["prompt_policy"] or training_metadata["score_scales"] != metadata["score_scales"]:
-        raise ValueError("training and matched evaluation conditions differ")
+    for key in ("revision", "prompt_policy", "prompt_sources_sha256", "score_scales", "decision_horizon", "trained_questions"):
+        if training_metadata[key] != metadata[key]:
+            raise ValueError(f"training and matched evaluation conditions differ: {key}")
     training = [r for r in map(json.loads, (training_path / "train.jsonl").read_text().splitlines())
                 if r["state"]["development_budget_candidates"] == horizon]
     if {r["run_id"] for r in training} & {r["run_id"] for r in rows}:

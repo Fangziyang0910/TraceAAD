@@ -11,7 +11,7 @@ def development_stats(facts):
         costs[block['purpose']] += block['spent']
         reasons[block['allocation_reason'] or 'scheduled'] += 1
     trials = len(facts.attempts)
-    new_questions = sum(u['purpose'] == 'new_question' and bool(u['trial_ids']) for u in units)
+    new_questions = sum((u.get('source') == 'Explore' or u.get('purpose') == 'new_question') and bool(u['trial_ids']) for u in units)
     delivery = {}
     for mode in ('edit', 'full'):
         rows = [a for a in facts.attempts.values() if a.get('delivery_mode') == mode]
@@ -25,11 +25,19 @@ def development_stats(facts):
     result = {
         'kind': 'finite_development_requests', 'candidate_cost_by_purpose': dict(costs),
         'delivery': delivery,
-        'allocation_reasons': dict(reasons), 'reserved': policy.get('reserved', 0),
+        'allocation_reasons': dict(reasons),
+        'opened_requests': sum(bool(u['trial_ids']) for u in units),
+        'waiting_requests': sum(u['status'] == 'waiting' for u in units),
+        'candidate_cost_by_source': dict(Counter({source: sum(len(u['trial_ids']) for u in units
+            if u.get('source') == source) for source in ('Refine', 'Crossover', 'Explore')})),
+        'context': {'trimmed_requests': sum(bool(a.get('omitted_materials')) for a in facts.attempts.values()),
+                    'max_input_tokens': max((a.get('input_tokens', 0) for a in facts.attempts.values()), default=0),
+                    'closures': dict(Counter(u['closure_reason'] for u in units
+                        if u.get('closure_reason') in ('local_context_too_long', 'base_context_too_long')))},
         'new_question_proposals': new_questions,
         'new_questions_per_100_candidates': 100 * new_questions / trials if trials else None,
         'settled_frontier_gain': sum(b['frontier_gain'] or 0 for b in blocks),
-        'units': [{**{k: u.get(k) for k in ('id', 'purpose', 'axis', 'question', 'anchor_id', 'proposal_id',
+        'units': [{**{k: u.get(k) for k in ('id', 'source', 'purpose', 'question', 'anchor_id', 'proposal_id',
                    'champion_id', 'worktip_id', 'pending_failure', 'status', 'closure_reason', 'anchor_delta',
                    'block_ids', 'trial_ids', 'linked_unit_ids', 'events')},
                    'cost': len(u['trial_ids'])} for u in units],

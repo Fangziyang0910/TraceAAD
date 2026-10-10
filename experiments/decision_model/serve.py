@@ -62,7 +62,8 @@ def main():
             self.respond(200, {"adapter": args.adapter, "score_scales": metadata["score_scales"],
                                "horizons": metadata["horizons"], "max_seq_length": metadata["max_seq_length"],
                                "decision_horizon": metadata.get("decision_horizon", 1),
-                               "prompt_policy": metadata["prompt_policy"]})
+                               "prompt_policy": metadata["prompt_policy"], "revision": metadata["revision"],
+                               "prompt_sources_sha256": metadata["prompt_sources_sha256"]})
 
         def do_POST(self):
             if not self.authorized():

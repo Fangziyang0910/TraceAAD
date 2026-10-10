@@ -259,10 +259,11 @@ class ResultsMonitor:
                 continue
             for row in manifest.get("plan", []):
                 name = row.get("run_name") or Path(row.get("run_dir", "")).name
-                rows[(row.get("task"), name)] = row
+                rows[(row.get("task"), name)] = {**row, 'run_batch': manifest.get('batch'),
+                    'batch_status': manifest.get('status')}
         return rows
 
-    def _runs(self, experiment: str, task_filter=None, name_filter=None):
+    def _runs(self, experiment: str, task_filter=None, name_filter=None, run_batch=None):
         if experiment not in {item["id"] for item in self.batches()}:
             return []
         rows = []
@@ -274,6 +275,8 @@ class ResultsMonitor:
                     or (name_filter and run_dir.name != name_filter)):
                 continue
             metadata = manifest_runs.get((run_dir.parent.name, run_dir.name), {})
+            if run_batch and metadata.get('run_batch') != run_batch:
+                continue
             if self.batch_filter and not metadata:
                 continue
             config = _read_json(config_path)
@@ -282,6 +285,8 @@ class ResultsMonitor:
             journal_hot = self._journal_is_hot(run_dir)
             if raw_status == "finished":
                 status = "finished"
+            elif metadata.get('batch_status') == 'stopped_by_user' or metadata.get('status') == 'stopped_by_user':
+                status = 'stopped'
             elif raw_status == "stopped" and not self._journal_newer_than_summary(run_dir):
                 status = "stopped"
             elif metadata.get("status") in {"running", "launching"} or raw_status == "running":
@@ -319,6 +324,7 @@ class ResultsMonitor:
                     score = progress["best_fitness"]
             row = {
                 "task": task, "name": run_dir.name, "repeat": config.get("repeat", metadata.get("repeat")),
+                "run_batch": metadata.get('run_batch'),
                 "seed": config.get("seed", metadata.get("seed")), "backend": config.get("backend", metadata.get("backend")),
                 "status": status, "raw_status": raw_status, "budget": int(budget or 0),
                 "budget_used": int(used or 0), "valid_nodes": int(nodes or 0),
@@ -337,9 +343,13 @@ class ResultsMonitor:
             rows.append(row)
         return rows
 
-    def overview(self, experiment: str | None = None):
+    def overview(self, experiment: str | None = None, run_batch=None):
         experiment = experiment or self.default_batch()
-        runs = self._runs(experiment) if experiment else []
+        run_batches = sorted({r['run_batch'] for r in self._manifest_runs(experiment).values()
+                              if r.get('run_batch')}, reverse=True) if experiment else []
+        if run_batch == 'latest':
+            run_batch = run_batches[0] if run_batches else None
+        runs = self._runs(experiment, run_batch=run_batch) if experiment else []
         counts = Counter(row["status"] for row in runs)
         groups = []
         for task, meta in TASKS.items():
@@ -351,6 +361,7 @@ class ResultsMonitor:
                 ]})
         return {
             "batch": experiment, "updated_at": max((row["updated_at"] or "" for row in runs), default=""),
+            "run_batch": run_batch, "run_batches": run_batches,
             "summary": {
                 "runs": len(runs), "finished": counts["finished"],
                 "running": counts["running"], "queued": counts["queued"],
@@ -444,6 +455,7 @@ class ResultsMonitor:
         return {**{key: value for key, value in row.items() if key != "run_dir"},
                 "task_meta": TASKS[task], "curve": curve, "operators": operators,
                 "outcomes": outcomes, "recent": recent,
+                "development": _history(run_dir, task).development_snapshot(),
                 **_programs(run_dir, task, summary, curve)}
 
 
@@ -489,10 +501,11 @@ def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler
                 return self._send_json({"batches": monitor.batches(), "default_batch": monitor.default_batch()})
             if parsed.path == "/api/state":
                 batch = params.get("batch", [None])[0]
-                signature = monitor.state_signature(batch)
+                run_batch = params.get("run_batch", [None])[0]
+                signature = (monitor.state_signature(batch), run_batch)
                 body, _ = cache.get_or_build(
-                    ("state", batch), signature,
-                    lambda: _json_bytes(monitor.overview(batch)))
+                    ("state", batch, run_batch), signature,
+                    lambda: _json_bytes(monitor.overview(batch, run_batch)))
                 return self._send_body(body, signature)
             if parsed.path == "/api/cohorts":
                 return self._send_json({"cohorts": monitor.cohorts()})

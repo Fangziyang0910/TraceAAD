@@ -18,7 +18,7 @@ def finite(value):
 
 
 class TrainingHistory:
-    CACHE_VERSION = 5
+    CACHE_VERSION = 6
     CACHE_NAME = "history.json"
 
     def __init__(self, run_dir, minimize):
@@ -29,6 +29,7 @@ class TrainingHistory:
         self.boundary_tail = None
         self.streams, self.clock, self.node_offsets = {"events": []}, {}, {}
         self.programs = {}
+        self.development = {"units": {}, "blocks": {}, "active": None}
         self.progress = {}
         self.result = ([], [], {}, {})
         self.config = read_json(self.run_dir / "run_config.json", {})
@@ -39,6 +40,7 @@ class TrainingHistory:
             self.streams["events"] = cached["events"]
             self.programs, self.node_offsets = cached["programs"], cached["node_offsets"]
             self.clock = cached["clock"]
+            self.development = cached["development"]
             self.boundary_tail = cached.get("boundary_tail")
 
     def read(self):
@@ -60,6 +62,7 @@ class TrainingHistory:
                 self.offset, self.identity = 0, identity
                 self.streams, self.programs, self.node_offsets = {"events": []}, {}, {}
                 self.clock, self.stamp = {}, None
+                self.development = {"units": {}, "blocks": {}, "active": None}
                 self.boundary_tail = None
             if stamp == self.stamp:
                 return self.result
@@ -77,6 +80,14 @@ class TrainingHistory:
                     if row.get("program"):
                         program = row["program"]
                         self.programs[str(program["id"])] = program
+                    if dev := row.get("development"):
+                        self.development['active'] = dev['scheduler'].get('active')
+                        for key, fields in (
+                            ('unit', ('id', 'source', 'question', 'status', 'closure_reason', 'anchor_id',
+                                      'worktip_id', 'champion_id', 'pending_failure', 'trial_ids', 'block_ids')),
+                            ('block', ('id', 'unit_id', 'purpose', 'spent', 'limit', 'frontier_gain'))):
+                            if item := dev.get(key):
+                                self.development[key + 's'][str(item['id'])] = {k: item.get(k) for k in fields}
                     if row["kind"] == "candidate":
                         self.node_offsets[str(row["candidate_id"])] = row.get("node_id")
                         attempt = row["attempt"]
@@ -84,7 +95,8 @@ class TrainingHistory:
                             "evaluation": row["budget_used"], "candidate": row["candidate_id"],
                             "node_id": row.get("node_id"), "fitness": row["fitness"],
                             "operator": row["operator"], "status": row["status"], "valid": row["valid"],
-                            **{k: attempt.get(k) for k in ("reason", "channel", "parent_id", "repair_of", "created_at")},
+                            **{k: attempt.get(k) for k in ("reason", "channel", "parent_id", "repair_of", "created_at",
+                                "unit_id", "block_id", "resource_purpose", "delivery_mode", "entered_evaluation")},
                             "idea": (attempt.get("idea") or "")[:280]})
                     if row.get("progress"):
                         progress = row["progress"]
@@ -104,6 +116,7 @@ class TrainingHistory:
                 write_json(self.run_dir / ".cache/history.json", {"version": self.CACHE_VERSION,
                     "identity": self.identity, "offset": self.offset, "events": self.streams["events"],
                     "programs": self.programs, "node_offsets": self.node_offsets, "clock": self.clock,
+                    "development": self.development,
                     "boundary_tail": self.boundary_tail})
             except OSError:
                 pass
@@ -118,6 +131,37 @@ class TrainingHistory:
         with self.lock:
             self.read()
             return dict(self.progress)
+
+    def development_snapshot(self):
+        with self.lock:
+            self.read()
+            if not self.development['units']:
+                return None
+            units = []
+            events = {e['candidate']: e for e in self.streams['events']}
+            for unit in self.development['units'].values():
+                roles = {}
+                for role in ('anchor', 'worktip', 'champion', 'pending_failure'):
+                    pid = unit.get(role if role == 'pending_failure' else role + '_id')
+                    p = self.programs.get(str(pid))
+                    roles[role] = {k: p.get(k) for k in ('id', 'fitness', 'valid')} if p else None
+                units.append({**unit, **roles, 'blocks': [self.development['blocks'][str(i)]
+                              for i in unit['block_ids'] if str(i) in self.development['blocks']],
+                              'trials': [{**events[i], 'result': self.programs.get(
+                                  str(events[i]['node_id']), {}).get('fitness')}
+                                  for i in unit['trial_ids'] if i in events]})
+            costs, delivery = Counter(), {}
+            for event in self.streams['events']:
+                costs[event.get('resource_purpose') or 'initialization'] += 1
+                mode = event.get('delivery_mode')
+                if mode:
+                    d = delivery.setdefault(mode, dict(attempts=0, evaluated=0, failed=0, cached=0))
+                    d['attempts'] += 1
+                    d['evaluated'] += bool(event.get('entered_evaluation'))
+                    d['failed'] += event['status'] == 'delivery_failed'
+                    d['cached'] += event['status'] in ('duplicate', 'known_failure', 'copied_reference')
+            return {'active_block': self.development['active'], 'units': units,
+                    'costs': dict(costs), 'delivery': delivery}
 
     def node(self, identifier, *, by_node=False):
         with self.lock:

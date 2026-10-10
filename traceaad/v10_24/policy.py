@@ -10,7 +10,7 @@ AXES = (
     "prediction: could lookahead, completion, local improvement or decomposition improve this decision?",
     "organization: could shared, batched or incremental computation realize a useful output effect?",
 )
-PURPOSES = ("front_refine", "front_transfer", "new_question", "continuation")
+SOURCES = ("Refine", "Crossover", "Explore")
 
 
 def stable_key(seed, value):
@@ -44,9 +44,17 @@ def frontier(programs, evaluations, roots, units, count, seed, excluded=()):
         sources.add(p["key"])
         vector = score_vector(p, evaluations)
         groups.setdefault(vector, []).append(pid)
-    ranked = sorted(groups.items(), key=lambda g: (programs[g[1][0]]["fitness"], stable_key(seed, g[0])))[:count]
-    return [{"key": stable_key(seed, vector), "vector": vector, "members": ids, "rank": rank}
-            for rank, (vector, ids) in enumerate(ranked, 1)]
+    ranked = sorted(groups.items(), key=lambda g: (programs[g[1][0]]["fitness"], stable_key(seed, g[0])))
+    result, rank, previous = [], 0, None
+    for position, (vector, members) in enumerate(ranked, 1):
+        fitness = programs[members[0]]["fitness"]
+        if fitness != previous:
+            if position > count:
+                break
+            rank = position
+        result.append({"key": stable_key(seed, vector), "vector": vector, "members": members, "rank": rank})
+        previous = fitness
+    return result
 
 
 def declarations(text):
@@ -58,12 +66,7 @@ def declarations(text):
         return {}
     analysis = re.split(r"(?im)^\s*(?:Design|Idea|Code|Edits)\s*:|```|^<<<<<<< SEARCH", text, maxsplit=1)[0]
     fields = {}
-    for match in re.finditer(r"(?im)^\s*(Base|Change|Effect|Evidence|Status|Plan|Stage 1|Stage 2|Dependency|Location)\s*:\s*([^\n]+)", analysis):
+    for match in re.finditer(r"(?im)^[ \t]*(Base|Question|Change|Effect|Evidence|Status)[ \t]*:[ \t]*([^\r\n]*)", analysis):
         fields[match[1].lower().replace(" ", "_")] = match[2].strip()
     fields["analysis"] = analysis.strip()
     return fields
-
-
-def two_block_plan(fields):
-    return (fields.get("plan", "").lower() == "two blocks"
-            and all(fields.get(k) for k in ("stage_1", "stage_2", "dependency", "location")))

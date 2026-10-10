@@ -47,6 +47,62 @@ def test_overview_reads_v1013_progress(tmp_path):
     assert state["tasks"][0]["runs"][0]["best_fitness"] == 10.0
 
 
+def test_stopped_manifest_overrides_running_summary(tmp_path):
+    results, name = make_run(tmp_path)
+    manifest = results / 'batch_batch.json'
+    data = json.loads(manifest.read_text())
+    data['status'] = 'stopped_by_user'
+    write_json(manifest, data)
+    write_json(results / 'tsp_construct' / name / 'summary.json', {'status': 'running'})
+    row = ResultsMonitor(results.parent, results.name).overview()['tasks'][0]['runs'][0]
+    assert row['status'] == 'stopped'
+
+
+def test_run_batch_filter_keeps_restarted_conditions_separate(tmp_path):
+    results, name = make_run(tmp_path)
+    old = json.loads((results / 'batch_batch.json').read_text())
+    old.update(batch='older', status='stopped_by_user')
+    write_json(results / 'batch_batch.json', old)
+    new_name = 'restarted_tsp_rep1'
+    write_json(results / 'batch_new.json', {'batch': 'restarted',
+        'plan': [{'task': 'tsp_construct', 'run_name': new_name, 'status': 'running'}]})
+    run = results / 'tsp_construct' / new_name
+    write_json(run / 'run_config.json', {'task': 'tsp_construct', 'budget': 4})
+    append_records(run / 'events.jsonl', [candidate(1, 11)])
+    monitor = ResultsMonitor(results.parent, results.name)
+    assert monitor.overview()['summary']['runs'] == 2
+    latest = monitor.overview(run_batch='latest')
+    assert latest['run_batch'] == 'restarted'
+    assert latest['summary']['runs'] == 1 and latest['summary']['budget_used'] == 1
+    assert monitor.overview(run_batch='older')['summary']['stopped'] == 1
+
+
+def test_development_projection_keeps_roles_costs_and_cache(tmp_path):
+    from experiments.infra.monitor_history import TrainingHistory
+    initial = candidate(1, 10, operator='Init')
+    trial = candidate(2, 12, operator='Develop', parent_id=1)
+    trial['attempt'].update(unit_id=1, block_id=2, resource_purpose='continuation',
+                            delivery_mode='edit', entered_evaluation=True)
+    trial['development'] = {
+        'scheduler': {'active': 2},
+        'unit': {'id': 1, 'source': 'Refine', 'question': 'Can flatter priors help?',
+                 'status': 'active', 'anchor_id': 1, 'worktip_id': 2, 'champion_id': 1,
+                 'pending_failure': None, 'trial_ids': [2], 'block_ids': [1, 2]},
+        'block': {'id': 2, 'unit_id': 1, 'purpose': 'continuation', 'spent': 1, 'limit': 4}}
+    append_records(tmp_path / 'events.jsonl', [initial, trial])
+    history = TrainingHistory(tmp_path, minimize=True)
+    history.read()
+    dev = history.development_snapshot()
+    assert dev['units'][0]['worktip']['fitness'] == 12
+    assert dev['units'][0]['champion']['fitness'] == 10
+    assert dev['costs'] == {'continuation': 1, 'initialization': 1}
+    assert dev['delivery']['edit'] == {'attempts': 1, 'evaluated': 1, 'failed': 0, 'cached': 0}
+    assert history.read()[1][0]['unit_id'] == 1
+    restored = TrainingHistory(tmp_path, minimize=True)
+    assert restored.development_snapshot() == dev
+    assert 'code' not in json.dumps(dev)
+
+
 def test_active_run_ignores_stale_error_summary(tmp_path):
     results, run_name = make_run(tmp_path)
     write_json(results / "tsp_construct" / run_name / "summary.json", {

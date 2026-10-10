@@ -88,6 +88,7 @@ def main():
             wait_file("B3-server3", output + "/metadata.json", session)
         local = args.root / name
         command(["rsync", "-a", "B3-server3:" + output + "/", str(local) + "/"])
+        command(["rsync", "-aH", "B3-server3:" + S3 + "/" + collection + "/", str(args.root / collection) + "/"])
         return local
 
     def fit(local, name):
@@ -117,7 +118,9 @@ def main():
             session = "traceaad-eval-" + name
             cmd = gpu_command(gpu, ["evaluate_policy.py", model, "data/paired-request-fit", output,
                 "--training-data", training_data, "--split", "calibration", "--load-in-4bit"], name + "-calibration.log")
-            tmux_job("B3-server2", session, cmd)
+            existing = remote("B3-server2", f"import json;from pathlib import Path;print(json.dumps(Path({output!r}).is_file()))")
+            if not existing:
+                tmux_job("B3-server2", session, cmd)
             started.append((output, session))
         reports = {}
         for (label, _), (output, session) in zip(models.items(), started):
@@ -140,6 +143,14 @@ def main():
         fit(pilot, "paired-request")
         models = {label: f"runs/request-v1023-{label}-seed3407/adapter" for label in ("warm", "base")}
         initial = evaluate("request-observed", "data/current-v1023-requests-fit", models | {"released": "models/clef-flash"})
+        require_free_gpus()
+        service_session = "traceaad-request-http-check-20261009"
+        service_report = S2 + "/runs/request-http-check.json"
+        service_cmd = gpu_command(5, ["check_service.py", models["warm"], "data/current-v1023-requests-fit/metadata.json",
+            "data/paired-request-fit", service_report], "request-http-check.log")
+        tmux_job("B3-server2", service_session, service_cmd)
+        wait_file("B3-server2", service_report, service_session)
+        command(["scp", "B3-server2:" + service_report, args.root / "request-http-check.json"])
         phase("waiting_for_training_enrichment", initial_calibration=initial)
         wait_file("B3-server3", S3 + "/enriched-v1023/complete.json", "traceaad-decision-enriched-20261009")
         enriched = export("enriched-v1023-training-states", "enriched-v1023", "enriched-request-raw", training_only=True)

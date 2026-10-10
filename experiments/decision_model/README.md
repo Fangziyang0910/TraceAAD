@@ -1,28 +1,87 @@
 # 决策模型的数据与训练入口
 
-**2026-10-09 状态：server2 的 GPU 5、6 已启动两轮初始训练。** 两步真实长输入检查通过，峰值保留显存 12,820 MiB，决策头确实更新。server1 队列与新增数据采集继续暂停，断点保留。当前使用“给定改进请求的结果预测”数据结构与 8,192 token 的 4-bit LoRA 配置，见[实际方案与执行记录](../../docs/04-研究认识与构想/2026-10-09-决策模型训练计划.md#10-月-9-日实际方案与暂停状态)。下文的算子硬标签例子与初始 BF16 参数保留作早期接口说明，不是本轮的数据与配置。
+**2026-10-09 晚：server2 的 GPU 5、6 正在训练“普通算子加自动 Repair”的 9B 请求模型。** 旧目标两轮均已完成，但收益排序没有超过简单状态规则。当前真实数据、标签设计与推进条件见[训练计划](../../docs/04-研究认识与构想/2026-10-09-决策模型训练计划.md)，结果与认识见[实际请求收益](../../docs/03-现象与检验/2026-10-09-算子选择与实际请求收益.md)。
 
 ## server2 当前运行
 
-训练目录 `/home/fzy/code/traceaad-decision`；底座 `models/clef-flash` 已从 ModelScope 下载齐全并固定文件哈希。实际数据 `data/bootstrap-fit`，训练 2,328 条、标定 2,304 条，保留测试 2,493 条不用于本轮评价。两张卡各跑一轮独立训练，不合并显存。
+目录 `/home/fzy/code/traceaad-decision`；Python `/home/fzy/venvs/traceaad-decision/bin/python`。完整底座在 `models/clef-flash`，从 ModelScope 下载并保存文件哈希。两张卡各运行一轮，不合并显存。
 
-| GPU | 种子 | tmux 会话 | 日志 |
+| GPU | 初始化 | tmux 会话 | 日志 |
 | --- | --- | --- | --- |
-| 5 | 3408 | `traceaad-decision-server2-gpu5-20261009` | `logs/train-server2-gpu5.log` |
-| 6 | 3407 | `traceaad-decision-server2-gpu6-20261009` | `logs/train-server2-gpu6.log` |
+| 5 | 发布版 Clef-Flash | `traceaad-request-base-gpu5-20261009` | `logs/request-v1023-base.log` |
+| 6 | 旧 AAD checkpoint 292 | `traceaad-request-warm-gpu6-20261009` | `logs/request-v1023-warm.log` |
 
-两轮的实际参数相同：4-bit LoRA、BF16 计算、rank 16、语言模型学习率 `5e-5`、决策头 `1e-4`、batch 1、累积 16、8,192 token、2 epoch，共 292 个优化步骤。输出分别为 `runs/aad-outcome-v1-warm-server2-seed3408` 和 `runs/aad-outcome-v1-warm-server2-seed3407`，每 50 步保存 checkpoint，结束后标定并保存 adapter。`run_config.json` 保存种子、参数和数据哈希。
+数据为 `data/current-v1023-requests-fit`：训练 1,468、标定 1,321、测试 1,380。训练有 50 个正收益请求。测试只做结构和编码检查，不计算模型测试指标。最大输入 4,852 token；父程序与参考全文保留，预设的历史片段不需进一步缩短。两种初始化的两步硬件检查通过，峰值保留显存 12,510 MiB。
+
+独立审计 4,169 条请求的代码、历史、收益与成本，零错配；4,102 个有效程序的原始实例平均分与档案一致。两步硬件检查后的实际参数核验确认 LoRA 和决策头都更新。报告为本地本轮档案的 `request-v1023-{data-audit,score-vector-audit,encoder-check}.json`。
+
+实际设置：4-bit LoRA、BF16、rank 16／alpha 16、语言模型学习率 `5e-5`、决策头 `1e-4`、batch 1、累积 16、8,192 token、2 epoch、种子 3407，各 184 步。输出为 `runs/request-v1023-base-seed3407` 与 `runs/request-v1023-warm-seed3407`；每 50 步保存 checkpoint，结束后标定并保存 `adapter`。运行参数与数据哈希写入 `run_config.json`。
 
 ```bash
-ssh B3-server2 'tail -n 8 /home/fzy/code/traceaad-decision/logs/train-server2-gpu5.log'
-ssh B3-server2 'tail -n 8 /home/fzy/code/traceaad-decision/logs/train-server2-gpu6.log'
+ssh B3-server2 'tail -n 4 /home/fzy/code/traceaad-decision/logs/request-v1023-base.log'
+ssh B3-server2 'tail -n 4 /home/fzy/code/traceaad-decision/logs/request-v1023-warm.log'
+ssh B3-server2 'tmux list-sessions'
 ```
 
-启动时的硬件核验、会话和路径保存在远端 `runs/server2-training-status.json`；它记录启动结果，后续是否仍运行须结合 tmux 会话与最新训练日志。当前使用 PyTorch 的参考因果卷积，数值正确但吞吐较慢，尚未安装 `causal_conv1d` 优化内核。
+当前使用正确但较慢的 PyTorch 因果卷积参考实现。原来两个 `aad-outcome-v1-warm-server2-seed*` 训练均已完成 292 步并保存标定 adapter；在固定 427 案例中的增益捕获为 29.3%／22.5%，简单状态表为 46.9%。完整结果保留在本地 `campaign_20261009/checkpoint292-calibration-screen-seed*/`。
 
-第 100 步模型的[中间检查](../../docs/02-实验结果/2026-10-09-决策模型100步中间检查.md)已完成：使用标定集全部 43 个前沿改善案例和每任务 64 个随机负例，按抽样比例加权。按任务分别取预期增益最高 10% 请求，模型捕获增益的六任务平均为 21.6%，简单状态表为 46.9%，尚未体现模型增量。推理在 server3 GPU 3 完成后退出，server2 训练继续；本地记录在 `experiments_result/decision_model/campaign_20261009/checkpoint100-calibration-screen/`。这是已观察请求的排序诊断，没有实际更换动作或运行完整搜索。
+## server3 当前采集
 
-这里训练一个供 TraceAAD 使用的决策模型。第一阶段只选择 Refine、Explore 或 Crossover，代码仍由现有生成模型修改。研究问题、数据采集对照和推进条件见[训练计划](../../docs/04-研究认识与构想/2026-10-09-决策模型训练计划.md)。
+根目录 `/home/fzy/code/traceaad-decision-data/campaign_20261009`。采集使用冻结的 `runtime-v1023` 和已有 CPU／模型槽调度器；不改正在运行的其他实验。原始结果以每条 `chains/<run>/<state>/<action>/repN/result.json` 及其逐步事件为准。
+
+| 批次 | 会话 | 规模 | 日志 |
+| --- | --- | --- | --- |
+| 固定试采 | `traceaad-decision-pilot-v1023-20261009` | 72 状态，最多 3,456 新候选，4 worker | `logs/pilot-v1023-blocked.log` |
+| 训练增样 | `traceaad-decision-enriched-20261009` | 100 训练状态，最多 4,800 新候选，4 worker | `logs/enriched-v1023.log` |
+| 独立确认 | `traceaad-decision-confirm-tsp-20261009` | 一个 TSP 标定状态，各算子追加四重复，最多 48 候选 | `logs/confirm-tsp.log` |
+
+每状态比较三个算子、每算子四条独立重复、每条四次候选。四次开发内先执行初始算子，再使用 Refine／Repair；部署用的标签只取初始请求及自动 Repair，不能把这个开发块当作实际 V10.23 Develop。确认的 repeat ID 为 4–7，独立保存，不混入固定试采。
+
+固定试采已核验 72 状态、216 个实际生成提示，最大 15,920 token。训练增样已核验 100 状态、300 个实际提示，最大 7,697 token；每个父程序最多两个起点。预检没有生成候选。历史正收益只用于训练增样选起点，重新运行的结果才作为标签。标定／测试的固定状态不做成功筛选；进度日志不显示测试结果。
+
+## 自动导出、训练与实际选择评价
+
+本地 tmux `traceaad-decision-research-20261009` 已启动当前后台流程：
+
+```bash
+# 当前会话已经在运行；这个入口用于复现或检查中断后的流程。
+.venv/bin/python -u -m experiments.decision_model.campaign experiments_result/decision_model/campaign_20261009
+```
+
+流程先等两轮当前训练和固定试采完成，在 server3 的 `analysis-runtime-v1023` 导出请求标签，检查全单元完成和提示哈希，然后在 server2 完整编码。它比较两轮模型、未微调底座与三个简单规则的标定侧实际选择收益。训练增样完成后，流程用独立重复标签替换被选中的历史单次样本，再从相同初始化训练，并重做同状态标定比较。它不自动开始完整搜索，也不计算决策测试指标。
+
+首轮选择评价后，流程还在授权 GPU 上启动真实模型的 HTTP 检查：核对生成条件，确认无令牌返回 401，并给同一标定状态的三个动作评分。检查不生成候选，完成后退出自己的服务；报告为 `request-http-check.json`。
+
+本地 `pipeline-status.json`、`pipeline.log` 记录推进状态；`campaign-status.json` 保存整体账本及启动事实。每批导出时同时拉回完整原始重放档案，保存程序、调用及逐步评价；冻结生成代码在 `runtime-v1023` 副本，审计与研究脚本在 `research_scripts/`。已有事实记录不等于进程当前仍活着，要同时看会话和日志。异常时流程写 `needs_attention` 并停止，保留档案，不覆盖已有结果。
+
+实际收益报告文件为 `request-observed-{warm,base,released}-calibration.json` 和随后 `request-paired-{warm,base}-calibration.json`。主字段 `equal_task_macro_gain_per_candidate`：每任务先累计所选动作增益、除以实际候选消耗，再对任务等权。简单规则只拟合训练来源；`matched_sample_best` 使用观察结果，仅作为描述，不是可部署对照。loss／accuracy 不作为验收指标。
+
+独立运行数据入口：
+
+```bash
+# 在项目环境：从已有冻结前缀重新归并自动 Repair，无新生成。
+.venv/bin/python -m experiments.decision_model.request_data SOURCE REQUEST_DATA
+
+# 在项目环境：仅在所有固定单元完成后导出重复标签。
+.venv/bin/python -m experiments.decision_model.export_replays DATASET COLLECTION PAIRED_DATA --request-only
+
+# 训练增样只有 train，用 --splits train 导出，再与完整数据合并。
+.venv/bin/python -m experiments.decision_model.augment_data REQUEST_DATA PAIRED_DATA ENRICHED_DATA AUGMENTED_DATA
+```
+
+在服务器训练环境中，完整编码与训练的模板如下。`OUTPUT` 必须是新目录；恢复已有训练时使用原数据与 checkpoint：
+
+```bash
+cd /home/fzy/code/traceaad-decision
+HF_HUB_OFFLINE=1 /home/fzy/venvs/traceaad-decision/bin/python fit_data.py RAW FIT --tokenizer models/clef-flash --max-seq-length 8192
+CUDA_VISIBLE_DEVICES=5 HF_HUB_OFFLINE=1 /home/fzy/venvs/traceaad-decision/bin/python train.py FIT OUTPUT --model models/clef-flash --load-in-4bit --max-seq-length 8192 --seed 3407
+# 同一个 OUTPUT 和数据；具体 checkpoint 按实际档案选择。
+CUDA_VISIBLE_DEVICES=5 HF_HUB_OFFLINE=1 /home/fzy/venvs/traceaad-decision/bin/python train.py FIT OUTPUT --model models/clef-flash --load-in-4bit --max-seq-length 8192 --seed 3407 --resume OUTPUT/checkpoints/checkpoint-50
+```
+
+独立确认已完成 48 次候选，追加四次 Explore 有两次即时改善；结果保存在 `confirmation-tsp-before464/request-outcomes.json`，不混入固定标定估计。
+
+HTTP 服务和 V10.23 算子接入已有原型，使用收益／成本比评分。实际 HTTP 检查已排入后台流程，尚未完成；完整搜索接入与搜索收益尚未验证。下面保留环境安装与早期格式说明；早期算子硬标签与 BF16 示例不是当前训练设置。
 
 ## 环境与机器
 
@@ -61,7 +120,7 @@ Unsloth 给出的 Qwen3.5 BF16 LoRA 参考显存为 4B 约 10 GB、9B 约 22 GB�
 
 ## 下载底座
 
-优先使用 ModelScope。2026-10-09 已通过仓库 API 核验 [Cloudflare/clef-flash](https://modelscope.cn/models/Cloudflare/clef-flash)、[Qwen/Qwen3.5-9B](https://modelscope.cn/models/Qwen/Qwen3.5-9B) 和 [Qwen/Qwen3.5-4B](https://modelscope.cn/models/Qwen/Qwen3.5-4B) 均存在。四台机器已安装 ModelScope 1.40.1，并成功下载 Clef-Flash 的配置文件；完整 9B／4B 权重尚未下载。
+优先使用 ModelScope。2026-10-09 已通过仓库 API 核验 [Cloudflare/clef-flash](https://modelscope.cn/models/Cloudflare/clef-flash)、[Qwen/Qwen3.5-9B](https://modelscope.cn/models/Qwen/Qwen3.5-9B) 和 [Qwen/Qwen3.5-4B](https://modelscope.cn/models/Qwen/Qwen3.5-4B) 均存在。四台机器已安装 ModelScope 1.40.1。Clef-Flash 完整权重已在 server2、server3 就绪；server1 保留部分下载，本地只有配置。其他两个底座的完整权重未准备。
 
 在训练入口目录执行。下面使用已实测的 CLI 语法，不需要 Hugging Face 连接：
 
@@ -82,7 +141,7 @@ cd /home/fzy/code/traceaad-decision
 
 ## 准备训练文件
 
-原始来源是搜索决策时的状态和同状态对照结果。保存 `events.jsonl`、`programs.jsonl` 与原始调用，通过程序编号还原当前代码和当时已有的历史。字段取值方式与标签依据见[训练计划](../../docs/04-研究认识与构想/2026-10-09-决策模型训练计划.md#数据与标签)。
+原始来源是搜索决策时的状态和同状态对照结果。保存 `events.jsonl`、`programs.jsonl` 与原始调用，通过程序编号还原当前代码和当时已有的历史。字段取值方式与标签依据见[训练计划](../../docs/04-研究认识与构想/2026-10-09-决策模型训练计划.md#数据从哪里来)。
 
 先按完整搜索运行分组，写成三个 JSONL 文件。每行一个决策状态，不是一次后续生成。
 
@@ -195,7 +254,7 @@ CUDA_VISIBLE_DEVICES=0 /home/fzy/venvs/traceaad-decision/bin/python train.py \
 
 模型和设置冻结后，最终那次训练可增加 `--evaluate-test`，报告此前保留的决策 test 集。不要每次试参数都加这个选项。决策 test 集由保留的搜索运行组成，区别于组合优化任务的 held-out 实例。
 
-离线主要看选择的质量损失：模型所选算子与同状态最好算子的短程结果相差多少；同时看超过父代、超过当前前沿的比例、失败率和重复率。准确率与标定用于解释模型，最后仍需在完整搜索中比较同候选预算的质量。[具体比较](../../docs/04-研究认识与构想/2026-10-09-决策模型训练计划.md#判断模型是否有用)
+离线主要看选择的质量损失：模型所选算子与同状态最好算子的短程结果相差多少；同时看超过父代、超过当前前沿的比例、失败率和重复率。准确率与标定用于解释模型，最后仍需在完整搜索中比较同候选预算的质量。[具体比较](../../docs/04-研究认识与构想/2026-10-09-决策模型训练计划.md#怎样判定模型确实有用)
 
 ## 调用训练后的模型
 
