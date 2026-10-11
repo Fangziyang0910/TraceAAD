@@ -15,7 +15,7 @@ from typing import List, Optional
 
 import numpy as np
 
-from baselines.observability import (
+from baselines.shared.observability import (
     init_observability,
     is_search_aborted,
     log_event,
@@ -30,7 +30,7 @@ from core import (
     SecureEvaluator,
     TextFunctionProgramConverter,
 )
-from baselines.sampling import SampleTrimmer
+from baselines.shared.sampling import SampleTrimmer
 from .numeric_refine import code_signature, run_numeric_refinement
 from .parse import (
     extract_first_double_braced,

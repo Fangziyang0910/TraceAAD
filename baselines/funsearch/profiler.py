@@ -1,4 +1,4 @@
-from baselines.profiler import ProfilerBase
+from baselines.shared.profiler import ProfilerBase
 
 
 class FunSearchProfiler(ProfilerBase):

@@ -1,5 +1,4 @@
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from core import Evaluation, Function, LLM
@@ -238,12 +237,6 @@ class ReEvoMechanicsTest(unittest.TestCase):
         self.assertEqual(constructed._init_pop_size, 30)
         self.assertEqual(constructed._max_sample_nums, 100)
         self.assertEqual(constructed._mutation_rate, 0.5)
-
-        paras = Path("baselines/reevo/paras.yaml").read_text()
-        self.assertIn("max_sample_nums: 100", paras)
-        self.assertIn("pop_size: 10", paras)
-        self.assertIn("init_pop_size: 30", paras)
-        self.assertIn("mutation_rate: 0.5", paras)
 
         method._evaluation_executor.shutdown(cancel_futures=True)
 

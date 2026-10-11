@@ -6,9 +6,9 @@ from pathlib import Path
 
 from core import Function
 from core.evaluate import Evaluation
-from baselines.observability import init_observability, record_sample_failure
-from baselines.eoh.sampling import sample_thought_and_function, trim_braced_thought
-from baselines.profiler import ProfilerBase
+from baselines.shared.observability import init_observability, record_sample_failure
+from baselines.eoh.sampler import sample_thought_and_function, trim_braced_thought
+from baselines.shared.profiler import ProfilerBase
 
 
 def make_function(label: int, score: float) -> Function:

@@ -33,7 +33,7 @@ import numpy as np
 from .population import Population
 from .profiler import ReEvoProfiler
 from .prompt import ReEvoPrompt
-from baselines.observability import (
+from baselines.shared.observability import (
     close_sampler_llm,
     finish_profiler,
     init_observability,
@@ -49,8 +49,8 @@ from baselines.observability import (
 from core import (
     Evaluation, LLM, Function, Program, TextFunctionProgramConverter, SecureEvaluator
 )
-from baselines.sampling import SampleTrimmer
-from baselines.profiler import ProfilerBase
+from baselines.shared.sampling import SampleTrimmer
+from baselines.shared.profiler import ProfilerBase
 
 
 class ReEvo:

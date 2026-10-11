@@ -5,7 +5,7 @@ import os
 from threading import Lock
 from typing import Any
 
-from baselines.profiler import ProfilerBase
+from baselines.shared.profiler import ProfilerBase
 
 
 class ShinkaEvoProfiler(ProfilerBase):

@@ -1,6 +1,6 @@
 import json
 
-from baselines.profiler import ProfilerBase
+from baselines.shared.profiler import ProfilerBase
 from core import Function
 
 

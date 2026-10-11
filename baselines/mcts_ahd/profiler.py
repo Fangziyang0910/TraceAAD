@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 from pathlib import Path
-from baselines.profiler import ProfilerBase
+from baselines.shared.profiler import ProfilerBase
 
 
 class MAProfiler(ProfilerBase):

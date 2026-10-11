@@ -14,8 +14,8 @@ from .profiler import PathWiseProfiler
 from .prompt import PathWisePrompt
 from .sampler import PathWiseSampler
 from core import Evaluation, Function, LLM, Program, SecureEvaluator, TextFunctionProgramConverter
-from baselines.profiler import ProfilerBase
-from baselines.observability import (
+from baselines.shared.profiler import ProfilerBase
+from baselines.shared.observability import (
     close_llm,
     finish_profiler,
     init_observability,

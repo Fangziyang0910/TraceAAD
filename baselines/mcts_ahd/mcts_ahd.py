@@ -37,11 +37,11 @@ from .mcts import MCTS, MCTSNode
 from .profiler import MAProfiler
 from .prompt import MAPrompt
 from .sampler import MASampler
-from baselines.observability import close_sampler_llm, finish_profiler, is_search_aborted, shutdown_executor
+from baselines.shared.observability import close_sampler_llm, finish_profiler, is_search_aborted, shutdown_executor
 from core import (
     Evaluation, LLM, Function, Program, TextFunctionProgramConverter, SecureEvaluator
 )
-from baselines.profiler import ProfilerBase
+from baselines.shared.profiler import ProfilerBase
 
 
 class MCTS_AHD:

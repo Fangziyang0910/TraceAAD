@@ -6,7 +6,7 @@ import re
 
 from .graph import PathWiseAction, PathWiseNode
 from core import Function, LLM, Program, TextFunctionProgramConverter
-from baselines.sampling import SampleTrimmer
+from baselines.shared.sampling import SampleTrimmer
 
 
 GLOBAL_IMPORTS = [

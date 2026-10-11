@@ -10,8 +10,8 @@ import pytest
 from core import Function, SecureEvaluator
 from core.evaluate import EVALUATION_SEED
 from core.scheduling import SchedulerError
-from baselines.observability import is_search_aborted
-from baselines.profiler import ProfilerBase
+from baselines.shared.observability import is_search_aborted
+from baselines.shared.profiler import ProfilerBase
 from benchmarks.tasks import FUNCTION_SECONDS, INSTANCE_SECONDS
 from experiments.infra import base, evaluate, runner, search_heldout
 from tests.method.test_instance_evaluation import IndexedEvaluation

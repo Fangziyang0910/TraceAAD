@@ -7,7 +7,7 @@ from .graph import PathWiseAction, PathWiseEdge, PathWiseNode
 from .population import Population
 from pathlib import Path
 from traceaad.common.storage import append_jsonl
-from baselines.profiler import ProfilerBase
+from baselines.shared.profiler import ProfilerBase
 
 
 class PathWiseProfiler(ProfilerBase):

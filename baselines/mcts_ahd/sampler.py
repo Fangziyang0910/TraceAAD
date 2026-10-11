@@ -4,7 +4,7 @@ import re
 from typing import Tuple
 
 from core import LLM, Function, Program
-from baselines.sampling import SampleTrimmer
+from baselines.shared.sampling import SampleTrimmer
 
 
 class MASampler:
