@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from .._seeded_data import canonical_split, rng_for
+from ..shared.seeded_data import canonical_split, rng_for
 
 TASK = 'graph_colouring'
 SCALE = 300

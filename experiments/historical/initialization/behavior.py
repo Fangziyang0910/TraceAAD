@@ -28,7 +28,7 @@ from benchmarks.cvrp_aco.evaluation import (  # noqa: E402
     ACO as CVRPACO,
     CVRPACOEvaluation,
 )
-from benchmarks.generated_data_config import (  # noqa: E402
+from benchmarks.tasks import (  # noqa: E402
     get_generated_task_kwargs,
 )
 from benchmarks.online_bin_packing.generate_weibull_instances import (  # noqa: E402

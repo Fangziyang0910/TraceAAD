@@ -1,6 +1,0 @@
-name: OPACOEvaluation
-timeout_seconds: 60
-split: train
-n_ants: 20
-n_iterations: 50
-aco_seed: 1234

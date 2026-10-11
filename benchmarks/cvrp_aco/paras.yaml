@@ -1,6 +1,0 @@
-name: CVRPACOEvaluation
-timeout_seconds: 120
-split: train
-n_ants: 30
-n_iterations: 100
-aco_seed: 1234

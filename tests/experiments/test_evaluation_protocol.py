@@ -24,7 +24,7 @@ def test_timeout_is_wall_clock_and_cpu_time_is_recorded():
 
 
 def test_obp_program_state_does_not_leak_across_instances():
-    from benchmarks.generated_data_config import get_generated_task_kwargs
+    from benchmarks.tasks import get_generated_task_kwargs
     from benchmarks.online_bin_packing import OBPEvaluation
 
     program = ("import numpy as np\n_seen = [0]\n"

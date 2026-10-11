@@ -3,7 +3,7 @@
 import numpy as np
 
 from core import Evaluation
-from ._seeded_data import PROTOCOL, SEED, generate_dataset
+from .seeded_data import PROTOCOL, SEED, generate_dataset
 
 
 class FixedEvaluation(Evaluation):

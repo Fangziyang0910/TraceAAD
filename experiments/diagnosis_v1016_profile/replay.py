@@ -22,7 +22,7 @@ import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
-from benchmarks.generated_data_config import get_generated_task_kwargs
+from benchmarks.tasks import get_generated_task_kwargs
 from benchmarks.tsp_construct import TSPEvaluation
 from core import SecureEvaluator
 from experiments.infra.base import BACKENDS, build_llm_client
@@ -46,7 +46,7 @@ def training_evaluation(timeout):
 RUNNER = """import sys, importlib.util
 sys.path.insert(0, {repo!r})
 import experiments
-from benchmarks.generated_data_config import get_generated_task_kwargs
+from benchmarks.tasks import get_generated_task_kwargs
 from benchmarks.tsp_construct import TSPEvaluation
 kwargs = get_generated_task_kwargs("tsp_construct", "train")
 kwargs["timeout_seconds"] = None

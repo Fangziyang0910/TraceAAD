@@ -3,7 +3,7 @@
 import numpy as np
 
 from core.evaluate import InvalidEvaluationResult
-from .._fixed_evaluation import FixedEvaluation
+from ..shared.fixed_evaluation import FixedEvaluation
 from . import dataset
 from .template import function_name, task_description, template_program
 

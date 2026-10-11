@@ -1,7 +1,7 @@
 """Evaluate complete job-shop schedules with independent constraint checks."""
 import numpy as np
 from core.evaluate import InvalidEvaluationResult
-from .._fixed_evaluation import FixedEvaluation
+from ..shared.fixed_evaluation import FixedEvaluation
 from . import dataset
 from .template import template_program, task_description, function_name
 

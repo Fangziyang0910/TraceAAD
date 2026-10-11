@@ -22,10 +22,9 @@ The new fixed-scale tasks state their primary held-out data through the same int
 import re
 
 from benchmarks.cvrp_aco.dataset import get_split_spec as cvrp_split
-from benchmarks.generated_data_config import get_generated_task_kwargs
 from benchmarks.op_aco.dataset import get_split_spec as op_split
 from benchmarks.tasks import (CLASSES, CO_TASKS, HELDOUT_TIMEOUT, FIXED_TASKS, SCALES, TEST_INSTANCES,
-                              TEST_SCALES)
+                              TEST_SCALES, get_generated_task_kwargs)
 from traceaad.common.history import final_attempt
 from traceaad.common.prompts import ANALYSIS as SHARED_ANALYSIS, ContextTooLong, KNOWN
 from traceaad.v10_17.prompts import PromptBuilder as V1017Prompts

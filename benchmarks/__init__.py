@@ -1,1 +1,1 @@
-"""Benchmark tasks and the shared generated-data config."""
+"""Eight benchmark tasks, registered in benchmarks.tasks."""

@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from benchmarks.jssp_construct.evaluation import solve, validate_schedule
 from benchmarks.jssp_construct import JSSPEvaluation
-from benchmarks._seeded_data import generate_dataset, digest_arrays
+from benchmarks.shared.seeded_data import generate_dataset, digest_arrays
 from benchmarks.jssp_construct import dataset
 from core.evaluate import InvalidEvaluationResult
 

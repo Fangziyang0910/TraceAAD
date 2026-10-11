@@ -1,6 +1,6 @@
 """Fixed scale, data distribution and instance description for fssp_gls."""
 
-from .._seeded_data import canonical_split, rng_for
+from ..shared.seeded_data import canonical_split, rng_for
 
 TASK = 'fssp_gls'
 SCALE = 50

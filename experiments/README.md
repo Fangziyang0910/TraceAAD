@@ -33,7 +33,7 @@
 
 [按改动种类定义的步骤](traceaad_v10_23/README.md)、[从精确输出出发的探索](traceaad_v10_22/README.md)、[精简提示与效率规则](traceaad_v10_21/README.md)、[当前规则引导的搜索](traceaad_v10_20/README.md)、[改动检验搜索](traceaad_v10_19/README.md)、[新设计开发搜索](traceaad_v10_18/README.md)、[短程改写搜索](traceaad_v10_17/README.md)、[形成路径搜索](traceaad_v10_15/README.md)、[尝试经验搜索](traceaad_v10_16/README.md)各自提供运行命令，并共用[实验与结果实现](infra/SEARCH_FORMAT.md)。代码目录保留实现标识，文档按研究对象命名。
 
-任务条件集中在 `benchmarks/tasks.py`。通用测试命令为 `uv run python -m experiments.infra.evaluate <运行目录> --primary`。
+任务注册与统一预算在 `benchmarks/tasks.py`；任务专属的数据、配置、模板和评价器位于各自任务目录，共用数据与评价逻辑位于 `benchmarks/shared/`。通用测试命令为 `uv run python -m experiments.infra.evaluate <运行目录> --primary`。
 
 当前仅保留上述六任务和旧版在线装箱（OBP）、VRPTW，共八个任务。CO-Bench适配器与专用任务预检入口已移除，历史结果保留。此次清理不改变六任务的规模、数据、计分和时间预算；OBP、VRPTW沿用原设置。
 

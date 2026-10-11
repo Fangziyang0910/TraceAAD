@@ -10,7 +10,7 @@ from benchmarks.fssp_gls import evaluation as fssp
 from benchmarks.graph_colouring import evaluation as graph
 from benchmarks.jssp_construct import evaluation as jssp
 from benchmarks.tasks import CLASSES, FIXED_TASKS as TASKS
-from benchmarks._seeded_data import digest_arrays, generate_dataset
+from benchmarks.shared.seeded_data import digest_arrays, generate_dataset
 from core import SecureEvaluator
 from core.evaluate import InvalidEvaluationResult
 

@@ -1,6 +1,6 @@
 """Independent seeded static 20-job/20-machine instances, no stored arrays."""
 import numpy as np
-from .._seeded_data import canonical_split, rng_for
+from ..shared.seeded_data import canonical_split, rng_for
 
 TASK = 'jssp_construct'
 SCALE = 20

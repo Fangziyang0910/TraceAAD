@@ -3,7 +3,9 @@
 from copy import deepcopy
 import math
 
-from .generated_data_config import get_generated_task_kwargs
+from .tsp_construct.config import DATA_CONFIGS as TSP_DATA
+from .online_bin_packing.config import DATA_CONFIGS as OBP_DATA
+from .vrptw_construct.config import DATA_CONFIGS as VRPTW_DATA
 from .tsp_construct import TSPEvaluation
 from .vrptw_construct import VRPTWEvaluation
 from .online_bin_packing import OBPEvaluation
@@ -88,6 +90,15 @@ def obp_scale(kwargs, n_items, capacity):
     count = matches[0]
     kwargs['dataset_specs'] = [{'n_instances': count, 'n_items': n_items, 'capacities': [capacity]}]
     return kwargs
+
+
+def get_generated_task_kwargs(task_name, split='train'):
+    configs = {'tsp_construct': TSP_DATA, 'online_bin_packing': OBP_DATA, 'vrptw_construct': VRPTW_DATA}
+    try:
+        return deepcopy(configs[task_name][split])
+    except KeyError as exc:
+        raise KeyError(f'Unknown generated optimization task/split: {task_name!r}/{split!r}. '
+                       f'Known tasks: {", ".join(sorted(configs))}') from exc
 
 
 def training_task(task, workers=None, *, condition='shared'):

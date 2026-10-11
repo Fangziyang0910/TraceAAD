@@ -3,10 +3,7 @@ from tests.experiments.test_training_monitor import append_records, candidate, w
 import numpy as np
 
 from experiments.infra.artifacts import pick_best_sample
-from benchmarks.tasks import obp_scale
-from benchmarks.generated_data_config import (
-    get_generated_task_kwargs,
-)
+from benchmarks.tasks import obp_scale, get_generated_task_kwargs
 from benchmarks.online_bin_packing import OBPEvaluation
 from benchmarks.online_bin_packing.template import task_description
 from benchmarks.online_bin_packing.generate_weibull_instances import (
