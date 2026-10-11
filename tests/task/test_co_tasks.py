@@ -50,9 +50,9 @@ def test_flowshop_rejects_invalid_perturbations(output):
 
 @pytest.mark.parametrize("adjacency,optimal", [(np.ones((3, 3), dtype=bool) ^ np.eye(3, dtype=bool), 3),
     (np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=bool), 2)])
-def test_graph_final_solution_survives_failed_color_reduction(adjacency, optimal):
-    colors, k = graph.solve({"adjacency": adjacency}, seed("graph_colouring"), repair_steps=4)
-    assert graph.valid(adjacency, colors) and k == optimal
+def test_graph_starter_returns_a_valid_complete_coloring(adjacency, optimal):
+    colors, k = graph.solve({"adjacency": adjacency}, seed("graph_colouring"))
+    assert graph.validate_coloring(adjacency, colors) == k == optimal
 
 
 def miniature_evaluation():
@@ -86,19 +86,20 @@ def test_eval_isolates_module_state_and_measures_calls():
     evaluation._rows *= 2
     evaluation._instances *= 2
     code = ('import numpy as np\n_calls = 0\n'
-            'def score_operations(t, m, n, j, r, candidates):\n'
-            '    global _calls\n    _calls += 1\n    assert _calls <= 4\n'
-            '    return np.array([t[j,k:].sum() for j,k in candidates])\n')
+            'def helper():\n    return np.array([[0,3],[0,3]])\n'
+            'def solve(t, m):\n'
+            '    global _calls\n    _calls += 1\n    assert _calls == 1\n'
+            '    return helper()\n')
     result = ProgramEvaluator(evaluation, (123,)).evaluate(code, "isolation")
     assert result["failure"] is None
-    assert result["calls"] == 8
+    assert result["calls"] == 2
     assert result["fitness"] == pytest.approx(-100/8)
 
 
 def test_invalid_scores_are_reported_as_invalid_output():
     from traceaad.common.evaluation import ProgramEvaluator
     evaluation = miniature_evaluation()
-    result = ProgramEvaluator(evaluation).evaluate('def score_operations(*args):\n    return [float("nan")]\n', "bad")
+    result = ProgramEvaluator(evaluation).evaluate('def solve(*args):\n    return [float("nan")]\n', "bad")
     assert result["failure"]["kind"] == "invalid_output"
 
 
@@ -171,7 +172,48 @@ def test_offline_training_winner_and_heldout_use_the_new_task(tmp_path):
     summary = method.run()
     assert summary['status'] == 'finished' and summary['selection_evaluations'] == 0
     assert len(llm.calls) == 1
-    write_json(run / "run_config.json", {"task": "jssp_construct", "method_params": {"evaluation_seeds": [730241]}})
+    write_json(run / "run_config.json", {"task": "jssp_construct", "task_eval": {"interface": "full-solver-v1"},
+                                         "method_params": {"evaluation_seeds": [730241]}})
     # Real task data are used for held-out; a frozen valid heuristic must transfer.
     results = evaluate_run(run, ["test_20"], condition="traceaad")
     assert results[0]["fitness"] is not None and not results[0]["failures"]
+
+
+@pytest.mark.parametrize('task', ['graph_colouring', 'jssp_construct'])
+def test_complete_solver_helpers_are_inside_instance_cpu_budget(task):
+    from traceaad.common.instance_evaluation import InstanceProgramEvaluator
+    evaluation = CLASSES[task](limit=1)
+    runner = InstanceProgramEvaluator(evaluation, timeout_seconds=5, function_seconds=.05)
+    code = '''import time
+
+def helper():
+    start = time.process_time()
+    while time.process_time() - start < .2:
+        pass
+
+def solve(*args):
+    helper()
+    return []
+'''
+    result = runner.evaluate(code, 'helper-budget')
+    assert result['failure']['kind'] == 'timeout'
+    assert result['failure']['error_type'] == 'FunctionBudgetExceeded'
+
+
+def test_complete_solver_search_rejects_a_different_saved_protocol(tmp_path):
+    from tests.support import TokenLLM, text_candidate
+    from traceaad.v10_21 import Config, TraceAADV1021
+    evaluation = miniature_evaluation()
+    config = Config(budget=1, roots=1)
+    method = TraceAADV1021(evaluation=evaluation, llm=TokenLLM(text_candidate(code=evaluation.TEMPLATE)),
+                          run_dir=tmp_path, config=config, task='jssp_construct')
+    method.run()
+    before = (tmp_path / 'resume.json').read_bytes()
+    resumed = TraceAADV1021(evaluation=evaluation, llm=TokenLLM(), run_dir=tmp_path,
+                           config=config, task='jssp_construct')
+    assert resumed.attempts == 1
+    evaluation.interface = 'different-interface'
+    with pytest.raises(ValueError, match='same task interface'):
+        TraceAADV1021(evaluation=evaluation, llm=TokenLLM(), run_dir=tmp_path,
+                      config=config, task='jssp_construct')
+    assert (tmp_path / 'resume.json').read_bytes() == before

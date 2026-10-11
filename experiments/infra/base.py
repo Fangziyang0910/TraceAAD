@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 
 import numpy as np
 
-from benchmarks.tasks import ALL_TASKS, CO_TASKS, TASKS, TASK_SHORT, SUITES, DEFAULT_WORKERS, INSTANCE_SECONDS, training_task
+from benchmarks.tasks import ALL_TASKS, CO_TASKS, TASKS, TASK_SHORT, SUITES, DEFAULT_WORKERS, INSTANCE_LIMITS, training_task
 from .env import resolve_llm_api_key
 from core.llm import OpenAIAPI
 
@@ -180,7 +180,7 @@ def scheduler_socket():
 def build_task(task, eval_workers=None, *, condition='shared'):
     evaluation, settings = training_task(task, eval_workers, condition=condition)
     if task in CO_TASKS:
-        evaluation._instance_execution = {"timeout_seconds": INSTANCE_SECONDS,
+        evaluation._instance_execution = {"timeout_seconds": INSTANCE_LIMITS[task],
                                           "n_workers": 1 if eval_workers is None else eval_workers,
                                           "scheduler_socket": scheduler_socket(),
                                           "record_path": os.environ.get("TRACEAAD_EVALUATION_LOG") or None}

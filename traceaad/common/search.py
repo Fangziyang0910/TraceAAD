@@ -67,6 +67,9 @@ class Search:
             "selection_protocol": self.selection.protocol if self.selection else None}))
         # A resumed run continues under the current configuration and evaluator.
         saved = self.facts.state or {}
+        if (getattr(evaluation, 'interface', None) and saved
+                and saved.get('identity', {}).get('protocol') != self.training.protocol):
+            raise ValueError('complete-solver resume requires the same task interface and evaluation protocol')
         self.progress = Progress(**{name: saved[name] for name in Progress.__dataclass_fields__ if name in saved})
         self.parent_rng = random.Random(f"{self.METHOD.replace('v10', 'v10.')}:{self.config.seed}:parent")
         self.action_rng = random.Random(f"{self.METHOD.replace('v10', 'v10.')}:{self.config.seed}:action")

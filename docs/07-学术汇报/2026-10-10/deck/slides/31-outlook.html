@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>P31 · 展望</title>
+<link rel="stylesheet" href="../shared/tokens.css">
+<style>
+.fi{opacity:0;animation:fi .6s ease forwards}@keyframes fi{to{opacity:1}}
+.h1{position:absolute;left:140px;top:128px;width:1640px;font-size:50px;line-height:1.25;font-weight:600}
+.fg{position:absolute;left:140px;top:236px;width:1060px;height:610px;background:var(--panel);border:1px solid #DAD6CB;overflow:hidden}
+.fg .ov{position:absolute;left:0;top:0;width:1060px;height:610px}
+.cl3{position:absolute;left:1240px;top:236px;width:540px}
+.cl3 h3{margin:0 0 10px;font-size:24px;font-weight:600;color:var(--teal);border-bottom:2px solid var(--teal);padding-bottom:6px}
+.cl3 h3.x{color:var(--hi);border-color:var(--hi)}
+.cl3 p{margin:0 0 26px;font-size:22px;line-height:1.7;color:var(--body);text-align:justify}
+.cl3 p b{color:var(--ink);font-weight:600}
+.bn{position:absolute;left:140px;top:872px;width:1640px;height:120px;border-top:2px solid var(--ink);padding-top:26px;font-size:40px;font-weight:600;line-height:1.4}
+.bn em{font-style:normal;color:var(--hi)}
+.bn small{display:block;font-size:22px;font-weight:400;color:var(--mute);margin-top:4px}
+.rp{position:absolute;left:1118px;top:200px;z-index:5;font:400 17px 'Source Han Serif SC','Noto Serif CJK SC','Noto Serif SC','Songti SC','STSong','SimSun',serif;color:var(--mute);background:#FBFAF6;border:1px solid #DAD6CB;padding:2px 14px;cursor:pointer;opacity:.75}
+.gl{stroke-dasharray:1;stroke-dashoffset:1;animation-name:dr;animation-fill-mode:forwards;animation-timing-function:linear}
+@keyframes dr{to{stroke-dashoffset:0}}
+.gx{transform-box:fill-box;transform-origin:left center;transform:scaleX(0);animation:gx .8s ease forwards}
+@keyframes gx{to{transform:scaleX(1)}}
+.gy{transform-box:fill-box;transform-origin:center bottom;transform:scaleY(0);animation:gy .8s ease forwards}
+@keyframes gy{to{transform:scaleY(1)}}
+.t{font-size:20px;fill:#1D1D1B}.tb{font-size:22px;font-weight:600;fill:#1D1D1B}.ts{font-size:18px;fill:#6C6A64}.tt{font-size:19px;font-weight:600}
+.cx{position:absolute;left:140px;top:198px;width:1640px;font-size:21px;line-height:32px;color:var(--mute);white-space:nowrap}
+.cx b{color:var(--teal);font-weight:600;margin-right:14px;letter-spacing:.06em}
+.pts{position:absolute;left:1240px;top:236px;width:540px}
+.pt{display:flex;gap:16px;margin-bottom:34px}
+.pt .n{flex:none;width:32px;height:32px;border-radius:50%;background:var(--teal);color:#fff;font-size:19px;font-weight:600;text-align:center;line-height:32px;margin-top:3px}
+.pt.x .n{background:var(--hi)}
+.pt p{margin:0}
+.pt .c{font-size:25px;line-height:1.45;font-weight:600;color:var(--ink)}
+.pt .s{font-size:22px;line-height:1.65;color:var(--body);margin-top:6px}
+.pt .s b{color:var(--ink);font-weight:600}
+.rp{left:1700px!important;top:196px!important}
+.fg{width:1640px}.fg .ov{width:1640px}.tl{font-size:29px;font-weight:600;fill:#1D1D1B}.tm{font-size:23px;fill:#1D1D1B}.tn{font-size:21px;fill:#6C6A64}.th{font-size:21px;font-weight:600;letter-spacing:.08em}</style></head><body>
+<div class="top"><span>第五部分 · 展望</span><span>展望</span></div>
+<h1 class="h1">展望：用搜索记录训练模型，学习选择，测准相似度</h1>
+
+<div class="fg"><svg class="ov" viewBox="0 0 1640 610"><g class="fi" style="animation-delay:0.3s"><rect x="30" y="20" width="500" height="570" fill="#FBFAF6" stroke="#DAD6CB" stroke-width="1" /><text class="tt" x="54" y="60" fill="#C8502B">方向一</text><text class="tl" x="54" y="100" >训练：把搜索经验内化到模型</text><line x1="54" y1="122" x2="506" y2="122" stroke="#DAD6CB"/><text class="th" x="54" y="160" fill="#6C6A64">现在</text><text class="tm" x="54" y="198" >每次搜索的记录，只在这一次</text><text class="tm" x="54" y="232" >搜索内使用。</text><text class="tm" x="54" y="266" >一次运行有 1000 条尝试，每条</text><text class="tm" x="54" y="300" >带起点、代码差异和结果。</text><rect x="54" y="350" width="452" height="2" fill="#DAD6CB" stroke="none" stroke-width="1" /><text class="th" x="54" y="392" fill="#0E6B6B">可做</text><text class="tm" x="54" y="430" >用这些记录训练模型，</text><text class="tm" x="54" y="464" >让它学到算法改进的底层模式，</text><text class="tm" x="54" y="498" >而不只在提示里读到。</text></g><g class="fi" style="animation-delay:1.9s"><rect x="570" y="20" width="500" height="570" fill="#FBFAF6" stroke="#DAD6CB" stroke-width="1" /><text class="tt" x="594" y="60" fill="#C8502B">方向二</text><text class="tl" x="594" y="100" >决策：把选择交给学习</text><line x1="594" y1="122" x2="1046" y2="122" stroke="#DAD6CB"/><text class="th" x="594" y="160" fill="#6C6A64">现在</text><text class="tm" x="594" y="198" >选起点、选算子、选上下文，</text><text class="tm" x="594" y="232" >现在是概率抽样或固定规则：</text><text class="tm" x="594" y="266" >分数项 × 经验项，算子份额</text><text class="tm" x="594" y="300" >0.45 / 0.30 / 0.25。</text><rect x="594" y="350" width="452" height="2" fill="#DAD6CB" stroke="none" stroke-width="1" /><text class="th" x="594" y="392" fill="#0E6B6B">可做</text><text class="tm" x="594" y="430" >决策模型读取搜索状态，</text><text class="tm" x="594" y="464" >预测各个选择的收益，</text><text class="tm" x="594" y="498" >再做选择。</text></g><g class="fi" style="animation-delay:3.5s"><rect x="1110" y="20" width="500" height="570" fill="#FBFAF6" stroke="#DAD6CB" stroke-width="1" /><text class="tt" x="1134" y="60" fill="#C8502B">方向三</text><text class="tl" x="1134" y="100" >度量：把算法相似度测准</text><line x1="1134" y1="122" x2="1586" y2="122" stroke="#DAD6CB"/><text class="th" x="1134" y="160" fill="#6C6A64">现在</text><text class="tm" x="1134" y="198" >分数相同，逻辑不一定相同。</text><text class="tm" x="1134" y="232" >现在用代码相似度判断新设计</text><text class="tm" x="1134" y="266" >是否回到起点程序。</text><text class="tm" x="1134" y="300" >BehaveSim 用求解过程比较行为。</text><rect x="1134" y="350" width="452" height="2" fill="#DAD6CB" stroke="none" stroke-width="1" /><text class="th" x="1134" y="392" fill="#0E6B6B">可做</text><text class="tm" x="1134" y="430" >更稳的行为度量，用来判断</text><text class="tm" x="1134" y="464" >新设计是否成立，并分配</text><text class="tm" x="1134" y="498" >探索与利用。</text></g></svg></div><button class="rp" onclick="rp()">重播</button>
+
+<div class="bn fi" style="animation-delay:5.4s">三个方向，都建立在已记录的改进过程上。<small>TraceAAD 已把每次尝试的起点、差异和结果记下来；下面三页分别讲：解决什么问题，现在的痛点，大致怎么做。</small></div>
+<script>function rp(){document.getAnimations().forEach(function(a){a.cancel();a.play()})}document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")rp()})</script></body></html>

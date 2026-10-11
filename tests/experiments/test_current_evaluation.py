@@ -219,3 +219,65 @@ def test_local_queue_advances_when_a_run_exits_before_writing_results(tmp_path, 
     monkeypatch.setattr(local_queue, "launch_command", launch)
     local_queue.main(["--method", "funsearch", "--batch", "test", "--slots", "1"])
     assert launched == ["first", "second"]
+
+
+@pytest.mark.parametrize('task_name', ['graph_colouring', 'jssp_construct'])
+@pytest.mark.parametrize('name', ['eoh', 'reevo', 'mcts_ahd', 'pathwise', 'calm', 'funsearch', 'shinka_evo'])
+def test_baseline_entries_accept_complete_solvers(name, task_name, tmp_path, monkeypatch):
+    from benchmarks.tasks import CLASSES
+    monkeypatch.delenv('TRACEAAD_SCHEDULER_SOCKET', raising=False)
+    module = importlib.import_module(f'experiments.{name}.run')
+    task = CLASSES[task_name](limit=1)
+    monkeypatch.setattr(base, 'training_task', lambda *args, **kwargs: (task, {'interface': task.interface}))
+    monkeypatch.setattr(module, 'build_llm_client', lambda **kwargs: TokenLLM())
+    spec = module.make_run_spec(task=task_name, eval_workers=1, experiments_root=tmp_path)
+    method = module.build_method(spec, tmp_path / name / 'logs')
+    outcome = method._evaluator.evaluate_program_with_details(task.TEMPLATE)
+    assert outcome.failure_kind is None, outcome.error
+    assert outcome.result == 0
+    config = runner.baseline_run_config(spec, tmp_path / name, 'new', name, {'max_sample_nums': 1})
+    assert config['task_eval']['interface'] == 'full-solver-v1'
+    assert task._instance_execution['timeout_seconds'] == 30
+    assert config['method_params']['eval_timeout_seconds'] == 30
+    assert config['method_params']['function_seconds'] == 10
+
+
+@pytest.mark.parametrize('task_name,cpu,wall', [
+    ('tsp_construct', 2, 20), ('cvrp_aco', 2, 20), ('fssp_gls', 2, 20),
+    ('op_aco', 2, 20), ('graph_colouring', 10, 30), ('jssp_construct', 10, 30),
+])
+def test_task_budgets_reach_search_baselines_and_heldout(task_name, cpu, wall, monkeypatch, capsys):
+    from experiments.traceaad_v10_21.run import main
+    from experiments.infra.evaluation_execution import heldout_evaluator
+    from traceaad.common.instance_evaluation import InstanceProgramEvaluator
+    task = IndexedEvaluation(1)
+    task.task = task_name
+    runner = InstanceProgramEvaluator(task)
+    assert (runner.function_seconds, runner.timeout_seconds) == (cpu, wall)
+    override = InstanceProgramEvaluator(task, function_seconds=.05, timeout_seconds=.1)
+    assert (override.function_seconds, override.timeout_seconds) == (.05, .1)
+    monkeypatch.setattr(base, 'training_task', lambda *args, **kwargs: (task, {}))
+    baseline, _ = base.build_task(task_name)
+    assert baseline._instance_execution['timeout_seconds'] == wall
+    main(['--task', task_name, '--dry-run'])
+    config = json.loads(capsys.readouterr().out)
+    assert config['config']['eval_timeout_seconds'] == wall
+    assert config['evaluation_execution']['function_seconds'] == cpu
+    frozen, metadata = heldout_evaluator(config, 'eval', (730241,), workers=1,
+        timeout_seconds=None, measure_calls=True, task_factory=lambda *args: task)
+    assert (frozen.function_seconds, metadata['timeout_seconds']) == (cpu, wall)
+
+
+def test_mixed_task_launch_uses_per_task_budgets(capsys):
+    from experiments.traceaad_v10_21.launch_local import main, plan_for
+    from experiments.infra.search_run import build_parser
+    from benchmarks.tasks import INSTANCE_LIMITS
+    main(['--batch', 'budget_check', '--suite', 'co6'])
+    manifest = json.loads(capsys.readouterr().out)
+    for task, limits in manifest['evaluation_limits'].items():
+        assert limits['timeout_seconds'] == INSTANCE_LIMITS[task]
+        assert limits['function_seconds'] == (10 if task in ('graph_colouring', 'jssp_construct') else 2)
+    for entry in plan_for('budget_check'):
+        command = entry['command']
+        args = build_parser('budget_check', Config).parse_args(command[command.index('--task'):])
+        assert args.eval_timeout_seconds is None

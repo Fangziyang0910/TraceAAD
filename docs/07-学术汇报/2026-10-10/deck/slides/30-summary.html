@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>P30 · 总结</title>
+<link rel="stylesheet" href="../shared/tokens.css">
+<style>
+.fi{opacity:0;animation:fi .6s ease forwards}@keyframes fi{to{opacity:1}}
+.h1{position:absolute;left:140px;top:128px;width:1640px;font-size:50px;line-height:1.25;font-weight:600}
+.fg{position:absolute;left:140px;top:236px;width:1060px;height:610px;background:var(--panel);border:1px solid #DAD6CB;overflow:hidden}
+.fg .ov{position:absolute;left:0;top:0;width:1060px;height:610px}
+.cl3{position:absolute;left:1240px;top:236px;width:540px}
+.cl3 h3{margin:0 0 10px;font-size:24px;font-weight:600;color:var(--teal);border-bottom:2px solid var(--teal);padding-bottom:6px}
+.cl3 h3.x{color:var(--hi);border-color:var(--hi)}
+.cl3 p{margin:0 0 26px;font-size:22px;line-height:1.7;color:var(--body);text-align:justify}
+.cl3 p b{color:var(--ink);font-weight:600}
+.bn{position:absolute;left:140px;top:872px;width:1640px;height:120px;border-top:2px solid var(--ink);padding-top:26px;font-size:40px;font-weight:600;line-height:1.4}
+.bn em{font-style:normal;color:var(--hi)}
+.bn small{display:block;font-size:22px;font-weight:400;color:var(--mute);margin-top:4px}
+.rp{position:absolute;left:1118px;top:200px;z-index:5;font:400 17px 'Source Han Serif SC','Noto Serif CJK SC','Noto Serif SC','Songti SC','STSong','SimSun',serif;color:var(--mute);background:#FBFAF6;border:1px solid #DAD6CB;padding:2px 14px;cursor:pointer;opacity:.75}
+.gl{stroke-dasharray:1;stroke-dashoffset:1;animation-name:dr;animation-fill-mode:forwards;animation-timing-function:linear}
+@keyframes dr{to{stroke-dashoffset:0}}
+.gx{transform-box:fill-box;transform-origin:left center;transform:scaleX(0);animation:gx .8s ease forwards}
+@keyframes gx{to{transform:scaleX(1)}}
+.gy{transform-box:fill-box;transform-origin:center bottom;transform:scaleY(0);animation:gy .8s ease forwards}
+@keyframes gy{to{transform:scaleY(1)}}
+.t{font-size:20px;fill:#1D1D1B}.tb{font-size:22px;font-weight:600;fill:#1D1D1B}.ts{font-size:18px;fill:#6C6A64}.tt{font-size:19px;font-weight:600}
+.cx{position:absolute;left:140px;top:198px;width:1640px;font-size:21px;line-height:32px;color:var(--mute);white-space:nowrap}
+.cx b{color:var(--teal);font-weight:600;margin-right:14px;letter-spacing:.06em}
+.pts{position:absolute;left:1240px;top:236px;width:540px}
+.pt{display:flex;gap:16px;margin-bottom:34px}
+.pt .n{flex:none;width:32px;height:32px;border-radius:50%;background:var(--teal);color:#fff;font-size:19px;font-weight:600;text-align:center;line-height:32px;margin-top:3px}
+.pt.x .n{background:var(--hi)}
+.pt p{margin:0}
+.pt .c{font-size:25px;line-height:1.45;font-weight:600;color:var(--ink)}
+.pt .s{font-size:22px;line-height:1.65;color:var(--body);margin-top:6px}
+.pt .s b{color:var(--ink);font-weight:600}
+.rp{left:1700px!important;top:196px!important}
+.fg{width:1640px}.fg .ov{width:1640px}.tl{font-size:29px;font-weight:600;fill:#1D1D1B}.tm{font-size:23px;fill:#1D1D1B}.tn{font-size:21px;fill:#6C6A64}</style></head><body>
+<div class="top"><span>TraceAAD</span><span>总结</span></div>
+<h1 class="h1">总结：把改进过程记为实测事实，让新设计先落地再竞争</h1>
+
+<div class="fg"><svg class="ov" viewBox="0 0 1640 610"><g class="fi" style="animation-delay:0.3s"><rect x="30" y="20" width="500" height="480" fill="#FBFAF6" stroke="#0E6B6B" stroke-width="2" /><text class="tl" x="58" y="70" fill="#0E6B6B">认识</text><line x1="58" y1="90" x2="502" y2="90" stroke="#DAD6CB"/><text class="tm" x="58" y="134" >分数混合了思想的潜力</text><text class="tm" x="58" y="168" >和精炼的程度。</text><text class="tm" x="58" y="220" >新思想的出现无法预测，</text><text class="tm" x="58" y="254" >出现后还要落地和精炼。</text><text class="tm" x="58" y="306" >上下文既引导模型，</text><text class="tm" x="58" y="340" >也锚定模型。</text><text class="tm" x="58" y="392" >写法影响大，</text><text class="tm" x="58" y="426" >而且因算子而异。</text></g><g class="fi" style="animation-delay:1.5s"><rect x="570" y="20" width="500" height="480" fill="#FBFAF6" stroke="#0E6B6B" stroke-width="2" /><text class="tl" x="598" y="70" fill="#0E6B6B">方法</text><line x1="598" y1="90" x2="1042" y2="90" stroke="#DAD6CB"/><text class="tm" x="598" y="134" >记录：每次尝试带起点、</text><text class="tm" x="598" y="168" >差异和结果。</text><text class="tm" x="598" y="220" >选择：分数项 × 经验项。</text><text class="tm" x="598" y="272" >材料与目标句：</text><text class="tm" x="598" y="306" >按算子配置。</text><text class="tm" x="598" y="358" >短程落地：新设计先落地，</text><text class="tm" x="598" y="392" >再与已有程序竞争。</text></g><g class="fi" style="animation-delay:2.7s"><rect x="1110" y="20" width="500" height="480" fill="#FBFAF6" stroke="#C8502B" stroke-width="2" /><text class="tl" x="1138" y="70" fill="#C8502B">实证</text><line x1="1138" y1="90" x2="1582" y2="90" stroke="#DAD6CB"/><text class="tm" x="1138" y="134" >TSP、CVRP 六个规模全部更好，</text><text class="tm" x="1138" y="168" >优于最好的外部方法 2.2%–8.0%。</text><text class="tm" x="1138" y="220" >VRPTW 在 100、200 规模</text><text class="tm" x="1138" y="254" >好 2.2%–3.6%。</text><text class="tm" x="1138" y="306" >OP、OBP 相近。</text><text class="tm" x="1138" y="358" >3 个任务的 9 个规模排第 1。</text></g><g class="fi" style="animation-delay:4.6s"><rect x="30" y="520" width="1580" height="70" fill="#FBF1EC" stroke="#C8502B" stroke-width="1.5" /><text class="tm" x="54" y="564" >落地阶段的观察：481 个变好的新设计中，205 个回到起点程序；后续版本已改为不展示起点程序的差异。</text></g></svg></div><button class="rp" onclick="rp()">重播</button>
+
+<div class="bn fi" style="animation-delay:5.2s">TraceAAD 把<em>改进过程</em>交给选择和生成使用。<small>数据：测试，对比 5 个外部方法，3 次运行均值。</small></div>
+<script>function rp(){document.getAnimations().forEach(function(a){a.cancel();a.play()})}document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")rp()})</script></body></html>

@@ -9,6 +9,7 @@ from traceaad.common.selection import better, weights
 from traceaad.common.storage import RESULT_FORMAT, append_jsonl, read_json, write_json
 
 
+# Archived CO-Bench results still need migration after removal of the adapter.
 @pytest.mark.parametrize("task,old_fitness,old_score", [
     ("tsp_construct", -10., 10.), ("op_aco", 10., 10.), ("cob_tsp", .8, .8)])
 def test_migration_preserves_winner_offsets_and_source(tmp_path, task, old_fitness, old_score):

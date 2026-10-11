@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>P11 · 设计对象</title>
+<link rel="stylesheet" href="../shared/tokens.css"><link rel="stylesheet" href="../shared/survey.css">
+<style>
+.fi{opacity:0;animation:fi .6s ease forwards}@keyframes fi{to{opacity:1}}
+.blk{position:absolute;height:50px;border:1px solid #C9C5B8;background:#FDFCF9;font-size:17px;color:var(--mute);text-align:center;padding-top:13px}
+.blk.on{animation:bon .5s ease forwards}@keyframes bon{to{background:#CFE2DF;border-color:#0E6B6B;color:#0E6B6B}}
+.rl{position:absolute;left:24px;font-size:22px;font-weight:600;color:var(--ink)}
+.rl span{display:block;font-size:17px;font-weight:400;color:var(--mute);margin-top:2px}
+.sep{position:absolute;left:24px;right:24px;height:1px;background:#DAD6CB}
+</style></head><body>
+<div class="top"><span>第二部分 · 自动算法设计</span><span>设计对象</span></div>
+<h1 class="h1">设计对象决定模型可以改动哪些计算</h1>
+<div class="def"><div class="lab">这一步做什么</div><p>设计对象指系统被允许修改的计算。对象不同，模型能提出的结构变化不同，评价与部署的成本也不同。</p><div class="lab">设计选择</div><ol><li><b>函数</b>固定框架中的一个关键函数</li><li><b>求解器</b>完整的可运行求解程序</li><li><b>集合</b>按实例互补的一组程序</li></ol></div>
+<div class="fig"><div class="rl fi" style="top:50px;animation-delay:0.4s">关键函数<span>框架固定，只改一处</span></div><div class="fi" style="animation-delay:0.4s"><div class="blk" style="left:240px;top:54px;width:148px">读取实例</div><div class="blk" style="left:398px;top:54px;width:148px">初始化</div><div class="blk on" style="left:556px;top:54px;width:148px;animation-delay:1.6s">选点函数</div><div class="blk" style="left:714px;top:54px;width:148px">局部改进</div><div class="blk" style="left:872px;top:54px;width:148px">输出路线</div></div><div class="sep" style="top:136px"></div><div class="rl fi" style="top:156px;animation-delay:3.4s">完整求解器<span>整段程序都可改动</span></div><div class="fi" style="animation-delay:3.4s"><div class="blk on" style="left:240px;top:160px;width:148px;animation-delay:4.4s">读取实例</div><div class="blk on" style="left:398px;top:160px;width:148px;animation-delay:4.9s">初始化</div><div class="blk on" style="left:556px;top:160px;width:148px;animation-delay:5.4s">选点函数</div><div class="blk on" style="left:714px;top:160px;width:148px;animation-delay:5.9s">局部改进</div><div class="blk on" style="left:872px;top:160px;width:148px;animation-delay:6.4s">输出路线</div></div><div class="sep" style="top:242px"></div><div class="rl fi" style="top:262px;animation-delay:7.4s">启发式集合<span>多个程序，逐实例选择</span></div><div class="fi" style="animation-delay:7.4s"><div class="blk on" style="left:240px;top:256px;width:380px;height:30px;padding-top:3px;font-size:16px;animation-delay:7.6s">程序 1：完整的求解程序</div><div class="blk on" style="left:240px;top:294px;width:380px;height:30px;padding-top:3px;font-size:16px;animation-delay:7.9s">程序 2：完整的求解程序</div><div class="blk on" style="left:240px;top:332px;width:380px;height:30px;padding-top:3px;font-size:16px;animation-delay:8.2s">程序 3：完整的求解程序</div></div><svg class="ov" viewBox="0 0 1040 400"><g class="fi" style="animation-delay:8.6s" fill="none" stroke="#6C6A64" stroke-width="2.5"><path d="M636 308 H676 M667 300 L676 308 L667 316"/></g></svg><div class="fi" style="position:absolute;left:690px;top:280px;font-size:20px;color:#6C6A64;line-height:1.6;animation-delay:8.8s">每个程序擅长不同的实例；<br>每个实例取集合中最好的结果</div><button class="rp" onclick="rp()">重播</button></div>
+<div class="bot">
+ <div><h3>代表做法</h3><div class="w"><b>FunSearch</b><i>Nature 2023</i><span>固定骨架中的关键函数</span></div><div class="w"><b>EoH</b><i>ICML 2024</i><span>嵌入模板的启发式函数</span></div><div class="w"><b>AlphaEvolve</b><i>DeepMind 2025</i><span>程序中标记为可演化的部分</span></div><div class="w"><b>EoH-S</b><i>arXiv 2025</i><span>一组互补的启发式</span></div><div class="w"><b>LACE</b><i>NMI 2026</i><span>完整求解器及其互补组合</span></div></div>
+ <div><h3>作用</h3><p class="st">设计范围越大，模型可提出的结构变化越多，如控制流程与成员组合。范围越小，评价与修复越容易。</p></div>
+ <div class="lim"><h3>代价</h3><p>· 范围扩大后，候选更长，评价、修复与部署的成本随之上升</p><p>· 集合在部署时要运行多个程序，或另设选择规则</p><p>· 一次性生成完整的启发式，在新问题上常常失败，需要经过验证的接口与工具库</p></div>
+</div>
+<script>function rp(){document.getAnimations().forEach(function(a){a.cancel();a.play()})}document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")rp()})</script></body></html>

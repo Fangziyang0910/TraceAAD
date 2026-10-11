@@ -32,7 +32,7 @@ def generate_instances(split):
         group = f'generated_{split}_base{i:03d}'
         upper = np.triu(rng.random((300, 300)) < 0.5, k=1)
         arrays = {'adjacency': upper | upper.T}
-        _, reference = solve(arrays, heuristic, reduction_attempts=0)
+        _, reference = solve(arrays, heuristic)
         yield arrays, {'id': group, 'group': group, 'seed_entropy': entropy, 'source_kind': 'generated',
             'scale': 300, 'dimensions': {'vertices': 300},
             'density': float(arrays['adjacency'].sum() / (300*299))}, float(reference), 'DSATUR feasible upper bound'

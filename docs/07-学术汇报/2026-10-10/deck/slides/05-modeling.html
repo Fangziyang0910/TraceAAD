@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>P05 · 问题建模</title>
+<link rel="stylesheet" href="../shared/tokens.css"><link rel="stylesheet" href="../shared/survey.css">
+<style>
+@keyframes hv{0%,7.14%{background:transparent}10.71%,100%{background:rgba(14,107,107,.24)}}
+@keyframes ho{0%,22.86%{background:transparent}26.43%,100%{background:rgba(200,80,43,.26)}}
+@keyframes hc{0%,38.57%{background:transparent}42.14%,100%{background:rgba(108,106,100,.22)}}
+@keyframes m1{0%,11.43%{opacity:0}15.0%,100%{opacity:1}}
+@keyframes m2{0%,27.14%{opacity:0}30.71%,100%{opacity:1}}
+@keyframes m3{0%,42.86%{opacity:0}46.43%,100%{opacity:1}}
+@keyframes cd{0%,57.14%{opacity:0}60.71%,100%{opacity:1}}
+@keyframes rs{0%,72.86%{opacity:0}76.43%,100%{opacity:1}}
+@keyframes fb{0%,65.71%{opacity:0}69.29%,100%{opacity:1}}
+
+.mt{font-size:21px;line-height:1.9;color:var(--ink)}
+.mt span{padding:1px 2px}
+.hv{animation:hv 14s 1 forwards}.ho{animation:ho 14s 1 forwards}.hc{animation:hc 14s 1 forwards}
+.ml{margin-bottom:16px;opacity:0}.ml .tg{display:inline-block;font-size:17px;padding:1px 10px;margin-right:12px;color:#FBFAF6;vertical-align:middle}
+.tv{background:var(--teal)}.to{background:var(--hi)}.tc{background:#6C6A64}
+.fm{font-style:italic;font-size:26px}
+.sub{display:block;margin:2px 0 0 0;font-size:17px;color:var(--mute);font-style:normal}
+.m1{animation:m1 14s 1 forwards}.m2{animation:m2 14s 1 forwards}.m3{animation:m3 14s 1 forwards}
+pre.mono{margin:0;font-size:18px;line-height:1.75;color:var(--body);opacity:0;animation:cd 14s 1 forwards}
+.rs{margin-top:14px;padding-top:10px;border-top:1px solid #DAD6CB;font-size:19px;line-height:1.6;color:var(--ink);opacity:0;animation:rs 14s 1 forwards}
+.rs b{color:var(--hi)}
+.fbk{opacity:0;animation:fb 14s 1 forwards}
+</style></head><body>
+<div class="top"><span>第一部分 · 研究领域</span><span>问题建模</span></div>
+<h1 class="h1">问题建模：把自然语言问题转为可求解的数学模型</h1>
+<div class="def"><div class="lab">定义</div><p>问题建模确定问题的变量、目标与约束。它把自然语言描述的问题转为数学模型，再写成求解器可运行的代码。</p><div class="lab">研究内容</div><ol><li><b>理解</b>识别变量、目标与约束</li><li><b>表述</b>写出与原问题一致的模型</li><li><b>验证</b>检验模型是否忠实于原问题</li></ol></div>
+<div class="fig">
+<div class="cd" style="left:24px;top:24px;width:326px;height:326px"><div class="cl">自然语言问题</div>
+<p class="mt">工厂生产<span class="hv">甲</span>、<span class="hv">乙</span>两种产品。<span class="ho">甲每件利润 5 元，乙每件利润 4 元。</span>每天可用工时 100 小时，<span class="hc">甲每件需 2 小时，乙每件需 1 小时。</span>求最大利润。</p></div>
+<div class="cd" style="left:392px;top:24px;width:326px;height:326px"><div class="cl">数学模型</div>
+<div class="ml m1"><span class="tg tv">变量</span><span class="fm">x, y ≥ 0</span><span class="sub">x：甲的产量，y：乙的产量</span></div>
+<div class="ml m2"><span class="tg to">目标</span><span class="fm">max 5x + 4y</span></div>
+<div class="ml m3"><span class="tg tc">约束</span><span class="fm">2x + y ≤ 100</span></div></div>
+<div class="cd" style="left:760px;top:24px;width:256px;height:326px"><div class="cl">模型代码与求解</div>
+<pre class="mono">x = add_var()
+y = add_var()
+maximize(5*x+4*y)
+add(2*x+y &lt;= 100)
+solve()</pre>
+<div class="rs">x = 0，y = 100<br>最大利润 <b>400</b></div></div>
+<svg class="ov" viewBox="0 0 1040 400"><g fill="none" stroke="#6C6A64" stroke-width="2.5"><path d="M354 187 H388 M380 179 L389 187 L380 195"/><path d="M722 187 H756 M748 179 L757 187 L748 195"/></g>
+<g class="fbk" fill="none" stroke="#C8502B" stroke-width="2.5"><path d="M888 352 V372 H555 V356 M547 364 L555 355 L563 364"/></g>
+<text class="fbk" x="722" y="394" text-anchor="middle" font-size="18" fill="#C8502B">执行结果回到模型，检验并修正</text></svg>
+<button class="rp" onclick="rp()">重播</button></div>
+<div class="bot">
+ <div><h3>代表工作</h3><div class="w"><b>NL4Opt</b><i>NeurIPS 2022</i><span>首个公开竞赛：标注要素，生成逻辑形式</span></div><div class="w"><b>Chain-of-Experts</b><i>ICLR 2024</i><span>多专家智能体分工；提出 ComplexOR</span></div><div class="w"><b>OptiMUS</b><i>ICML 2024</i><span>智能体生成模型与代码，并执行验证</span></div><div class="w"><b>ORLM</b><i>OR 2025</i><span>合成数据并微调；提出 IndustryOR</span></div><div class="w us"><b>TriVAL</b><i>arXiv 2026</i><span>三阶段验证；提出 NL4COP 基准</span></div></div>
+ <div><h3>现状</h3><p class="st">大语言模型使端到端建模成为可能。方法从提示与多智能体流程，发展到微调专用模型；基准扩展到工业场景。</p></div>
+ <div class="lim"><h3>局限</h3><p>· 基准质量参差，评测方法缺乏统一标准，各项结果难以直接比较</p><p>· 模型与原问题的等价性难以自动验证，错误的模型会得到对错误问题最优的解</p><p>· 提示方法受限于底层模型的能力，复杂工业问题上的准确率仍然较低</p></div>
+</div>
+<script>function rp(){document.getAnimations().forEach(function(a){a.cancel();a.play()})}document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")rp()})</script></body></html>

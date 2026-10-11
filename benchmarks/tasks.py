@@ -26,18 +26,17 @@ CLASSES = dict(zip(ALL_TASKS, (TSPEvaluation, CVRPACOEvaluation, OPACOEvaluation
                                     FSSPGLSEvaluation, GraphColouringEvaluation, JSSPEvaluation)))
 SELECTION_SEED = 20260927
 DEFAULT_WORKERS = 4
-# Six-task protocol: the candidate function may spend FUNCTION_SECONDS per
-# instance, summed over its calls. The fixed solver's time does not count: it
-# is the same for every candidate and varies with the core, not the candidate.
-# INSTANCE_SECONDS bounds a whole instance (start, solver and function) and
-# only stops programs that hang. The evaluator enforces both; prompts do not state them.
+# Fixed-framework tasks budget only candidate calls; complete solvers include all search.
 FUNCTION_SECONDS = 2
 INSTANCE_SECONDS = 20
+FULL_SOLVER_TASKS = ('graph_colouring', 'jssp_construct')
+FUNCTION_LIMITS = {task: 10 if task in FULL_SOLVER_TASKS else FUNCTION_SECONDS for task in CO_TASKS}
+INSTANCE_LIMITS = {task: 30 if task in FULL_SOLVER_TASKS else INSTANCE_SECONDS for task in CO_TASKS}
 TRAIN_INSTANCES, TEST_INSTANCES = 16, 50
 TRAIN_TIMEOUT = {'online_bin_packing': 30, 'vrptw_construct': 30}
-TRAIN_TIMEOUT.update({task: TRAIN_INSTANCES * INSTANCE_SECONDS for task in CO_TASKS})
+TRAIN_TIMEOUT.update({task: TRAIN_INSTANCES * INSTANCE_LIMITS[task] for task in CO_TASKS})
 HELDOUT_TIMEOUT = {'vrptw_construct': 1000, 'online_bin_packing': 1000}
-HELDOUT_TIMEOUT.update({task: TEST_INSTANCES * INSTANCE_SECONDS for task in CO_TASKS})
+HELDOUT_TIMEOUT.update({task: TEST_INSTANCES * INSTANCE_LIMITS[task] for task in CO_TASKS})
 # Cross-scale checks lie outside the six-task protocol and keep their old limits.
 CROSS_SCALE_TIMEOUT = {'tsp_construct': 3000, 'cvrp_aco': 3600, 'op_aco': 3600}
 SCALES = {'tsp_construct': (50, 100, 200), 'vrptw_construct': (50, 100, 200),
@@ -94,7 +93,10 @@ def obp_scale(kwargs, n_items, capacity):
 def training_task(task, workers=None, *, condition='shared'):
     if task in FIXED_TASKS:
         kwargs = dict(split='train', timeout_seconds=TRAIN_TIMEOUT[task])
-        return CLASSES[task](**kwargs), kwargs
+        evaluation = CLASSES[task](**kwargs)
+        if evaluation.INTERFACE:
+            kwargs['interface'] = evaluation.INTERFACE
+        return evaluation, kwargs
     if task in {'cvrp_aco', 'op_aco'}:
         cvrp = task == 'cvrp_aco'
         # One worker: the per-instance budget assumes instances run in turn.
@@ -106,6 +108,14 @@ def training_task(task, workers=None, *, condition='shared'):
         if task in CO_TASKS or condition == 'traceaad':
             kwargs['timeout_seconds'] = TRAIN_TIMEOUT.get(task, kwargs['timeout_seconds'])
     return CLASSES[task](**kwargs), {'split': 'train', **kwargs}
+
+
+def validate_task_interface(task, config):
+    """Keep archived priority-function runs out of the complete-solver protocol."""
+    interface = getattr(CLASSES[task], 'INTERFACE', None)
+    if interface and (config.get('task_eval') or {}).get('interface') != interface:
+        raise ValueError(f'{task} now uses {interface}; use a new run directory. '
+                         'Evaluate old runs with their saved source snapshot.')
 
 
 def selection_task(task, search):

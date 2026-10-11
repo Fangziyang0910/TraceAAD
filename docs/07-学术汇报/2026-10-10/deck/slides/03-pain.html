@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>P03 · 难点与局限</title>
+<link rel="stylesheet" href="../shared/tokens.css">
+<style>
+.h1{position:absolute;left:140px;top:140px;width:1640px}
+.cols{position:absolute;left:140px;top:250px;width:1640px;display:grid;grid-template-columns:repeat(3,1fr);gap:48px}
+.col{opacity:0;animation:in .7s ease forwards}.c2{animation-delay:.6s}.c3{animation-delay:1.2s}
+@keyframes in{to{opacity:1}}
+.lab{display:flex;align-items:baseline;gap:16px;border-bottom:2px solid var(--teal);padding-bottom:12px}
+.lab b{font-size:44px;color:var(--hi);font-weight:600}.lab span{font-size:32px;font-weight:600;color:var(--teal)}
+.claim{margin:18px 0 14px;height:56px;font-size:29px;line-height:1.55;font-weight:600;color:var(--ink)}
+.txt{margin-top:16px;font-size:21px;line-height:1.7;color:var(--body)}
+.txt p{margin:0 0 6px;text-wrap:pretty}.txt em{font-style:normal;color:var(--teal);font-weight:600}
+svg.p{display:block;width:100%;height:290px;background:#F4F2EA;border:1px solid #DAD6CB}
+.concl{position:absolute;left:140px;top:938px;font-size:30px;font-weight:600;color:var(--hi)}
+.best{stroke:#1D1D1B;stroke-width:3;fill:none}
+.nw{opacity:0;animation:in 1s ease forwards 1.6s}
+</style></head><body>
+<div class="top"><span>第一部分 · 研究领域</span><span>难点与局限</span></div>
+<h1 class="h1">通用智能优化难在三层：原理有边界，性质要权衡，研究较分散</h1>
+<div class="cols">
+ <div class="col">
+  <div class="lab"><b>1</b><span>固有局限</span></div>
+  <p class="claim">没有任何固定算法，适用于所有问题。</p>
+  <svg class="p" id="m" viewBox="0 0 520 300"></svg>
+  <div class="txt">
+   <p><em>原理</em>　无免费午餐定理（Wolpert 与 Macready，1997）：在全部问题上取平均，任意两个算法表现相同。通用只能依靠按问题调整。</p>
+   <p><em>现状</em>　理论进展与大语言模型能力，限定当前所能。</p>
+  </div>
+ </div>
+ <div class="col c2">
+  <div class="lab"><b>2</b><span>实现局限</span></div>
+  <p class="claim">各项性质相互牵制，难以同时最优。</p>
+  <svg class="p" viewBox="0 0 520 300"><text x="506" y="24" text-anchor="end" font-size="18" fill="#9C9A92">示意</text>
+   <line x1="60" y1="260" x2="500" y2="260" stroke="#6C6A64" stroke-width="2"/><line x1="60" y1="260" x2="60" y2="24" stroke="#6C6A64" stroke-width="2"/>
+   <text x="280" y="288" text-anchor="middle" font-size="20" fill="#3B3A36">通用性（覆盖的问题范围）</text>
+   <text transform="translate(26,142) rotate(-90)" text-anchor="middle" font-size="20" fill="#3B3A36">单个问题上的表现</text>
+   <rect x="350" y="34" width="140" height="84" fill="none" stroke="#C8502B" stroke-width="2.5" stroke-dasharray="7 5"/><text x="420" y="84" text-anchor="middle" font-size="26" font-weight="600" fill="#C8502B">目标</text>
+   <path d="M96 64 C 180 80, 300 150, 440 236" fill="none" stroke="#0E6B6B" stroke-width="3"/>
+   <circle cx="96" cy="64" r="10" fill="#0E6B6B"/><text x="114" y="52" font-size="21" fill="#0E6B6B">专用算法</text>
+   <circle cx="440" cy="236" r="10" fill="#0E6B6B"/><text x="418" y="248" text-anchor="end" font-size="21" fill="#0E6B6B">通用求解器</text>
+  </svg>
+  <div class="txt">
+   <p>单个问题上做到高效不难，每个问题都专业很难。</p>
+   <p>五项性质构成一个多目标问题。</p>
+  </div>
+ </div>
+ <div class="col c3">
+  <div class="lab"><b>3</b><span>研究现状</span></div>
+  <p class="claim">现有研究各解决一段，彼此难以串联。</p>
+  <svg class="p" viewBox="0 0 520 300"><text x="506" y="24" text-anchor="end" font-size="18" fill="#9C9A92">示意</text>
+   <g font-size="24" text-anchor="middle" fill="#1D1D1B">
+    <rect x="12" y="80" width="100" height="64" fill="#FBFAF6" stroke="#0E6B6B" stroke-width="2.5"/><text x="62" y="120">建模</text>
+    <rect x="142" y="80" width="100" height="64" fill="#FBFAF6" stroke="#0E6B6B" stroke-width="2.5"/><text x="192" y="120">选择</text>
+    <rect x="272" y="80" width="100" height="64" fill="#FBFAF6" stroke="#0E6B6B" stroke-width="2.5"/><text x="322" y="120">配置</text>
+    <rect x="402" y="80" width="100" height="64" fill="#FBFAF6" stroke="#0E6B6B" stroke-width="2.5"/><text x="452" y="120">设计</text>
+   </g>
+   <g stroke="#C8502B" stroke-width="2.5" fill="none">
+    <path d="M114 112 H128 M126 100 l12 24"/><path d="M244 112 H258 M256 100 l12 24"/><path d="M374 112 H388 M386 100 l12 24"/>
+   </g>
+   <text x="260" y="62" text-anchor="middle" font-size="20" fill="#6C6A64">各段研究相互独立</text>
+   <path d="M12 190 V204 H502 V190" fill="none" stroke="#C8502B" stroke-width="2.5"/>
+   <text x="260" y="238" text-anchor="middle" font-size="22" fill="#C8502B">逐题由专家串联</text>
+  </svg>
+  <div class="txt">
+   <p>多数工作针对某类问题的某个环节，很少考虑整体。</p>
+   <p>各环节目前由专家逐题串联。</p>
+  </div>
+ </div>
+</div>
+<p class="concl">通用智能优化是一个整体问题，而现有研究只解决了其中的一段。</p>
+<script>
+const rows=[['旅行商',[.35,.9,.5,.4,.3]],['车辆路径',[.4,.45,.35,.9,.5]],['作业调度',[.9,.4,.3,.5,.45]],['装箱',[.3,.35,.9,.4,.5]],['新问题',null]];
+const cols=['一','二','三','四','五'],x0=120,w=76,h=44,y0=46,g=4;let s='';
+s+='<text x="'+x0+'" y="26" font-size="20" fill="#6C6A64">算法</text>'+'<text x="506" y="24" text-anchor="end" font-size="18" fill="#9C9A92">示意</text>';
+rows.forEach((r,j)=>{const y=y0+j*(h+g);
+ s+='<text x="108" y="'+(y+h/2+7)+'" text-anchor="end" font-size="20" fill="'+(r[1]?'#1D1D1B':'#C8502B')+'" font-weight="600">'+r[0]+'</text>';
+ cols.forEach((c,i)=>{const x=x0+i*(w+g);
+  if(r[1]){const v=r[1][i];s+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="#0E6B6B" fill-opacity="'+v.toFixed(2)+'"/>';
+   if(v>=.9)s+='<rect class="best" x="'+(x+2)+'" y="'+(y+2)+'" width="'+(w-4)+'" height="'+(h-4)+'"/>';}
+  else{s+='<g class="nw"><rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="none" stroke="#C8502B" stroke-dasharray="5 4" stroke-width="2"/><text x="'+(x+w/2)+'" y="'+(y+h/2+9)+'" text-anchor="middle" font-size="26" fill="#C8502B">?</text></g>';}
+ });});
+document.getElementById('m').innerHTML=s;
+</script>
+</body></html>

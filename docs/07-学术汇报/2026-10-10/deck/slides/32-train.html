@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>P32 · 方向一</title>
+<link rel="stylesheet" href="../shared/tokens.css">
+<style>
+.fi{opacity:0;animation:fi .6s ease forwards}@keyframes fi{to{opacity:1}}
+.h1{position:absolute;left:140px;top:128px;width:1640px;font-size:50px;line-height:1.25;font-weight:600}
+.fg{position:absolute;left:140px;top:236px;width:1060px;height:610px;background:var(--panel);border:1px solid #DAD6CB;overflow:hidden}
+.fg .ov{position:absolute;left:0;top:0;width:1060px;height:610px}
+.cl3{position:absolute;left:1240px;top:236px;width:540px}
+.cl3 h3{margin:0 0 10px;font-size:24px;font-weight:600;color:var(--teal);border-bottom:2px solid var(--teal);padding-bottom:6px}
+.cl3 h3.x{color:var(--hi);border-color:var(--hi)}
+.cl3 p{margin:0 0 26px;font-size:22px;line-height:1.7;color:var(--body);text-align:justify}
+.cl3 p b{color:var(--ink);font-weight:600}
+.bn{position:absolute;left:140px;top:872px;width:1640px;height:120px;border-top:2px solid var(--ink);padding-top:26px;font-size:40px;font-weight:600;line-height:1.4}
+.bn em{font-style:normal;color:var(--hi)}
+.bn small{display:block;font-size:22px;font-weight:400;color:var(--mute);margin-top:4px}
+.rp{position:absolute;left:1118px;top:200px;z-index:5;font:400 17px 'Source Han Serif SC','Noto Serif CJK SC','Noto Serif SC','Songti SC','STSong','SimSun',serif;color:var(--mute);background:#FBFAF6;border:1px solid #DAD6CB;padding:2px 14px;cursor:pointer;opacity:.75}
+.gl{stroke-dasharray:1;stroke-dashoffset:1;animation-name:dr;animation-fill-mode:forwards;animation-timing-function:linear}
+@keyframes dr{to{stroke-dashoffset:0}}
+.gx{transform-box:fill-box;transform-origin:left center;transform:scaleX(0);animation:gx .8s ease forwards}
+@keyframes gx{to{transform:scaleX(1)}}
+.gy{transform-box:fill-box;transform-origin:center bottom;transform:scaleY(0);animation:gy .8s ease forwards}
+@keyframes gy{to{transform:scaleY(1)}}
+.t{font-size:20px;fill:#1D1D1B}.tb{font-size:22px;font-weight:600;fill:#1D1D1B}.ts{font-size:18px;fill:#6C6A64}.tt{font-size:19px;font-weight:600}
+.cx{position:absolute;left:140px;top:198px;width:1640px;font-size:21px;line-height:32px;color:var(--mute);white-space:nowrap}
+.cx b{color:var(--teal);font-weight:600;margin-right:14px;letter-spacing:.06em}
+.pts{position:absolute;left:1240px;top:236px;width:540px}
+.pt{display:flex;gap:16px;margin-bottom:34px}
+.pt .n{flex:none;width:32px;height:32px;border-radius:50%;background:var(--teal);color:#fff;font-size:19px;font-weight:600;text-align:center;line-height:32px;margin-top:3px}
+.pt.x .n{background:var(--hi)}
+.pt p{margin:0}
+.pt .c{font-size:25px;line-height:1.45;font-weight:600;color:var(--ink)}
+.pt .s{font-size:22px;line-height:1.65;color:var(--body);margin-top:6px}
+.pt .s b{color:var(--ink);font-weight:600}
+.rp{left:1700px!important;top:196px!important}
+.tok{offset-distance:0%;opacity:0;animation:tk 6s linear forwards}@keyframes tk{0%{opacity:1;offset-distance:0%}95%{opacity:1}100%{opacity:0;offset-distance:100%}}</style></head><body>
+<div class="top"><span>第五部分 · 展望</span><span>展望 · 训练</span></div>
+<h1 class="h1">方向一：把搜索记录变成训练数据，让模型学会改进</h1>
+<div class="cx"><b>常见做法</b>CALM 以相对起点程序的表现和执行反馈做 GRPO 训练；EvoTune 用同一提示的多个输出构造偏好数据。</div>
+<div class="fg"><svg class="ov" viewBox="0 0 1060 610"><text class="tb fi" style="animation-delay:0.2s" x="20" y="40" >一次搜索的记录：每条是 材料 → 改动 → 结果</text><rect class="fi" style="animation-delay:0.6s" x="20" y="70" width="380" height="84" fill="#FBFAF6" stroke="#0E6B6B" stroke-width="2" /><text class="t fi" style="animation-delay:0.6s" x="36" y="102" >#34 · Refine · 起点 #33</text><text class="tb fi" style="animation-delay:0.6s" x="36" y="134" >9.9977 → 9.2848</text><rect class="fi" style="animation-delay:0.6s" x="300" y="110" width="84" height="30" fill="#0E6B6B" stroke="none" stroke-width="0" /><text class="tt fi" style="animation-delay:0.6s" x="342" y="131" text-anchor="middle" fill="#fff">变好</text><rect class="fi" style="animation-delay:1.2s" x="20" y="166" width="380" height="84" fill="#FBFAF6" stroke="#8B8578" stroke-width="2" /><text class="t fi" style="animation-delay:1.2s" x="36" y="198" >#35 · Refine · 起点 #34</text><text class="tb fi" style="animation-delay:1.2s" x="36" y="230" >9.2848 → 9.3497</text><rect class="fi" style="animation-delay:1.2s" x="300" y="206" width="84" height="30" fill="#8B8578" stroke="none" stroke-width="0" /><text class="tt fi" style="animation-delay:1.2s" x="342" y="227" text-anchor="middle" fill="#fff">没变好</text><rect class="fi" style="animation-delay:1.8s" x="20" y="262" width="380" height="84" fill="#FBFAF6" stroke="#C8502B" stroke-width="2" /><text class="t fi" style="animation-delay:1.8s" x="36" y="294" >#36 · Explore · 起点 #34</text><text class="tb fi" style="animation-delay:1.8s" x="36" y="326" >9.2848 → 14.162</text><rect class="fi" style="animation-delay:1.8s" x="300" y="302" width="84" height="30" fill="#C8502B" stroke="none" stroke-width="0" /><text class="tt fi" style="animation-delay:1.8s" x="342" y="323" text-anchor="middle" fill="#fff">退步</text><text class="ts fi" style="animation-delay:2.6s" x="20" y="526" >材料：起点程序 + 形成路径</text><text class="ts fi" style="animation-delay:2.6s" x="20" y="552" >改动：代码差异</text><text class="ts fi" style="animation-delay:2.6s" x="20" y="578" >结果：相对起点的分数变化</text><g class="fi" style="animation-delay:3.2s"><rect x="470" y="150" width="220" height="130" fill="#E8F0EE" stroke="#0E6B6B" stroke-width="2" /><text class="tb" x="580" y="190" text-anchor="middle" >训练</text><text class="ts" x="580" y="222" text-anchor="middle" >变好的改动：正例</text><text class="ts" x="580" y="248" text-anchor="middle" >退步的改动：反例</text></g><g class="fi" style="animation-delay:4.0s"><rect x="790" y="150" width="240" height="130" fill="#FBFAF6" stroke="#0E6B6B" stroke-width="2" /><text class="tb" x="910" y="190" text-anchor="middle" >模型</text><text class="ts" x="910" y="222" text-anchor="middle" >学到“怎样改”</text><text class="ts" x="910" y="248" text-anchor="middle" >写进参数，不靠提示</text></g><g class="fi" style="animation-delay:3.0s" fill="none" stroke="#6C6A64" stroke-width="2.5"><path d="M400 215 H470 M461 207 L470 215 L461 223"/></g><g class="fi" style="animation-delay:3.8s" fill="none" stroke="#6C6A64" stroke-width="2.5"><path d="M690 215 H790 M781 207 L790 215 L781 223"/></g><g class="fi" style="animation-delay:4.6s" fill="none" stroke="#6C6A64" stroke-width="2.5"><path d="M910 280 V400 M902 391 L910 400 L918 391"/></g><g class="fi" style="animation-delay:5.0s"><rect x="790" y="400" width="240" height="90" fill="#FBFAF6" stroke="#C8502B" stroke-width="2" /><text class="tb" x="910" y="440" text-anchor="middle" >TraceAAD 搜索</text><text class="ts" x="910" y="468" text-anchor="middle" >生成新的尝试</text></g><g class="fi" style="animation-delay:5.6s" fill="none" stroke="#C8502B" stroke-width="2.5" stroke-dasharray="6 5"><path d="M790 445 H210 V352"/></g><g class="fi" style="animation-delay:5.6s" fill="none" stroke="#C8502B" stroke-width="2.5"><path d="M201 364 L210 352 L219 364"/></g><text class="ts fi" style="animation-delay:5.6s" x="500" y="436" text-anchor="middle" fill="#C8502B">产生新的记录</text><circle class="tok" r="9" fill="#C8502B" style="offset-path:path('M400 215 H910 V445 H210 V352');animation-delay:6.2s"/><text class="ts fi" style="animation-delay:2.6s" x="1030" y="590" text-anchor="end" fill="#8B8578">记录取自 CVRP 第 3 次运行；训练方式为设想</text></svg></div><button class="rp" onclick="rp()">重播</button>
+<div class="pts"><div class="pt"><span class="n">1</span><div><p class="c">解决什么：让模型学到“怎样改”。</p><p class="s">认识三、四显示，模型的改法随一句话、一种写法而变。训练把改进模式写进参数，不再每次靠提示传达。</p></div></div><div class="pt x"><span class="n">2</span><div><p class="c">痛点：经验用完即弃，正样本稀疏。</p><p class="s">一次搜索的记录只在本次使用。一个程序首次尝试的成功率为 18%–21%，样本以失败为主。</p></div></div><div class="pt"><span class="n">3</span><div><p class="c">做法：以“材料 → 改动 → 结果”为样本。</p><p class="s">变好的改动作正例，退步的作反例。训练后的模型放回 TraceAAD，继续产生记录。</p></div></div></div>
+<div class="bn fi" style="animation-delay:7.0s">搜索产生数据，数据训练模型，模型改进搜索。<small>形成路径让样本带上“改动从哪里来”，这是只含最好程序的数据缺少的。</small></div>
+<script>function rp(){document.getAnimations().forEach(function(a){a.cancel();a.play()})}document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")rp()})</script></body></html>

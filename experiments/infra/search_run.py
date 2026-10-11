@@ -4,7 +4,7 @@ import argparse
 from dataclasses import asdict
 import json
 
-from benchmarks.tasks import FUNCTION_SECONDS, SELECTION_SEED, selection_task, training_task
+from benchmarks.tasks import FUNCTION_SECONDS, FUNCTION_LIMITS, INSTANCE_LIMITS, INSTANCE_SECONDS, SELECTION_SEED, selection_task, training_task
 from experiments.infra.base import RESULTS_ROOT
 from experiments.infra.runner import add_common_run_args, setup_experiment_run
 from traceaad.common.config import REVISION
@@ -16,8 +16,7 @@ def build_parser(experiment, config_class=None):
     add_common_run_args(parser, default_output_tokens=8192)
     if config_class is not None and hasattr(config_class, "eval_timeout_seconds"):
         parser.add_argument('--scheduler-socket', help='shared CPU/GPU scheduler on this host')
-        from benchmarks.tasks import INSTANCE_SECONDS
-        parser.add_argument("--eval-timeout-seconds", type=float, default=float(INSTANCE_SECONDS),
+        parser.add_argument("--eval-timeout-seconds", type=float, default=None,
                             help="wall-clock limit for each instance, including the fixed solver")
     parser.add_argument("--evaluation-seeds", type=int, nargs="+", default=[730241])
     parser.add_argument("--experiment", default=experiment,
@@ -34,6 +33,8 @@ def main(method_class, config_class, experiment, description, argv=None):
         raise ValueError("search requires thinking disabled and exact serving token counts")
     if args.repeat is not None and args.seed != args.repeat - 1:
         raise ValueError("run seed must equal repeat - 1")
+    if hasattr(args, "eval_timeout_seconds") and args.eval_timeout_seconds is None:
+        args.eval_timeout_seconds = INSTANCE_LIMITS.get(args.task, INSTANCE_SECONDS)
     execution = ({"eval_timeout_seconds": args.eval_timeout_seconds, "eval_workers": args.eval_workers}
                  if hasattr(args, "eval_timeout_seconds") else {})
     scheduler, llm_factory, profile = None, None, None
@@ -55,15 +56,16 @@ def main(method_class, config_class, experiment, description, argv=None):
     config = config_class(budget=args.budget, output_tokens=args.output_tokens,
                     evaluation_seeds=tuple(args.evaluation_seeds), seed=args.seed, **execution)
     metadata = ({"evaluation_execution": {"timeout_scope": "instance",
-                 "timeout_seconds": config.eval_timeout_seconds, "function_seconds": FUNCTION_SECONDS,
+                 "timeout_seconds": config.eval_timeout_seconds, "function_seconds": FUNCTION_LIMITS.get(args.task, FUNCTION_SECONDS),
                  "n_workers": config.eval_workers,
                  "protocol": "isolated-instances-v1"}} if execution else {})
     if scheduler:
         metadata['resource_scheduler'] = scheduler
     if args.dry_run:
-        evaluation, _ = training_task(args.task, args.eval_workers, condition="traceaad")
+        evaluation, task_config = training_task(args.task, args.eval_workers, condition="traceaad")
         selection = selection_task(args.task, evaluation) if args.final_selection == 'validation' else None
         print(json.dumps({"method": method_class.METHOD, "revision": REVISION, "task": args.task, "config": asdict(config),
+            "task_eval": task_config,
             "search_timeout": config.eval_timeout_seconds if execution else evaluation.timeout_seconds,
             **metadata,
             "final_selection": args.final_selection,

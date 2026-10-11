@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>C · 封面</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0B1016;--ink:#E9EEF2;--mute:#8696A5;--line:#26323E;--acc:#FFB547;--cy:#5AD1E6}
+*{box-sizing:border-box;margin:0}
+body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--ink);font-family:'Noto Sans SC','Space Grotesk',sans-serif;position:relative}
+.grid{position:absolute;inset:0;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:160px 120px;opacity:.55}
+.hair{position:absolute;left:120px;right:120px;height:1px;background:var(--mute)}
+.meta{position:absolute;left:120px;right:120px;font:500 22px 'Space Grotesk';letter-spacing:.2em;color:var(--mute);display:flex;justify-content:space-between}
+h1{position:absolute;left:120px;top:250px;font-size:176px;font-weight:900;line-height:1.02;letter-spacing:-.02em}
+h1 span{color:var(--acc)}
+.sub{position:absolute;left:120px;top:690px;width:1000px;font-size:40px;font-weight:300;line-height:1.5;color:#C5D0DA}
+.who{position:absolute;left:120px;bottom:80px;font-size:28px;line-height:1.7}
+.who span{color:var(--mute);font:400 22px 'Space Grotesk';letter-spacing:.08em}
+svg{position:absolute;right:120px;top:210px;width:520px;height:640px}
+.pulse{stroke:var(--cy);stroke-width:2;fill:none;stroke-dasharray:1000;stroke-dashoffset:1000;animation:d 4s ease forwards .4s}
+@keyframes d{to{stroke-dashoffset:0}}
+</style></head><body>
+<div class="grid"></div>
+<div class="meta" style="top:70px"><span>ACADEMIC TALK</span><span>2026 · 10 · 10</span></div>
+<div class="hair" style="top:130px"></div>
+<h1>通用智能<br>优化中的<span>AAD</span></h1>
+<p class="sub">LLM 怎样改进算法：TraceAAD 的认识、机制与实验</p>
+<div class="who">方子阳<br><span>SOUTH CHINA UNIVERSITY OF TECHNOLOGY</span></div>
+<svg viewBox="0 0 520 640">
+ <polyline class="pulse" points="260,320 90,120 40,380 170,560 260,320"/>
+ <polyline class="pulse" points="260,320 400,100 490,300 410,540 260,320" style="animation-delay:1.6s"/>
+ <g fill="#0B1016" stroke="#8696A5" stroke-width="2"><circle cx="90" cy="120" r="10"/><circle cx="40" cy="380" r="10"/><circle cx="170" cy="560" r="10"/><circle cx="400" cy="100" r="10"/><circle cx="490" cy="300" r="10"/><circle cx="410" cy="540" r="10"/></g>
+ <rect x="246" y="306" width="28" height="28" fill="#FFB547"/>
+</svg>
+</body></html>

@@ -23,11 +23,13 @@ import numpy as np
 from core import SecureEvaluator
 from core.evaluate import EVALUATION_SEED, EvaluationOutcome, _stop_eval_process
 from core.scheduling import SchedulerSession
-from benchmarks.tasks import FUNCTION_SECONDS
+from benchmarks.tasks import FUNCTION_SECONDS, FUNCTION_LIMITS, INSTANCE_LIMITS
+
 from .config import REVISION
 from .evaluation import SeededEvaluation, clean_traceback, failing_line, fingerprint, protocol_identity
 
 EXECUTION = "isolated-instances-v1"
+_TASK_BUDGET = object()
 
 
 def _positive(value):
@@ -97,7 +99,12 @@ class InstanceProgramEvaluator:
     """
 
     def __init__(self, evaluation, seeds=(730241,), role="search", *, measure_calls=True,
-                 timeout_seconds=10, n_workers=1, scheduler_socket=None, function_seconds=FUNCTION_SECONDS):
+                 timeout_seconds=None, n_workers=1, scheduler_socket=None, function_seconds=_TASK_BUDGET):
+        task = getattr(evaluation, "task", None)
+        if function_seconds is _TASK_BUDGET:
+            function_seconds = FUNCTION_LIMITS.get(task, FUNCTION_SECONDS)
+        if timeout_seconds is None:
+            timeout_seconds = INSTANCE_LIMITS.get(task, 10)
         validate_execution(timeout_seconds, n_workers, function_seconds)
         if function_seconds is not None and not measure_calls:
             raise ValueError("a function budget needs the call measurement")

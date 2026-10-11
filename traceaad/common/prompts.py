@@ -107,6 +107,7 @@ class PromptBuilder:
     REPAIR = REPAIR
     EXPLORE = EXPLORE
     CROSSOVER = CROSSOVER
+    FORMATION_INTRO = FORMATION_INTRO
     ANALYSIS = ANALYSIS
     CLOSING = CLOSING
 
@@ -266,7 +267,7 @@ class PromptBuilder:
             return (f"[{title}]\nThe {subject} algorithm is {self.UNCHANGED_ROOT.format(origin=origin)}{failed_note}; no changes have been "
                     f"recorded yet.\nDesign: {idea_view(root['idea'])}"), []
         start = max(1, len(steps) - count)
-        lines = [f"[{title}]", FORMATION_INTRO.replace("current algorithm", f"{subject} algorithm")]
+        lines = [f"[{title}]", self.FORMATION_INTRO.replace("current algorithm", f"{subject} algorithm")]
         if start == 1:
             lines.append(f"Start · {origin} · score {score_text(root['score'])}{failed_note}\n"
                          f"  Design: {idea_view(root['idea'])}")

@@ -1,16 +1,17 @@
 """Evaluate frozen programs with the current task execution defaults."""
 
-from benchmarks.tasks import CO_TASKS, INSTANCE_SECONDS, heldout_task
+from benchmarks.tasks import CO_TASKS, INSTANCE_LIMITS, heldout_task, validate_task_interface
 from traceaad.common.evaluation import ProgramEvaluator
 from traceaad.common.instance_evaluation import InstanceProgramEvaluator
 
 
 def heldout_evaluator(config, split, seeds, *, workers, timeout_seconds, measure_calls,
                       task_factory=heldout_task, scheduler_socket=None):
+    validate_task_interface(config['task'], config)
     params = config.get("method_params", {})
     count = params.get("eval_workers", 1) if workers is None else workers
     if config["task"] in CO_TASKS:
-        timeout = params.get("eval_timeout_seconds", INSTANCE_SECONDS) if timeout_seconds is None else timeout_seconds
+        timeout = params.get("eval_timeout_seconds", INSTANCE_LIMITS[config["task"]]) if timeout_seconds is None else timeout_seconds
         task = task_factory(config["task"], split, 1, None)
         evaluator = InstanceProgramEvaluator(task, seeds, "heldout", measure_calls=measure_calls,
                                              timeout_seconds=timeout, n_workers=count,

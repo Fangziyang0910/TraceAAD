@@ -23,7 +23,7 @@
 
 `candidate` 事件记录 `candidate_id`、`budget_used`、`operator`、`status`、`fitness`、`valid`、`node_id` 和 `attempt`。`attempt` 保存父程序、参考程序、改动归属和 `call_ids`，通过调用编号查看原始请求和回复。新程序用 `program` 元数据引用 `programs.jsonl` 中的 `key`；重复尝试引用已有 `node_id`。评价和探索结束记录按发生时追加，不重写历史。
 
-源码身份是实际保存文本的 SHA-256。当前 TraceAAD 在交付时先规范化源码，再计算身份。`fitness` 和 `score` 都是统一后的最小化目标值，越小越好。TSP、CVRP、VRPTW 用正路径长度，装箱用正箱数，OP 用负奖励，CO-Bench 用负归一化质量。`run_config.json` 的 `objective` 为 `min`，`native_objective` 另记原任务方向。改进量统一为原值减去新值，正数表示改善。选中程序的训练成绩与独立选择成绩分别保存。
+源码身份是实际保存文本的 SHA-256。当前 TraceAAD 在交付时先规范化源码，再计算身份。`fitness` 和 `score` 都是统一后的最小化目标值，越小越好。TSP、CVRP、VRPTW 用正路径长度，装箱用正箱数，OP 用负奖励；已移除的 CO-Bench 任务历史档案用负归一化质量。`run_config.json` 的 `objective` 为 `min`，`native_objective` 另记原任务方向。改进量统一为原值减去新值，正数表示改善。选中程序的训练成绩与独立选择成绩分别保存。
 
 预算和候选编号分别记录。初始化、失败、重复和 Repair 都消耗一次候选预算。有效率使用有效候选记录数 / 全部候选记录数。
 

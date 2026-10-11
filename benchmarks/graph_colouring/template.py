@@ -1,38 +1,36 @@
-"""Problem definition, evolved function contract and executable starting heuristic."""
+"""Whole-solver contract and a fully editable DSATUR starting program."""
 
 template_program = '''import numpy as np
 
-def score_coloring_moves(adjacency: np.ndarray, colors: np.ndarray, moves: np.ndarray, phase: str) -> np.ndarray:
-    """Return one finite score per candidate (vertex_id, target_color) row.
-
-    adjacency: symmetric boolean (n,n) matrix, zero diagonal, zero-based IDs.
-    colors: integer (n,) array; -1 means uncolored during construction.
-    moves: integer (K,2) candidate rows; IDs and colors are zero-based.
-    phase="construct": one candidate per uncolored vertex, using its smallest
-    conflict-free color. Rank vertices; the outer solver assigns that color.
-    phase="repair": recolor conflicting vertices at a fixed smaller color
-    budget; candidates can still leave conflicts. Tabu filtering is external.
-    Larger scores are preferred; ties choose the first candidate row.
-    """
-    nodes, targets = moves[:, 0], moves[:, 1]
-    if phase == "construct":
-        saturation = np.array([len(set(colors[adjacency[v] & (colors >= 0)].tolist())) for v in nodes])
-        return saturation * (len(colors) + 1) + adjacency[nodes].sum(axis=1)
-    k = int(colors.max()) + 1
-    counts = adjacency.astype(np.int32) @ (colors[:, None] == np.arange(k)[None, :]).astype(np.int32)
-    return (counts[nodes, colors[nodes]] - counts[nodes, targets]).astype(float)
+def solve(adjacency: np.ndarray) -> np.ndarray:
+    """Return a nonnegative integer color for every vertex of the input graph."""
+    n = len(adjacency)
+    colors = np.full(n, -1, dtype=np.int64)
+    degrees = adjacency.sum(axis=1)
+    for _ in range(n):
+        uncolored = np.flatnonzero(colors < 0)
+        saturation = np.array([
+            len(set(colors[adjacency[v] & (colors >= 0)].tolist()))
+            for v in uncolored
+        ])
+        node = uncolored[np.argmax(saturation * (n + 1) + degrees[uncolored])]
+        used = set(colors[adjacency[node]].tolist())
+        color = 0
+        while color in used:
+            color += 1
+        colors[node] = color
+    return colors
 '''
 
-task_description = '''Design a construction and conflict-repair priority for graph coloring.
-Assign every vertex one non-negative integer color so adjacent vertices have different colors.
-Minimize the number of distinct colors in the FINAL VALID coloring. The graph is undirected,
-without self-loops. During construction the fixed solver proposes, for every uncolored vertex,
-its smallest currently conflict-free color; score_coloring_moves ranks these assignments.
-It then attempts to eliminate the highest color class, remapping its vertices into fewer colors.
-During repair it proposes recolorings of currently conflicting vertices within the reduced color
-budget. A seven-step reverse-move tabu filter is external (relaxed if all candidates are tabu).
-The returned priorities may guide temporarily conflicting moves. A reduced coloring is accepted
-only if ALL conflicts disappear. If repair fails, the best previous valid coloring is returned.
-Construction and repair share ONE evolved function; phase states which decision is being made.'''
+task_description = '''Design a complete solver for graph coloring.
+The input adjacency is a symmetric boolean (n, n) matrix with a zero diagonal.
+Vertex IDs are zero-based. Return an integer array of shape (n,) assigning a
+nonnegative color to every vertex. Adjacent vertices must have different colors.
+Minimize the number of DISTINCT colors in the returned valid coloring; color
+labels need not be consecutive. Return the coloring itself, not a score.
+The supplied DSATUR construction is editable starting code. You may change or
+replace the entire algorithm and add helper functions. No construction, repair,
+neighborhood, acceptance rule or restart strategy is imposed by the evaluator.
+The solver is called once per instance and receives the complete graph.'''
 
-function_name = 'score_coloring_moves'
+function_name = 'solve'

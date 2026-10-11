@@ -12,7 +12,7 @@ import subprocess
 from experiments.infra.base import SAMPLING_PROFILES, TASKS
 from experiments.infra.launcher import launch_plan
 from experiments.infra.search_launch import build_plan, implementation_files
-from benchmarks.tasks import ALL_TASKS, FUNCTION_SECONDS, SUITES, evaluation_limits
+from benchmarks.tasks import ALL_TASKS, FUNCTION_SECONDS, FUNCTION_LIMITS, INSTANCE_SECONDS, INSTANCE_LIMITS, SUITES, evaluation_limits
 from traceaad.common.config import REVISION
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,8 +59,7 @@ def main(config_class, experiment, module, method, host="local", backends=("serv
     if instance_execution:
         parser.set_defaults(suite="co6")
         parser.add_argument("--eval-workers", type=int, help='per-evaluation ceiling; scheduled default: host CPU capacity')
-        from benchmarks.tasks import INSTANCE_SECONDS
-        parser.add_argument("--eval-timeout-seconds", type=float, default=float(INSTANCE_SECONDS))
+        parser.add_argument("--eval-timeout-seconds", type=float, default=None)
         parser.add_argument('--scheduler-socket', help='shared CPU/GPU scheduler on this host')
         parser.add_argument('--repeat-ids', type=int, nargs='+', help='run only these repeats on this host, preserving seeds')
     args = parser.parse_args(argv)
@@ -79,17 +78,19 @@ def main(config_class, experiment, module, method, host="local", backends=("serv
                  if instance_execution else {})
     if scheduler:
         execution['scheduler_socket'] = args.scheduler_socket
-    policy = config_class(budget=args.budget, **execution)
+    policy = config_class(budget=args.budget, **{k: v for k, v in execution.items() if v is not None})
     plan = plan_for(args.batch, experiment, module, backends, args.repeats, tasks, args.budget,
                      repeat_ids=getattr(args, 'repeat_ids', None), **execution)
     limits = evaluation_limits(tasks)
     metadata = ({"evaluation_execution": {"timeout_scope": "instance",
-                 "timeout_seconds": policy.eval_timeout_seconds, "function_seconds": FUNCTION_SECONDS,
+                 "timeout_seconds": {task: args.eval_timeout_seconds if args.eval_timeout_seconds is not None
+                                     else INSTANCE_LIMITS.get(task, INSTANCE_SECONDS) for task in tasks},
+                 "function_seconds": {task: FUNCTION_LIMITS.get(task, FUNCTION_SECONDS) for task in tasks},
                  "n_workers": policy.eval_workers,
                  "protocol": "isolated-instances-v1"}} if instance_execution else {})
     if instance_execution:
-        limits = {task: {"timeout_scope": "instance", "timeout_seconds": policy.eval_timeout_seconds,
-                         "function_seconds": FUNCTION_SECONDS}
+        limits = {task: {"timeout_scope": "instance", "timeout_seconds": metadata["evaluation_execution"]["timeout_seconds"][task],
+                         "function_seconds": FUNCTION_LIMITS.get(task, FUNCTION_SECONDS)}
                   for task in tasks}
     if scheduler:
         metadata['resource_scheduler'] = scheduler

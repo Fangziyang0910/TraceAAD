@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>P14 · 评价与反馈</title>
+<link rel="stylesheet" href="../shared/tokens.css"><link rel="stylesheet" href="../shared/survey.css">
+<style>
+.fi{opacity:0;animation:fi .6s ease forwards}@keyframes fi{to{opacity:1}}
+.stg{position:absolute;top:118px;height:76px;border:2px solid var(--teal);background:#FDFCF9;text-align:center;padding-top:22px;font-size:23px;font-weight:600;color:var(--teal)}
+.cdn{position:absolute;top:118px;height:76px;width:130px;background:#FDFCF9;border:1px solid #DAD6CB;text-align:center;padding-top:22px;font-size:21px}
+.fb{position:absolute;top:262px;background:#FDFCF9;border:1px solid #C8502B;font-size:18px;line-height:1.5;padding:10px 14px;color:var(--ink)}
+.fb b{color:var(--hi);font-weight:600}
+.dd{position:absolute;background:#FDFCF9;border:1px dashed #9C9A92;font-size:17px;line-height:1.5;padding:8px 12px;color:var(--mute)}
+.res{position:absolute;left:944px;top:132px;font-size:22px;font-weight:600;color:var(--hi)}
+</style></head><body>
+<div class="top"><span>第二部分 · 自动算法设计</span><span>评价与反馈</span></div>
+<h1 class="h1">评价把候选运行成结果，不同结果为后续动作提供不同依据</h1>
+<div class="def"><div class="lab">这一步做什么</div><p>评价把候选程序运行成结果。结果包括分数、报错和执行情况，为选择、修复与后续生成提供依据。</p><div class="lab">设计选择</div><ol><li><b>失败处理</b>丢弃，或依据报错修复</li><li><b>评价成本</b>分级评价，或预测分数</li><li><b>反馈内容</b>分数外加文字与行为</li></ol></div>
+<div class="fig"><div class="cdn fi" style="left:20px;animation-delay:0.4s">候选程序</div><div class="stg fi" style="left:250px;width:150px;animation-delay:1.6s">运行</div><div class="stg fi" style="left:520px;width:150px;animation-delay:4.4s">评分</div><div class="res fi" style="left:790px;animation-delay:7.6s">分数</div><div class="fb fi" style="left:200px;width:250px;animation-delay:2.6s"><b>执行失败或超时</b><br>丢弃：FunSearch、EoH<br>修复：MeLA、LACE</div><div class="fb fi" style="left:470px;width:250px;animation-delay:5.4s"><b>分级评价</b><br>先小规模，再主测试<br>AlphaEvolve</div><div class="fb fi" style="left:740px;width:280px;animation-delay:8.4s"><b>分数之外</b><br>文字反馈、多项指标<br>行为信号：Teacher-Aware</div><div class="dd fi" style="left:405px;top:46px;animation-delay:9.6s">预测分数，只评价部分候选：Hercules-P</div><svg class="ov" viewBox="0 0 1040 400"><g class="fi" style="animation-delay:1.0s" fill="none" stroke="#6C6A64" stroke-width="2.5"><path d="M158 156 H242 M233 148 L242 156 L233 164"/></g><g class="fi" style="animation-delay:3.8s" fill="none" stroke="#6C6A64" stroke-width="2.5"><path d="M408 156 H512 M503 148 L512 156 L503 164"/></g><g class="fi" style="animation-delay:6.8s" fill="none" stroke="#6C6A64" stroke-width="2.5"><path d="M678 156 H782 M773 148 L782 156 L773 164"/></g><g class="fi" style="animation-delay:2.4s" fill="none" stroke="#C8502B" stroke-width="2.5"><path d="M325 200 V256 M317 247 L325 256 L333 247"/></g><g class="fi" style="animation-delay:5.2s" fill="none" stroke="#C8502B" stroke-width="2.5"><path d="M595 200 V256 M587 247 L595 256 L603 247"/></g><g class="fi" style="animation-delay:8.2s" fill="none" stroke="#C8502B" stroke-width="2.5"><path d="M880 176 V256 M872 247 L880 256 L888 247"/></g><g class="fi" style="animation-delay:9.8s" fill="none" stroke="#9C9A92" stroke-width="1.5" stroke-dasharray="4 4"><path d="M595 86 V112"/></g></svg><button class="rp" onclick="rp()">重播</button></div>
+<div class="bot">
+ <div><h3>代表做法</h3><div class="w"><b>FunSearch</b><i>Nature 2023</i><span>出错或超时的候选被丢弃</span></div><div class="w"><b>MeLA</b><i>arXiv 2025</i><span>依据报错，最多修复 M 次</span></div><div class="w"><b>AlphaEvolve</b><i>DeepMind 2025</i><span>级联评价，可含文字反馈</span></div><div class="w"><b>Hercules</b><i>arXiv 2025</i><span>预测分数，只评价部分候选</span></div><div class="w"><b>Teacher-Aware</b><i>arXiv 2026</i><span>以教师策略的动作偏好作反馈</span></div></div>
+ <div><h3>作用</h3><p class="st">分数用于选优，报错用于修复，行为信号指出候选的局部决策。不同的反馈支持不同的后续动作。</p></div>
+ <div class="lim"><h3>代价</h3><p>· 每次评价都要运行候选，评价次数决定搜索的预算</p><p>· 修复与重采样为同一候选增加额外的模型调用</p><p>· 多数方法依赖终点分数，看不到候选在执行中的决策</p></div>
+</div>
+<script>function rp(){document.getAnimations().forEach(function(a){a.cancel();a.play()})}document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")rp()})</script></body></html>

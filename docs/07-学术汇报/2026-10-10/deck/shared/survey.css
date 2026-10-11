@@ -1,0 +1,23 @@
+.h1{position:absolute;left:140px;top:132px;width:1640px;font-size:50px;line-height:1.2}
+.def{position:absolute;left:140px;top:240px;width:560px}
+.lab{font-size:20px;font-weight:600;letter-spacing:.14em;color:var(--teal);border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:10px}
+.def p{margin:0 0 22px;font-size:23px;line-height:1.7;color:var(--ink);text-wrap:pretty}
+.def ol{margin:0;padding:0;list-style:none}
+.def li{font-size:21px;line-height:1.6;color:var(--body);margin-bottom:9px;text-wrap:pretty}
+.def li b{color:var(--teal);margin-right:10px;font-weight:600}
+.fig{position:absolute;left:740px;top:240px;width:1040px;height:400px;background:var(--panel);border:1px solid #DAD6CB;overflow:hidden}
+.bot{position:absolute;left:140px;top:672px;width:1640px;display:grid;grid-template-columns:800px 360px 400px;gap:40px}
+.bot h3{margin:0 0 12px;font-size:27px;font-weight:600;color:var(--teal);border-bottom:2px solid var(--teal);padding-bottom:8px}
+.w{display:grid;grid-template-columns:172px 146px 1fr;column-gap:12px;font-size:20px;line-height:1.55;margin-bottom:8px;color:var(--body)}
+.w b{color:var(--ink);font-weight:600}.w i{font-style:normal;color:var(--mute);font-size:17px;padding-top:2px}
+.w.us b{color:var(--hi)}
+.st{font-size:21px;line-height:1.7;color:var(--body);text-wrap:pretty}
+.lim p{margin:0 0 10px;font-size:21px;line-height:1.6;color:var(--body);padding-left:1.1em;text-indent:-1.1em;text-wrap:pretty}
+.fig .cd{position:absolute;background:#FDFCF9;border:1px solid #DAD6CB;padding:14px 18px}
+.fig .cl{font-size:18px;color:var(--mute);letter-spacing:.08em;margin-bottom:8px}
+.fig svg.ov{position:absolute;left:0;top:0;width:1040px;height:400px}
+.fig svg text{font-family:'Source Han Serif SC','Noto Serif CJK SC','Noto Serif SC','Songti SC','STSong','SimSun','Times New Roman',serif}
+.fig svg text.mono,.fig .mono{font-family:Consolas,'Courier New',monospace}
+.rp{position:absolute;right:12px;top:10px;z-index:5;font:400 17px 'Source Han Serif SC','Noto Serif CJK SC','Noto Serif SC','Songti SC','STSong','SimSun',serif;color:var(--mute);background:#FBFAF6;border:1px solid #DAD6CB;padding:2px 14px;cursor:pointer;opacity:.75}
+.rp:hover{opacity:1;color:var(--teal);border-color:var(--teal)}
+.def p,.st,.lim p{text-align:justify;text-justify:inter-character}

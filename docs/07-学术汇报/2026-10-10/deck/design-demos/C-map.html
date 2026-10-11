@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>C · 领域地图</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0B1016;--ink:#E9EEF2;--mute:#8696A5;--line:#26323E;--acc:#FFB547;--cy:#5AD1E6}
+*{box-sizing:border-box;margin:0}
+body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--ink);font-family:'Noto Sans SC','Space Grotesk',sans-serif;position:relative}
+.meta{position:absolute;left:100px;right:100px;top:56px;font:500 20px 'Space Grotesk';letter-spacing:.2em;color:var(--mute);display:flex;justify-content:space-between}
+h1{position:absolute;left:100px;top:112px;width:1500px;font-size:56px;font-weight:700;line-height:1.28}
+.rail{position:absolute;left:100px;right:100px;top:300px;height:1px;background:var(--mute)}
+.rail i{position:absolute;top:-6px;width:13px;height:13px;border-radius:50%;background:var(--cy);box-shadow:0 0 18px 4px rgba(90,209,230,.55);animation:go 8s linear infinite}
+@keyframes go{from{left:0}to{left:calc(100% - 13px)}}
+.cols{position:absolute;left:100px;right:100px;top:300px;bottom:230px;display:grid;grid-template-columns:1fr 1fr 1fr 1.9fr;border-left:1px solid var(--line)}
+.col{border-right:1px solid var(--line);padding:30px 34px}
+.col .no{font:700 120px/1 'Space Grotesk';color:#2C3A47}
+.col h2{font-size:42px;font-weight:700;margin-top:18px}
+.col h2 small{display:block;font:500 17px 'Space Grotesk';letter-spacing:.2em;color:var(--mute);margin-top:6px}
+.col p{font-size:25px;line-height:1.55;color:#C5D0DA;margin-top:22px}
+.col .w{font:400 21px/1.6 'Space Grotesk','Noto Sans SC';color:var(--mute);margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+.col .w b{color:var(--cy);font-weight:500}
+.col.f{background:linear-gradient(180deg,rgba(255,181,71,.10),transparent 70%);border-top:3px solid var(--acc);margin-top:-3px}
+.col.f .no{color:var(--acc)}.col.f h2{color:var(--acc)}
+.loop{margin-top:30px;display:flex;align-items:center;gap:14px;font-size:22px}
+.loop div{border:1px solid var(--acc);padding:10px 18px;color:var(--ink);white-space:nowrap}
+.loop span{color:var(--acc);font-size:30px}
+.bar{position:absolute;left:100px;right:100px;bottom:80px;height:110px;border-top:1px solid var(--mute);display:flex;align-items:center;gap:60px}
+.bar .t{font:500 18px 'Space Grotesk';letter-spacing:.2em;color:var(--mute);width:210px}
+.bar .d{font-size:27px;line-height:1.5;color:#C5D0DA}.bar .d b{color:var(--ink)}
+</style></head><body>
+<div class="meta"><span>PART 1 · FIELD MAP</span><span>通用智能优化</span></div>
+<h1>四类研究任务，把一个自然语言问题变成可用的求解方案</h1>
+<div class="rail"><i></i></div>
+<div class="cols">
+ <div class="col"><div class="no">01</div><h2>问题建模<small>MODELING</small></h2><p>变量、目标、约束是什么</p><div class="w">NL4Opt · OptiMUS<br><b>TriVAL（我们）</b></div></div>
+ <div class="col"><div class="no">02</div><h2>算法选择<small>SELECTION</small></h2><p>用哪一个现有算法</p><div class="w">SATzilla</div></div>
+ <div class="col"><div class="no">03</div><h2>算法配置<small>CONFIGURATION</small></h2><p>用什么参数</p><div class="w">irace · SMAC</div></div>
+ <div class="col f"><div class="no">04</div><h2>算法设计<small>AUTOMATED ALGORITHM DESIGN · 本次汇报聚焦</small></h2><p>现有算法不够时，写出新的算法程序。</p>
+  <div class="loop"><div>候选程序</div><span>→</span><div>评估</div><span>→</span><div>分析 · 设计 · 修改</div><span>↺</span></div>
+  <div class="w">FunSearch · EoH · ReEvo · AlphaEvolve</div></div>
+</div>
+<div class="bar"><div class="t">INPUT → OUTPUT</div><div class="d"><b>自然语言问题</b>（例：CVRP，50 个客户，容量有限，总距离最短）→ 建模 → 选择 → 配置 → <b>设计</b> → 求解与评估</div></div>
+</body></html>

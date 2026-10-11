@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>P12 · 候选生成</title>
+<link rel="stylesheet" href="../shared/tokens.css"><link rel="stylesheet" href="../shared/survey.css">
+<style>
+.fi{opacity:0;animation:fi .6s ease forwards}@keyframes fi{to{opacity:1}}
+.chip{position:absolute;background:#FDFCF9;border:1px solid #DAD6CB;font-size:19px;color:var(--ink);padding:10px 14px;line-height:1.35}
+.chip small{display:block;font-size:15px;color:var(--mute)}
+.mid{position:absolute;left:408px;top:90px;width:224px;height:150px;border:2px solid var(--teal);background:#FDFCF9;text-align:center;padding-top:34px;font-size:25px;font-weight:600;color:var(--teal)}
+.mid span{display:block;margin-top:8px;font-size:17px;font-weight:400;color:var(--mute)}
+.col{position:absolute;font-size:18px;color:var(--mute);letter-spacing:.08em}
+.op{position:absolute;top:332px;height:44px;width:128px;border:1px solid #0E6B6B;background:#E6F0EE;text-align:center;font-size:19px;color:#0E6B6B;padding-top:9px}
+</style></head><body>
+<div class="top"><span>第二部分 · 自动算法设计</span><span>候选生成</span></div>
+<h1 class="h1">候选由读到的材料和要求的修改共同决定</h1>
+<div class="def"><div class="lab">这一步做什么</div><p>候选生成让大语言模型读取材料，按要求修改程序，输出新的候选。材料与要求，共同决定模型提出什么修改。</p><div class="lab">设计选择</div><ol><li><b>材料</b>起点程序、参考程序、反思与历史</li><li><b>要求</b>探索、改进、调参、简化</li><li><b>交付</b>完整代码、diff 补丁、思想加代码</li></ol></div>
+<div class="fig"><div class="col fi" style="left:24px;top:26px;animation-delay:0.3s">读到的材料</div><div class="col fi" style="left:730px;top:26px;animation-delay:0.3s">输出的候选</div><div class="chip fi" style="left:24px;top:54px;width:290px;animation-delay:0.8s">起点程序与分数</div><div class="chip fi" style="left:24px;top:112px;width:290px;animation-delay:1.5s">参考程序</div><div class="chip fi" style="left:24px;top:170px;width:290px;animation-delay:2.2s">好坏程序的对比与反思</div><div class="chip fi" style="left:24px;top:228px;width:290px;animation-delay:2.9s">演化路径上的历史程序</div><div class="mid fi" style="animation-delay:3.8s">大语言模型<span>按要求修改程序</span></div><div class="chip fi" style="left:730px;top:54px;width:286px;animation-delay:5.2s">完整代码<small>重写整段程序</small></div><div class="chip fi" style="left:730px;top:130px;width:286px;animation-delay:5.8s">diff 补丁<small>只改动指定位置</small></div><div class="chip fi" style="left:730px;top:206px;width:286px;animation-delay:6.4s">思想加代码<small>先写思想，再写实现</small></div><div class="col fi" style="left:24px;top:298px;animation-delay:7.2s">要求的修改（EoH 的五类提示）</div><div class="op fi" style="left:24px;animation-delay:7.6s">差异探索</div><div class="op fi" style="left:164px;animation-delay:7.9s">共同思想</div><div class="op fi" style="left:304px;animation-delay:8.2s">改进</div><div class="op fi" style="left:444px;animation-delay:8.5s">调参</div><div class="op fi" style="left:584px;animation-delay:8.8s">简化</div><svg class="ov" viewBox="0 0 1040 400"><g class="fi" style="animation-delay:3.4s" fill="none" stroke="#6C6A64" stroke-width="2.5"><path d="M318 78 H348 M318 136 H348 M318 194 H348 M318 252 H348 M348 78 V252 M348 165 H398"/><path d="M390 157 L400 165 L390 173"/></g><g class="fi" style="animation-delay:5.0s" fill="none" stroke="#6C6A64" stroke-width="2.5"><path d="M636 165 H722 M713 157 L722 165 L713 173"/></g></svg><button class="rp" onclick="rp()">重播</button></div>
+<div class="bot">
+ <div><h3>代表做法</h3><div class="w"><b>FunSearch</b><i>Nature 2023</i><span>续写按分数排序的两个旧版本</span></div><div class="w"><b>EoH</b><i>ICML 2024</i><span>五类提示，输出思想与代码</span></div><div class="w"><b>ReEvo</b><i>NeurIPS 2024</i><span>好坏程序对比，加入反思</span></div><div class="w"><b>AlphaEvolve</b><i>DeepMind 2025</i><span>历史程序与评价结果，输出 diff</span></div><div class="w"><b>ShinkaEvolve</b><i>arXiv 2025</i><span>diff、完整重写与交叉三类</span></div></div>
+ <div><h3>作用</h3><p class="st">材料为模型提供修改的依据，要求限定修改的种类与幅度。两者一起，使候选带有明确的设计意图。</p></div>
+ <div class="lim"><h3>代价</h3><p>· 反思与描述对齐需要额外的模型调用，增加每个候选的成本</p><p>· diff 适于局部修改；代码很短或需整体重写时，改用完整代码</p><p>· 模型给出的描述不一定对应实际代码，思想与实现可能不一致</p></div>
+</div>
+<script>function rp(){document.getAnimations().forEach(function(a){a.cancel();a.play()})}document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")rp()})</script></body></html>

@@ -29,7 +29,7 @@ from experiments.infra.base import (
     set_random_seed,
     write_run_config,
 )
-from benchmarks.tasks import CO_TASKS, FUNCTION_SECONDS, INSTANCE_SECONDS, NATIVE_MINIMIZE
+from benchmarks.tasks import CO_TASKS, FUNCTION_LIMITS, INSTANCE_LIMITS, NATIVE_MINIMIZE
 from core.evaluate import EVALUATION_SEED
 from traceaad.common.storage import read_json
 from core.llm import OpenAIAPI
@@ -131,6 +131,9 @@ def setup_experiment_run(
 
     evaluation, task_config = build_task(args.task, getattr(args, "eval_workers", None), condition=condition)
     saved = read_json(run_dir / "run_config.json", {})
+    if saved:
+        from benchmarks.tasks import validate_task_interface
+        validate_task_interface(args.task, saved)
     phase = read_json(run_dir / "resume.json", {}).get("state", {}).get("phase")
     if phase not in {"finished", "search_complete", "selection_failed", "no_valid_root"}:
         write_run_config(
@@ -214,7 +217,7 @@ def baseline_run_config(spec, run_dir: Path, run_name: str, method: str,
         _, task_config = build_task(spec.task, spec.eval_workers)
     if spec.task in CO_TASKS:
         method_params = {**method_params, "evaluation_seeds": [EVALUATION_SEED],
-                         "eval_timeout_seconds": INSTANCE_SECONDS, "function_seconds": FUNCTION_SECONDS,
+                         "eval_timeout_seconds": INSTANCE_LIMITS[spec.task], "function_seconds": FUNCTION_LIMITS[spec.task],
                          "eval_workers": 1 if spec.eval_workers is None else spec.eval_workers,
                          "scheduler_socket": scheduler_socket()}
     return {

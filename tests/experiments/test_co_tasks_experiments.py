@@ -53,3 +53,39 @@ def test_primary_aliases_have_the_same_evaluation_identity(task):
     primary = heldout_task(task, PRIMARY_SPLITS[task][0])
     alias = heldout_task(task, 'eval')
     assert ProgramEvaluator(primary).protocol == ProgramEvaluator(alias).protocol
+
+
+@pytest.mark.parametrize('task', ['graph_colouring', 'jssp_construct'])
+def test_complete_solver_interface_is_saved_and_legacy_heldout_is_blocked(task):
+    from benchmarks.tasks import validate_task_interface
+    from experiments.infra.evaluation_execution import heldout_evaluator
+    evaluation, task_config = training_task(task)
+    assert evaluation.FUNCTION_NAME == 'solve'
+    assert evaluation.outer_settings == {}
+    assert task_config['interface'] == evaluation.interface == 'full-solver-v1'
+    validate_task_interface(task, {'task_eval': task_config})
+    def must_not_build(*args):
+        raise AssertionError('legacy result must not be evaluated or overwritten')
+    with pytest.raises(ValueError, match='saved source snapshot'):
+        heldout_evaluator({'task': task}, PRIMARY_SPLITS[task][0], (730241,),
+                          workers=1, timeout_seconds=None, measure_calls=True,
+                          task_factory=must_not_build)
+
+
+def test_old_run_config_is_not_relabelled_on_resume(tmp_path, monkeypatch):
+    import json
+    from experiments.infra import runner
+    from tests.task.test_co_tasks import miniature_evaluation
+    from experiments.infra.search_run import build_parser
+    args = build_parser('traceaad_test').parse_args([
+        '--task', 'jssp_construct', '--run-name', 'old', '--backend', 'local'])
+    run = tmp_path / args.task / 'old'
+    run.mkdir(parents=True)
+    config = run / 'run_config.json'
+    config.write_text(json.dumps({'task': args.task, 'task_eval': {'split': 'train'}}))
+    (run / 'events.jsonl').write_text('')
+    before = config.read_bytes()
+    monkeypatch.setattr(runner, 'build_task', lambda *a, **k: (miniature_evaluation(), {'interface': 'full-solver-v1'}))
+    with pytest.raises(ValueError, match='new run directory'):
+        runner.setup_experiment_run(args, method='test', results_root=tmp_path, resume_file='events.jsonl')
+    assert config.read_bytes() == before
