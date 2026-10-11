@@ -1,8 +1,8 @@
 # TraceAAD V10.15
 
-> 旧本地模型批次已归档。下文保存历史启动与修订记录，“当前”按对应日期读取；现有入口仍可用于新批次，新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次复现使用[历史身份与源码快照](../../docs/08-实验规范与共识/历史实验身份.md)。
+本页维护生成目标、形成路径与材料裁剪的运行与复现入口。机制解释见[轨迹用途索引](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)，启动与实现检查不代替算法收益。旧本地模型批次已归档，历史状态按日期读取；新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次使用[历史身份](../../docs/08-实验规范与共识/历史实验身份.md)与源码快照。
 
-> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
 
 
 The frozen mechanism is specified in [the design document](../../docs/01-搜索方法/生成目标与形成路径.md). Search draws parents over programs by training quality with a fixed target ESS of 8 (uniform over the top-scoring programs when at least eight tie) and immediately admits each valid unique candidate; finalists are the five best programs. An equal training score does not make two programs the same algorithm; only identical normalized code is a duplicate. The formation path is shown only in generation prompts.

@@ -1,8 +1,8 @@
 # TraceAAD V10.20
 
-> 旧本地模型批次已归档。下文保存历史启动与修订记录，“当前”按对应日期读取；现有入口仍可用于新批次，新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次复现使用[历史身份与源码快照](../../docs/08-实验规范与共识/历史实验身份.md)。
+本页维护计算代价视图及Deepen之后的开发的运行与复现入口。机制解释见[轨迹用途索引](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)，启动与实现检查不代替算法收益。旧本地模型批次已归档，历史状态按日期读取；新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次使用[历史身份](../../docs/08-实验规范与共识/历史实验身份.md)与源码快照。
 
-> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
 
 
 The mechanism and its reasons are in [the design document](../../docs/01-搜索方法/当前规则引导的搜索.md); the diagnosis that motivated it is in [版本差异与计算使用](../../docs/03-现象与检验/2026-10-06-版本差异与计算使用.md). Everything of V10.17 is kept: experience-weighted starting points, design-anchored Refine/Crossover goals, Explore anchored on the current algorithm, a random eighth of new Explore programs developed with three Refine steps, one repair. New experiments freeze the training-best program; independent validation selection with replacement remains available only when explicitly requested for historical reproduction. Three things change:

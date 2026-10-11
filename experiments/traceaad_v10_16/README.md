@@ -1,8 +1,8 @@
 # TraceAAD V10.16
 
-> 旧本地模型批次已归档。下文保存历史启动与修订记录，“当前”按对应日期读取；现有入口仍可用于新批次，新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次复现使用[历史身份与源码快照](../../docs/08-实验规范与共识/历史实验身份.md)。
+本页维护直接尝试反馈怎样进入选父和生成的运行与复现入口。机制解释见[轨迹用途索引](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)，启动与实现检查不代替算法收益。旧本地模型批次已归档，历史状态按日期读取；新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次使用[历史身份](../../docs/08-实验规范与共识/历史实验身份.md)与源码快照。
 
-> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
 
 
 The mechanism is specified in [the design document](../../docs/01-搜索方法/尝试记录与经验使用.md). The search records each program by normalized code and each generation attempt with its inputs and measured outcome, including failures. Duplicates, known failures and repairs are events linked to programs; only identical code counts as a duplicate. Parents are drawn by training quality times a smoothed improvement rate, `(k + 3r) / (n + 3)` over the attempts started from it. Refine, Explore and Crossover see the attempts that started from the current algorithm with their measured outcomes; Explore also sees how the search best improved. Every evaluation records the calls to the target function and the time inside it, also when it times out. A finalist that fails on the selection set is replaced by the next program in the training ranking (at most five replacements).

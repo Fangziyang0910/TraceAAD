@@ -1,8 +1,8 @@
 # TraceAAD V10.19
 
-> 旧本地模型批次已归档。下文保存历史启动与修订记录，“当前”按对应日期读取；现有入口仍可用于新批次，新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次复现使用[历史身份与源码快照](../../docs/08-实验规范与共识/历史实验身份.md)。
+本页维护开发段结果回填、参照与停止的运行与复现入口。机制解释见[轨迹用途索引](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)，启动与实现检查不代替算法收益。旧本地模型批次已归档，历史状态按日期读取；新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次使用[历史身份](../../docs/08-实验规范与共识/历史实验身份.md)与源码快照。
 
-> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
 
 
 The mechanism is specified in [the design document](../../docs/01-搜索方法/对原算法的改动检验.md); the diagnosis that motivated it is in [the V10.18 diagnosis](../../docs/03-现象与检验/2026-10-06-新设计开发诊断与改动检验.md). Everything of V10.18 is kept (programs and generation events, experience-weighted starting points, measured outcomes, design-anchored Refine/Crossover goals, Explore draws that continue the open exploration before proposing) except how an Explore proposal is judged. A proposal is a change to the current algorithm: the Explore goal adds "Keep unchanged the parts of the current algorithm that the change does not replace." When the first version does not score better than the algorithm the change was made to, up to 3 Develop steps follow; each starts from the best version the change has reached and sees that algorithm in full, the change's own formation from its first version and the other attempts on the change, with the goal "Make the change work in the algorithm it was made to: keep the computation the change introduces and write a version that scores better than that algorithm." The change ends as soon as a version beats that algorithm. Its outcome (the best version reached) is stated in that algorithm's attempt list and counted in its experience. Shares: Refine 0.40, Explore 0.35, Crossover 0.25.
