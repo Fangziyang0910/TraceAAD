@@ -67,7 +67,7 @@ class RunSpec:
 def make_run_spec(
     *,
     task: TaskName,
-    backend: str = "local",
+    backend: str = DEFAULT_BACKEND,
     base_url: str | None = None,
     model: str | None = None,
     no_proxy: str | None = None,

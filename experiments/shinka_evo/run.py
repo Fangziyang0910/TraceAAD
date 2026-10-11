@@ -84,7 +84,7 @@ class RunSpec:
 def make_run_spec(
     *,
     task: TaskName,
-    backend: str = "local",
+    backend: str = DEFAULT_BACKEND,
     base_url: str | None = None,
     model: str | None = None,
     no_proxy: str | None = None,
@@ -167,7 +167,7 @@ def build_method(spec: RunSpec, log_dir: Path) -> ShinkaEvo:
         no_proxy=spec.no_proxy,
         max_tokens=spec.output_tokens,
     )
-    # Paper uses a separate meta model; with a single Qwen endpoint we reuse it
+    # Paper uses a separate meta model; with a single generation endpoint we reuse it
     # so meta-scratchpad updates remain active.
     meta_llm = build_llm_client(
         base_url=spec.base_url,

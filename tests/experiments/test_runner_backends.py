@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from experiments.infra import base as _common
 
 
@@ -97,3 +99,14 @@ def test_aco_tasks_evaluate_instances_in_turn() -> None:
     for task in ("cvrp_aco", "op_aco"):
         evaluation, kwargs = build_task(task, 4)
         assert evaluation.n_workers == kwargs["n_workers"] == 1
+
+
+@pytest.mark.parametrize("method", ["eoh", "reevo", "mcts_ahd", "funsearch", "pathwise", "calm", "shinka_evo"])
+def test_baseline_python_entry_defaults_to_deepseek(method):
+    from importlib import import_module
+    from benchmarks.tasks import CO_TASKS
+    run = import_module(f"experiments.{method}.run")
+    for task in CO_TASKS:
+        spec = run.make_run_spec(task=task)
+        assert spec.backend == "deepseek"
+        assert spec.model == "deepseek-v4.1-flash"
