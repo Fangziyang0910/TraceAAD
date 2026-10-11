@@ -102,3 +102,12 @@ def test_baseline_lifecycle_runs_once_and_writes_config(tmp_path, monkeypatch):
     assert run_dir == tmp_path / "eoh" / "tsp_construct" / "rep1"
     assert json.loads((run_dir / "run_config.json").read_text())["run_name"] == "rep1"
     assert calls == [run_dir / "logs"]
+
+
+def test_traceaad_entry_accepts_thinking_and_preserves_its_own_output_limit(capsys):
+    from experiments.traceaad_v10_25 import run
+    args = run.build_parser().parse_args(['--task', 'graph_colouring'])
+    assert args.thinking is None and args.output_tokens == 8192
+    run.main(['--task', 'graph_colouring', '--thinking', '--dry-run'])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload['config']['output_tokens'] == 8192

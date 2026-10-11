@@ -38,3 +38,26 @@ def test_methods_can_place_records_at_the_evaluation_that_produced_them(tmp_path
     assert [row['budget_used'] for row in rows] == [0, 7, 31]
     summary = json.loads((tmp_path / 'summary.json').read_text())
     assert summary['budget_used'] == 40 and summary['candidate_count'] == 3
+
+
+def test_token_usage_covers_retries_reflection_and_transport_deduplication(tmp_path):
+    profiler = ProfilerBase(tmp_path)
+    calls = [
+        {'transport_id': 'retry', 'prompt': 'p', 'response': '', 'usage': {}, 'error': 'timeout'},
+        {'transport_id': 'generate', 'prompt': 'p', 'response': 'code',
+         'usage': {'prompt_tokens': 100, 'completion_tokens': 50, 'total_tokens': 150,
+                   'completion_tokens_details': {'reasoning_tokens': 30},
+                   'prompt_tokens_details': {'cached_tokens': 20}}},
+    ]
+    profiler.log_llm_call(transport_calls=calls, stage='generate')
+    profiler.log_llm_call(transport_calls=calls, stage='generate')
+    profiler.log_llm_call(transport_calls=[{'transport_id': 'reflection', 'prompt': 'r', 'response': 'thought',
+        'usage': {'prompt_tokens': 40, 'completion_tokens': 10, 'total_tokens': 50,
+                  'completion_tokens_details': {'reasoning_tokens': 5}}}], stage='short_term_reflection')
+    totals = json.loads((tmp_path / 'token_usage.json').read_text())
+    assert totals == {'calls': 3, 'calls_with_usage': 2, 'calls_without_usage': 1,
+        'calls_with_reasoning_usage': 2, 'prompt_tokens': 140, 'completion_tokens': 60,
+        'total_tokens': 200, 'reasoning_tokens': 35, 'cached_prompt_tokens': 20}
+    assert len((tmp_path / 'calls.jsonl').read_text().splitlines()) == 3
+    profiler.write_run_summary()
+    assert json.loads((tmp_path / 'summary.json').read_text())['token_usage'] == totals

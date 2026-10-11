@@ -10,7 +10,7 @@ from .base import build_llm_client
 
 
 class ScheduledLLM(LLM):
-    def __init__(self, socket_path, *, max_tokens=8192, label='', client_factory=build_llm_client):
+    def __init__(self, socket_path, *, max_tokens=8192, label='', enable_thinking=None, client_factory=build_llm_client):
         super().__init__()
         self.socket_path, self.label = str(socket_path), label
         self.scheduler = scheduler_status(socket_path)
@@ -20,7 +20,7 @@ class ScheduledLLM(LLM):
         try:
             for endpoint in self.endpoints:
                 self.clients.append(client_factory(base_url=endpoint['base_url'], model=endpoint['model'],
-                    no_proxy=no_proxy, max_tokens=max_tokens, enable_thinking=False))
+                    no_proxy=no_proxy, max_tokens=max_tokens, enable_thinking=enable_thinking))
         except BaseException:
             self.close()
             raise

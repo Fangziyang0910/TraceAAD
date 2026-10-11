@@ -353,3 +353,18 @@ def test_openai_api_counts_chat_prompt_via_llamacpp_apply_template(monkeypatch):
         "http://127.0.0.1:8001/tokenize",
         {"content": "<|im_start|>user\nhello<|im_end|>\n"},
     )
+
+
+def test_high_thinking_is_sent_and_reasoning_is_kept_in_transport_records(monkeypatch):
+    response = make_response(content='code', reasoning_content='reasoned about the algorithm')
+    response.usage = SimpleNamespace(model_dump=lambda: {'prompt_tokens': 3, 'completion_tokens': 8,
+        'completion_tokens_details': {'reasoning_tokens': 5}})
+    clients = install_fake_openai(monkeypatch, response)
+    llm = OpenAIAPI(base_url='http://localhost/v1', api_key='EMPTY', model='deepseek-v4.1-flash',
+                    enable_thinking=True, reasoning_effort='high')
+    assert llm.draw_sample('task') == 'code'
+    body = clients[0].chat.completions.calls[0]['extra_body']
+    assert body['thinking'] == {'type': 'enabled'} and body['reasoning_effort'] == 'high'
+    assert llm.last_calls[0]['reasoning'] == 'reasoned about the algorithm'
+    assert llm.last_calls[0]['sampling']['reasoning_effort'] == 'high'
+    assert llm.last_calls[0]['usage']['completion_tokens_details']['reasoning_tokens'] == 5

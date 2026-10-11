@@ -105,7 +105,9 @@ def generate(llm, prompt, **kwargs):
                 'seconds': time.monotonic()-started,
                 'error': f'{type(error).__name__}: {error}' if error else None,
                 'sampling': {name: kwargs.get(name, getattr(llm, name, None))
-                             for name in ('max_tokens', 'temperature', 'top_p', 'enable_thinking')}}
+                             for name in ('max_tokens', 'temperature', 'top_p', 'enable_thinking', 'reasoning_effort')}}
+        if details.get('reasoning'):
+            call['reasoning'] = details['reasoning']
         if 'messages' in kwargs:
             call['messages'] = kwargs['messages']
         dispatch = details.get('scheduler') or getattr(llm, 'last_dispatch', None)
@@ -141,6 +143,7 @@ class OpenAIAPI(LLM):
         top_p: float | None = None,
         stop: str | Sequence[str] | None = None,
         enable_thinking: bool | None = False,
+        reasoning_effort: str | None = None,
         extra_body: dict[str, Any] | None = None,
         chars_per_token: float | None = None,
         tokenizer: str | None = None,
@@ -159,6 +162,7 @@ class OpenAIAPI(LLM):
         self.top_p = top_p
         self.stop = stop
         self.enable_thinking = enable_thinking
+        self.reasoning_effort = reasoning_effort
         # Gateways without a /tokenize endpoint count locally by characters.
         # Choose the ratio conservatively (overestimate tokens) for the budget math.
         self.chars_per_token = chars_per_token
@@ -255,13 +259,20 @@ class OpenAIAPI(LLM):
             return max(1, int(len(text) / self.chars_per_token) + 32)
         if self._tokenizer is not None:
             roles = [message.get("role") for message in messages]
-            if roles == ["user"]:
+            if self.prompt_format == "<｜begin▁of▁sentence｜><｜User｜>{}<｜Assistant｜></think>" and roles in (["user"], ["system", "user"]):
+                text = "<｜begin▁of▁sentence｜>"
+                if self.enable_thinking:
+                    effort = getattr(self, "reasoning_effort", None) or "high"
+                    budget = {"low": 50, "medium": 62, "high": 75, "max": 100}[effort]
+                    text += f"<｜System｜>Reasoning Effort: {budget} (range 1-100, the higher the value, the more thorough the reasoning)\n\n"
+                for message in messages:
+                    role = message["role"]
+                    if role == "user" or not self.enable_thinking:
+                        text += "<｜System｜>" if role == "system" else "<｜User｜>"
+                    text += message["content"]
+                text += "<｜Assistant｜>" + ("<think>" if self.enable_thinking else "</think>")
+            elif roles == ["user"]:
                 text = self.prompt_format.format(messages[0]["content"])
-            elif (roles == ["system", "user"] and self.enable_thinking is False
-                  and self.prompt_format == "<｜begin▁of▁sentence｜><｜User｜>{}<｜Assistant｜></think>"):
-                # DeepSeek-V4.1's published chat template, including the system token.
-                text = ("<｜begin▁of▁sentence｜><｜System｜>" + messages[0]["content"]
-                        + "<｜User｜>" + messages[1]["content"] + "<｜Assistant｜></think>")
             else:
                 # shortcut: current baselines use one user or system/user; extend with the model template for other roles.
                 raise ValueError("local prompt counting does not support this model/message format")
@@ -400,6 +411,9 @@ class OpenAIAPI(LLM):
                 "thinking",
                 {"type": "enabled" if self.enable_thinking else "disabled"},
             )
+        if self.reasoning_effort is not None and self.enable_thinking:
+            extra_body["reasoning_effort"] = self.reasoning_effort
+            extra_body["chat_template_kwargs"]["reasoning_effort"] = self.reasoning_effort
         if request_extra_body:
             self._deep_update(extra_body, request_extra_body)
         return extra_body

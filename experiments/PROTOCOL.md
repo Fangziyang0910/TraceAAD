@@ -45,8 +45,9 @@
 
 - 每路预算 **1000次候选**，初始化／种子、解析失败、重复、新颖性拒绝和数值微调候选都计入。反思、策略、代码说明及新颖性判别调用不产生候选，单独记录模型调用；未返回候选的接口故障不消耗候选数。
 - 每个方法每个任务 **3路**，搜索种子0、1、2。
-- 所有方法使用同一模型 DeepSeek-V4.1-Flash（`--backend deepseek`，默认），默认采样设置为关闭思考，temperature 1.0，top_p 0.95（模型卡推荐值）。基线保留官方阶段设置：ReEvo初始化温度偏移、MCTS-AHD思路重述temperature=0、CALM任务配置的temperature／top_p；实际调用参数写入日志。提示长度用该模型发布的分词器和消息格式在本地计数，保留system/user角色。单user格式已与网关核对，system/user格式已与官方编码器核对。
+- 所有方法使用同一模型 DeepSeek-V4.1-Flash（`--backend deepseek`，默认），默认采样设置为开启思考，固定reasoning_effort=high（DeepSeek编码预算75），temperature 1.0，top_p 0.95（模型卡推荐值）。基线保留官方阶段设置：ReEvo初始化温度偏移、MCTS-AHD思路重述temperature=0、CALM任务配置的temperature／top_p；实际调用参数写入日志。提示长度用该模型发布的分词器和消息格式在本地计数，保留system/user角色及high思考前缀。各方法沿用各自的输出上限和阶段设置，不统一强制同一max_tokens；每次调用记录实际参数。
 - CALM运行官方支持的w/o GRPO变体；Shinka生成、meta与novelty判别使用同一生成模型，embedding使用独立服务。当前为阿里云`text-embedding-v4`，模型及接口写入运行配置，相似度阈值保留0.99。
+- 模型开销：原始请求与回复在calls.jsonl（结束后压缩），保留API usage、reasoning和阶段信息；token_usage.json在运行中累计输入、输出、reasoning及缓存token，结束时写入summary.json。completion_tokens通常包含reasoning，不将reasoning再次加到total_tokens中；未返回usage的调用单独计数，不按0消费报告。
 - 最终程序：搜索结束时，按训练成绩取前 5 个程序，在训练集上按当前评价条件重新评价，冻结其中成绩最好的有效程序（同分取排名靠前者）。冻结后只做一次同规模测试。不设验证集；测试结果不用于选择或修改程序；测试失败记为失败。
 
 ## 5. 报告

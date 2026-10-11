@@ -112,11 +112,13 @@ _EXPLICIT = ("temperature", "top_p", "top_k")
 
 # Models whose own settings replace the Qwen profiles above. The gateway has no
 # /tokenize, so prompts are counted with the released tokenizer; the format is
-# the non-thinking chat template for one user message (matches the gateway's
-# prompt_tokens exactly). Sampling follows the model card.
+# the published chat format, including roles and the thinking effort prefix.
+# Sampling follows the model card.
 MODEL_SETTINGS: dict[str, dict[str, Any]] = {
     "deepseek-v4.1-flash": {
         "sampling": {"temperature": 1.0, "top_p": 0.95},
+        "enable_thinking": True,
+        "reasoning_effort": "high",
         "tokenizer": "deepseek-ai/DeepSeek-V4.1-Flash",
         "prompt_format": "<｜begin▁of▁sentence｜><｜User｜>{}<｜Assistant｜></think>",
         # The gateway's /models omits it; model card 1M, 78k-token prompt verified.
@@ -174,14 +176,16 @@ def build_llm_client(
     temperature: float | None = None,
     top_p: float | None = None,
     top_k: int | None = None,
-    enable_thinking: bool = False,
+    enable_thinking: bool | None = None,
     chars_per_token: float | None = None,
 ) -> OpenAIAPI:
     set_no_proxy(no_proxy)
+    settings = MODEL_SETTINGS.get(model, {})
+    if enable_thinking is None:
+        enable_thinking = settings.get("enable_thinking", False)
     controls = sampling_controls(enable_thinking, model, temperature=temperature, top_p=top_p, top_k=top_k)
     temperature, top_p = controls.pop("temperature"), controls.pop("top_p")
     extra_body = controls
-    settings = MODEL_SETTINGS.get(model, {})
     return OpenAIAPI(
         base_url=base_url,
         api_key=resolve_llm_api_key(base_url=base_url),
@@ -192,6 +196,7 @@ def build_llm_client(
         top_p=top_p,
         extra_body=extra_body,
         enable_thinking=enable_thinking,
+        reasoning_effort=settings.get("reasoning_effort") if enable_thinking else None,
         chars_per_token=chars_per_token,
         tokenizer=settings.get("tokenizer"),
         prompt_format=settings.get("prompt_format", "{}"),
@@ -222,9 +227,12 @@ def llm_payload(
     temperature: float | None = None,
     top_p: float | None = None,
     top_k: int | None = None,
-    enable_thinking: bool = False,
+    enable_thinking: bool | None = None,
     chars_per_token: float | None = None,
 ) -> dict[str, Any]:
+    settings = MODEL_SETTINGS.get(model, {})
+    if enable_thinking is None:
+        enable_thinking = settings.get("enable_thinking", False)
     controls = sampling_controls(enable_thinking, model, temperature=temperature, top_p=top_p, top_k=top_k)
     payload: dict[str, Any] = {
         "base_url": base_url,
@@ -235,6 +243,7 @@ def llm_payload(
         "top_p": controls["top_p"],
         "top_k": controls.get("top_k"),
         "enable_thinking": enable_thinking,
+        "reasoning_effort": settings.get("reasoning_effort") if enable_thinking else None,
         "sampling": controls,
         "no_proxy": no_proxy,
         "api_key_configured": resolve_llm_api_key(base_url=base_url) != "EMPTY",

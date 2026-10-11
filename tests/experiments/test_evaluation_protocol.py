@@ -77,7 +77,7 @@ def test_deepseek_uses_model_card_sampling_and_its_own_tokenizer():
     from experiments.infra.base import BACKENDS, build_llm_client
 
     b = BACKENDS["deepseek"]
-    client = build_llm_client(base_url=b.base_url, model=b.model, no_proxy=b.no_proxy, max_tokens=16)
+    client = build_llm_client(base_url=b.base_url, model=b.model, no_proxy=b.no_proxy, max_tokens=16, enable_thinking=False)
     body = client._merged_extra_body(None)
     assert (client.temperature, client.top_p) == (1.0, 0.95)
     assert "presence_penalty" not in body and "top_k" not in body
@@ -86,3 +86,19 @@ def test_deepseek_uses_model_card_sampling_and_its_own_tokenizer():
     assert client.count_prompt_tokens("hi") == 5
     assert client.count_prompt_tokens("中文测试：路径规划问题 ✓ 🚀") == 14
     assert client.count_tokens("中文测试：路径规划问题 ✓ 🚀") == 10
+
+
+def test_deepseek_defaults_to_high_thinking_and_records_the_same_settings():
+    from experiments.infra.base import BACKENDS, build_llm_client, llm_payload
+    b = BACKENDS['deepseek']
+    client = build_llm_client(base_url=b.base_url, model=b.model, no_proxy=b.no_proxy, max_tokens=16384)
+    try:
+        body = client._merged_extra_body(None)
+        assert body['thinking'] == {'type': 'enabled'}
+        assert body['reasoning_effort'] == 'high'
+        assert body['chat_template_kwargs']['reasoning_effort'] == 'high'
+        record = llm_payload(base_url=b.base_url, model=b.model, no_proxy=b.no_proxy, max_tokens=16384)
+        assert record['enable_thinking'] is True and record['reasoning_effort'] == 'high'
+        assert record['max_tokens'] == client.max_tokens == 16384
+    finally:
+        client.close()

@@ -29,8 +29,8 @@ def build_parser(experiment, config_class=None):
 
 def main(method_class, config_class, experiment, description, argv=None):
     args = build_parser(experiment, config_class).parse_args(argv)
-    if args.thinking or args.approx_chars_per_token is not None:
-        raise ValueError("search requires thinking disabled and exact serving token counts")
+    if args.approx_chars_per_token is not None:
+        raise ValueError("search requires exact serving token counts")
     if args.repeat is not None and args.seed != args.repeat - 1:
         raise ValueError("run seed must equal repeat - 1")
     if hasattr(args, "eval_timeout_seconds") and args.eval_timeout_seconds is None:
@@ -49,7 +49,7 @@ def main(method_class, config_class, experiment, description, argv=None):
         endpoint = scheduler['endpoints'][0]
         profile = BackendProfile(endpoint['base_url'], endpoint['model'], endpoint.get('no_proxy', ''))
         llm_factory = lambda **kw: ScheduledLLM(args.scheduler_socket, max_tokens=kw['max_tokens'],
-                                               label=args.run_name or args.task)
+                                               label=args.run_name or args.task, enable_thinking=kw['enable_thinking'])
     if execution and execution['eval_workers'] is None:
         execution['eval_workers'] = scheduler['cpu']['capacity'] if scheduler else 1
         args.eval_workers = execution['eval_workers']

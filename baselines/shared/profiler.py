@@ -42,6 +42,7 @@ _LLM_SAFE_FIELDS = frozenset(
         "max_tokens",
         "temperature",
         "enable_thinking",
+        "reasoning_effort",
         "debug_mode",
         "token_count_mode",
     }
@@ -105,6 +106,9 @@ class ProfilerBase:
         self._llm = None
         self._evaluation = self._method = None
         self._recorded_transport = set()
+        self._token_usage = dict.fromkeys(('calls', 'calls_with_usage', 'calls_without_usage',
+            'calls_with_reasoning_usage', 'prompt_tokens', 'completion_tokens', 'total_tokens',
+            'reasoning_tokens', 'cached_prompt_tokens'), 0)
         self._logger_txt = logging.getLogger('traceaad.' + str(self.run_dir))
         for field, name in (('_llm_calls_path', 'calls.jsonl'), ('_method_events_path', 'events.jsonl'),
                             ('_method_state_path', 'resume.json'), ('_run_summary_path', 'summary.json')):
@@ -185,15 +189,36 @@ class ProfilerBase:
     def log_llm_call(self, *, llm=None, transport_calls=None, **payload):
         if not self.run_dir:
             return
-        calls = transport_calls if transport_calls is not None else getattr(llm or self._llm, 'last_calls', [])
-        response_matches = calls and payload.get('response') == calls[-1]['response']
-        if transport_calls is not None or response_matches or calls and payload.get('prompt') == calls[-1]['prompt']:
-            for call in calls:
-                if call['transport_id'] not in self._recorded_transport:
-                    self._append_counted(self._llm_calls_path, {**payload, **call}, '_llm_call_count')
-                    self._recorded_transport.add(call['transport_id'])
-        else:
-            self._append_counted(self._llm_calls_path, payload, '_llm_call_count')
+        with self._artifact_lock:
+            calls = transport_calls if transport_calls is not None else getattr(llm or self._llm, 'last_calls', [])
+            response_matches = calls and payload.get('response') == calls[-1]['response']
+            if transport_calls is not None or response_matches or calls and payload.get('prompt') == calls[-1]['prompt']:
+                for call in calls:
+                    if call['transport_id'] not in self._recorded_transport:
+                        self._append_counted(self._llm_calls_path, {**payload, **call}, '_llm_call_count')
+                        self._recorded_transport.add(call['transport_id'])
+                        self._record_token_usage(call)
+            else:
+                self._append_counted(self._llm_calls_path, payload, '_llm_call_count')
+                self._record_token_usage(payload)
+
+    def _record_token_usage(self, call):
+        totals = self._token_usage
+        usage = call.get('usage') or {}
+        complete = all(isinstance(usage.get(k), int) for k in ('prompt_tokens', 'completion_tokens'))
+        totals['calls'] += 1
+        totals['calls_with_usage' if complete else 'calls_without_usage'] += 1
+        if complete:
+            totals['prompt_tokens'] += usage['prompt_tokens']
+            totals['completion_tokens'] += usage['completion_tokens']
+            totals['total_tokens'] += usage.get('total_tokens') or usage['prompt_tokens'] + usage['completion_tokens']
+            reasoning = (usage.get('completion_tokens_details') or {}).get('reasoning_tokens')
+            if isinstance(reasoning, int):
+                totals['reasoning_tokens'] += reasoning
+                totals['calls_with_reasoning_usage'] += 1
+            cached = (usage.get('prompt_tokens_details') or {}).get('cached_tokens', usage.get('prompt_cache_hit_tokens', 0))
+            totals['cached_prompt_tokens'] += cached or 0
+        write_json(self.run_dir/'token_usage.json', totals)
 
     def log_method_event(self, event=None, **payload):
         if event is not None:
@@ -304,7 +329,7 @@ class ProfilerBase:
                 'finished_at': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(), 'seconds': self._elapsed(),
                 'num_nodes': self._evaluate_success_program_num, 'candidate_count': self._num_samples,
                 'valid_candidate_count': self._evaluate_success_program_num, 'best': self._canonical_best,
-                'model_calls': self._llm_call_count,
+                'model_calls': self._llm_call_count, 'token_usage': dict(self._token_usage),
                 'evaluation_calls': self._evaluate_success_program_num+self._evaluate_failed_program_num
                                     +payload.get('selection_evaluations', 0),
                 'error_count': self._error_count, **payload})
