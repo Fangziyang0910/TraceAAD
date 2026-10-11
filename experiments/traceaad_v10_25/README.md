@@ -1,5 +1,8 @@
 # V10.25：基于 V10.17 的有限调整
 
+> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
+
 **停止记录：** 东京时间2026-10-10 19:42:42，按用户要求停止 base-2 的18路实验，保留并同步7994次候选（逐路241—613次）。接下来使用原 V10.17 机制运行当前六任务新实验，见[恢复入口](../traceaad_v10_17/README.md#2026-10-10原机制在当前协议下重跑)。
 
 本次停止前的机制为 `v1025-v1017-base-2`，完整规则见[新版设计](../../docs/01-搜索方法/轨迹条件化的算法改进-V10.25.md)。恢复 V10.17 的质量×尝试经验选择、历史分工、性能目标、完整代码交付和少量续写；将失败提案与修复的真实代码变化分开展示，并精炼历史解释和 Refine、Crossover、Repair 指令。评价使用当前六任务固定协议。
@@ -8,7 +11,7 @@
 
 新版曾启动正式批次 `20261010_server3_v1025_v1017base2`，机制为 `v1025-v1017-base-2`。以下为检查条件与生成计划的命令（不带 `--launch` 不启动模型）：
 
-`v1025-v1017-base-2` 已通过18项版本检查，加上 V10.17、V10.21、训练冻结和看板回归共86项。检查包括无历史根、较弱参考、失败／修复双差异的裁剪、完整提示修改范围，以及旧机制恢复拒绝。六任务各取一份 V10.23 历史档案，在档案当前状态离线展开42份提示；初始化与 Explore 和基础适配层逐字一致，所有提示均可构建。[展开记录及提示文件](../../experiments_result/diagnosis_v1025_prompts/base2/audit.json)使用离线测试 tokenizer，仅检查材料组织，不代表生产 token 消耗或生成质量。
+`v1025-v1017-base-2` 已通过18项版本检查，加上 V10.17、V10.21、训练冻结和看板回归共86项。检查包括无历史根、较弱参考、失败／修复双差异的裁剪、完整提示修改范围，以及旧机制恢复拒绝。六任务各取一份 V10.23 历史档案，在档案当前状态离线展开42份提示；初始化与 Explore 和基础适配层逐字一致，所有提示均可构建。[展开记录及提示文件](../../archive/local_models_20261011/diagnosis_v1025_prompts/base2/audit.json)使用离线测试 tokenizer，仅检查材料组织，不代表生产 token 消耗或生成质量。
 
 ```bash
 uv run python -m experiments.traceaad_v10_25.run --task tsp_construct --dry-run
@@ -31,11 +34,11 @@ uv run python -m experiments.infra.evaluate <运行目录> --primary
 
 启动前，本地与远端137个实现文件哈希全部一致；启动清单中的哈希与保存的源码快照再次核对一致。旧批次没有续跑，新批次独立保存。
 
-- [批次清单](../../experiments_result/traceaad_v10_25/batch_20261010_server3_v1025_v1017base2.json)
-- [源码身份](../../experiments_result/traceaad_v10_25/source_20261010_server3_v1025_v1017base2.json)与[源码快照](../../experiments_result/traceaad_v10_25/source_20261010_server3_v1025_v1017base2.tar.gz)
+- [批次清单](../../archive/local_models_20261011/traceaad_v10_25/batch_20261010_server3_v1025_v1017base2.json)
+- [源码身份](../../archive/local_models_20261011/traceaad_v10_25/source_20261010_server3_v1025_v1017base2.json)与[源码快照](../../archive/local_models_20261011/traceaad_v10_25/source_20261010_server3_v1025_v1017base2.tar.gz)
 - [训练看板](http://127.0.0.1:8765/#b=traceaad_v10_25&rb=20261010_server3_v1025_v1017base2)
 
-东京时间2026-10-10 15:42:47的首次完整核验：18路进程全部存活且都有候选，机制标识全部为 `v1025-v1017-base-2`；累计73次候选，各路1—9次，65次新有效、3次超时、2次返回契约错误、3次运行错误。模型服务错误和上下文关闭均为0。随后同步的看板显示18路运行中、累计117次候选，其中105次有效。当前仍是启动早期，候选失败进入原有Repair流程，不据此判断算法质量。[首轮健康记录](../../experiments_result/traceaad_v10_25/health_20261010_server3_v1025_v1017base2_initial.json)。
+东京时间2026-10-10 15:42:47的首次完整核验：18路进程全部存活且都有候选，机制标识全部为 `v1025-v1017-base-2`；累计73次候选，各路1—9次，65次新有效、3次超时、2次返回契约错误、3次运行错误。模型服务错误和上下文关闭均为0。随后同步的当时18路通过启动核验（现已归档）、累计117次候选，其中105次有效。该检查采集于启动早期，候选失败进入原有Repair流程，不据此判断算法质量。[首轮健康记录](../../archive/local_models_20261011/traceaad_v10_25/health_20261010_server3_v1025_v1017base2_initial.json)。
 
 本地同步会话 `watch_v1025_base2` 已停止。历史批次查询：
 
@@ -78,19 +81,19 @@ FSSP前300次三路均弱于V10.24：新版-2.5081、-3.1316、-2.4192，对方-
 
 与废弃V10.25统一前150次，新有效率84.70%→89.26%，重复／复制／已知失败10.67%→1.85%；但六任务训练质量并未全面提升。全截点重复等共175/7765，约2.25%。低重复率只说明源码交付不同，不保证有效决策不同。
 
-保留批次原条件继续运行。本轮没有修改搜索或候选程序，没有提前使用测试集，也没有把回归V10.17、完整代码交付和新措辞的联合结果单独归因于提示优化。下一步重点区分发现有用计算的速度与在该计算上继续获得收益的能力。
+该批次已按原条件封存。本轮没有修改搜索或候选程序，没有提前使用测试集，也没有把回归V10.17、完整代码交付和新措辞的联合结果单独归因于提示优化。下一步重点区分发现有用计算的速度与在该计算上继续获得收益的能力。
 
-[各路与多截点数据](../../experiments_result/diagnosis_v1025_base2/audit.json)、[复算脚本](../../experiments_result/diagnosis_v1025_base2/analyze.py)、[逐步源码与差异](../../experiments_result/diagnosis_v1025_base2/code_examples.json)、[CVRP排序核验](../../experiments_result/diagnosis_v1025_base2/cvrp_restart_check.json)。复算脚本重新执行会更新快照；所存代码例子固定在本次分析的候选编号。
+[各路与多截点数据](../../archive/local_models_20261011/diagnosis_v1025_base2/audit.json)、[复算脚本](../../archive/local_models_20261011/diagnosis_v1025_base2/analyze.py)、[逐步源码与差异](../../archive/local_models_20261011/diagnosis_v1025_base2/code_examples.json)、[CVRP排序核验](../../archive/local_models_20261011/diagnosis_v1025_base2/cvrp_restart_check.json)。复算脚本重新执行会更新快照；所存代码例子固定在本次分析的候选编号。
 
 ## 废弃版运行记录
 
 以下为已停止批次的历史记录。`20261010_server3_v1025` 当时在 server3 启动六任务各三路，种子 0/1/2，每路 1000 候选，共 18000 候选。每次评价最多 8 个并行实例，使用共享调度器 `/tmp/traceaad-1005/scheduler.sock`；模型、数据、CPU 限时和冻结协议沿用实验准则。
 
-[批次清单](../../experiments_result/traceaad_v10_25/batch_20261010_server3_v1025.json)记录启动条件及实现哈希；[源码身份](../../experiments_result/traceaad_v10_25/source_20261010_server3_v1025.json)与[源码快照](../../experiments_result/traceaad_v10_25/source_20261010_server3_v1025.tar.gz)保存在本地，138 个实现文件均与远端匹配。源码包含启动时尚未提交的实现，以快照及文件哈希定位。
+[批次清单](../../archive/local_models_20261011/traceaad_v10_25/batch_20261010_server3_v1025.json)记录启动条件及实现哈希；[源码身份](../../archive/local_models_20261011/traceaad_v10_25/source_20261010_server3_v1025.json)与[源码快照](../../archive/local_models_20261011/traceaad_v10_25/source_20261010_server3_v1025.tar.gz)保存在本地，138 个实现文件均与远端匹配。源码包含启动时尚未提交的实现，以快照及文件哈希定位。
 
 运行期间本地 tmux 会话 `watch_v1025` 每 60 秒同步一次，现已停止。训练看板：[本批次](http://127.0.0.1:8765/#b=traceaad_v10_25&rb=20261010_server3_v1025)。
 
-首次完整健康检查（东京时间 2026-10-10 13:35:53）：18 路均存活且已有候选，合计 80 次，77 次新有效、1 次重复、1 次超时、1 次运行错误；模型服务错误为 0。18 路均使用 `v1025-trajectories-2`，配置与预算核对通过；看板显示 18 路运行中。[检查记录](../../experiments_result/traceaad_v10_25/health_20261010_server3_v1025_initial.json)。此时主要处于初始化，尚不能判断搜索收益。
+首次完整健康检查（东京时间 2026-10-10 13:35:53）：18 路均存活且已有候选，合计 80 次，77 次新有效、1 次重复、1 次超时、1 次运行错误；模型服务错误为 0。18 路均使用 `v1025-trajectories-2`，配置与预算核对通过；当时18路通过启动核验（现已归档）。[检查记录](../../archive/local_models_20261011/traceaad_v10_25/health_20261010_server3_v1025_initial.json)。此时主要处于初始化，尚不能判断搜索收益。
 
 ```bash
 uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD --manifest experiments_result/traceaad_v10_25/batch_20261010_server3_v1025.json
@@ -117,7 +120,7 @@ CVRP 三路均优于 V10.24 对应重复；TSP 的均值改善主要来自第二
 
 源码核验：TSP 第二路第 13 次加入完整最近邻补全，从 6.262 改到第 94 次的 6.103，末版主要调整补全权重和回终点项，没有 2-opt。第一路当前最好源码先将邻接子矩阵对角线置为 `inf`，随后直接求行均值，使所有打分为 `inf`；`argmin` 总取第一个未访问节点，而接口已按当前距离排序，因此实际退化为最近邻。第三路当前最好源码仍是距离与回终点项的动态加权。这些观察只描述已核验的最好程序，不代表全部中间提案都未尝试过更强计算。
 
-[逐路结果、三路离散程度及形成路径](../../experiments_result/diagnosis_v1025_150/audit.json)；[只读复算脚本](../../experiments_result/diagnosis_v1025_150/analyze.py)，从仓库根执行 `uv run python - < experiments_result/diagnosis_v1025_150/analyze.py`。脚本再次运行会更新正在运行的最新截点，前 150 次的比较保持不变。本次未修改机制、评价器或运行中的候选。
+[逐路结果、三路离散程度及形成路径](../../archive/local_models_20261011/diagnosis_v1025_150/audit.json)；[只读复算脚本](../../archive/local_models_20261011/diagnosis_v1025_150/analyze.py)，从仓库根执行 `uv run python - < experiments_result/diagnosis_v1025_150/analyze.py`。原脚本用于截点分析，前150次比较保持不变；读取归档时使用归档路径，不再跟踪旧批次进度。
 
 ## 与V10.17的比较及机制损失
 
@@ -146,4 +149,4 @@ TSP @200，V10.17 三路为 6.2282 / 5.9375 / 6.0826，V10.25 为 6.8240 / 6.102
 
 **CVRP 计分更正：** 核对原批次提交 `571f8b1a` 后确认，旧 `_path_costs` 直接累加对角线为 1 的距离矩阵，蚂蚁完成后的仓库等待步也会增加成本；当前实现使用独立的零对角线 `edge_lengths`，只计不同节点之间的移动。成本还用于 `1/cost` 的信息素更新，所以差异既影响得分，也影响 ACO 求解过程，并非统一减掉一个常数。上表旧程序已使用当前评价器重测，因此重测数值确实同口径；但旧程序是按旧目标搜索并筛选出来的，事后重测不能消除整个搜索过程的目标差异。此前据此概括“CVRP 的机制有改善”过强，撤回这一判断。也不能反向据此断言 V10.17 全面优于 V10.25。
 
-证据：[逐路比较与选择记录](../../experiments_result/diagnosis_v1017_v1025/comparison.json)、[当前协议重测](../../experiments_result/diagnosis_v1017_v1025/recheck.json)、[同状态选择概率核验](../../experiments_result/diagnosis_v1017_v1025/selection_check.json)、[V10.17 原始 Explore 提示](../../experiments_result/diagnosis_v1017_v1025/v1017_tsp_r2_explore109.txt)。分析脚本为同目录的 `compare.py` 与 `recheck.py`，均从仓库根以 `uv run python - < 脚本路径` 执行；后者会进行 12 次训练重测。
+证据：[逐路比较与选择记录](../../archive/local_models_20261011/diagnosis_v1017_v1025/comparison.json)、[当前协议重测](../../archive/local_models_20261011/diagnosis_v1017_v1025/recheck.json)、[同状态选择概率核验](../../archive/local_models_20261011/diagnosis_v1017_v1025/selection_check.json)、[V10.17 原始 Explore 提示](../../archive/local_models_20261011/diagnosis_v1017_v1025/v1017_tsp_r2_explore109.txt)。分析脚本为同目录的 `compare.py` 与 `recheck.py`，均从仓库根以 `uv run python - < 脚本路径` 执行；后者会进行 12 次训练重测。

@@ -1,6 +1,9 @@
 # FunSearch 基线：TSP 独立测试与 CVRP 启动
 
-本机批次 `20261007_local`。TSP 三路已完成搜索和 held-out，9 项中 8 项有效；CVRP 三路于 10 月 7 日 20:58 启动，仍在运行。
+> 本地模型结果已归档（2026-10-11）。以下保留原评价条件与历史成绩，不代表活跃实验；完整数据见[归档目录](../../archive/local_models_20261011/README.md)。
+
+
+本机批次 `20261007_local`。TSP 三路已完成搜索和 held-out，9 项中 8 项有效；CVRP 三路于 10 月 7 日 20:58 启动，已归档。
 
 ## 实验条件
 
@@ -45,4 +48,4 @@
 
 三路使用相同参数和本机模型，种子 0、1、2。评价条件与 V10.20 的 CVRP 相同：训练 10 个实例，30 蚁 × 100 迭代，ACO 种子 1234。启动 1 分钟内三路都产生有效样本；种子程序训练成绩为 18.69。完成后按同样流程冻结训练最好程序，运行 CVRP50/100/200 的 held-out。
 
-[TSP 档案](../../experiments_result/funsearch/tsp_construct/)、[CVRP 档案](../../experiments_result/funsearch/cvrp_aco/)、[运行入口](../../experiments/funsearch/run.py)
+[TSP 档案](../../archive/local_models_20261011/funsearch/tsp_construct)、[CVRP 档案](../../archive/local_models_20261011/funsearch/cvrp_aco)、[运行入口](../../experiments/funsearch/run.py)

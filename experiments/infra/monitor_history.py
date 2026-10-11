@@ -110,11 +110,12 @@ class TrainingHistory:
             self.stamp = stamp
             self.result = self._build()
             try:
-                write_json(self.run_dir / ".cache/history.json", {"version": self.CACHE_VERSION,
-                    "identity": self.identity, "offset": self.offset, "events": self.streams["events"],
-                    "programs": self.programs, "node_offsets": self.node_offsets, "clock": self.clock,
-                    "development": self.development,
-                    "boundary_tail": self.boundary_tail})
+                if read_json(self.run_dir / 'summary.json', {}).get('status') != 'archived':
+                    write_json(self.run_dir / ".cache/history.json", {"version": self.CACHE_VERSION,
+                        "identity": self.identity, "offset": self.offset, "events": self.streams["events"],
+                        "programs": self.programs, "node_offsets": self.node_offsets, "clock": self.clock,
+                        "development": self.development,
+                        "boundary_tail": self.boundary_tail})
             except OSError:
                 pass
             return self.result

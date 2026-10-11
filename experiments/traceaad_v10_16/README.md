@@ -1,5 +1,8 @@
 # TraceAAD V10.16
 
+> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
+
 The mechanism is specified in [the design document](../../docs/01-搜索方法/尝试记录与经验使用.md). The search records each program by normalized code and each generation attempt with its inputs and measured outcome, including failures. Duplicates, known failures and repairs are events linked to programs; only identical code counts as a duplicate. Parents are drawn by training quality times a smoothed improvement rate, `(k + 3r) / (n + 3)` over the attempts started from it. Refine, Explore and Crossover see the attempts that started from the current algorithm with their measured outcomes; Explore also sees how the search best improved. Every evaluation records the calls to the target function and the time inside it, also when it times out. A finalist that fails on the selection set is replaced by the next program in the training ranking (at most five replacements).
 
 ```bash

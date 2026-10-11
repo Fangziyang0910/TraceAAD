@@ -4,10 +4,12 @@
 
 ## 批次状态
 
+旧本地模型结果已归档到`archive/local_models_20261011/`，对应摘要与清单status为archived；不列作活跃实验、等待队列或待补测。当前活跃实验为EoH／ReEvo／FunSearch的DeepSeek关闭思考批次。
+
 批次清单是查询范围的依据。指定清单，不遍历所有版本，也不以已同步的路次代替整个批次。
 
 ```bash
-uv run python -m experiments.infra.batch_status --manifest experiments_result/traceaad_v10_16/batch_20261003_server3_v1016.json
+uv run python -m experiments.infra.batch_status --manifest experiments_result/eoh/batch_20261011_server3_deepseek_off_pilot.json
 ```
 
 默认返回总数、搜索 ETA，以及需要注意的路次。`--details` 展开每路，`--json` 返回结构化数据。待 held-out 只包括已完成且选定程序哈希和节点均通过核验的路次；无效结果、程序不匹配、历史身份缺失和未评价结果分别计数。此入口读取统一的逐路结果，不依赖版本号猜文件格式。
@@ -28,7 +30,7 @@ uv run python -m experiments.infra.batch_status --manifest experiments_result/tr
 通过本地命令执行一次远端查询；读取器经 stdin 发送，不需部署新文件。远端需要当前 `benchmarks.tasks`、`monitor_timing`、`traceaad.common.storage` 模块。
 
 ```bash
-uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD --manifest experiments_result/traceaad_v10_16/batch_20261003_server3_v1016.json
+uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD --manifest experiments_result/eoh/batch_20261011_server3_deepseek_off_pilot.json
 ```
 
 连接失败时再检查 `ssh -G B3-server3`；仓库或解释器不存在时再定位环境。已知入口可用时无需重新搜索目录、检查全部依赖或读取 SSH 配置。
@@ -36,6 +38,8 @@ uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fz
 ## 本机模型服务
 
 后端 `local`（`http://127.0.0.1:8001/v1`，模型名 `Qwen3.8-27B`，3 槽）由 tmux 会话 `qwen3_8-27b-mtp` 中的 llama-server 提供：`~/models/gguf/qwen3.8-27b/Qwen3.8-27B-UD-Q4_K_XL.gguf`，上下文 98304（3 槽各 32768），MTP 草稿 3 个 token，KV 缓存 q8_0，日志 `/tmp/llama-qwen38-restart.log`。先用 `curl -s --noproxy '*' 127.0.0.1:8001/health` 检查；会话不存在时按 `~/models/gguf/qwen3.8-27b/update_ud_q4_k_xl.sh` 末尾的同一组参数在该会话中启动。
+
+本机旧实验的两个调度器已在空闲状态停止，旧队列不再启动；server3当前调度器与DeepSeek实验继续运行。现用看板在tmux `results_monitor`中，日志为`logs/results_monitor.log`。
 
 ## 本机基线排队
 
@@ -49,7 +53,7 @@ uv run python -m experiments.infra.local_queue --method funsearch --suite co6 --
 
 ## 等待、检索和同步
 
-训练可视化使用本地 `8765` 端口（`http://127.0.0.1:8765/`）。先检查该端口；服务未运行时，用 `uv run python -m experiments.monitor --host 0.0.0.0 --port 8765` 启动。不指定 `--experiment` 时默认展示最近更新的批次；版本对比默认选中该 TraceAAD 批次和全部基线方法。查看其他方法用链接中的 `#b=<方法目录>`。运行监控默认筛选该方法的最新启动批次，也可选全部或具体批次；`#b=<方法目录>&rb=<启动批次>`固定条件，`rb=latest`跟随最新批次。API用`/api/state?batch=<方法目录>&run_batch=<启动批次或latest>`筛选，不传run_batch则返回全部。页面读取本地档案，运行中路次显示最近同步的快照；文件变化会刷新缓存。核验 `/api/state?batch=traceaad_v10_16` 的路次数、曲线和 ETA，并用 `/api/compare?cohorts=traceaad_v10_16` 核验测试结果。
+训练可视化使用本地 `8765` 端口（`http://127.0.0.1:8765/`）。先检查该端口；服务未运行时，用 `uv run python -m experiments.monitor --host 0.0.0.0 --port 8765` 启动。不指定 `--experiment` 时默认展示最近更新的批次；版本对比默认选中该 TraceAAD 批次和全部基线方法。查看其他方法用链接中的 `#b=<方法目录>`。运行监控默认筛选该方法的最新启动批次，也可选全部或具体批次；`#b=<方法目录>&rb=<启动批次>`固定条件，`rb=latest`跟随最新批次。API用`/api/state?batch=<方法目录>&run_batch=<启动批次或latest>`筛选，不传run_batch则返回全部。页面读取本地档案，运行中路次显示最近同步的快照；文件变化会刷新缓存。核验 `/api/state?batch=eoh` 的路次数、曲线和 ETA，并用 `/api/compare?cohorts=eoh,reevo` 核验测试结果。
 
 V10.15–V10.19 共用生成、评价和结果保存，各版本仍写到原版本目录。日常读取只使用 `events.jsonl`、`programs.jsonl`、`resume.json`、`summary.json`、`selection.json` 和平面的 `heldout.json`。原始模型请求与回复单独保存于 `calls.jsonl`，结束后压缩。诊断入口为 `uv run python -m experiments.traceaad_v10_17.diagnose --run-dir <目录>`，其他当前版本同样提供。格式、恢复条件和历史迁移见[实验与结果](SEARCH_FORMAT.md)。
 
@@ -72,7 +76,7 @@ server3 是一次性的执行机：不保留 git、历史版本、备份或已�
 同步前固定已完成路次清单，再用 `rsync --files-from` 统一同步，随后对冻结文件核验哈希。新完成路次加入下一轮。运行中的日志可继续变化，应与冻结档案分开处理；不要因同步时日志增长而反复重传已冻结档案。批次全局汇总可能持续变化，不作为冻结路次的内容哈希依据。
 
 
-## 当前：EoH／ReEvo 六任务关闭思考批次
+## 当前：EoH／ReEvo／FunSearch 六任务关闭思考批次
 
 批次`20261011_server3_deepseek_off_pilot`，EoH和ReEvo各6任务×1路，共12路；seed=0，1000候选／路，每路最多8个实例worker，共用`/tmp/traceaad-1005/scheduler.sock`的52核心CPU池。生成使用DeepSeek-V4.1-Flash，原生思考关闭、不发送reasoning_effort，temperature=1.0、top_p=0.95。DeepSeek版ReEvo初始化增量设为0，作为明确记录的模型适配；原始类默认+0.3保留。EoH、ReEvo输出上限各16384。
 
@@ -85,4 +89,6 @@ uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fz
 uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD --manifest experiments_result/reevo/batch_20261011_server3_deepseek_off_pilot.json
 ```
 
-旧`20261011_server3_deepseek_high_pilot`保持停止，标为diagnostic_excluded_from_main；旧同步watch已停止。high／low／off诊断已结束，保留本机证据，不纳入正式方法比较，不在旧目录中更换模式续跑。
+旧`20261011_server3_deepseek_high_pilot`保持停止，标为diagnostic_excluded_from_main；旧同步watch已停止。high／low／off诊断已结束，临时脚本与输出已删除，结论记录在基线审查文档，不纳入正式方法比较。
+
+FunSearch已加入同批次，六任务各1路，seed=0、1000候选、每路最多8个实例worker，共用上述52核心CPU池。关闭思考、temperature=1.0、top_p=0.95、max_tokens=16384。保留方法默认10个岛、每提示4次采样、2个父代与4小时岛重置周期。实际配置及token记录位于各运行目录；源码哈希与启动命令见`experiments_result/funsearch/batch_20261011_server3_deepseek_off_pilot.json`。本机tmux `sync_20261011_server3_deepseek_off_pilot_funsearch`每60秒同步。当前共18路。FunSearch复用已部署且核对一致的方法代码，未向server3覆盖在跑实验的公共源码。

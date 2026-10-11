@@ -1,5 +1,8 @@
 # TraceAAD V10.18
 
+> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
+
 The mechanism is specified in [the design document](../../docs/01-搜索方法/新设计的开发过程.md); the diagnosis that motivated it is in [the V10.17 diagnosis](../../docs/03-现象与检验/2026-10-04-短程改写诊断与首版门槛.md). Everything of V10.17 is kept (programs and generation events, experience-weighted starting points, measured outcomes, design-anchored Refine/Crossover goals) except how a new Explore design is treated. Every new program an Explore proposal produces opens an exploration. An Explore draw (share 0.40; Refine 0.35, Crossover 0.25) develops the open exploration if there is one and proposes a new design otherwise. Each Develop step starts from the best version the design has reached and sees the design's own formation from its first version, the source program only as a stated score and Design, and all other development attempts on the design. Development lasts at least 2 steps, ends after 2 steps in a row without a better version, after 8 steps, or as soon as the design's best version ranks among the five best programs of the search (also at proposal, without development).
 
 ```bash

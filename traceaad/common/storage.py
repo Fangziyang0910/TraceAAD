@@ -59,7 +59,8 @@ def selected_program(run_dir):
 def _selected_program(run_dir, signature):
     summary = read_json(run_dir / "summary.json", {})
     best = summary.get("best")
-    if summary.get("status") != "finished" or not best:
+    status = summary.get('archived_from_status') if summary.get('status') == 'archived' else summary.get('status')
+    if status != "finished" or not best:
         return None
     exported = run_dir / "best_program.py"
     code = exported.read_text(encoding="utf-8") if exported.exists() else Programs(run_dir).get(best["key"])

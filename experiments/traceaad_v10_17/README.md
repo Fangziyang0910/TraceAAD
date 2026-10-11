@@ -1,5 +1,8 @@
 # TraceAAD V10.17：科研实现
 
+> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
+
 机制见[提出后的短程改写](../../docs/01-搜索方法/提出后的短程改写.md)。父代按训练质量乘尝试经验选择，Refine / Explore / Crossover 默认份额为 45:30:25。新的有效 Explore 程序中，按探索编号抽取 1/8，继续至多三步 Refine，每步从该探索达到的最好程序出发。失败的新程序至多修复一次，所有生成都计入预算。最终在独立选择集评价前五名，失败时按训练排名替补。
 
 ## 2026-10-10：原机制在当前协议下重跑
@@ -17,9 +20,9 @@ uv run python -m experiments.traceaad_v10_17.launch_current --batch 20261010_ser
 
 新批次已于东京时间2026-10-10 19:52启动。19:53:15核验18路均存活且已有候选，累计48次（44次新有效、1次重复、2次超时、1次运行错误），模型服务错误和上下文裁剪均为0。所有路次机制身份正确，144个实现文件与启动快照一致。每分钟由本地 `watch_v1017_co6` 同步。
 
-- [批次清单](../../experiments_result/traceaad_v10_17/batch_20261010_server3_v1017_original_co6.json)、[源码身份](../../experiments_result/traceaad_v10_17/source_20261010_server3_v1017_original_co6.json)与[源码快照](../../experiments_result/traceaad_v10_17/source_20261010_server3_v1017_original_co6.tar.gz)
-- [首次健康核验](../../experiments_result/traceaad_v10_17/health_20261010_server3_v1017_original_co6_initial.json)
-- [历史等价核对](../../experiments_result/diagnosis_v1017_restart/audit.json)：17个历史源文件哈希吻合；三路历史TSP档案展开150份提示，在替换评价事实后逐字一致；300次父代与参考选择一致。入口10项检查与已有49项相关回归通过。
+- [批次清单](../../archive/local_models_20261011/traceaad_v10_17/batch_20261010_server3_v1017_original_co6.json)、[源码身份](../../archive/local_models_20261011/traceaad_v10_17/source_20261010_server3_v1017_original_co6.json)与[源码快照](../../archive/local_models_20261011/traceaad_v10_17/source_20261010_server3_v1017_original_co6.tar.gz)
+- [首次健康核验](../../archive/local_models_20261011/traceaad_v10_17/health_20261010_server3_v1017_original_co6_initial.json)
+- [历史等价核对](../../archive/local_models_20261011/diagnosis_v1017_restart/audit.json)：17个历史源文件哈希吻合；三路历史TSP档案展开150份提示，在替换评价事实后逐字一致；300次父代与参考选择一致。入口10项检查与已有49项相关回归通过。
 - [训练看板](http://127.0.0.1:8765/#b=traceaad_v10_17&rb=20261010_server3_v1017_original_co6)
 
 下文记载10月6日整理入口，不能用它代替本次恢复入口。历史实验的五任务、独立选择集和旧计分也不作为本次条件。

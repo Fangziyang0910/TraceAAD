@@ -1,23 +1,14 @@
 # 实验入口
 
-这里的实验用于理解 LLM 在不同材料、目标与约束下怎样改进算法，并检验由这些认识形成的方法。研究问题与认识见[研究主线](../docs/04-研究认识与构想/研究主线与问题.md)。这里集中查找运行命令、状态查询和结果位置。
+这里的实验用于理解 LLM 在不同材料、目标与约束下怎样改进算法，并检验由这些认识形成的方法。研究问题与认识见[研究主线](../docs/04-研究认识与构想/研究主线与问题.md)。这里集中查找运行命令、状态查询和结果位置。旧本地模型结果已封存到[归档入口](../archive/local_models_20261011/README.md)，现用结果目录保留DeepSeek实验。
 
 ## 针对问题的检验
 
 | 问题 | 实验 |
 | --- | --- |
-| 真实程序轨迹能否帮助继承、替换和迁移计算？ | [V10.25 轨迹条件化搜索](traceaad_v10_25/README.md)：base-2 已停止并保留7994次候选；当前[恢复原V10.17机制运行六任务18路](traceaad_v10_17/README.md#2026-10-10原机制在当前协议下重跑)。 |
-| 代码前的分析怎样影响生成？ | [格式配对](historical/format_study/README.md) |
-| 目标与计算余量怎样影响结构发现？ | [固定父代提示对照](diagnosis_v1015_5/README.md) |
-| 提供逐行耗时能改善修改吗？ | [耗时剖析重放](diagnosis_v1016_profile/README.md) |
-| 训练进展能延续到独立实例吗？ | [前沿重测](diagnosis_v1016_frontier/README.md) |
-| 初次生成的程序经少量改写后怎样变化？ | [同等开发](diagnosis_v1016_develop/README.md) |
+| 真实程序轨迹能否帮助继承、替换和迁移计算？ | [V10.25 轨迹条件化搜索](traceaad_v10_25/README.md)：base-2 已停止并保留7994次候选；[原V10.17的旧本地模型重跑](traceaad_v10_17/README.md#2026-10-10原机制在当前协议下重跑)已归档。 |
 | 落后的新设计得到开发后能否成立？ | [新设计开发搜索](traceaad_v10_18/README.md) |
 | 改动在原算法上检验，能否让新计算成立？ | [改动检验搜索](traceaad_v10_19/README.md) |
-| 保留当前规则、用它引导搜索，首版是否不劣于父代？ | [固定父代重放](diagnosis_v1020_replay/README.md) |
-| ACO 训练成绩有多少是种子噪声？后期提升是否真实？ | [ACO 噪声审计](diagnosis_aco_noise/README.md) |
-| Explore 反复提出失败方向，是因为看不到失败吗？ | [Explore 上下文重放](diagnosis_explore_context/README.md) |
-| 起点提示能否让不同的决策结构进入搜索？ | [起点提示重放](diagnosis_init_prompt/README.md) |
 | 更正计算事实并增加 Deepen，能否把时限换成质量？ | [当前规则引导的搜索](traceaad_v10_20/README.md) |
 | 只交代问题与一条效率规则，能否减少超时、保持成绩？ | [精简提示与效率规则](traceaad_v10_21/README.md) |
 | Explore 从精确输出出发分析，能否引入新的决策结构？ | [从精确输出出发的探索](traceaad_v10_22/README.md) |

@@ -1,5 +1,8 @@
 # 围绕求解器作用的有限开发
 
+> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
+
 V10.24 已实现，并于2026-10-10完成成组编辑与开发机制重构。Refine、Crossover、Explore共用四次一段、最多两段；新开与续投交替，待续投按等待顺序恢复原worktip或失败源码。单一候选预算，没有Plan准入、预留或名义槽。成熟程序默认SEARCH/REPLACE，初始化与整体重组保留完整Code；只评价原子应用后的完整结果。
 
 [最终设计与完整提示](../../docs/04-研究认识与构想/2026-10-09-从求解行为到开发决策的V10.24全局设计.md)解释推导、来源、公式与边界。[实验准则](../../docs/08-实验规范与共识/README.md)保持不变。2026-10-10已启动首个18路真实搜索批次，评价与冻结条件保持原协议。
@@ -12,8 +15,8 @@ V10.24 已实现，并于2026-10-10完成成组编辑与开发机制重构。Ref
 
 新版批次：`20261010_server3_v1024b`，server3，co6×3，种子0/1/2，每路1000候选，共18,000候选。每次评价最多8个worker，复用`/tmp/traceaad-1005/scheduler.sock`；候选每实例2秒CPU、整实例20秒墙钟上限不变。
 
-- [批次清单](../../experiments_result/traceaad_v10_24/batch_20261010_server3_v1024b.json)保存18路路径、命令、采样、评价条件和实现哈希。
-- [源码哈希快照](../../experiments_result/traceaad_v10_24/source_20261010_server3_v1024b.json)与同目录`source_20261010_server3_v1024b.tar.gz`固定本次未提交工作区的134个实现文件；部署后逐一核对一致。
+- [批次清单](../../archive/local_models_20261011/traceaad_v10_24/batch_20261010_server3_v1024b.json)保存18路路径、命令、采样、评价条件和实现哈希。
+- [源码哈希快照](../../archive/local_models_20261011/traceaad_v10_24/source_20261010_server3_v1024b.json)与同目录`source_20261010_server3_v1024b.tar.gz`固定本次未提交工作区的134个实现文件；部署后逐一核对一致。
 - 训练看板 [8765](http://127.0.0.1:8765/#b=traceaad_v10_24&rb=latest) 默认选最新启动批次；可切换旧批次，详情显示开发单元和真实支出。
 - 本地tmux会话`watch_v1024`每60秒同步结果。查询当前状态用下列命令，不能把本地快照当作实时进程状态。
 
@@ -23,7 +26,7 @@ uv run python -m experiments.infra.batch_status --ssh B3-server3 \
   --manifest experiments_result/traceaad_v10_24/batch_20261010_server3_v1024b.json --details
 ```
 
-首轮核验：18个新进程、预算与协议身份均匹配；东京时间01:28:45共94次候选，无服务错误或预算／状态不一致。此截点主要仍在初始化，不作为修正后算法收益证据。健康记录为[重启后检查](../../experiments_result/traceaad_v10_24/health_20261010_v1024b_followup.json)。
+首轮核验：18个新进程、预算与协议身份均匹配；东京时间01:28:45共94次候选，无服务错误或预算／状态不一致。此截点主要仍在初始化，不作为修正后算法收益证据。健康记录为[重启后检查](../../archive/local_models_20261011/traceaad_v10_24/health_20261010_v1024b_followup.json)。
 
 ## 运行入口
 

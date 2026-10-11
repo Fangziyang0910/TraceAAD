@@ -1,5 +1,8 @@
 # TraceAAD V10.20
 
+> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
+
 The mechanism and its reasons are in [the design document](../../docs/01-搜索方法/当前规则引导的搜索.md); the diagnosis that motivated it is in [版本差异与计算使用](../../docs/03-现象与检验/2026-10-06-版本差异与计算使用.md). Everything of V10.17 is kept: experience-weighted starting points, design-anchored Refine/Crossover goals, Explore anchored on the current algorithm, a random eighth of new Explore programs developed with three Refine steps, one repair. New experiments freeze the training-best program; independent validation selection with replacement remains available only when explicitly requested for historical reproduction. Three things change:
 
 - **Facts about computation** (all steps): the ACO task texts say the function is called once per instance before the colony starts (they said it "is evaluated many times"); the VRPTW text states that service durations are added to the time but not passed to the function; each measured program states its evaluation time against the limit; the evaluation section states the training instances and the test sets with their limits. Numbers come from `benchmarks/`; the benchmark task files are not edited, so the baselines' prompts do not change.
@@ -17,7 +20,7 @@ uv run python -m experiments.traceaad_v10_20.diagnose --run-dir experiments_resu
 
 Batch `20261006_local_v1020` was launched on 2026-10-06 at 19:01 (manifest `experiments_result/traceaad_v10_20/batch_20261006_local_v1020.json`; server3 8 runs, server3b 7). The working tree was not committed at launch; the manifest records the commit, `git status` and the hashes of all implementation files. Run held-out on each run soon after it finishes, so that a timeout at the 200 scale shows up early.
 
-[The fixed-parent replay](../diagnosis_v1020_replay/README.md) checked the first draft, whose Deepen used the Refine material: it behaved like Refine, while the same goal without the formation path raised the computation 12–17×. That replay shaped the final material and development rule.
+[The fixed-parent replay](../../archive/local_models_20261011/diagnosis_v1020_replay) checked the first draft, whose Deepen used the Refine material: it behaved like Refine, while the same goal without the formation path raised the computation 12–17×. That replay shaped the final material and development rule.
 
 Diagnostics (`diagnostics.json`) add `computation` for every method: the best and top programs' share of the training limit, each step's evaluation time relative to its starting program, timeouts by step, and programs that read the clock; exploration statistics add `by_proposal_action`. Method tests: `tests/method/test_traceaad_v1020.py`.
 

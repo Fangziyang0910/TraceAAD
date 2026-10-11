@@ -1,5 +1,8 @@
 # TraceAAD V10.15
 
+> 旧本地模型批次已全部归档（2026-10-11），本页保留方法入口与历史分析；当前运行状态以新批次清单为准。归档见[数据入口](../../archive/local_models_20261011/README.md)。
+
+
 The frozen mechanism is specified in [the design document](../../docs/01-搜索方法/生成目标与形成路径.md). Search draws parents over programs by training quality with a fixed target ESS of 8 (uniform over the top-scoring programs when at least eight tie) and immediately admits each valid unique candidate; finalists are the five best programs. An equal training score does not make two programs the same algorithm; only identical normalized code is a duplicate. The formation path is shown only in generation prompts.
 
 The 2026-09-30 prompt revision shows complete diffs for every displayed Refine/Crossover history step. History has no separate token or diff-line cap; whole oldest steps are removed only when the full prompt exceeds 24,320 input tokens, reserving 8,192 output tokens within the 32K context. The independent initialization prompt no longer contains the “more than a single formula” instruction. Use a new run name for this revision: saved runs retain their original protocol and cannot resume after source/config changes.

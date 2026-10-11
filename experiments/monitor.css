@@ -145,6 +145,7 @@ main { max-width: 1480px; margin: 0 auto; padding: 18px 20px 64px; }
 .pill.queued, .pill.unknown { background: var(--warn-soft); color: var(--warn); }
 .pill.blocked { background: var(--bad-soft); color: var(--bad); }
 .pill.stopped { background: var(--info-soft); color: var(--muted); }
+.pill.archived { background: var(--info-soft); color: var(--muted); }
 @keyframes pulse { 50% { opacity: .3; } }
 .prog { min-width: 0; }
 .track { height: 5px; border-radius: 99px; background: var(--line-2); overflow: hidden; }

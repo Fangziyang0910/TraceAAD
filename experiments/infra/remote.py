@@ -16,7 +16,7 @@ from pathlib import Path
 HOST = "B3-server3"
 REMOTE = "/home/fzy/code/LLM4AD/TraceAAD"
 ROOT = Path(__file__).resolve().parents[2]
-CODE_EXCLUDES = (".git/", ".venv/", "experiments_result/", "__pycache__/", ".pytest_cache/", ".cache/", ".env", ".vscode/",
+CODE_EXCLUDES = (".git/", ".venv/", "experiments_result/", "archive/", "__pycache__/", ".pytest_cache/", ".cache/", ".env", ".vscode/",
                  ".claude/", "*.pyc")
 TERMINAL = {"finished", "search_complete", "selection_failed", "no_valid_root"}
 

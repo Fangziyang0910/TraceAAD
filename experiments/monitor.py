@@ -281,7 +281,9 @@ class ResultsMonitor:
             summary = _read_json(run_dir / "summary.json")
             raw_status = summary.get("status")
             journal_hot = self._journal_is_hot(run_dir)
-            if raw_status == "finished":
+            if raw_status == 'archived' or metadata.get('batch_status') == 'archived':
+                status = 'archived'
+            elif raw_status == "finished":
                 status = "finished"
             elif metadata.get('batch_status') == 'stopped_by_user' or metadata.get('status') == 'stopped_by_user':
                 status = 'stopped'
@@ -365,6 +367,7 @@ class ResultsMonitor:
                 "running": counts["running"], "queued": counts["queued"],
                 "blocked": counts["blocked"], "unknown": counts["unknown"],
                 "stopped": counts["stopped"],
+                "archived": counts['archived'],
                 "budget_used": sum(row["budget_used"] for row in runs),
                 "budget": sum(row["budget"] for row in runs),
                 "valid_nodes": sum(row["valid_nodes"] for row in runs),
