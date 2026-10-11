@@ -368,3 +368,12 @@ def test_high_thinking_is_sent_and_reasoning_is_kept_in_transport_records(monkey
     assert llm.last_calls[0]['reasoning'] == 'reasoned about the algorithm'
     assert llm.last_calls[0]['sampling']['reasoning_effort'] == 'high'
     assert llm.last_calls[0]['usage']['completion_tokens_details']['reasoning_tokens'] == 5
+
+
+def test_unset_output_limit_is_omitted_from_the_request(monkeypatch):
+    clients = install_fake_openai(monkeypatch, make_response())
+    llm = OpenAIAPI(base_url='http://localhost/v1', api_key='EMPTY', model='test', max_tokens=None)
+    assert llm.draw_sample('task') == 'OK'
+    assert 'max_tokens' not in clients[0].chat.completions.calls[0]
+    llm.draw_sample('task', max_tokens=200)
+    assert clients[0].chat.completions.calls[1]['max_tokens'] == 200

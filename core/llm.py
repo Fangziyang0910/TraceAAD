@@ -138,7 +138,7 @@ class OpenAIAPI(LLM):
         api_key: str,
         model: str,
         timeout: float = 60,
-        max_tokens: int = 16384,
+        max_tokens: int | None = 16384,
         temperature: float = 1.0,
         top_p: float | None = None,
         stop: str | Sequence[str] | None = None,
@@ -222,10 +222,12 @@ class OpenAIAPI(LLM):
             "model": kwargs.pop("model", self.model),
             "messages": messages,
             "stream": False,
-            "max_tokens": kwargs.pop("max_tokens", self.max_tokens),
             "temperature": kwargs.pop("temperature", self.temperature),
         }
 
+        max_tokens = kwargs.pop("max_tokens", self.max_tokens)
+        if max_tokens is not None:
+            request["max_tokens"] = max_tokens
         top_p = kwargs.pop("top_p", self.top_p)
         stop = kwargs.pop("stop", self.stop)
         if top_p is not None:
