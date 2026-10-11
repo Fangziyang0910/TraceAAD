@@ -16,6 +16,10 @@ from typing import List, Optional
 import numpy as np
 
 from baselines.shared.observability import (
+    close_llm,
+    finish_profiler,
+    log_error,
+    shutdown_executor,
     init_observability,
     is_search_aborted,
     log_event,
@@ -31,6 +35,7 @@ from core import (
     TextFunctionProgramConverter,
 )
 from baselines.shared.sampling import SampleTrimmer
+from baselines.shared.checkpoint import save_checkpoint
 from .numeric_refine import code_signature, run_numeric_refinement
 from .parse import (
     extract_first_double_braced,
@@ -140,6 +145,10 @@ class CALM:
         if self._max_sample_nums is None:
             return 10 ** 9
         return max(0, self._max_sample_nums - self._tot_sample_nums)
+
+    def _reserve_budget(self, used: int) -> None:
+        self._tot_sample_nums = used
+        log_event(self, event='evaluation_batch_reserved', sample_order=used, counts_budget=True)
 
     @property
     def best_perf(self) -> float:
@@ -314,7 +323,10 @@ class CALM:
         self._best_perf = algo.perf
         # The shared experiment budget includes the supplied seed evaluation.
         self._register_function(algo, counts_budget=True)
+        save_checkpoint(self, 'calm', 'seed_evaluated')
+        self._refine_seeds()
 
+    def _refine_seeds(self) -> None:
         old_best = self._best_perf
         refined, self._tot_sample_nums, self._best_perf = run_numeric_refinement(
             candidate_parents=self._seed_algos,
@@ -339,10 +351,13 @@ class CALM:
             top_k=0,
             parent_limit=len(self._seed_algos),
             source_label='INITIAL_NUMERIC_REFINE',
+            on_budget_reserved=self._reserve_budget,
         )
         if self._best_perf < old_best:
             self._age_stuck = 0
         del refined
+        self._resume_boundary = 'initialized'
+        save_checkpoint(self, 'calm', 'initialized')
 
     def _evaluate_code_for_refine(self, code: str) -> tuple:
         score, perfs, status = self._evaluate_code(code)
@@ -489,7 +504,7 @@ class CALM:
 
         # Count all evaluated candidates toward budget (CALM evaluations_used).
         batch_start = self._tot_sample_nums
-        self._tot_sample_nums += len(curr_algos)
+        self._reserve_budget(self._tot_sample_nums + len(curr_algos))
 
         for position, (algo, curr_algo_i) in enumerate(zip(curr_algos, curr_algos_reward_idx), batch_start + 1):
             prompt = curr_prompts[curr_algo_i]
@@ -639,6 +654,7 @@ class CALM:
             log_info=self._log_info,
             register_accepted=lambda a, position: self._register_function(a, counts_budget=False, budget_used=position),
             on_new_best=self._save_best_if_needed,
+            on_budget_reserved=self._reserve_budget,
         )
         if self._best_perf < old_best:
             self._age_stuck = 0
@@ -709,33 +725,37 @@ class CALM:
         })
 
     def run(self) -> None:
-        log_state(self, phase='start', method='calm', sample_count=self._tot_sample_nums)
-        self._prepare_dataset()
-        while self._has_budget():
-            self._run_round()
+        run_status = 'finished'
+        try:
+            log_state(self, phase='start', method='calm', sample_count=self._tot_sample_nums)
+            if not getattr(self, '_resume_mode', False):
+                save_checkpoint(self, 'calm', 'initialization')
+            if getattr(self, '_resume_boundary', None) == 'seed_evaluated' and self._has_budget():
+                self._refine_seeds()
+            if not self._messages and self._has_budget():
+                self._prepare_dataset()
+            save_checkpoint(self, 'calm', 'prepared_round')
+            while self._has_budget():
+                self._run_round()
+                self._save_trace()
+                save_checkpoint(self, 'calm', 'round_complete')
+                if not self._has_budget():
+                    break
+                self._prepare_dataset()
+                log_event(self, event='epoch', method='calm', train_epoch=self._train_epoch,
+                          sample_count=self._tot_sample_nums, archive_size=len(self._algos),
+                          best_perf=self.best_perf)
+                save_checkpoint(self, 'calm', 'prepared_round')
+        except KeyboardInterrupt:
+            run_status = 'interrupted'
+        except Exception as exc:
+            run_status = 'error'
+            log_error(self, 'run', exc, method='calm', counts_budget=False)
+            raise
+        finally:
             self._save_trace()
-            if not self._has_budget():
-                break
-            self._prepare_dataset()
-            log_event(
-                self,
-                event='epoch',
-                method='calm',
-                train_epoch=self._train_epoch,
-                sample_count=self._tot_sample_nums,
-                archive_size=len(self._algos),
-                best_perf=self.best_perf,
-            )
-        self._save_trace()
-        if self._profiler is not None:
-            self._profiler.write_run_summary(status='finished', budget_used=self._tot_sample_nums)
-            self._profiler.finish()
-        log_state(
-            self,
-            phase='final',
-            method='calm',
-            sample_count=self._tot_sample_nums,
-            archive_size=len(self._algos),
-            best_perf=self.best_perf,
-        )
-        self._evaluation_executor.shutdown(wait=False)
+            log_state(self, phase='final', method='calm', sample_count=self._tot_sample_nums,
+                      archive_size=len(self._algos), best_perf=self.best_perf)
+            finish_profiler(self, status=run_status, budget_used=self._tot_sample_nums)
+            shutdown_executor(self._evaluation_executor)
+            close_llm(self._llm)

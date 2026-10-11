@@ -164,7 +164,14 @@ def shutdown_executor(executor: Any) -> None:
 def finish_profiler(method: Any, *, status: str = "finished", **payload) -> None:
     if is_search_aborted(method):
         status = "aborted"
+    budget = getattr(method, "_max_sample_nums", None)
+    used = getattr(method, "_tot_sample_nums", None)
+    if (status == "finished" and not payload.get('search_complete', False)
+            and budget is not None and used is not None and used < budget):
+        status = "stopped"
     profiler = _profiler(method)
+    if used is not None and hasattr(profiler, '_budget_used'):
+        profiler._budget_used = max(profiler._budget_used, used)
     writer = getattr(profiler, "write_run_summary", None)
     if callable(writer):
         writer(

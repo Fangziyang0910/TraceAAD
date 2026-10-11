@@ -8,6 +8,8 @@ all experiment entries.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 from collections.abc import Callable
 import os
 from dataclasses import dataclass
@@ -32,7 +34,7 @@ from experiments.infra.base import (
 )
 from benchmarks.tasks import CO_TASKS, FUNCTION_LIMITS, INSTANCE_LIMITS, NATIVE_MINIMIZE
 from core.evaluate import EVALUATION_SEED
-from traceaad.common.storage import read_json
+from traceaad.common.storage import read_json, write_json, repair_jsonl_tail
 from core.llm import OpenAIAPI
 from traceaad.common.config import REVISION
 
@@ -191,6 +193,28 @@ def setup_experiment_run(
     )
 
 
+@contextmanager
+def baseline_run_lock(run_dir):
+    """One writer per run; a dead writer releases its lock even after SIGKILL."""
+    with (Path(run_dir) / '.recovery.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ValueError(f'Run has an active writer: {run_dir}') from exc
+        summary_path = Path(run_dir) / 'summary.json'
+        summary = read_json(summary_path, {})
+        if summary.get('status') == 'running' and not summary.get('writer_lock'):
+            raise ValueError('Legacy run marked running; verify its process has stopped before updating its status')
+        for path in Path(run_dir).rglob('*.jsonl'):
+            repair_jsonl_tail(path, Path(run_dir) / 'logs/interrupted_tails')
+        try:
+            yield
+        finally:
+            summary = read_json(summary_path, {})
+            if summary.get('status') == 'running' and summary.get('writer_lock'):
+                write_json(summary_path, {**summary, 'status': 'stopped', 'phase': 'stopped'})
+
+
 def run_baseline_experiment(spec, *, write_config, build_method, description: str) -> Path:
     """Run a baseline with the shared directory, config and log lifecycle."""
     from experiments.infra.base import resolve_run_dir
@@ -199,13 +223,15 @@ def run_baseline_experiment(spec, *, write_config, build_method, description: st
     log_dir = run_dir / "logs"
     # Each evaluation's outcome, failure kind included, whatever the method records.
     os.environ["TRACEAAD_EVALUATION_LOG"] = str(run_dir / "evaluations.jsonl")
-    write_config(spec, run_dir, run_name)
-    print(f"run_dir={run_dir}")
-    run_in_tmux_log(
-        run_dir, log_dir,
-        [f"log_dir={log_dir}", f"llm={spec.model} @ {spec.base_url}", description],
-        lambda: build_method(spec, log_dir).run(),
-    )
+    with baseline_run_lock(run_dir):
+        write_config(spec, run_dir, run_name)
+        write_json(run_dir / 'summary.json', {'status': 'running', 'writer_lock': True})
+        print(f"run_dir={run_dir}")
+        run_in_tmux_log(
+            run_dir, log_dir,
+            [f"log_dir={log_dir}", f"llm={spec.model} @ {spec.base_url}", description],
+            lambda: build_method(spec, log_dir).run(),
+        )
     return run_dir
 
 

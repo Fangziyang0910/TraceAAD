@@ -142,6 +142,8 @@ class ProfilerBase:
         with self._artifact_lock:
             self._num_samples += 1
             position = self._num_samples if budget_used is None else int(budget_used)
+            if budget_used is None and getattr(self, '_resume_budget_from_method', False):
+                position = self._method._tot_sample_nums
             self._budget_used = max(self._budget_used, position)
             valid = function.score is not None and math.isfinite(float(function.score))
             self._evaluate_success_program_num += valid
@@ -264,12 +266,23 @@ class ProfilerBase:
             if isinstance(value, np.ndarray) else value.item() if isinstance(value, np.generic) else str(value), allow_nan=False))
 
     def _elapsed(self):
-        return (datetime.now(ZoneInfo('Asia/Shanghai'))-self._process_start_time).total_seconds()
+        return (datetime.now(ZoneInfo('Asia/Shanghai'))-self._process_start_time).total_seconds() + getattr(self, '_resume_elapsed', 0)
 
     def _freeze_training(self, config):
         from traceaad.common.instance_evaluation import InstanceProgramEvaluator
         from traceaad.common.state import Facts
-        nodes = sorted(Facts(self.run_dir).valid.values(), key=lambda n: (n['fitness'], n['id']))
+        nodes = list(Facts(self.run_dir).valid.values())
+        if profiles := getattr(self, '_recovery_profiles', None):
+            refreshed = []
+            for node in nodes:
+                if node['id'] <= self._recovery_candidate_cutoff and node['key'] in profiles:
+                    score = profiles[node['key']]['score']
+                    if score is None:
+                        continue
+                    node = {**node, 'fitness': score, 'score': score}
+                refreshed.append(node)
+            nodes = refreshed
+        nodes.sort(key=lambda n: (n['fitness'], n['id']))
         candidates = {}
         for node in nodes:
             candidates.setdefault(node['key'], node)
@@ -277,7 +290,7 @@ class ProfilerBase:
                 break
         evaluator = InstanceProgramEvaluator(self._evaluation,
             seeds=config.get('method_params', {}).get('evaluation_seeds', [EVALUATION_SEED]),
-            **self._evaluation._instance_execution)
+            **{k: v for k, v in self._evaluation._instance_execution.items() if k != 'record_path'})
         results = []
         payload = {'final_selection': 'training', 'finalists': [n['id'] for n in candidates.values()]}
         self._append_jsonl(self._method_events_path, {'kind': 'progress',

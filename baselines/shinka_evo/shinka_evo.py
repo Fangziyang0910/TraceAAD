@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional, Sequence
 
 from core import Evaluation, Function, LLM, Program, SecureEvaluator, TextFunctionProgramConverter
 from baselines.shared.profiler import ProfilerBase
+from baselines.shared.checkpoint import save_checkpoint
 from baselines.shared.observability import (
     close_llm,
     finish_profiler,
@@ -189,10 +190,13 @@ class ShinkaEvo:
         return not is_search_aborted(self) and (self._max_sample_nums is None or self._tot_sample_nums < self._max_sample_nums)
 
     def run(self):
+        run_status = 'finished'
         try:
-            if not self._resume_mode and self._has_budget() and self._archive.initial_program is None:
+            if self._has_budget() and self._archive.initial_program is None:
+                save_checkpoint(self, 'shinka_evo', 'initialization')
                 self._evaluate_seed()
-            generation = 1
+                save_checkpoint(self, 'shinka_evo', 'generation')
+            generation = self._generation + 1
             while self._has_budget():
                 if self._num_generations is not None and generation > self._num_generations:
                     break
@@ -200,7 +204,10 @@ class ShinkaEvo:
                 self._run_generation(generation)
                 for event in self._archive.maybe_migrate(generation):
                     self._register_event("island_migration", {"generation": generation, **event})
+                save_checkpoint(self, 'shinka_evo', 'generation')
                 generation += 1
+        except KeyboardInterrupt:
+            run_status = 'interrupted'
         except Exception as exc:
             log_error(self, "run", exc, method="shinka_evo", counts_budget=False)
             self._search_aborted = True
@@ -208,7 +215,8 @@ class ShinkaEvo:
                 raise
         finally:
             self._log_archive_state("final")
-            finish_profiler(self, status="aborted" if is_search_aborted(self) else "finished")
+            finish_profiler(self, status="aborted" if is_search_aborted(self) else run_status,
+                            search_complete=run_status == 'finished')
             close_embedding = getattr(self._embedding_fn, "close", None)
             if callable(close_embedding):
                 close_embedding()
@@ -218,6 +226,7 @@ class ShinkaEvo:
     def _evaluate_seed(self) -> ShinkaProgram:
         score, eval_time = self._evaluator.evaluate_program_record_time(program=self._template_program)
         self._tot_sample_nums += 1
+        log_event(self, event='seed_evaluated', sample_order=self._tot_sample_nums, counts_budget=True)
         result = self._coerce_evaluation_result(score)
         func = copy.deepcopy(self._function_to_evolve)
         func.score = result["combined_score"] if result["correct"] else None
@@ -694,7 +703,7 @@ class ShinkaEvo:
 
     def _register_function(self, program: ShinkaProgram) -> None:
         if self._profiler is not None:
-            self._profiler.register_function(program.function, program=program.program)
+            self._profiler.register_function(program.function, program=program.program, budget_used=self._tot_sample_nums)
 
     def _register_patch_attempt(
             self,

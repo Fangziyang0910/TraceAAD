@@ -15,6 +15,7 @@ from .prompt import PathWisePrompt
 from .sampler import PathWiseSampler
 from core import Evaluation, Function, LLM, Program, SecureEvaluator, TextFunctionProgramConverter
 from baselines.shared.profiler import ProfilerBase
+from baselines.shared.checkpoint import save_checkpoint
 from baselines.shared.observability import (
     close_llm,
     finish_profiler,
@@ -148,6 +149,9 @@ class PathWise:
         self._outer_iteration = 0
         self._inner_step = 0
         self._node_counter = 0
+        self._initialization_index = 0
+        self._initial_candidates: list[PathWiseNode] = []
+        self._initialization_complete = False
         self._best_node: PathWiseNode | None = None
         self._all_nodes_archive: dict[str, PathWiseNode] = {}
         self._root_node_ids: set[str] = set()
@@ -225,7 +229,7 @@ class PathWise:
 
     def _register_node(self, node: PathWiseNode, program: Program):
         if self._profiler is not None:
-            self._profiler.register_function(node.function, program=str(program))
+            self._profiler.register_function(node.function, program=str(program), budget_used=self._tot_sample_nums)
 
     def _register_population(self):
         if isinstance(self._profiler, PathWiseProfiler):
@@ -320,6 +324,8 @@ class PathWise:
     def _count_invalid_sample(self):
         if self._has_budget():
             self._tot_sample_nums += 1
+            log_event(self, event='sample_rejected', status='parse_failed',
+                      sample_order=self._tot_sample_nums, counts_budget=True)
 
     def _init_sampling_kwargs(self) -> dict:
         temperature = getattr(self._policy_llm, "temperature", None)
@@ -328,10 +334,12 @@ class PathWise:
         return {}
 
     def _initialize_population(self):
-        candidates: list[PathWiseNode] = []
-        for i in range(self._init_pop_size):
+        candidates = self._initial_candidates
+        for i in range(self._initialization_index, self._init_pop_size):
             if not self._has_budget():
                 break
+            save_checkpoint(self, 'pathwise', 'initialization')
+            self._initialization_index = i + 1
             prompt = self._prompt.initialization_prompt(i, self._external_knowledge)
             self._debug_print("PathWise Initialization Prompt", prompt)
             sample_start = time.time()
@@ -348,6 +356,7 @@ class PathWise:
                     role="policy",
                     counts_budget=False,
                 )
+                save_checkpoint(self, 'pathwise', 'initialization')
                 continue
             sample_time = time.time() - sample_start
             parsed = PathWiseSampler.parse_initialization_response(response, self._template_program)
@@ -367,6 +376,7 @@ class PathWise:
                 self._count_invalid_sample()
                 log_event(self, event="sample_rejected", method="pathwise", status="parse_failed",
                           operator="init", sample_order=self._tot_sample_nums, counts_budget=True)
+                save_checkpoint(self, 'pathwise', 'initialization')
                 continue
             func, description, rationale = parsed
             node = self._evaluate_function(
@@ -379,6 +389,7 @@ class PathWise:
             )
             if node is not None:
                 candidates.append(node)
+            save_checkpoint(self, 'pathwise', 'initialization')
 
         selected = self._rank_unique(candidates)
         if selected:
@@ -391,10 +402,12 @@ class PathWise:
                 selected.append(duplicate)
 
         self._population.set_nodes(selected[:self._pop_size], increment_generation=True)
+        self._initialization_complete = True
         self._register_population()
         log_state(self, phase="population", method="pathwise", generation=self._population.generation,
                   sample_count=self._tot_sample_nums, population_size=len(self._population),
                   node_ids=[node.node_id for node in self._population.nodes])
+        save_checkpoint(self, 'pathwise', 'outer_iteration')
 
     def _fallback_action(self, state: list[PathWiseNode]) -> PathWiseAction:
         best = min(state, key=lambda node: node.score)
@@ -564,7 +577,7 @@ class PathWise:
                     log_event(self, event="world_model_retry", method="pathwise", status="retry",
                               operator="world_model", sample_order=self._tot_sample_nums + 1,
                               action_idx=action_idx, rollout_idx=rollout_idx,
-                              retry=attempt + 1, counts_budget=True)
+                              retry=attempt + 1, counts_budget=False)
                     continue
                 return self._fallback_world_model_rollout(
                     action, state, graph, action_idx, rollout_idx, total_sample_time,
@@ -871,7 +884,7 @@ class PathWise:
         run_status = "finished"
         run_error = None
         try:
-            if not self._resume_mode:
+            if not self._resume_mode or not self._initialization_complete:
                 self._initialize_population()
                 if len(self._population) == 0:
                     print(
@@ -890,6 +903,7 @@ class PathWise:
                     break
                 self._update_population(graph)
                 self._outer_iteration += 1
+                save_checkpoint(self, 'pathwise', 'outer_iteration')
         except KeyboardInterrupt as exc:
             run_status = "interrupted"
             run_error = exc
@@ -915,7 +929,7 @@ class PathWise:
                       population_size=len(self._population),
                       archive_size=len(self._all_nodes_archive),
                       best_score=self._best_node.score if self._best_node else None)
-            finish_profiler(self, status=run_status, **summary_payload)
+            finish_profiler(self, status=run_status, search_complete=run_status == 'finished', **summary_payload)
             for agent_llm in self._llms():
                 close_llm(agent_llm)
 

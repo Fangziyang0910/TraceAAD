@@ -4,7 +4,7 @@
 
 ## 批次状态
 
-旧本地模型结果已归档到`archive/local_models_20261011/`，对应摘要与清单status为archived；不列作活跃实验、等待队列或待补测。当前活跃实验为EoH／ReEvo／FunSearch的DeepSeek关闭思考批次。
+旧本地模型结果已归档到`archive/local_models_20261011/`，对应摘要与清单status为archived；不列作活跃实验、等待队列或待补测。EoH与ReEvo已恢复的CVRP、FSSP完成搜索，图着色与JSSP继续；FunSearch四路已按用户要求启动恢复。MCTS-AHD保持暂停。实时进度以批次查询和进程核验为准。
 
 批次清单是查询范围的依据。指定清单，不遍历所有版本，也不以已同步的路次代替整个批次。
 
@@ -57,7 +57,7 @@ uv run python -m experiments.infra.local_queue --method funsearch --suite co6 --
 
 V10.15–V10.19 共用生成、评价和结果保存，各版本仍写到原版本目录。日常读取只使用 `events.jsonl`、`programs.jsonl`、`resume.json`、`summary.json`、`selection.json` 和平面的 `heldout.json`。原始模型请求与回复单独保存于 `calls.jsonl`，结束后压缩。诊断入口为 `uv run python -m experiments.traceaad_v10_17.diagnose --run-dir <目录>`，其他当前版本同样提供。格式、恢复条件和历史迁移见[实验与结果](SEARCH_FORMAT.md)。
 
-横轴单位来自 `run_config.json` 的 `budget_axis`，候选编号和实际预算分别保留。曲线显示迄今最佳训练成绩，并延伸到最后一条已记录的预算位置。列表、最近候选、有效率和预算共用一个增量投影；有效率的分母是全部候选记录数。
+横轴单位来自 `run_config.json` 的 `budget_axis`，候选编号和实际预算分别保留。基线实际预算读取方法事件与恢复点，不用保存的有效候选数代替；曲线延伸到已记录的实际预算位置。已停止且用完预算、尚未完成最终收尾的路次显示“搜索完成 · 待收尾”。列表、最近候选、有效率和预算共用一个增量投影；有效率的分母是全部候选记录数。
 
 V10.24详情还显示开发问题、工作版／单元最好版、分段实际支出、逐次结果，以及edit/full评价、缓存和交付失败统计。显式停止的批次以清单停止标记为准，不被旧运行总结覆盖。
 
@@ -76,7 +76,7 @@ server3 是一次性的执行机：不保留 git、历史版本、备份或已�
 同步前固定已完成路次清单，再用 `rsync --files-from` 统一同步，随后对冻结文件核验哈希。新完成路次加入下一轮。运行中的日志可继续变化，应与冻结档案分开处理；不要因同步时日志增长而反复重传已冻结档案。批次全局汇总可能持续变化，不作为冻结路次的内容哈希依据。
 
 
-## 当前：EoH／ReEvo／FunSearch 六任务关闭思考批次
+## 已暂停：EoH／ReEvo／FunSearch／MCTS-AHD 六任务关闭思考批次
 
 批次`20261011_server3_deepseek_off_pilot`，EoH和ReEvo各6任务×1路，共12路；seed=0，1000候选／路，每路最多8个实例worker，共用`/tmp/traceaad-1005/scheduler.sock`的52核心CPU池。生成使用DeepSeek-V4.1-Flash，原生思考关闭、不发送reasoning_effort，temperature=1.0、top_p=0.95。DeepSeek版ReEvo初始化增量设为0，作为明确记录的模型适配；原始类默认+0.3保留。EoH、ReEvo输出上限各16384。
 
@@ -92,3 +92,56 @@ uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fz
 旧`20261011_server3_deepseek_high_pilot`保持停止，标为diagnostic_excluded_from_main；旧同步watch已停止。high／low／off诊断已结束，临时脚本与输出已删除，结论记录在基线审查文档，不纳入正式方法比较。
 
 FunSearch已加入同批次，六任务各1路，seed=0、1000候选、每路最多8个实例worker，共用上述52核心CPU池。关闭思考、temperature=1.0、top_p=0.95、max_tokens=16384。保留方法默认10个岛、每提示4次采样、2个父代与4小时岛重置周期。实际配置及token记录位于各运行目录；源码哈希与启动命令见`experiments_result/funsearch/batch_20261011_server3_deepseek_off_pilot.json`。本机tmux `sync_20261011_server3_deepseek_off_pilot_funsearch`每60秒同步。当前共18路。FunSearch复用已部署且核对一致的方法代码，未向server3覆盖在跑实验的公共源码。
+
+MCTS-AHD于10月11日15:12加入同批次，六任务各1路，seed=0、1000候选、每路最多8个实例worker，共用上述52核心CPU池；生成设置与上相同，方法参数为默认值（初始4、种群10、λ0=0.1、α=0.5、4个采样线程）。同样复用server3已部署且核对一致的代码，未push；源码哈希与启动命令见`experiments_result/mcts_ahd/batch_20261011_server3_deepseek_off_pilot.json`。本机tmux `sync_20261011_server3_deepseek_off_pilot_mcts_ahd`每60秒同步。当前共24路。
+
+2026-10-11按用户要求因API额度不足中断：本批次四种方法的运行进程已全部停止，清单标记`stopped_by_user`，原因`api_quota_insufficient`。结果已拉回本机保留，四个同步watch已停止；不会自动重启。下文历史启动与同步说明仅用于定位批次，不表示当前正在运行。
+
+## 中断后的基线恢复
+
+`experiments.infra.resume_baseline`支持EoH、ReEvo、FunSearch、MCTS-AHD、CALM、PathWise、ShinkaEvo七种基线。本次旧批次涉及前四种方法。默认只核对配置、程序来源、预算和搜索状态，不调用模型、不做任务评价；核对结果在各方法的`recovery_check_20261011_server3_deepseek_off_pilot.json`。六路已满1000候选，只需最终训练重评与独立测试；其余18路按已花预算继续，不能重新初始化或重置token累计。
+
+```bash
+# server3仓库根目录；单路只读核对
+HF_HUB_OFFLINE=1 .venv/bin/python -m experiments.infra.resume_baseline --run-dir <运行目录>
+# FunSearch缺少历史评分向量时，只做CPU补全，不调用模型
+HF_HUB_OFFLINE=1 .venv/bin/python -m experiments.infra.resume_baseline --run-dir <运行目录> --prepare-profiles
+# 仅在用户要求恢复后执行；不足预算的路次会调用模型
+HF_HUB_OFFLINE=1 .venv/bin/python -m experiments.infra.resume_baseline --run-dir <运行目录> --execute
+# 整个方法批次：默认只读核对；加--execute在原tmux会话中启动各路恢复
+HF_HUB_OFFLINE=1 .venv/bin/python -m experiments.infra.resume_baseline --manifest <批次清单> --execute
+```
+
+批次入口支持上述七种基线。在执行机仓库根目录运行，按清单所在目录定位各路，不沿用另一台机器的绝对路径。已冻结路次和已存在的tmux会话自动跳过；满预算但未冻结的路次只做最终训练选择。后台日志写入各路`logs/resume_search.log`，CPU补全使用`--prepare-profiles`及`logs/recovery_profiles.log`。打印launched只表示会话已启动，须继续核对日志、进程与批次状态；结果同步仍使用既有`remote watch`入口。
+
+新启动与恢复入口共用`.recovery.lock`，阻止同一路重复写入；锁随进程退出释放。新入口写入的running状态带`writer_lock`标记，强制终止后可直接再次执行恢复，无需手改状态。未升级的旧进程没有这个标记，仍需核实进程已经停止后修正旧状态，不能仅凭锁空闲判断其存活。批次清单更新另用`.batch.lock`串行写入。
+
+预算未满的中断记录为stopped或interrupted，不提前冻结最终程序；方法原有的自然结束规则仍可正常完成。预算已满后恢复FunSearch最终选择，仍使用已保存的重评分数与失败排除结果。后续候选已有逐实例向量时直接读取，标记`recorded_database`；缺失的旧向量仍需重评，标记`reevaluated_database`。本轮改动只涉及记录、恢复和启动，不改变基线的生成、父代选择、反思、树搜索或候选预算规则。当前已启动的server3进程仍使用启动时源码，本机改动未推送。
+
+前四种方法的旧日志恢复是`journal_boundary`：旧随机状态和执行栈未保存，重新设定原seed。EoH从下一算子开始；ReEvo保留最近完整种群、当前最好程序及最后成功的长期反思，从新一代开始；MCTS按事件与实际父代提示恢复树，从新一轮树搜索开始；FunSearch恢复岛归属和评分向量，从新提示批开始。未完成的阶段不承诺逐步重现；已有候选支出不退回。恢复事实及代码哈希追加到`recovery.jsonl`，原始日志与配置不覆盖。
+
+CALM、PathWise和ShinkaEvo的新实验会自动保存`search_checkpoint.json.gz`，无需额外开关。它是压缩JSON，通过临时文件原子替换；只保存搜索对象和随机状态，不保存模型客户端或线程池。恢复核对原模型、任务、参数、预算身份以及事件和源码文件的完整性，标记为`search_checkpoint`。
+
+| 方法 | 保存与恢复的状态 | 恢复边界 |
+| --- | --- | --- |
+| CALM | 候选与种子、逐实例评分、提示试验与回访关系、注入组件、重复检测、数值微调尝试、停滞计数、已准备消息及独立RandomState | 种子评价／数值微调完成、准备好的轮次或完整轮次结束 |
+| PathWise | 初始化进度与候选、完整种群、节点档案与最好节点、父代信息、反思历史、轮次与节点编号 | 初始化候选结束或外层迭代结束 |
+| ShinkaEvo | 全部岛程序与副本身份、archive及亲子计数、embedding、bandit统计与随机流、meta记忆与待总结程序、已完成代数 | 种子或整代（含迁移）结束 |
+
+三个方法均恢复检查点时的Python／NumPy随机状态。Shinka从保存代数的下一代继续，不把代数重置为1；CALM已有消息不重新调度提示，种子评价后的检查点继续初始数值微调。初始化、解析失败、patch拒绝和数值微调的预算按各方法原有口径保留，不用有效候选记录数代替已花预算。CALM在批次评价和数值微调开始时记录原来已经预留的评价预算。
+
+执行栈不保存。检查点之后未完成的阶段从保存边界重新开始，该阶段已记录的支出仍计入总预算，不退还；PathWise跳过已花预算的初始化位置，未完成外层迭代使用新编号，避免复用日志中的节点身份。原调用与评价记录保留。恢复本身不调用模型、不重新评价旧程序或请求旧embedding；后续搜索和最终训练选择按原规则正常调用。旧CALM、PathWise、Shinka档案没有完整检查点时，预算未满的恢复会明确拒绝；不能仅凭最好程序猜测剩余搜索状态。
+
+写入前先在持有运行锁的情况下保存并移除JSONL未完成尾行，片段保留在`logs/interrupted_tails/*.partial`，完整记录和其他硬链接副本不变。调用压缩也先形成完整临时档案，再原子替换，避免二次中断破坏旧gzip。上述处理只由写入入口执行，只读核对不修剪文件。恢复或核对失败时关闭评价线程、生成／meta客户端及embedding客户端。
+
+FunSearch按用户确认的方式重新评价旧程序，使用重评后的分数与逐实例向量重建数据库。数据独立写`recovery_profiles.jsonl`与`recovery_evaluations.jsonl`，旧调用、候选和评价记录不覆盖。原岛归属保留，聚类及岛内最好分数按新结果更新，不要求与旧值相同。重评失败的程序保留失败记录并排除出重建数据库；候选预算不退回。最终训练候选排序也使用重建后的分数，避免新旧评分混用。空岛、父代身份不唯一或旧岛重置来源缺失仍拒绝启动模型请求。
+
+恢复方式明确记为`reevaluated_database`，不是中断前状态的精确还原。后续FunSearch评价保存逐实例向量，不再依赖补测恢复这些结果。原预算、候选编号与token累计保留，恢复重评成本单独记录。
+
+FunSearch的CPU补全在tmux `recover_profiles_20261011_funsearch_<task>`中进行，每路一次程序、8个实例worker，日志为各路`logs/recovery_profiles.log`。CVRP已补齐；FSSP、图着色、JSSP继续重评，分数变化不会中止。`recovery_ready.json`分别记录preparing、ready或实际错误。准备完成不会自动恢复LLM请求，正式搜索全部保持暂停。用户要求恢复后，再用独立tmux会话包装--execute并恢复相应remote watch。已冻结路次拒绝重复选择最终程序。
+
+按用户最新要求，先恢复EoH四路：CVRP从653／1000、FSSP从774／1000、图着色从432／1000、JSSP从399／1000继续。采用原批次、原运行目录与原tmux会话，通过resume_baseline --execute恢复；模型、采样与评价条件保持原配置。本机`sync_20261011_server3_deepseek_off_pilot_eoh`恢复每60秒同步。TSP与OP已满预算，不新增LLM请求。
+
+随后按用户要求恢复ReEvo四路：CVRP从738／1000、FSSP从796／1000、图着色从391／1000、JSSP从414／1000继续。恢复最近种群、全局最好程序和长期反思，从新一代开始，先成对反思再生成候选。原模型与评价设置不变，token累计连续；本机`sync_20261011_server3_deepseek_off_pilot_reevo`恢复同步。TSP与OP已满预算，不新增模型请求。
+
+随后按用户要求恢复FunSearch四路：CVRP从702／1000、FSSP从782／1000、图着色从592／1000、JSSP从466／1000继续。四路CPU重评均已ready，使用重评分数与逐实例向量重建数据库，从新提示批继续；原岛归属、已花预算和token累计保留。复用原tmux会话，恢复日志为各路`logs/resume_search.log`；本机`sync_20261011_server3_deepseek_off_pilot_funsearch`每60秒同步。TSP与OP实际预算均为1000，不新增模型请求。

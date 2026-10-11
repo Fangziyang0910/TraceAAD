@@ -131,6 +131,7 @@ def run_numeric_refinement(
         parent_limit=None,
         source_label: str = 'NUMERIC_REFINE',
         function_name: str | None = None,
+        on_budget_reserved: Optional[Callable[[int], None]] = None,
 ) -> tuple[List[HeuristicRecord], int, float]:
     """Returns (refined_algos, evaluations_used, best_perf)."""
     if variants_per_parent is None:
@@ -221,6 +222,8 @@ def run_numeric_refinement(
 
     batch_start = evaluations_used
     evaluations_used += len(variant_algos)
+    if on_budget_reserved is not None:
+        on_budget_reserved(evaluations_used)
     refined_algos = []
     for position, (algo, parent) in enumerate(zip(variant_algos, variant_parents), batch_start + 1):
         score, perfs, status = evaluate_code(algo.code)

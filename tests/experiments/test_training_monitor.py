@@ -58,6 +58,35 @@ def test_stopped_manifest_overrides_running_summary(tmp_path):
     assert row['status'] == 'stopped'
 
 
+def test_full_search_budget_is_not_the_number_of_saved_candidates(tmp_path):
+    results, name = make_run(tmp_path)
+    manifest = results / 'batch_batch.json'
+    data = json.loads(manifest.read_text())
+    data['status'] = 'stopped_by_user'
+    write_json(manifest, data)
+    run = results / 'tsp_construct' / name
+    write_json(run / 'summary.json', {'status': 'stopped'})
+    write_json(run / 'resume.json', {'method_state': {'sample_count': 4}})
+    append_records(run / 'events.jsonl', [{'kind': 'method', 'profiler_sample_order': 3,
+        'data': {'event': 'sample_registered', 'sample_order': 4, 'counts_budget': True}}])
+    row = ResultsMonitor(results.parent, results.name).overview()['tasks'][0]['runs'][0]
+    assert row['candidate_count'] == 3
+    assert row['budget_used'] == 4
+    assert row['curve'][-1]['evaluation'] == 4
+    assert row['status'] == 'search_complete'
+
+
+def test_resume_budget_refreshes_without_new_candidates(tmp_path):
+    from experiments.infra.monitor_history import TrainingHistory
+    results, name = make_run(tmp_path)
+    run = results / 'tsp_construct' / name
+    history = TrainingHistory(run, minimize=True)
+    assert history.progress_snapshot()['budget_used'] == 3
+    write_json(run / 'resume.json', {'method_state': {'sample_count': 4}})
+    assert history.progress_snapshot()['budget_used'] == 4
+    assert history.read()[0][-1]['evaluation'] == 4
+
+
 def test_run_batch_filter_keeps_restarted_conditions_separate(tmp_path):
     results, name = make_run(tmp_path)
     old = json.loads((results / 'batch_batch.json').read_text())

@@ -322,6 +322,8 @@ class ResultsMonitor:
                     used = progress["budget_used"]
                 if status != "finished" or score is None:
                     score = progress["best_fitness"]
+            if status == 'stopped' and budget and used >= budget and not summary.get('error'):
+                status = 'search_complete'
             row = {
                 "task": task, "name": run_dir.name, "repeat": config.get("repeat", metadata.get("repeat")),
                 "run_batch": metadata.get('run_batch'),
@@ -367,6 +369,7 @@ class ResultsMonitor:
                 "running": counts["running"], "queued": counts["queued"],
                 "blocked": counts["blocked"], "unknown": counts["unknown"],
                 "stopped": counts["stopped"],
+                "search_complete": counts['search_complete'],
                 "archived": counts['archived'],
                 "budget_used": sum(row["budget_used"] for row in runs),
                 "budget": sum(row["budget"] for row in runs),

@@ -104,6 +104,35 @@ def detach_link(path):
         temporary.replace(path)
 
 
+def repair_jsonl_tail(path, backup_dir):
+    """A stopped writer can leave a partial line; preserve it before appending again."""
+    path = Path(path)
+    size = path.stat().st_size
+    if not size:
+        return
+    with path.open('rb') as source:
+        source.seek(size - 1)
+        if source.read(1) == b'\n':
+            return
+        start, boundary = size, 0
+        while start:
+            offset = max(0, start - 65536)
+            source.seek(offset)
+            newline = source.read(start - offset).rfind(b'\n')
+            if newline >= 0:
+                boundary = offset + newline + 1
+                break
+            start = offset
+        backup = Path(backup_dir)
+        backup.mkdir(parents=True, exist_ok=True)
+        source.seek(boundary)
+        with tempfile.NamedTemporaryFile(dir=backup, prefix=path.name + '.', suffix='.partial', delete=False) as handle:
+            shutil.copyfileobj(source, handle)
+    detach_link(path)
+    with path.open('r+b') as handle:
+        handle.truncate(boundary)
+
+
 class Programs:
     """One source per content hash; index offsets without retaining every source."""
 
@@ -170,13 +199,17 @@ def seal_calls(run_dir):
     if not source.exists():
         return
     target = run_dir / "calls.jsonl.gz"
-    destination = target if target.exists() else target.with_suffix(".tmp")
-    detach_link(destination)
-    mode = "ab" if destination == target else "wb"
-    with source.open("rb") as original, gzip.open(destination, mode, compresslevel=1) as compressed:
-        shutil.copyfileobj(original, compressed)
-    if destination != target:
+    with tempfile.NamedTemporaryFile(dir=run_dir, suffix='.tmp', delete=False) as handle:
+        destination = Path(handle.name)
+    try:
+        if target.exists():
+            with target.open('rb') as previous, destination.open('wb') as handle:
+                shutil.copyfileobj(previous, handle)
+        with source.open("rb") as original, gzip.open(destination, 'ab', compresslevel=1) as compressed:
+            shutil.copyfileobj(original, compressed)
         destination.replace(target)
+    finally:
+        destination.unlink(missing_ok=True)
     source.unlink()
     checkpoint = read_json(run_dir / "resume.json")
     if checkpoint and "files" in checkpoint:

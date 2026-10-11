@@ -18,7 +18,7 @@ def finite(value):
 
 
 class TrainingHistory:
-    CACHE_VERSION = 6
+    CACHE_VERSION = 7
     CACHE_NAME = "history.json"
 
     def __init__(self, run_dir, minimize):
@@ -29,6 +29,7 @@ class TrainingHistory:
         self.boundary_tail = None
         self.streams, self.clock, self.node_offsets = {"events": []}, {}, {}
         self.programs = {}
+        self.recorded_budget = 0
         self.development = {"units": {}, "blocks": {}, "active": None}
         self.progress = {}
         self.result = ([], [], {}, {})
@@ -40,6 +41,7 @@ class TrainingHistory:
             self.streams["events"] = cached["events"]
             self.programs, self.node_offsets = cached["programs"], cached["node_offsets"]
             self.clock = cached["clock"]
+            self.recorded_budget = cached.get('recorded_budget', 0)
             self.development = cached["development"]
             self.boundary_tail = cached.get("boundary_tail")
 
@@ -51,7 +53,9 @@ class TrainingHistory:
             stat = path.stat()
             committed = committed_size(self.run_dir)
             identity = (stat.st_dev, stat.st_ino)
-            stamp = (committed, stat.st_mtime_ns)
+            metadata = tuple((p.stat().st_size, p.stat().st_mtime_ns) if p.exists() else None
+                             for p in (self.run_dir / 'resume.json', self.run_dir / 'summary.json'))
+            stamp = (committed, stat.st_mtime_ns, metadata)
             # A rewritten journal may reuse its inode. Check the committed
             # boundary before treating its contents as an appended tail.
             with path.open("rb") as handle:
@@ -62,6 +66,7 @@ class TrainingHistory:
                 self.offset, self.identity = 0, identity
                 self.streams, self.programs, self.node_offsets = {"events": []}, {}, {}
                 self.clock, self.stamp = {}, None
+                self.recorded_budget = 0
                 self.development = {"units": {}, "blocks": {}, "active": None}
                 self.boundary_tail = None
             if stamp == self.stamp:
@@ -74,6 +79,13 @@ class TrainingHistory:
                     if not raw.endswith(b"\n"):
                         break
                     row = json.loads(raw)
+                    data = row.get('data', {})
+                    if data.get('counts_budget') is True:
+                        self.recorded_budget = max(self.recorded_budget, data.get('sample_order', 0))
+                        if data.get('event') == 'sample_registered' and self.streams['events']:
+                            last = self.streams['events'][-1]
+                            if last['candidate'] == row.get('profiler_sample_order'):
+                                last['evaluation'] = data['sample_order']
                     if row.get("program"):
                         program = row["program"]
                         self.programs[str(program["id"])] = program
@@ -104,7 +116,7 @@ class TrainingHistory:
                     self.offset = handle.tell()
                 handle.seek(max(0, self.offset - 128))
                 self.boundary_tail = handle.read(min(128, self.offset)).hex()
-            if self.stamp is not None and self.offset == previous_offset:
+            if self.stamp is not None and self.offset == previous_offset and self.stamp[2] == metadata:
                 self.stamp = stamp
                 return self.result
             self.stamp = stamp
@@ -114,6 +126,7 @@ class TrainingHistory:
                     write_json(self.run_dir / ".cache/history.json", {"version": self.CACHE_VERSION,
                         "identity": self.identity, "offset": self.offset, "events": self.streams["events"],
                         "programs": self.programs, "node_offsets": self.node_offsets, "clock": self.clock,
+                        "recorded_budget": self.recorded_budget,
                         "development": self.development,
                         "boundary_tail": self.boundary_tail})
             except OSError:
@@ -178,8 +191,13 @@ class TrainingHistory:
         node_ids = {str(e.get("node_id") if e.get("node_id") is not None else e.get("candidate"))
                     for e in successful if e.get("node_id") is not None or e.get("candidate") is not None}
         unit = self.config.get("budget_axis", "候选尝试")
+        state = read_json(self.run_dir / 'resume.json', {}).get('method_state', {})
+        summary = read_json(self.run_dir / 'summary.json', {})
+        used = max(self.recorded_budget, state.get('sample_count', state.get('sample_order', 0)),
+                   summary.get('method_sample_count', 0),
+                   max((e['evaluation'] for e in events), default=0))
         self.progress = {"source": source, "x_label": unit,
-                         "budget_used": max((e["evaluation"] for e in events), default=0),
+                         "budget_used": used,
                          "valid_nodes": len(node_ids),
                          "candidate_count": len(events), "valid_candidate_count": len(successful),
                          "valid_rate": len(successful) / len(events) if events else None}
@@ -201,7 +219,7 @@ class TrainingHistory:
             last = event
         # Extend the incumbent through failures and regressions, without
         # misattributing its fitness/operator to the last candidate.
-        if points and last["evaluation"] > points[-1]["evaluation"]:
-            points.append({"evaluation": last["evaluation"], "fitness": best, "kind": "progress"})
+        if points and used > points[-1]["evaluation"]:
+            points.append({"evaluation": used, "fitness": best, "kind": "progress"})
         self.progress["best_fitness"] = best
         return points, recent[-12:][::-1], dict(operators), dict(outcomes)

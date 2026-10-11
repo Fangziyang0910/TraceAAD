@@ -168,6 +168,8 @@ class FunSearch:
         function.operator = operator
         if self._profiler is not None:
             self._profiler.register_function(function, program=str(program))
+            log_event(self, event='evaluation_profile', sample_order=self._tot_sample_nums,
+                      score=score, instance_scores=list(getattr(function, 'instance_scores', ())))
         if score is not None:
             self._database.register_program(function, island_id, -float(score))
 
@@ -216,14 +218,15 @@ class FunSearch:
     def run(self) -> None:
         try:
             # The template must run: it seeds every island.
-            outcome, eval_time = self._evaluator.evaluate_program_record_time_with_details(self._template_program)
-            score = outcome.result
-            self._tot_sample_nums += 1
-            if score is None:
-                raise RuntimeError('The score of the template program must not be None.')
-            seed = TextFunctionProgramConverter.program_to_function(self._template_program)
-            seed.instance_scores = tuple(-v for v in outcome.instance_scores)
-            self._register(seed, self._template_program, score, eval_time, 0.0, None, 'seed')
+            if not getattr(self, '_resume_mode', False):
+                outcome, eval_time = self._evaluator.evaluate_program_record_time_with_details(self._template_program)
+                score = outcome.result
+                self._tot_sample_nums += 1
+                if score is None:
+                    raise RuntimeError('The score of the template program must not be None.')
+                seed = TextFunctionProgramConverter.program_to_function(self._template_program)
+                seed.instance_scores = tuple(-v for v in outcome.instance_scores)
+                self._register(seed, self._template_program, score, eval_time, 0.0, None, 'seed')
 
             while self._has_budget():
                 prompt = self._database.get_prompt()

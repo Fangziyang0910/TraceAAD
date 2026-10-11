@@ -705,9 +705,13 @@ class MCTS_AHD:
         run_status = 'finished'
         run_error = None
         try:
-            mcts = MCTS('Root', self.alpha, self.lambda_0)
-            brothers = self._initialize_mcts_root(mcts)
-            nodes_set = self.population_management(brothers, min(len(brothers), self._pop_size))
+            if hasattr(self, '_recovered_tree'):
+                mcts, nodes_set = self._recovered_tree
+                brothers = [node.individual for node in mcts.root.children]
+            else:
+                mcts = MCTS('Root', self.alpha, self.lambda_0)
+                brothers = self._initialize_mcts_root(mcts)
+                nodes_set = self.population_management(brothers, min(len(brothers), self._pop_size))
 
             # terminate searching if
             if len(brothers) < self._selection_num:
