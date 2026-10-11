@@ -68,6 +68,7 @@ class ReEvo:
                  resume_mode: bool = False,
                  debug_mode: bool = False,
                  max_consecutive_sample_failures: int = 20,
+                 init_temperature_offset: float = 0.3,
                  multi_thread_or_process_eval: Literal['thread', 'process'] = 'thread',
                  **kwargs):
         """Reflective Evolution following the original ReEvo mechanics.
@@ -81,6 +82,9 @@ class ReEvo:
         self._pop_size = pop_size
         self._init_pop_size = init_pop_size
         self._mutation_rate = mutation_rate
+        if not np.isfinite(init_temperature_offset) or init_temperature_offset < 0:
+            raise ValueError('init_temperature_offset must be finite and nonnegative')
+        self._init_temperature_offset = init_temperature_offset
 
         self._num_samplers = num_samplers
         self._num_evaluators = num_evaluators
@@ -259,7 +263,7 @@ class ReEvo:
     def _init_sampling_kwargs(self) -> dict:
         temperature = getattr(self._sampler.llm, 'temperature', None)
         if isinstance(temperature, (int, float)):
-            return {'temperature': temperature + 0.3}
+            return {'temperature': temperature + self._init_temperature_offset}
         return {}
 
     def _evaluate_seed(self) -> Function:

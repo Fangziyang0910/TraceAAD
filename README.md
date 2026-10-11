@@ -4,7 +4,7 @@
 
 从[当前问题与认识](docs/04-研究认识与构想/研究主线与问题.md)开始。[研究文档](docs/README.md)按问题查找证据，[相关工作](docs/05-相关工作/README.md)帮助比较解释，[周报](docs/06-总结与周报/2026-W40.md)记录近期进展。
 
-运行实验、查询状态与定位结果见[实验入口](experiments/README.md)。搜索实现位于 `traceaad/`，比较方法位于 `baselines/`，数据与测试条件见[实验配置](docs/02-实验结果/00-实验配置.md)。
+运行实验、查询状态与定位结果见[实验入口](experiments/README.md)。搜索实现位于 `traceaad/`，比较方法位于 `baselines/`，数据与测试条件见[实验规范与共识](docs/08-实验规范与共识/README.md)。
 
 六个组合优化任务的规模、函数契约、数据划分与运行命令见[六任务 AHD 实验](experiments/co6/README.md)。主比较使用同规模独立测试。
 

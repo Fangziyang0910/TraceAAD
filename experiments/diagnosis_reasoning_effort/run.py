@@ -14,6 +14,9 @@ from core.llm import OpenAIAPI, generate, ModelCallError
 from experiments.infra.base import BACKENDS, set_no_proxy
 from experiments.infra.env import resolve_llm_api_key
 from traceaad.common.storage import write_json
+from benchmarks.tasks import training_task, FUNCTION_LIMITS, INSTANCE_LIMITS
+from traceaad.common.canonical import key
+from traceaad.common.instance_evaluation import InstanceProgramEvaluator
 
 
 def replay(case, mode, root):
@@ -33,6 +36,7 @@ def replay(case, mode, root):
     try:
         result = generate(client, case['prompt'])
         profiler.log_llm_call(transport_calls=result['calls'], stage='initialization', operator='replay')
+        (directory / 'response.txt').write_text(result['content'])
         usage = result.get('usage') or {}
         reasoning = (usage.get('completion_tokens_details') or {}).get('reasoning_tokens')
         completion = usage.get('completion_tokens')
@@ -63,17 +67,48 @@ def replay(case, mode, root):
     return row
 
 
+def evaluate_reply(case, row, root, *, workers, scheduler_socket):
+    directory = root / row['mode'] / case['id']
+    delivered = row.get('code_parse_success')
+    row['method_delivery_success'] = bool(delivered and row.get('thought_parse_success') is not False)
+    if not delivered:
+        row.update(evaluation_success=False, evaluation_failure={'kind': 'delivery_failure'}, fitness=None)
+    else:
+        try:
+            evaluation, config = training_task(case['task'], condition='traceaad')
+            evaluator = InstanceProgramEvaluator(evaluation, (730241,), 'search', n_workers=workers,
+                scheduler_socket=scheduler_socket, timeout_seconds=INSTANCE_LIMITS[case['task']],
+                function_seconds=FUNCTION_LIMITS[case['task']])
+            code = (directory / 'candidate.py').read_text()
+            outcome = evaluator.evaluate(code, key(code))
+            write_json(directory / 'evaluation.json', {'task_eval': config, **outcome})
+            row.update(evaluation_success=outcome['failure'] is None, fitness=outcome['fitness'],
+                       evaluation_failure=outcome['failure'], evaluation_seconds=outcome['seconds'])
+        except Exception as error:
+            row.update(evaluation_success=False, fitness=None,
+                       evaluation_failure={'kind': 'evaluation_error', 'error': f'{type(error).__name__}: {error}'})
+    write_json(directory / 'result.json', row)
+    return row
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--inputs', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--workers', type=int, default=12)
+    parser.add_argument('--temperature', type=float, help='Override all method temperatures for this diagnostic only')
+    parser.add_argument('--evaluate', action='store_true', help='Evaluate delivered programs on the fixed 16-instance training set')
+    parser.add_argument('--eval-workers', type=int, default=8)
+    parser.add_argument('--scheduler-socket')
     args = parser.parse_args()
     cases = json.loads(args.inputs.read_text())['cases']
     assert len(cases) == 12 and len({c['id'] for c in cases}) == 12
-    assert args.workers > 0
+    assert args.workers > 0 and args.eval_workers > 0
+    assert args.temperature is None or 0 <= args.temperature <= 2
     for case in cases:
         assert hashlib.sha256(json.dumps(case['prompt'], ensure_ascii=False, sort_keys=True).encode()).hexdigest() == case['prompt_sha256']
+        if args.temperature is not None:
+            case['sampling'].update(temperature=args.temperature, top_p=0.95)
     args.output.mkdir(parents=True, exist_ok=False)
     profile = BACKENDS['deepseek']
     set_no_proxy(profile.no_proxy)
@@ -81,12 +116,23 @@ def main():
         'design': '12 fixed prompts; phases high, low, off; one draw per prompt/mode; no client output cap',
         'model': profile.model, 'workers': args.workers, 'cases': [{k:c[k] for k in ('id','method','task','prompt_sha256')} for c in cases],
         'inputs_sha256': hashlib.sha256(args.inputs.read_bytes()).hexdigest(), 'results': []}
+    manifest.update(temperature_override=args.temperature, evaluate=args.evaluate,
+                    evaluation_seeds=[730241] if args.evaluate else [], eval_workers=args.eval_workers,
+                    scheduler_socket=args.scheduler_socket)
     write_json(args.output/'manifest.json', manifest)
+
+    def run_case(case, mode):
+        row = replay(case, mode, args.output)
+        if args.evaluate:
+            row = evaluate_reply(case, row, args.output, workers=args.eval_workers,
+                                 scheduler_socket=args.scheduler_socket)
+        return row
+
     for mode in ('high', 'low', 'off'):
         manifest['phase'] = mode
         write_json(args.output/'manifest.json', manifest)
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            futures = [executor.submit(replay, case, mode, args.output) for case in cases]
+            futures = [executor.submit(run_case, case, mode) for case in cases]
             for future in as_completed(futures):
                 row = future.result()
                 manifest['results'].append(row)

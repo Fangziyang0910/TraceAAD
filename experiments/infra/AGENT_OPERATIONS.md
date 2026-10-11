@@ -72,19 +72,17 @@ server3 是一次性的执行机：不保留 git、历史版本、备份或已�
 同步前固定已完成路次清单，再用 `rsync --files-from` 统一同步，随后对冻结文件核验哈希。新完成路次加入下一轮。运行中的日志可继续变化，应与冻结档案分开处理；不要因同步时日志增长而反复重传已冻结档案。批次全局汇总可能持续变化，不作为冻结路次的内容哈希依据。
 
 
-## 2026-10-11：EoH／ReEvo 六任务 high 首批
+## 当前：EoH／ReEvo 六任务关闭思考批次
 
-批次`20261011_server3_deepseek_high_pilot`，仅EoH和ReEvo，各6任务×1路，共12路；seed=0，1000候选／路，`eval_workers=8`。评价在server3，使用既有`/tmp/traceaad-1005/scheduler.sock`的52核心CPU池；模型请求直接使用`deepseek`网关，统一thinking开启、reasoning_effort=high。两方法当前输出上限均为16384，各自阶段采样设置保留。行为源码提交为`6b6ba74f`，源码哈希在批次清单中。
+批次`20261011_server3_deepseek_off_pilot`，EoH和ReEvo各6任务×1路，共12路；seed=0，1000候选／路，每路最多8个实例worker，共用`/tmp/traceaad-1005/scheduler.sock`的52核心CPU池。生成使用DeepSeek-V4.1-Flash，原生思考关闭、不发送reasoning_effort，temperature=1.0、top_p=0.95。DeepSeek版ReEvo初始化增量设为0，作为明确记录的模型适配；原始类默认+0.3保留。EoH、ReEvo输出上限各16384。
 
-远端不需uv命令，运行使用仓库`.venv/bin/python`。DeepSeek tokenizer缓存已部署在`/home/fzy/.cache/huggingface/hub/`，实验命令显式设置`HF_HUB_OFFLINE=1`，避免执行机在线下载。凭据仅由远端`.env`读取。
+远端Python使用`/home/fzy/code/LLM4AD/TraceAAD/.venv/bin/python`原路径，不解析symlink；启动设置`HF_HUB_OFFLINE=1`，使用已部署的tokenizer缓存。凭据只从远端.env读取。源码哈希与实际命令在批次清单，逐次实际请求与API用量在calls.jsonl，token_usage.json实时累计。反思等非候选调用也记录。
 
-清单分别为`experiments_result/eoh/batch_20261011_server3_deepseek_high_pilot.json`和`experiments_result/reevo/batch_20261011_server3_deepseek_high_pilot.json`。本机tmux会话`sync_20261011_server3_deepseek_high_pilot_eoh`、`sync_20261011_server3_deepseek_high_pilot_reevo`每60秒复用`experiments.infra.remote watch --experiment <方法> --batch 20261011_server3_deepseek_high_pilot`同步。watch默认在完成held-out后才清理远端，当前未启动独立测试。
-
-每路`calls.jsonl`保存物理请求、原生reasoning、API usage、阶段和实际采样参数；`token_usage.json`为运行中累计，结束后也写入`summary.json.token_usage`。累计completion_tokens含reasoning时不可再加reasoning_tokens；calls_without_usage表示无法取得API用量的请求，不把其开销报告为零。按阶段的统计可读取逐条calls；结束后calls压缩，复用既有读取入口。
+清单分别为`experiments_result/eoh/batch_20261011_server3_deepseek_off_pilot.json`、`experiments_result/reevo/batch_20261011_server3_deepseek_off_pilot.json`。本机`sync_20261011_server3_deepseek_off_pilot_eoh`、`sync_20261011_server3_deepseek_off_pilot_reevo`每60秒复用remote watch同步；按现有流程，完成独立测试且本地核验一致后才清理远端。
 
 ```bash
-uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD --manifest experiments_result/eoh/batch_20261011_server3_deepseek_high_pilot.json
-uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD --manifest experiments_result/reevo/batch_20261011_server3_deepseek_high_pilot.json
+uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD --manifest experiments_result/eoh/batch_20261011_server3_deepseek_off_pilot.json
+uv run python -m experiments.infra.batch_status --ssh B3-server3 --repo /home/fzy/code/LLM4AD/TraceAAD --manifest experiments_result/reevo/batch_20261011_server3_deepseek_off_pilot.json
 ```
 
-状态更新：上述12路已因首请求中10／12出现high思考耗尽16384总输出、无代码而停止，运行目录保留并同步本机。等待确定后续强度／输出预算；不自动重启。诊断见`experiments_result/diagnosis_deepseek_high_20261011/first_requests.json`。累计用量覆盖已返回API响应，被中断的在途请求可能没有usage。
+旧`20261011_server3_deepseek_high_pilot`保持停止，标为diagnostic_excluded_from_main；旧同步watch已停止。high／low／off诊断已结束，保留本机证据，不纳入正式方法比较，不在旧目录中更换模式续跑。

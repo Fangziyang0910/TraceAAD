@@ -16,7 +16,7 @@ uv run python -m experiments.traceaad_v10_25.launch_host --batch 20261010_server
 uv run pytest -q tests/method/test_traceaad_v1025.py
 ```
 
-正式运行沿用[实验准则](../PROTOCOL.md)：训练 16 例、每实例候选 CPU 2 秒／墙钟 20 秒、训练 top-5 重测冻结、独立测试 50 例。远端启动与同步遵循[执行入口](../infra/AGENT_OPERATIONS.md)。必须使用新的批次和运行目录；配置、任务、协议、机制不一致时拒绝恢复，不能续跑下面的废弃批次。
+正式运行沿用[实验准则](../../docs/08-实验规范与共识/README.md)：训练 16 例、每实例候选 CPU 2 秒／墙钟 20 秒、训练 top-5 重测冻结、独立测试 50 例。远端启动与同步遵循[执行入口](../infra/AGENT_OPERATIONS.md)。必须使用新的批次和运行目录；配置、任务、协议、机制不一致时拒绝恢复，不能续跑下面的废弃批次。
 
 调用、候选、形成路径、探索和最终选择继续采用公共档案格式。诊断及冻结后测试入口：
 

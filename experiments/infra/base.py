@@ -117,7 +117,7 @@ _EXPLICIT = ("temperature", "top_p", "top_k")
 MODEL_SETTINGS: dict[str, dict[str, Any]] = {
     "deepseek-v4.1-flash": {
         "sampling": {"temperature": 1.0, "top_p": 0.95},
-        "enable_thinking": True,
+        "enable_thinking": False,
         "reasoning_effort": "high",
         "tokenizer": "deepseek-ai/DeepSeek-V4.1-Flash",
         "prompt_format": "<｜begin▁of▁sentence｜><｜User｜>{}<｜Assistant｜></think>",

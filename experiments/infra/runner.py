@@ -58,7 +58,7 @@ def add_common_run_args(
     parser.add_argument("--budget", type=int, default=default_budget)
     parser.add_argument("--eval-workers", type=int)
     parser.add_argument("--thinking", action=argparse.BooleanOptionalAction, default=None,
-                        help="override model thinking mode (DeepSeek defaults to enabled/high)")
+                        help="override model thinking mode (DeepSeek defaults to disabled; --thinking enables high)")
     parser.add_argument("--approx-chars-per-token", type=float,
                         help="count tokens locally by characters (for gateways without /tokenize)")
 
