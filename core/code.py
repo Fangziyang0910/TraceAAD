@@ -67,6 +67,8 @@ class Function:
     evaluate_time: float | None = None
     sample_time: float | None = None
     operator: str | None = 'Unknown'
+    source_prefix: str = ''
+    source_suffix: str = ''
 
     def __str__(self) -> str:
         return_type = f' -> {self.return_type}' if self.return_type else ''
@@ -79,7 +81,7 @@ class Function:
             function += f'    """{self.docstring}"""{new_line}'
         # self.body is already indented.
         function += self.body + '\n\n'
-        return function
+        return self.source_prefix + function + self.source_suffix
 
     def __setattr__(self, name: str, value: str) -> None:
         # Ensure there aren't leading & trailing new lines in `body`.
@@ -97,7 +99,8 @@ class Function:
         return (self.name == other.name and
                 self.args == other.args and
                 self.return_type == other.return_type and
-                self.body == other.body)
+                self.body == other.body and
+                self.source_prefix == other.source_prefix and self.source_suffix == other.source_suffix)
 
     def to_code_without_docstring(self) -> str:
         """Return the function as a string without the docstring."""
@@ -279,6 +282,9 @@ class TextFunctionProgramConverter:
             if len(template_program.functions) != 1:
                 raise ValueError(f'Only one function expected, got {len(template_program.functions)}'
                                  f':\n{template_program.functions}')
+
+            if function.source_prefix or function.source_suffix:
+                return Program(preface="", functions=[function])
 
             # replace the function body with the new function body
             template_program.functions[0].body = function.body

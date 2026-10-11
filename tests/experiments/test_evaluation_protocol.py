@@ -71,3 +71,18 @@ def test_every_backend_receives_the_full_non_thinking_profile():
     thinking = llm_payload(base_url="http://127.0.0.1:1/v1", model="m", no_proxy="x", max_tokens=16,
                            enable_thinking=True)
     assert thinking["sampling"]["temperature"] == 1.0 and thinking["sampling"]["presence_penalty"] == 0.0
+
+
+def test_deepseek_uses_model_card_sampling_and_its_own_tokenizer():
+    from experiments.infra.base import BACKENDS, build_llm_client
+
+    b = BACKENDS["deepseek"]
+    client = build_llm_client(base_url=b.base_url, model=b.model, no_proxy=b.no_proxy, max_tokens=16)
+    body = client._merged_extra_body(None)
+    assert (client.temperature, client.top_p) == (1.0, 0.95)
+    assert "presence_penalty" not in body and "top_k" not in body
+    assert body["thinking"] == {"type": "disabled"}
+    # Counts recorded from the gateway's usage.prompt_tokens for the same prompts.
+    assert client.count_prompt_tokens("hi") == 5
+    assert client.count_prompt_tokens("中文测试：路径规划问题 ✓ 🚀") == 14
+    assert client.count_tokens("中文测试：路径规划问题 ✓ 🚀") == 10

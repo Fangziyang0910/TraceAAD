@@ -280,7 +280,7 @@ class ShinkaEvoMechanicsTest(unittest.TestCase):
             self.assertIn("import numpy as np", str(result.program))
             self.assertIn("return 9", result.function.body)
 
-    def test_novelty_rejection_happens_before_evaluation_and_does_not_spend_budget(self):
+    def test_novelty_rejection_happens_before_evaluation_and_counts_candidate_budget(self):
         llm = ScriptedLLM([code_block(2)])
         novelty_llm = ScriptedLLM(["NOT NOVEL: identical structure"])
         method, _, evaluation = make_method(
@@ -296,9 +296,9 @@ class ShinkaEvoMechanicsTest(unittest.TestCase):
         )
         method.run()
 
-        self.assertEqual(method._tot_sample_nums, 1)
+        self.assertEqual(method._tot_sample_nums, 2)
         self.assertEqual(len(evaluation.programs), 1)
-        self.assertIn("meaningfully novel", novelty_llm.prompts[0])
+        self.assertIn("meaningfully different", novelty_llm.prompts[0])
 
     def test_archive_fitness_replacement_and_crowding_fallback(self):
         archive = ShinkaArchive(archive_size=1)
@@ -377,7 +377,7 @@ class ShinkaEvoMechanicsTest(unittest.TestCase):
         method._run_generation(1)
 
         self.assertEqual(len(calls), 2)
-        self.assertEqual(method._tot_sample_nums, 2)
+        self.assertEqual(method._tot_sample_nums, 3)
 
     def test_meta_scratchpad_updates_and_recommendation_enters_prompt(self):
         llm = ScriptedLLM([code_block(2), code_block(3)])
@@ -399,6 +399,8 @@ class ShinkaEvoMechanicsTest(unittest.TestCase):
         self.assertTrue(method._current_meta_recommendation())
         parent = method.best_program
         prompt = method._sampler.build_prompt(parent, [], [], "full", meta_recommendations=method._current_meta_recommendation())
+        self.assertEqual([m["role"] for m in prompt], ["system", "user"])
+        prompt = "\n".join(m["content"] for m in prompt)
         self.assertIn("Potential Recommendations", prompt)
 
     def test_profiler_records_functions_and_shinka_events(self):

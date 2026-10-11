@@ -6,11 +6,13 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
+from .embedding import CodeEmbedding, embedding_settings
 from baselines.shinka_evo import ShinkaEvo, ShinkaEvoProfiler
 
 from experiments.infra.base import (
     ALL_TASKS,
     BACKENDS,
+    DEFAULT_BACKEND,
     RESULTS_ROOT,
     TaskName,
     build_llm_client,
@@ -187,8 +189,8 @@ def build_method(spec: RunSpec, log_dir: Path) -> ShinkaEvo:
         patch_type_probs=spec.patch_type_probs,
         parent_selection_strategy=spec.parent_selection_strategy,
         meta_llm=meta_llm,
-        novelty_llm=None,
-        embedding_fn=None,
+        novelty_llm=llm,
+        embedding_fn=CodeEmbedding(),
         max_patch_resamples=spec.max_patch_resamples,
         elite_selection_ratio=spec.elite_selection_ratio,
         num_archive_inspirations=spec.num_archive_inspirations,
@@ -229,16 +231,17 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                 "max_patch_resamples": spec.max_patch_resamples,
                 "meta_rec_interval": spec.meta_rec_interval,
                 "meta_llm_enabled": True,
-                "novelty_rejection_enabled": False,
-                "embedding_enabled": False,
+                "novelty_rejection_enabled": True,
+                "embedding_enabled": True,
+                "embedding": embedding_settings(),
                 "llm_ucb_exploration_coef": spec.llm_ucb_exploration_coef,
                 "budget_basis": (
                     "Fair comparison budget max_sample_nums=num_generations=1000 "
                     "(paper Circle Packing used 150). Other hyperparams follow "
                     "Circle Packing table: archive_size=40, islands=2, "
                     "inspirations=4/2, migration_rate=0, patch probs [0.45,0.45,0.1], "
-                    "meta interval=10, UCB exploration=1.0; novelty disabled; "
-                    "meta LLM reuses the same Qwen endpoint"
+                    "meta interval=10, UCB exploration=1.0; embedding and novelty enabled; "
+                    "meta and novelty LLMs reuse the selected generation model; initialization, rejected and evaluated candidates count toward the shared budget"
                 ),
             }),
     )
@@ -263,7 +266,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Run one paper-aligned ShinkaEvolve experiment."
     )
     parser.add_argument("--task", choices=ALL_TASKS, required=True)
-    parser.add_argument("--backend", choices=tuple(BACKENDS), default="local")
+    parser.add_argument("--backend", choices=tuple(BACKENDS), default=DEFAULT_BACKEND)
     parser.add_argument("--base-url")
     parser.add_argument("--model")
     parser.add_argument("--no-proxy")

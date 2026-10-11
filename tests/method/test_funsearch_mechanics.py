@@ -141,11 +141,11 @@ def test_run_counts_every_sample_and_registers_valid_programs_on_their_island():
     invalid = 'def priority_v1(item, bins):\n    return undefined_name\n'
     ancestor = 'def priority_v1(item, bins):\n    return priority_v0(item, bins)\n'
     responses = [good, 'I cannot help.', invalid, ancestor]
-    method = make_method(responses, budget=4)
+    method = make_method(responses, budget=5)
     method.run()
 
     llm = method._llm
-    assert method._tot_sample_nums == 4
+    assert method._tot_sample_nums == 5
     assert len(llm.prompts) == 4
     assert len(set(llm.prompts)) == 1  # four samples per prompt
     assert llm.prompts[0].endswith(chat_instruction('priority', 1))

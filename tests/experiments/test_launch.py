@@ -49,6 +49,7 @@ def test_scheduler_assigns_available_endpoints(monkeypatch):
         "experiments.infra.base.free_slots",
         lambda: {"server3": 2, "server3b": 1, "local": 0},
     )
+    monkeypatch.setattr("experiments.infra.base.PRIMARY_BACKENDS", ("server3", "server3b", "server1", "local"))
 
     assigned = assign_backends(plan)
 

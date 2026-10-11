@@ -101,7 +101,12 @@ class ReEvo:
         self._tot_sample_nums = 0
         self._seed_function: Function | None = None
         self._elite_function: Function | None = None
-        self._long_term_reflection_str = ''
+        from pathlib import Path
+        knowledge_dir = Path(__file__).with_name('prompts')
+        task_key = type(evaluation).__module__.split('.')[-2] if '.' in type(evaluation).__module__ else ''
+        knowledge = knowledge_dir / task_key / 'external_knowledge.txt'
+        self._external_knowledge = knowledge.read_text() if knowledge.is_file() else ''
+        self._long_term_reflection_str = self._external_knowledge
         init_observability(self, max_consecutive_sample_failures)
 
         assert multi_thread_or_process_eval in ['thread', 'process']
@@ -272,6 +277,8 @@ class ReEvo:
 
     def _initialize_population(self):
         prompt = ReEvoPrompt.get_pop_init_prompt(self._task_description_str, self._function_to_evolve)
+        if self._external_knowledge:
+            prompt[-1]["content"] += "\n" + self._external_knowledge
         self._debug_print('Initial Population Prompt', prompt)
         accepted = []
         for _ in range(self._init_pop_size):
@@ -296,20 +303,8 @@ class ReEvo:
         if len(pool) < 2:
             raise RuntimeError('ReEvo selection failed: fewer than two valid functions are available.')
 
-        require_distinct = len({float(func.score) for func in pool}) >= 2
-        if not require_distinct:
-            # OBP-like flat landscapes can collapse the population onto one score.
-            # Original ReEvo also fails selection in that case; for long budgets we
-            # fall back to random pairs so search can keep spending remaining FE.
-            log_event(
-                self,
-                event='selection_tie_fallback',
-                method='reevo',
-                generation=self._population.generation,
-                population_size=len(pool),
-                unique_scores=1,
-                sample_order=self._tot_sample_nums,
-            )
+        if len({float(func.score) for func in pool}) < 2:
+            raise RuntimeError('ReEvo selection failed: no distinct parent scores, as in upstream.')
 
         selected_pairs = []
         trial = 0
@@ -318,7 +313,7 @@ class ReEvo:
             parent_1, parent_2 = np.random.choice(pool, size=2, replace=False)
             if parent_1 is parent_2:
                 continue
-            if require_distinct and parent_1.score == parent_2.score:
+            if parent_1.score == parent_2.score:
                 continue
             selected_pairs.append([parent_1, parent_2])
             if trial > 1000:

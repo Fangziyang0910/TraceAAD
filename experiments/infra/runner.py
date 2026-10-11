@@ -19,6 +19,7 @@ from experiments.infra.base import (
     scheduler_socket,
     ALL_TASKS,
     BACKENDS,
+    DEFAULT_BACKEND,
     RESULTS_ROOT,
     BackendProfile,
     build_llm_client,
@@ -46,7 +47,7 @@ def add_common_run_args(
 ) -> None:
     """Add standard arguments required by all experiment runners."""
     parser.add_argument("--task", choices=ALL_TASKS, required=True)
-    parser.add_argument("--backend", choices=tuple(BACKENDS), default="local")
+    parser.add_argument("--backend", choices=tuple(BACKENDS), default=DEFAULT_BACKEND)
     parser.add_argument("--base-url")
     parser.add_argument("--model")
     parser.add_argument("--no-proxy")

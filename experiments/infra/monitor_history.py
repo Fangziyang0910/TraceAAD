@@ -6,7 +6,7 @@ from threading import RLock
 import json
 import math
 
-from traceaad.common.storage import Programs, committed_size, live_snapshot, normalize_live_record, read_json, write_json
+from traceaad.common.storage import Programs, committed_size, read_json, write_json
 
 
 def finite(value):
@@ -67,7 +67,6 @@ class TrainingHistory:
             if stamp == self.stamp:
                 return self.result
             previous_offset = self.offset
-            live = live_snapshot(self.run_dir)
             with path.open("rb") as handle:
                 handle.seek(self.offset)
                 while handle.tell() < committed:
@@ -75,8 +74,6 @@ class TrainingHistory:
                     if not raw.endswith(b"\n"):
                         break
                     row = json.loads(raw)
-                    if live:
-                        row = normalize_live_record(row, live["task"])
                     if row.get("program"):
                         program = row["program"]
                         self.programs[str(program["id"])] = program

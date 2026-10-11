@@ -1,0 +1,160 @@
+{
+  "audited_commit": "c6224cdf7a798dcf642981e77add0a7c6d968c41",
+  "complete_program_control": 3,
+  "helper_parsing": {
+    "eoh": {
+      "functions": [
+        "solve"
+      ],
+      "value": 3
+    },
+    "reevo": {
+      "functions": [
+        "solve"
+      ],
+      "value": 3
+    },
+    "mcts_ahd": {
+      "functions": [
+        "solve"
+      ],
+      "value": 3
+    },
+    "calm": {
+      "functions": [
+        "solve"
+      ],
+      "value": 3
+    },
+    "pathwise": {
+      "functions": [
+        "solve"
+      ],
+      "value": 3
+    },
+    "funsearch": {
+      "functions": [
+        "solve"
+      ],
+      "value": 3
+    },
+    "shinka_evo": {
+      "functions": [
+        "solve"
+      ],
+      "value": 3
+    }
+  },
+  "calm_task_support": {
+    "tsp_construct": {
+      "task_resolution": "tsp_construct",
+      "seed": true
+    },
+    "cvrp_aco": {
+      "task_resolution": "cvrp_aco",
+      "seed": true
+    },
+    "fssp_gls": {
+      "task_resolution": "fssp_gls",
+      "seed": true
+    },
+    "graph_colouring": {
+      "task_resolution": "graph_colouring",
+      "seed": true
+    },
+    "jssp_construct": {
+      "task_resolution": "jssp_construct",
+      "seed": true
+    },
+    "op_aco": {
+      "task_resolution": "op_aco",
+      "seed": true
+    }
+  },
+  "reevo_tie": {
+    "scores": [
+      1,
+      1
+    ],
+    "tie_rejected": true
+  },
+  "transport_roles": {
+    "reevo": [
+      "system",
+      "user"
+    ],
+    "pathwise": [
+      "system",
+      "user"
+    ],
+    "shinka_evo": [
+      "system",
+      "user"
+    ],
+    "calm": [
+      "system",
+      "user"
+    ]
+  },
+  "eoh_initialization": {
+    "population_size": 2,
+    "generated": 4,
+    "counted": 4
+  },
+  "mcts_multiline_thought": "First line\nSecond line",
+  "pathwise_failed_rollout_context": {
+    "inputs": [
+      [
+        2,
+        "inf (failed)"
+      ],
+      [
+        3,
+        4
+      ]
+    ],
+    "failure_description_present": true,
+    "action_A_displayed_average_is_2": false
+  },
+  "official_sources": {
+    "eoh": {
+      "repository": "https://github.com/FeiLiu36/EoH.git",
+      "commit": "472545785c936dcfc863d2bc0d6109cf23c7ce62"
+    },
+    "reevo": {
+      "repository": "https://github.com/ai4co/reevo.git",
+      "commit": "6dce18257da5e11db2d138e417a2fffc5c72d05f"
+    },
+    "mcts_ahd": {
+      "repository": "https://github.com/zz1358m/MCTS-AHD-master.git",
+      "commit": "ee9c4f424503c65a5fd2b899e6620ce86079fedb"
+    },
+    "funsearch": {
+      "repository": "https://github.com/google-deepmind/funsearch.git",
+      "commit": "cc53f274237d7ab05c19df939edbc1f9616a7c19"
+    },
+    "pathwise": {
+      "repository": "https://github.com/oguzhangungordu/PathWise.git",
+      "commit": "9d014a368d920d46ef4538da4c484503549214cb"
+    },
+    "calm": {
+      "repository": "https://github.com/whxru/CALM.git",
+      "commit": "3c40dbd78f2f6439bcc7cc2cbac334ab28a6f8f3"
+    },
+    "shinka_evo": {
+      "repository": "https://github.com/SakanaAI/ShinkaEvolve.git",
+      "commit": "8adc053a2ce4511ad2ac310e004c530a73fb974a"
+    }
+  },
+  "calm_prompt_equal_empty_parents": {
+    "system_prompt": true,
+    "prompt_creation": true,
+    "prompt_design_strategy": true,
+    "prompt_local_refinement_guidance": true,
+    "prompt_simplification": true,
+    "prompt_injection": true,
+    "prompt_replacement": true,
+    "prompt_algo_requirements": true,
+    "prompt_crossover": true
+  }
+}

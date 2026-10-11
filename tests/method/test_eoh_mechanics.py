@@ -115,7 +115,7 @@ class EoHMechanicsTest(unittest.TestCase):
         self.assertEqual(len(method._sampler.prompts), 4)
         self.assertTrue(all("describe your new algorithm" in p for p in method._sampler.prompts))
         self.assertEqual([func.score for func in method._population.population], [-3.0, -2.0])
-        self.assertEqual(method._tot_sample_nums, 0)
+        self.assertEqual(method._tot_sample_nums, 4)
         self.assertEqual(method._population.generation, 0)
 
     def test_valid_evolution_sample_counts_without_profiler_and_immediately_survives(self):
@@ -130,7 +130,7 @@ class EoHMechanicsTest(unittest.TestCase):
         self.assertEqual(method._tot_sample_nums, 1)
         self.assertEqual([func.score for func in method._population.population], [-2.0])
 
-    def test_invalid_generation_or_score_does_not_count_or_enter_population(self):
+    def test_invalid_generation_or_score_counts_but_does_not_enter_population(self):
         method = make_method(pop_size=2, funcs=[make_function(2)], scores=[None])
         method._population.register_function(make_function(1, 1.0), increment_generation=False)
         method._operators = ["m1"]
@@ -139,7 +139,7 @@ class EoHMechanicsTest(unittest.TestCase):
         accepted = method._run_one_evolution_sample()
 
         self.assertFalse(accepted)
-        self.assertEqual(method._tot_sample_nums, 0)
+        self.assertEqual(method._tot_sample_nums, 1)
         self.assertEqual([func.score for func in method._population.population], [-1.0])
         self.assertEqual(method._population.generation, 0)
 
@@ -195,7 +195,7 @@ class EoHMechanicsTest(unittest.TestCase):
         self.assertIn("simplify", method._sampler.prompts[-1].lower())
         self.assertIn("return 1", method._sampler.prompts[-1])
 
-    def test_failed_generation_does_not_count(self):
+    def test_failed_generation_counts_candidate_attempt(self):
         method = make_method(pop_size=1, funcs=[], scores=[])
         method._population.register_function(make_function(1, 1.0), increment_generation=False)
         method._operators = ["m1"]
@@ -204,7 +204,7 @@ class EoHMechanicsTest(unittest.TestCase):
         accepted = method._run_one_evolution_sample()
 
         self.assertFalse(accepted)
-        self.assertEqual(method._tot_sample_nums, 0)
+        self.assertEqual(method._tot_sample_nums, 1)
         self.assertTrue(math.isfinite(method._population.population[0].score))
 
     def test_max_sample_nums_takes_precedence_over_generation_budget(self):

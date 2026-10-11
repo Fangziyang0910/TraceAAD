@@ -50,6 +50,7 @@ class EvaluationOutcome:
     error: str | None = None
     traceback: str | None = None
     cpu_seconds: float | None = None
+    instance_scores: tuple[float, ...] = ()
 
 
 class InvalidEvaluationResult(Exception):
@@ -309,7 +310,8 @@ class SecureEvaluator:
                     _append_evaluation(execution["record_path"], program_str, record)
                 return EvaluationOutcome(result["fitness"],
                     **{name: record[name] for name in ("failure_kind", "error_type", "error", "traceback")},
-                    cpu_seconds=sum(r["cpu_seconds"] for r in result["evaluations"]))
+                    cpu_seconds=sum(r["cpu_seconds"] for r in result["evaluations"]),
+                    instance_scores=tuple(r["score"] for r in record["instances"]) if result["fitness"] is not None else ())
             function_name = self._target_function_name()
 
             if self._debug_mode:

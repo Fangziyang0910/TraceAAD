@@ -13,13 +13,8 @@ class CALMSampler:
         self._profiler = profiler
 
     @staticmethod
-    def messages_to_prompt(messages: Sequence[dict]) -> str:
-        parts = []
-        for msg in messages:
-            role = msg.get('role', 'user')
-            content = msg.get('content', '')
-            parts.append(f'[{role}]\n{content}')
-        return '\n\n'.join(parts)
+    def messages_to_prompt(messages: Sequence[dict]) -> list[dict]:
+        return list(messages)
 
     def sample(self, messages: Sequence[dict], *, n: int = 1, operator: str | None = None,
                sample_order: int | None = None) -> List[str]:

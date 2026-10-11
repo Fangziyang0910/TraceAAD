@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import re
 from typing import Any, List
 
 from core import Function, LLM, Program, TextFunctionProgramConverter
@@ -32,20 +33,16 @@ class SampleTrimmer:
 
     def draw_sample(self, prompt: str | Any, *args, **kwargs) -> str:
         """Get a sample based on the provided 'LLM' instance.
-        If the inner sampler sets 'auto_trim' to True, trim anything before the function body.
+        Preserve the full response for the task-aware program parser.
         """
         generated_code = self.llm.draw_sample(prompt, *args, **kwargs)
-        if self.llm.do_auto_trim:
-            generated_code = self.__class__.auto_trim(generated_code)
         return generated_code
 
     def draw_samples(self, prompts: List[str | Any], *args, **kwargs) -> List[str]:
         """Get samples based on the provided 'Sampler' instance.
-        If the inner sampler sets 'auto_trim' to True, trim anything before the function body.
+        Preserve the full response for the task-aware program parser.
         """
         ret = self.llm.draw_samples(prompts, *args, **kwargs)
-        if self.llm.do_auto_trim:
-            ret = [self.__class__.auto_trim(code) for code in ret]
         return ret
 
     @classmethod
@@ -113,8 +110,7 @@ class SampleTrimmer:
     def sample_to_function(cls, generated_code: str, template_program: str | Program) -> Function | None:
         """Convert the generated content (with redundant component)
         to a Function instance. If the convert fails, return None.
-        Please note that the modified Function instance is not executable,
-        as it lacks 'import ...' statements.
+        The returned entrypoint retains its module imports and helpers.
         """
         program = cls.sample_to_program(generated_code, template_program)
         if program is None:
@@ -126,32 +122,74 @@ class SampleTrimmer:
         """Convert the generated content (with redundant component)
         to a Function instance. If the convert fails, return None.
         """
-        try:
-            generated_code = cls.trim_function_body(generated_code)
-            # convert program to Program instance
-            if isinstance(template_program, str):
-                template_program = TextFunctionProgramConverter.text_to_program(template_program)
-            else:
-                template_program = copy.deepcopy(template_program)
-            # store a docstring copy
-            docstr_copy = template_program.functions[0].docstring
-            # replace the function body with the generated body
-            template_program.functions[0].body = generated_code
-            # ------------------------------------------------------------------------------------------------
-            # Add new operation on July 7, 2024: remove redundant docstrings.
-            # 1. Remove all docstrings.
-            template_program.functions[0] = cls.remove_docstrings(template_program.functions[0])
-            # 2. Check if the function body is 'None'.
-            if template_program.functions[0].body == '' or template_program.functions[0].body is None:
-                return None
-            # 3. Add the docstring copy.
-            template_program.functions[0].docstring = docstr_copy
-            # ------------------------------------------------------------------------------------------------
-            return template_program
-        except ValueError as value_err:
-            raise value_err
-        except:
+        if isinstance(template_program, str):
+            template_program = TextFunctionProgramConverter.text_to_program(template_program)
+        if template_program is None:
             return None
+        target = template_program.functions[0]
+        response = re.sub(r"<think>.*?</think>", "", generated_code, flags=re.DOTALL)
+        blocks = re.findall(r"```(?:python)?\s*\n(.*?)```", response, re.DOTALL | re.IGNORECASE)
+        sources = blocks or [response]
+        for source in sources:
+            lines = source.splitlines()
+            if not blocks:
+                starts = [i for i, line in enumerate(lines)
+                          if re.match(r"^(?:def |class |import |from |@|[A-Za-z_]\w*\s*(?::[^=]+)?=)", line)]
+                if starts:
+                    lines = lines[starts[0]:]
+            while lines:
+                try:
+                    tree = ast.parse("\n".join(lines))
+                    break
+                except SyntaxError:
+                    lines.pop()
+            else:
+                continue
+            functions = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
+            matches = [n for n in functions if re.fullmatch(re.escape(target.name) + r"(?:_v\d+)?", n.name)]
+            if not matches:
+                continue
+            node = matches[-1]
+            old_name = node.name
+            # Versioned responses retain helper functions, imports and module state.
+            class Rename(ast.NodeTransformer):
+                def visit_Name(self, item):
+                    if item.id == old_name:
+                        item.id = target.name
+                    return item
+            tree = Rename().visit(tree)
+            node.name = target.name
+            ast.fix_missing_locations(tree)
+            code = ast.unparse(tree)
+            tree = ast.parse(code)
+            node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == target.name)
+            function = TextFunctionProgramConverter.text_to_function(ast.get_source_segment(code, node))
+            if function is None:
+                continue
+            # The experiment supplies the callable contract, as in the previous adapter.
+            function.name, function.args, function.return_type = target.name, target.args, target.return_type
+            function.docstring = target.docstring
+            start = min([node.lineno] + [d.lineno for d in node.decorator_list]) - 1
+            code_lines = code.splitlines(keepends=True)
+            prefix = ''.join(code_lines[:start])
+            imports = '\n'.join(line for line in template_program.preface.splitlines() if line not in prefix.splitlines())
+            futures = [line for line in prefix.splitlines() if line.startswith('from __future__ import ')]
+            rest = '\n'.join(line for line in prefix.splitlines() if not line.startswith('from __future__ import '))
+            decorators = ''.join(code_lines[start:node.lineno - 1])
+            function.source_prefix = '\n'.join(part for part in ('\n'.join(futures), imports, rest) if part)
+            if function.source_prefix:
+                function.source_prefix += '\n'
+            function.source_prefix += decorators
+            function.source_suffix = ''.join(code_lines[node.end_lineno:])
+            return Program(preface='', functions=[function])
+        # FunSearch also accepts a completion containing only an indented body.
+        if generated_code.startswith((' ', '\t')):
+            body = cls.trim_function_body(generated_code)
+            if body:
+                function = copy.deepcopy(target)
+                function.body = body
+                return Program(preface=template_program.preface, functions=[function])
+        return None
 
     @classmethod
     def trim_function_body(cls, generated_code: str) -> str | None:

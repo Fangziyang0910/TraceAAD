@@ -145,14 +145,7 @@ class FunSearch:
 
     def sample_to_program(self, response: str, version: int) -> Program | None:
         """Returns the runnable program for one model response, or None if no function body is found."""
-        body = self._body_after_header(self._extract_code(response, version), version)
-        try:
-            # A recursive generated function calls itself by its versioned name.
-            body = code_manipulation.rename_function_calls(body, f'{self._function_name}_v{version}',
-                                                           self._function_name)
-        except Exception:
-            pass
-        return SampleTrimmer.sample_to_program(body, self._template_program)
+        return SampleTrimmer.sample_to_program(self._extract_code(response, version), self._template_program)
 
     def calls_ancestor(self, program: Program) -> bool:
         """Whether the generated function calls an earlier version `f_v*` (rejected, as in the original)."""
@@ -205,7 +198,9 @@ class FunSearch:
         if self.calls_ancestor(program):
             score, eval_time, status = None, 0.0, 'calls_ancestor'
         else:
-            score, eval_time = self._evaluator.evaluate_program_record_time(program)
+            outcome, eval_time = self._evaluator.evaluate_program_record_time_with_details(program)
+            score = outcome.result
+            function.instance_scores = tuple(-v for v in outcome.instance_scores)
             status = 'registered' if score is not None else 'invalid'
         self._register(function, program, score, eval_time, sample_time, prompt.island_id, OPERATOR)
         log_event(self, event='database_register', status=status, operator=OPERATOR, sample_order=sample_order,
@@ -221,10 +216,13 @@ class FunSearch:
     def run(self) -> None:
         try:
             # The template must run: it seeds every island.
-            score, eval_time = self._evaluator.evaluate_program_record_time(self._template_program)
+            outcome, eval_time = self._evaluator.evaluate_program_record_time_with_details(self._template_program)
+            score = outcome.result
+            self._tot_sample_nums += 1
             if score is None:
                 raise RuntimeError('The score of the template program must not be None.')
             seed = TextFunctionProgramConverter.program_to_function(self._template_program)
+            seed.instance_scores = tuple(-v for v in outcome.instance_scores)
             self._register(seed, self._template_program, score, eval_time, 0.0, None, 'seed')
 
             while self._has_budget():

@@ -258,7 +258,7 @@ class PromptBuilder:
         return f'{summary}; representative_scores=[{sample_str}]'
 
     def prompt_algo_requirements(self) -> str:
-        return dedent("""\
+        requirements = dedent("""\
             ## Your Task
             You should first present a concise conceptual description, followed by a complete code implementation.
             
@@ -283,3 +283,8 @@ class PromptBuilder:
             ```
             Except for the idea and code, do not give additional explanations or comments.\
         """)
+
+        if 'def solve(' in self.algorithm_template:
+            requirements = requirements.replace('Be a single Python function formatted within Python code blocks.',
+                'Be a complete Python program formatted within Python code blocks; helper functions are allowed.')
+        return requirements

@@ -39,7 +39,7 @@ TaskName = Literal[
     "graph_colouring",
     "jssp_construct",
 ]
-BackendName = Literal["local", "server1", "server3", "server3b"]
+BackendName = Literal["deepseek", "local", "server1", "server3", "server3b"]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RESULTS_ROOT = REPO_ROOT / "experiments_result"
@@ -56,6 +56,13 @@ class BackendProfile:
 
 
 BACKENDS: dict[BackendName, BackendProfile] = {
+    # Hosted gateway; key DEEPSEEK_API_KEY in .env. 24 concurrent requests tested.
+    "deepseek": BackendProfile(
+        base_url="http://183.36.243.124:33333/v1",
+        model="deepseek-v4.1-flash",
+        no_proxy="183.36.243.124,localhost,127.0.0.1,::1",
+        capacity=24,
+    ),
     "local": BackendProfile(
         base_url="http://127.0.0.1:8001/v1",
         model="Qwen3.8-27B",
@@ -82,7 +89,8 @@ BACKENDS: dict[BackendName, BackendProfile] = {
 BACKEND_CAPACITY = {name: profile.capacity for name, profile in BACKENDS.items()}
 BACKEND_DISPLAY_NAMES = {name: profile.label or name for name, profile in BACKENDS.items()}
 BACKEND_MARKERS = {name: (profile.marker or urlparse(profile.base_url).netloc,) for name, profile in BACKENDS.items()}
-PRIMARY_BACKENDS = ('server3', 'server3b', 'server1', 'local')
+PRIMARY_BACKENDS = ('deepseek',)
+DEFAULT_BACKEND: BackendName = 'deepseek'
 
 # Qwen3.8-27B's official sampling settings per mode (model card). Every
 # control is sent explicitly: left unset, vLLM fills it from the model's
@@ -102,10 +110,25 @@ SAMPLING_PROFILES: dict[bool, dict[str, float]] = {
 }
 _EXPLICIT = ("temperature", "top_p", "top_k")
 
+# Models whose own settings replace the Qwen profiles above. The gateway has no
+# /tokenize, so prompts are counted with the released tokenizer; the format is
+# the non-thinking chat template for one user message (matches the gateway's
+# prompt_tokens exactly). Sampling follows the model card.
+MODEL_SETTINGS: dict[str, dict[str, Any]] = {
+    "deepseek-v4.1-flash": {
+        "sampling": {"temperature": 1.0, "top_p": 0.95},
+        "tokenizer": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "prompt_format": "<｜begin▁of▁sentence｜><｜User｜>{}<｜Assistant｜></think>",
+        # The gateway's /models omits it; model card 1M, 78k-token prompt verified.
+        "context": 1048576,
+    },
+}
 
-def sampling_controls(enable_thinking: bool, **overrides: float | None) -> dict[str, float]:
-    """The mode's profile with any method-specified temperature/top_p/top_k."""
-    controls = dict(SAMPLING_PROFILES[bool(enable_thinking)])
+
+def sampling_controls(enable_thinking: bool, model: str | None = None, **overrides: float | None) -> dict[str, float]:
+    """The model's or mode's profile with any method-specified temperature/top_p/top_k."""
+    settings = MODEL_SETTINGS.get(model or "")
+    controls = dict(settings["sampling"] if settings else SAMPLING_PROFILES[bool(enable_thinking)])
     controls.update({k: v for k, v in overrides.items() if v is not None})
     return controls
 
@@ -155,9 +178,10 @@ def build_llm_client(
     chars_per_token: float | None = None,
 ) -> OpenAIAPI:
     set_no_proxy(no_proxy)
-    controls = sampling_controls(enable_thinking, temperature=temperature, top_p=top_p, top_k=top_k)
+    controls = sampling_controls(enable_thinking, model, temperature=temperature, top_p=top_p, top_k=top_k)
     temperature, top_p = controls.pop("temperature"), controls.pop("top_p")
     extra_body = controls
+    settings = MODEL_SETTINGS.get(model, {})
     return OpenAIAPI(
         base_url=base_url,
         api_key=resolve_llm_api_key(base_url=base_url),
@@ -169,6 +193,8 @@ def build_llm_client(
         extra_body=extra_body,
         enable_thinking=enable_thinking,
         chars_per_token=chars_per_token,
+        tokenizer=settings.get("tokenizer"),
+        prompt_format=settings.get("prompt_format", "{}"),
     )
 
 
@@ -199,7 +225,7 @@ def llm_payload(
     enable_thinking: bool = False,
     chars_per_token: float | None = None,
 ) -> dict[str, Any]:
-    controls = sampling_controls(enable_thinking, temperature=temperature, top_p=top_p, top_k=top_k)
+    controls = sampling_controls(enable_thinking, model, temperature=temperature, top_p=top_p, top_k=top_k)
     payload: dict[str, Any] = {
         "base_url": base_url,
         "model": model,
@@ -207,7 +233,7 @@ def llm_payload(
         "max_tokens": max_tokens,
         "temperature": controls["temperature"],
         "top_p": controls["top_p"],
-        "top_k": controls["top_k"],
+        "top_k": controls.get("top_k"),
         "enable_thinking": enable_thinking,
         "sampling": controls,
         "no_proxy": no_proxy,

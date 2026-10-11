@@ -23,6 +23,12 @@ from .bandit import ShinkaLLMBandit
 from .population import ShinkaArchive, ShinkaProgram, is_valid_score
 from .profiler import ShinkaEvoProfiler
 from .sampler import PatchResult, ShinkaSampler
+from .prompts import messages, prompt_record
+from .prompts.prompts_base import construct_individual_program_msg
+from .prompts.prompts_meta import (
+    META_STEP1_SYSTEM_MSG, META_STEP1_USER_MSG, META_STEP2_SYSTEM_MSG, META_STEP2_USER_MSG,
+    META_STEP3_SYSTEM_MSG, META_STEP3_USER_MSG)
+from .prompts.prompts_novelty import NOVELTY_SYSTEM_MSG, NOVELTY_USER_MSG
 
 
 class ShinkaEvo:
@@ -197,11 +203,15 @@ class ShinkaEvo:
                 generation += 1
         except Exception as exc:
             log_error(self, "run", exc, method="shinka_evo", counts_budget=False)
+            self._search_aborted = True
             if self._debug_mode:
                 raise
         finally:
             self._log_archive_state("final")
             finish_profiler(self, status="aborted" if is_search_aborted(self) else "finished")
+            close_embedding = getattr(self._embedding_fn, "close", None)
+            if callable(close_embedding):
+                close_embedding()
             for llm in self._all_llms():
                 close_llm(llm)
 
@@ -312,6 +322,7 @@ class ShinkaEvo:
                     island_idx=island_idx,
                     fix_mode=fix_mode,
                 )
+                self._tot_sample_nums += 1
                 patch = self._sampler.apply_response(response, parent, patch_type, fix_mode=fix_mode)
                 patch.metadata.update({
                     "novelty_attempt": novelty_attempt,
@@ -351,7 +362,7 @@ class ShinkaEvo:
                 last_error = patch.error
                 log_error(self, "patch_apply", None, method="shinka_evo",
                           operator=patch_type, generation=generation, parent_id=parent.id,
-                          error=patch.error, counts_budget=False)
+                          error=patch.error, counts_budget=True)
         self._bandit.update(arm, None, None)
         return None
 
@@ -376,7 +387,7 @@ class ShinkaEvo:
             embedding: list[float],
             arm: int,
     ) -> ShinkaProgram | None:
-        if not self._has_budget() or patch.function is None or patch.program is None:
+        if patch.function is None or patch.program is None:
             return None
         try:
             eval_result, eval_time = self._evaluator.evaluate_program_record_time(program=patch.program)
@@ -386,13 +397,12 @@ class ShinkaEvo:
                 exc,
                 stage="evaluate",
                 operator=patch_type,
-                sample_order=self._tot_sample_nums + 1,
+                sample_order=self._tot_sample_nums,
                 generation=generation,
                 parent_id=parent.id,
-                counts_budget=False,
+                counts_budget=True,
             )
             return None
-        self._tot_sample_nums += 1
         reset_sample_failures(self)
         result = self._coerce_evaluation_result(eval_result)
         func = copy.deepcopy(patch.function)
@@ -530,15 +540,8 @@ class ShinkaEvo:
 
     @staticmethod
     def _novelty_prompt(proposed_code: str, most_similar: ShinkaProgram | None) -> str:
-        existing = most_similar.program if most_similar is not None else ""
-        return (
-            "You are judging whether a proposed program is meaningfully novel.\n"
-            "Respond with NOVEL or NOT NOVEL first, then a brief explanation.\n\n"
-            "# Existing similar program\n"
-            f"```python\n{existing}\n```\n\n"
-            "# Proposed program\n"
-            f"```python\n{proposed_code}\n```"
-        )
+        return messages(NOVELTY_SYSTEM_MSG, NOVELTY_USER_MSG.format(language='python',
+            existing_code=most_similar.program if most_similar else '', proposed_code=proposed_code))
 
     @staticmethod
     def _coerce_evaluation_result(result: Any) -> dict[str, Any]:
@@ -573,9 +576,15 @@ class ShinkaEvo:
             return
         recent = list(self._evaluated_since_meta)
         self._evaluated_since_meta = []
-        summaries_prompt = self._meta_prompt_individual(recent)
+        summaries = []
         try:
-            summaries = self._meta_llm.draw_sample(summaries_prompt)
+            for program in recent:
+                summaries_prompt = self._meta_prompt_individual([program])
+                summary = self._meta_llm.draw_sample(summaries_prompt)
+                summaries.append(summary)
+                log_llm_call(self, llm=self._meta_llm, method="shinka_evo", stage="meta_summary", operator="meta_summary",
+                             sample_order=self._tot_sample_nums + 1, prompt=summaries_prompt,
+                             response=summary, generation=self._generation)
         except Exception as exc:
             record_sample_failure(
                 self,
@@ -588,9 +597,7 @@ class ShinkaEvo:
                 counts_budget=False,
             )
             return
-        log_llm_call(self, llm=self._meta_llm, method="shinka_evo", stage="meta_summary", operator="meta_summary",
-                     sample_order=self._tot_sample_nums + 1, prompt=summaries_prompt,
-                     response=summaries, generation=self._generation)
+        summaries = "\n\n".join(summaries)
         insights_prompt = self._meta_prompt_insights(summaries)
         try:
             insights = self._meta_llm.draw_sample(insights_prompt)
@@ -668,28 +675,22 @@ class ShinkaEvo:
 
     @staticmethod
     def _meta_prompt_individual(programs: list[ShinkaProgram]) -> str:
-        blocks = []
-        for program in programs:
-            blocks.append(
-                f"Program {program.id}\nscore={program.combined_score}, correct={program.correct}\n"
-                f"```python\n{program.program}\n```\nfeedback={program.text_feedback}"
-            )
-        return "Summarize each evaluated program and its useful algorithmic ideas.\n\n" + "\n\n".join(blocks)
+        return messages(META_STEP1_SYSTEM_MSG, META_STEP1_USER_MSG.format(
+            individual_program_msg='\n\n'.join(construct_individual_program_msg(prompt_record(p),
+                include_text_feedback=True) for p in programs)))
 
-    def _meta_prompt_insights(self, summaries: str) -> str:
-        previous = self._meta_scratch_pad or "*No previous memory state.*"
-        return (
-            "Synthesize global insights from recent program summaries and previous memory.\n\n"
-            f"# Previous Memory\n{previous}\n\n# Recent Summaries\n{summaries}"
-        )
-
-    def _meta_prompt_recommendations(self, insights: str) -> str:
+    def _meta_prompt_insights(self, summaries):
         best = self._archive.best_program
-        best_block = best.program if best else ""
-        return (
-            "Generate numbered actionable recommendations for the next program mutation.\n\n"
-            f"# Insights\n{insights}\n\n# Current Best Program\n```python\n{best_block}\n```"
-        )
+        return messages(META_STEP2_SYSTEM_MSG, META_STEP2_USER_MSG.format(
+            individual_summaries=summaries, previous_insights=self._meta_scratch_pad or '*No previous memory state.*',
+            best_program_info=construct_individual_program_msg(prompt_record(best)) if best else 'None'))
+
+    def _meta_prompt_recommendations(self, insights):
+        best = self._archive.best_program
+        return messages(META_STEP3_SYSTEM_MSG, META_STEP3_USER_MSG.format(
+            global_insights=insights, previous_recommendations=self._meta_recommendations or 'None',
+            best_program_info=construct_individual_program_msg(prompt_record(best)) if best else 'None',
+            max_recommendations=5))
 
     def _register_function(self, program: ShinkaProgram) -> None:
         if self._profiler is not None:

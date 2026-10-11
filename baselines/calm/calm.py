@@ -84,6 +84,7 @@ class CALM:
         self._rs = np.random.RandomState(seed)
 
         template_func = extract_function_from_string(self._template_program_str)
+        self._function_name = template_func.__name__
         self._expected_signature = (
             inspect.signature(template_func) if template_func is not None else None
         )
@@ -231,16 +232,9 @@ class CALM:
     # ------------------------------------------------------------------ #
 
     def _code_to_program(self, code: str):
-        trimmed = SampleTrimmer.trim_preface_of_function(code)
-        if not trimmed:
-            trimmed = code
-        func = SampleTrimmer.sample_to_function(trimmed, self._template_program_str)
-        if func is None:
-            parsed = TextFunctionProgramConverter.text_to_program(code)
-            if parsed is None or len(parsed.functions) != 1:
-                return None, None
-            func = parsed.functions[0]
-        program = TextFunctionProgramConverter.function_to_program(func, self._template_program_str)
+        func = SampleTrimmer.sample_to_function(code, self._template_program_str)
+        program = (TextFunctionProgramConverter.function_to_program(func, self._template_program_str)
+                   if func is not None else None)
         return func, program
 
     def _evaluate_code(self, code: str) -> tuple:
@@ -249,16 +243,16 @@ class CALM:
         if func is None or program is None:
             return None, None, 'code_bug'
         try:
-            score, eval_time = self._evaluation_executor.submit(
-                self._evaluator.evaluate_program_record_time,
+            outcome, eval_time = self._evaluation_executor.submit(
+                self._evaluator.evaluate_program_record_time_with_details,
                 program,
             ).result()
         except Exception:
             return None, None, 'code_bug'
-        if score is None:
+        if outcome.result is None:
             return None, None, 'code_bug'
-        score = float(score)
-        perfs = np.asarray([score], dtype=float)
+        score = float(outcome.result)
+        perfs = np.asarray(outcome.instance_scores or (score,), dtype=float)
         func.score = score
         func.evaluate_time = eval_time
         return score, perfs, 'ok'
@@ -318,8 +312,8 @@ class CALM:
         self._algos = [algo]
         self._seed_algos = [algo]
         self._best_perf = algo.perf
-        # Seed does not consume evaluation_budget in original CALM; still register for profiler.
-        self._register_function(algo, counts_budget=False, budget_used=0)
+        # The shared experiment budget includes the supplied seed evaluation.
+        self._register_function(algo, counts_budget=True)
 
         old_best = self._best_perf
         refined, self._tot_sample_nums, self._best_perf = run_numeric_refinement(
@@ -333,6 +327,7 @@ class CALM:
             seen_code_signatures=self._seen_code_signatures,
             numeric_refine_attempted=self._numeric_refine_attempted,
             matches_expected_signature=self.matches_expected_signature,
+            function_name=self._function_name,
             evaluate_code=self._evaluate_code_for_refine,
             is_seen_performance_profile=self.is_seen_performance_profile,
             record_performance_profile=self.record_performance_profile,
@@ -430,7 +425,7 @@ class CALM:
             if isinstance(code, list):
                 code = code[0]
 
-            step_func = extract_function_from_string(code)
+            step_func = extract_function_from_string(code, self._function_name)
             if step_func is None:
                 res.append(self._hp.reward_function_not_exist)
                 prompt.record_trial({
@@ -636,6 +631,7 @@ class CALM:
             seen_code_signatures=self._seen_code_signatures,
             numeric_refine_attempted=self._numeric_refine_attempted,
             matches_expected_signature=self.matches_expected_signature,
+            function_name=self._function_name,
             evaluate_code=self._evaluate_code_for_refine,
             is_seen_performance_profile=self.is_seen_performance_profile,
             record_performance_profile=self.record_performance_profile,

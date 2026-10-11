@@ -1,0 +1,16 @@
+Write a {func_name} function for {problem_desc}
+{func_desc}
+
+Function signature:
+{function_signature}
+
+Create a novel heuristic approach for this problem.
+
+Format your response as:
+```python
+[your generated code here]
+```
+
+Description: [Algorithmic description of this heuristic's approach and key features less than 30 words]
+
+Derivation Rationale: [Brief explanation of the reasoning behind this heuristic design and why it should perform well for this problem]

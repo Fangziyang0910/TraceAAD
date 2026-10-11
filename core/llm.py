@@ -143,6 +143,8 @@ class OpenAIAPI(LLM):
         enable_thinking: bool | None = False,
         extra_body: dict[str, Any] | None = None,
         chars_per_token: float | None = None,
+        tokenizer: str | None = None,
+        prompt_format: str = "{}",
         do_auto_trim: bool = True,
         debug_mode: bool = False,
         **client_kwargs: Any,
@@ -160,6 +162,14 @@ class OpenAIAPI(LLM):
         # Gateways without a /tokenize endpoint count locally by characters.
         # Choose the ratio conservatively (overestimate tokens) for the budget math.
         self.chars_per_token = chars_per_token
+        # Gateways without /tokenize can count exactly with the model's own
+        # tokenizer (a Hugging Face repo) and its chat format.
+        self.prompt_format = prompt_format
+        self._tokenizer = None
+        if tokenizer:
+            from huggingface_hub import hf_hub_download
+            from tokenizers import Tokenizer
+            self._tokenizer = Tokenizer.from_file(hf_hub_download(tokenizer, "tokenizer.json"))
         self.extra_body = copy.deepcopy(extra_body) if extra_body else {}
         self._requests = local()
         client_kwargs['max_retries'] = 0
@@ -231,6 +241,8 @@ class OpenAIAPI(LLM):
         """Count raw text tokens with the tokenizer serving this model."""
         if self.chars_per_token is not None:
             return max(1, int(len(text) / self.chars_per_token))
+        if self._tokenizer is not None:
+            return len(self._tokenizer.encode(text, add_special_tokens=False).ids)
         return self._request_token_count({"model": self.model, "prompt": text})
 
     def count_prompt_tokens(self, prompt: str | Any) -> int:
@@ -241,6 +253,19 @@ class OpenAIAPI(LLM):
             # overhead keeps the approximation on the conservative side.
             text = '\n'.join(str(m.get('content', '')) for m in messages if isinstance(m, dict))
             return max(1, int(len(text) / self.chars_per_token) + 32)
+        if self._tokenizer is not None:
+            roles = [message.get("role") for message in messages]
+            if roles == ["user"]:
+                text = self.prompt_format.format(messages[0]["content"])
+            elif (roles == ["system", "user"] and self.enable_thinking is False
+                  and self.prompt_format == "<｜begin▁of▁sentence｜><｜User｜>{}<｜Assistant｜></think>"):
+                # DeepSeek-V4.1's published chat template, including the system token.
+                text = ("<｜begin▁of▁sentence｜><｜System｜>" + messages[0]["content"]
+                        + "<｜User｜>" + messages[1]["content"] + "<｜Assistant｜></think>")
+            else:
+                # shortcut: current baselines use one user or system/user; extend with the model template for other roles.
+                raise ValueError("local prompt counting does not support this model/message format")
+            return self.count_tokens(text)
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -328,11 +353,12 @@ class OpenAIAPI(LLM):
 
     @property
     def token_count_mode(self) -> str:
-        return "llm_count_tokens"
+        return "local_tokenizer" if self._tokenizer is not None else "llm_count_tokens"
 
     @property
     def prompt_token_count_mode(self) -> str:
-        return "llm_chat_template_tokens"
+        return ("local_chat_template_tokens" if self._tokenizer is not None
+                else "llm_chat_template_tokens")
 
     @staticmethod
     def _token_count_from_payload(payload: Any) -> int:

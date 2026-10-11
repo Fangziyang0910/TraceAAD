@@ -92,18 +92,7 @@ class PathWiseSampler:
 
     @classmethod
     def response_to_function(cls, response: str, template_program: str | Program) -> Function | None:
-        function_source = cls.extract_function_source(response)
-        if function_source is None:
-            return None
-        program = SampleTrimmer.sample_to_program(function_source, template_program)
-        if program is None:
-            func = TextFunctionProgramConverter.text_to_function(function_source)
-            if func is None:
-                return None
-            program = TextFunctionProgramConverter.function_to_program(func, template_program)
-        if program is None:
-            return None
-        return TextFunctionProgramConverter.program_to_function(program)
+        return SampleTrimmer.sample_to_function(response, template_program)
 
     @classmethod
     def _line_value(cls, response: str, labels: list[str]) -> str:

@@ -27,8 +27,8 @@ def test_shinka_runner_uses_paper_parameters(tmp_path: Path, task: run.TaskName)
     assert method._max_sample_nums == 1000
     assert method._num_generations == 1000
     assert method._meta_llm is not None
-    assert method._novelty_llm is None
-    assert method._embedding_fn is None
+    assert method._novelty_llm is not None
+    assert method._embedding_fn is not None
     for llm in method._all_llms():
         llm.close()
 
@@ -52,5 +52,5 @@ def test_shinka_run_config_records_paper_settings(tmp_path: Path) -> None:
     assert payload["method_params"]["num_generations"] == 1000
     assert payload["method_params"]["archive_size"] == 40
     assert payload["method_params"]["num_archive_inspirations"] == 4
-    assert payload["method_params"]["novelty_rejection_enabled"] is False
+    assert payload["method_params"]["novelty_rejection_enabled"] is True
     assert "api_key" not in payload["llm"]

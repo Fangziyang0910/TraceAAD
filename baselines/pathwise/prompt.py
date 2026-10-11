@@ -1,220 +1,108 @@
 from __future__ import annotations
 
 import copy
+import json
+from pathlib import Path
 import random
 
 from .graph import PathWiseAction, PathWiseNode
 from core import Function
 
+_PROMPTS = Path(__file__).with_name('prompts')
+_PHRASES = json.loads((_PROMPTS / 'perturbations.json').read_text())
+
 
 class PathWisePrompt:
-    POLICY_PHRASES = [
-        "Favor unusual parent combinations.",
-        "Explore less common heuristic structures.",
-        "Prioritize novelty in parent selection.",
-        "Choose parents that differ in style.",
-        "Invent a directive that departs from usual conventions.",
-    ]
-
-    WORLD_MODEL_PHRASES = [
-        "Introduce a novel program segment that changes the decision logic.",
-        "Modify the structure of the algorithm rather than only tuning constants.",
-        "Create a new mechanism that has not appeared in the parent code.",
-        "Try a different control flow while keeping the required signature.",
-        "Construct a fresh rule that improves the existing methods.",
-    ]
+    POLICY_PHRASES = _PHRASES['explorative_phrases']
+    WORLD_MODEL_PHRASES = _PHRASES['explorative_phrases_world_model']
 
     def __init__(self, task_prompt: str, template_function: Function):
         self.task_prompt = task_prompt
         self.template_function = copy.deepcopy(template_function)
-        self.func_name = self.template_function.name
-        self.func_desc = self._function_description()
+        self.func_name = template_function.name
+        self.func_desc = (template_function.docstring or '').replace('"""', '').strip()
 
-    def _function_description(self) -> str:
-        docstring = self.template_function.docstring or ""
-        docstring = docstring.replace('"""', "").strip()
-        if docstring:
-            return docstring
-        return f"The `{self.func_name}` function must keep the given signature and solve the task."
+    def _messages(self, role, **values):
+        common = dict(problem_desc=self.task_prompt, func_desc=self.func_desc,
+                      func_name=self.func_name, fitness_goal='lower', metric_plural='objective values',
+                      metric_name='objective value', metric_name_cap='Objective value')
+        return [{'role': 'system', 'content': (_PROMPTS / f'system_{role}.txt').read_text()},
+                {'role': 'user', 'content': (_PROMPTS / f'user_{role}.txt').read_text().format(**(common | values))}]
 
-    def function_signature(self, version: int | str = 2) -> str:
-        ret = f" -> {self.template_function.return_type}" if self.template_function.return_type else ""
-        return f"def {self.func_name}_v{version}({self.template_function.args}){ret}:"
+    def function_signature(self, version=2):
+        ret = f' -> {self.template_function.return_type}' if self.template_function.return_type else ''
+        return f'def {self.func_name}_v{version}({self.template_function.args}){ret}:'
 
-    def blank_function(self, version: int | str = 2) -> str:
-        return f"{self.function_signature(version)}\n    pass"
-
-    @staticmethod
-    def perturbation_phrase(phrases: list[str], prob: float) -> str:
-        if phrases and random.random() < prob:
-            return random.choice(phrases)
-        return ""
+    def blank_function(self, version=2):
+        return self.function_signature(version) + '\n    pass'
 
     @staticmethod
-    def _node_code(node: PathWiseNode) -> str:
-        func = copy.deepcopy(node.function)
-        func.docstring = ""
-        return str(func).strip()
+    def perturbation_phrase(phrases, prob):
+        return random.choice(phrases) if phrases and random.random() < prob else ''
+
+    @staticmethod
+    def _node_code(node, version=None):
+        function = copy.deepcopy(node.function)
+        function.docstring = ''
+        if version is not None:
+            function.name = f'{function.name}_v{version}'
+        return str(function).strip()
 
     @classmethod
-    def format_state(cls, nodes: list[PathWiseNode], *, shuffle: bool = True) -> str:
+    def format_state(cls, nodes, *, shuffle=True):
+        if not nodes:
+            return 'Empty state'
         state = list(nodes)
         if shuffle:
             random.shuffle(state)
-        blocks = []
+        text = (f'I have {len(state)} existing heuristics listed below. For each heuristic, I provide its ID, '
+                'description, the heuristics used to derive it with their descriptions and objective values, '
+                'its derivation logic, its full code, and its own objective value:\n\n')
         for node in state:
-            parent_lines = []
-            for parent in node.parents:
-                parent_lines.append(f"- {parent.node_id} (score: {parent.score:.6f}): {parent.description}")
-            parent_text = "\n".join(parent_lines) if parent_lines else "None"
-            blocks.append(
-                f"ID: {node.node_id}\n"
-                f"Description: {node.description}\n"
-                f"Derivation rationale: {node.rationale}\n"
-                f"Parent metadata:\n{parent_text}\n"
-                f"Score: {node.score:.6f}\n"
-                f"Code:\n{cls._node_code(node)}"
-            )
-        return "\n\n".join(blocks) if blocks else "Empty state"
+            text += f'ID: {node.node_id}\nDescription: {node.description}\n'
+            if node.parents:
+                text += 'Heuristics used to derive this candidate:\n'
+                text += '\n'.join(f'- {p.node_id} (objective value: {p.score:.3f}): {p.description}' for p in node.parents) + '\n'
+            text += f'Derivation logic: {node.rationale}\nCode:\n{cls._node_code(node)}\nObjective value: {node.score:.3f}\n\n'
+        return text
 
-    def initialization_prompt(self, index: int, external_knowledge: str = "") -> str:
-        return f"""You are a PathWise initialization agent for automated algorithm design.
-Your task is to create one diverse heuristic candidate for the following task.
+    def initialization_prompt(self, index, external_knowledge=''):
+        messages = self._messages('initialization', function_signature=self.function_signature())
+        if external_knowledge:
+            messages[-1]['content'] += '\n' + external_knowledge
+        return messages
 
-Task:
-{self.task_prompt}
+    def policy_prompt(self, state, policy_reflection, perturbation=''):
+        return self._messages('policy', current_state=self.format_state(state),
+            reflection_section=f'\nReflection:\n{policy_reflection}\n' if policy_reflection else '',
+            explorative_nudge=f' {perturbation}' if perturbation else '',
+            parent_constraint=f"\nYou must choose parent ID(s) only from the {len(state)} heuristics listed above ({', '.join(n.node_id for n in state)}).")
 
-Function description:
-{self.func_desc}
+    def world_model_prompt(self, action, parent_nodes, world_model_reflection, perturbation=''):
+        parents = '\n\n'.join(
+            f"ID: {node.node_id} algorithm's description, its corresponding code and its objective value are:\n"
+            f'{node.description}\n{self._node_code(node, 1)}\nObjective value: {node.score:.5f}' for node in parent_nodes)
+        comparison = 'the provided algorithm' if len(parent_nodes) == 1 else 'all algorithms'
+        messages = self._messages('world_model', num_parents=len(parent_nodes), parent_heuristics=parents,
+            directive=action.rationale + (f' {perturbation}' if perturbation else ''),
+            reflection_section=f'\nReflection:\n{world_model_reflection}\n' if world_model_reflection else '',
+            fitness_comparison=f'The new algorithm should have an objective value lower than {comparison}.',
+            func_signature_constraint='')
+        if not world_model_reflection:
+            messages[-1]['content'] = messages[-1]['content'].replace('directive and reflection', 'directive')
+        return messages
 
-Implement this function body using the required signature:
-{self.blank_function(2)}
+    def policy_critic_prompt(self, state, actions, action_summaries):
+        action_data = []
+        by_id = {n.node_id: n for n in state}
+        for i, (action, summary) in enumerate(zip(actions, action_summaries)):
+            parents = ', '.join(f'{p} (objective value: {by_id[p].score:.5f})' if p in by_id else p for p in action.parents)
+            label = 'Parent ID' if len(action.parents) == 1 else 'Parent IDs'
+            action_data.append(f'Action {i}\n{label}: {parents}\nDirective: {action.rationale}\n{summary}')
+        return self._messages('policy_critic', current_state=self.format_state(state, shuffle=False),
+                              action_data='\n\n'.join(action_data))
 
-{external_knowledge}
-
-Output exactly:
-Description: <under 30 words>
-Derivation Rationale: <one concise sentence>
-```python
-<complete function>
-```"""
-
-    def policy_prompt(
-            self,
-            state: list[PathWiseNode],
-            policy_reflection: str,
-            perturbation: str = "",
-    ) -> str:
-        reflection = policy_reflection.strip() if policy_reflection else "None"
-        nudge = f"\nExploration nudge: {perturbation}" if perturbation else ""
-        available = ", ".join(node.node_id for node in state)
-        return f"""You are a PathWise policy agent. Choose parent heuristic ID(s) and write a directive for deriving one better child heuristic.
-
-Task:
-{self.task_prompt}
-
-Function description:
-{self.func_desc}
-
-Current entailment state:
-{self.format_state(state)}
-
-Policy reflection:
-{reflection}{nudge}
-
-Available parent IDs: {available}
-Use only available IDs. Lower score is better.
-
-Output exactly:
-PARENTS: [id_1, id_2]
-DIRECTIVE: <how the world model should transform or combine the selected parents>"""
-
-    def world_model_prompt(
-            self,
-            action: PathWiseAction,
-            parent_nodes: list[PathWiseNode],
-            world_model_reflection: str,
-            perturbation: str = "",
-    ) -> str:
-        parents = "\n\n".join(
-            f"Parent ID: {node.node_id}\n"
-            f"Description: {node.description}\n"
-            f"Score: {node.score:.6f}\n"
-            f"Code:\n{self._node_code(node)}"
-            for node in parent_nodes
-        )
-        reflection = world_model_reflection.strip() if world_model_reflection else "None"
-        nudge = f"\nExploration nudge: {perturbation}" if perturbation else ""
-        return f"""You are a PathWise world model agent. Execute the policy directive by generating one improved heuristic.
-
-Task:
-{self.task_prompt}
-
-Function description:
-{self.func_desc}
-
-Selected parents:
-{parents}
-
-Directive:
-{action.rationale}
-
-World-model reflection:
-{reflection}{nudge}
-
-The new function must keep the same inputs and outputs. Lower score is better.
-Implement the complete function using this signature:
-{self.blank_function(2)}
-
-Output exactly:
-Description: <under 30 words>
-```python
-<complete function>
-```"""
-
-    def policy_critic_prompt(
-            self,
-            state: list[PathWiseNode],
-            actions: list[PathWiseAction],
-            action_summaries: list[str],
-    ) -> str:
-        action_text = "\n\n".join(
-            f"Action {idx}\nParents: {action.parents}\nDirective: {action.rationale}\n{summary}"
-            for idx, (action, summary) in enumerate(zip(actions, action_summaries))
-        )
-        return f"""You are a PathWise policy critic. Reflect on which parent selections and directives were effective.
-
-Task:
-{self.task_prompt}
-
-Current state:
-{self.format_state(state, shuffle=False)}
-
-Action rollout results:
-{action_text}
-
-Lower score is better. Write concise guidance for the next policy step in under 80 words."""
-
-    def world_model_critic_prompt(
-            self,
-            best: PathWiseNode,
-            worst: PathWiseNode,
-    ) -> str:
-        return f"""You are a PathWise world model critic. Compare the best and worst generated heuristics and give code-generation guidance.
-
-Task:
-{self.task_prompt}
-
-Best rollout:
-Description: {best.description}
-Score: {best.score:.6f}
-Code:
-{self._node_code(best)}
-
-Worst rollout:
-Description: {worst.description}
-Score: {worst.score:.6f}
-Code:
-{self._node_code(worst)}
-
-Lower score is better. Write concise guidance for the next world-model rollout in under 80 words."""
+    def world_model_critic_prompt(self, best, worst):
+        return self._messages('world_model_critic', worst_description=worst.description,
+            worst_fitness=worst.score, worst_code=self._node_code(worst, 0),
+            best_description=best.description, best_fitness=best.score, best_code=self._node_code(best, 1))

@@ -225,6 +225,8 @@ class EoH:
         """
         sample_start = time.time()
         sample_order = self._tot_sample_nums + 1
+        if count_sample and not self._continue_loop():
+            return None
         try:
             thought, func = call_sampler_get_thought_and_function(
                 self._sampler,
@@ -243,6 +245,10 @@ class EoH:
                 counts_budget=False,
             )
             return None
+        if count_sample:
+            sample_order = self._try_increment_sample_count()
+            if sample_order is None:
+                return None
         sample_time = time.time() - sample_start
         reset_sample_failures(self)
         if thought is None or func is None:
@@ -252,7 +258,7 @@ class EoH:
                 status='parse_failed',
                 operator=operator,
                 sample_order=sample_order,
-                counts_budget=False,
+                counts_budget=count_sample,
             )
             return
         # convert to Program instance
@@ -264,7 +270,7 @@ class EoH:
                 status='program_parse_failed',
                 operator=operator,
                 sample_order=sample_order,
-                counts_budget=False,
+                counts_budget=count_sample,
             )
             return
         # evaluate
@@ -280,12 +286,7 @@ class EoH:
         func.algorithm = thought
         func.sample_time = sample_time
         func.operator = operator or 'Unknown'
-        should_advance_generation = False
-        if count_sample:
-            sample_order = self._try_increment_sample_count()
-            if sample_order is None:
-                return None
-            should_advance_generation = sample_order % self._pop_size == 0
+        should_advance_generation = count_sample and sample_order % self._pop_size == 0
 
         accepted = True
         if register:
@@ -411,9 +412,11 @@ class EoH:
         raw_population = []
         initial_sample_nums_max = getattr(self, "_initial_sample_nums_max", 2 * self._pop_size)
         for _ in range(initial_sample_nums_max):
+            if not self._continue_loop():
+                break
             try:
                 prompt = EoHPrompt.get_prompt_i1(self._task_description_str, self._function_to_evolve)
-                func = self._sample_evaluate_register(prompt, register=False, count_sample=False, operator='i1')
+                func = self._sample_evaluate_register(prompt, register=False, count_sample=True, operator='i1')
                 if func is not None:
                     raw_population.append(func)
             except Exception:

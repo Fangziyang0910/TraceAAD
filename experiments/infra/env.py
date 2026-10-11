@@ -45,6 +45,8 @@ def resolve_llm_api_key(*, base_url: str | None = None, default: str = "EMPTY") 
     # Both B3 vLLM services (server3 :8000/:8001 and server1 :8080) share one key.
     if base_url and ("222.201.145.6" in base_url or "222.201.145.8" in base_url):
         return os.environ.get("SERVER3_API_KEY", default)
+    if base_url and "183.36.243.124" in base_url:
+        return os.environ.get("DEEPSEEK_API_KEY", default)
     if base_url and "x5m5x.com" in base_url:
         return os.environ.get("X5M5X_API_KEY", default)
     return default

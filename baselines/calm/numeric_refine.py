@@ -130,6 +130,7 @@ def run_numeric_refinement(
         top_k=None,
         parent_limit=None,
         source_label: str = 'NUMERIC_REFINE',
+        function_name: str | None = None,
 ) -> tuple[List[HeuristicRecord], int, float]:
     """Returns (refined_algos, evaluations_used, best_perf)."""
     if variants_per_parent is None:
@@ -188,7 +189,7 @@ def run_numeric_refinement(
             variant_key = code_signature(variant_code)
             if variant_key in seen_code_signatures or variant_key in batch_signatures:
                 continue
-            step_func = extract_function_from_string(variant_code)
+            step_func = extract_function_from_string(variant_code, function_name)
             if step_func is None or not matches_expected_signature(step_func):
                 continue
             algo = HeuristicRecord(

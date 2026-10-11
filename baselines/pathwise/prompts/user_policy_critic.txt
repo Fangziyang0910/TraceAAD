@@ -1,0 +1,24 @@
+Analyze heuristic evolution for {problem_desc}
+{func_desc}
+{current_state}
+Actions taken and their results:
+Based on the heuristic candidates above, several evolution steps (called actions) were performed.  
+Each action consists of:
+- a chosen parent set,
+- a directive describing how to modify or combine those parents, and
+- the rollouts generated from that directive.
+
+The actions below are listed from best to worst by the average {metric_name} of their rollouts.
+Each rollout is one heuristic produced from an action, including its description and {metric_name}.
+
+{action_data}
+
+Reflection Task:
+1. Analyze the outcomes of the taken actions based on current heuristic candidates. Identify patterns behind which actions performed best and which performed worst, evaluate how their rollouts improved upon or became worse than their parent heuristics, and diagnose the key reasons behind these shifts to ground your hints.
+2. Correlate success with the parent selection strategies and directives above.
+
+You respond with concise hints for both improving parent selection and directives toward {fitness_goal} {metric_plural}.
+
+Do not refer to specific parent IDs, rollout names, or code blocks. 
+
+Write your reflection using less than 60 words.

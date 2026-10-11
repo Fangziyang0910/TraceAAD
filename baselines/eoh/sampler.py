@@ -45,7 +45,7 @@ def sample_thought_and_function(
 ):
     response = llm.draw_sample(prompt)
     thought = trim_braced_thought(response)
-    code = SampleTrimmer.trim_preface_of_function(response)
+    code = response
     function = SampleTrimmer.sample_to_function(code, template_program)
 
     if function is not None and attach_entire_code:

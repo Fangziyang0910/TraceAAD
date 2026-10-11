@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 
 from benchmarks.tasks import SUITES
-from experiments.infra.base import ALL_TASKS, BACKENDS, pending_items, validate_new_items
+from experiments.infra.base import ALL_TASKS, BACKENDS, DEFAULT_BACKEND, pending_items, validate_new_items
 from experiments.infra.launcher import is_session_alive, launch_command
 from experiments.launch import METHODS, build_plan
 
@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch", required=True)
     parser.add_argument("--slots", type=int, default=3)
     parser.add_argument("--scheduler-socket", default="/tmp/traceaad-1000/scheduler.sock")
-    parser.add_argument("--backend", choices=tuple(BACKENDS), default="local")
+    parser.add_argument("--backend", choices=tuple(BACKENDS), default=DEFAULT_BACKEND)
     parser.add_argument("--interval", type=int, default=30)
     parser.add_argument("--dry-run", action="store_true")
     return parser

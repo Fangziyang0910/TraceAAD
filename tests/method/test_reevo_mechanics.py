@@ -122,7 +122,7 @@ class ReEvoMechanicsTest(unittest.TestCase):
         self.assertEqual([func.score for func in method._population.population], [-1.0, -2.0, -3.0])
         self.assertNotIn(100.0, [func.score for func in method._population.population])
         self.assertEqual(len(llm.prompts), 3)
-        self.assertTrue(all("trivial design above" in prompt for prompt, _ in llm.prompts))
+        self.assertTrue(all("trivial design above" in str(prompt) for prompt, _ in llm.prompts))
         self.assertTrue(all(kwargs == {"temperature": 1.3} for _, kwargs in llm.prompts))
 
     def test_parent_selection_matches_original_random_pairing(self):
@@ -146,23 +146,12 @@ class ReEvoMechanicsTest(unittest.TestCase):
         self.assertEqual(choice.call_args_list[0].kwargs["size"], 2)
         self.assertFalse(choice.call_args_list[0].kwargs["replace"])
 
-    def test_parent_selection_falls_back_when_all_scores_tied(self):
+    def test_parent_selection_rejects_tied_scores_as_upstream(self):
         method, _, _ = make_method(pop_size=2)
-        parent_a = make_function(1, score=1.0)
-        parent_b = make_function(2, score=1.0)
-        parent_c = make_function(3, score=1.0)
-        method._population.set_population([parent_a, parent_b, parent_c], increment_generation=False)
+        method._population.set_population([make_function(1, 1.0), make_function(2, 1.0)], increment_generation=False)
         method._elite_function = None
-
-        with patch("baselines.reevo.reevo.np.random.choice") as choice:
-            choice.side_effect = [
-                [parent_a, parent_b],
-                [parent_b, parent_c],
-            ]
-            pairs = method._select_parent_pairs()
-
-        self.assertEqual(pairs, [[parent_a, parent_b], [parent_b, parent_c]])
-        self.assertEqual(choice.call_count, 2)
+        with self.assertRaisesRegex(RuntimeError, 'no distinct parent scores'):
+            method._select_parent_pairs()
 
     def test_short_reflection_orders_worse_then_better_by_high_score(self):
         worse = make_function(1, score=1.0)
@@ -170,6 +159,8 @@ class ReEvoMechanicsTest(unittest.TestCase):
 
         prompt = ReEvoPrompt.get_short_term_reflection_prompt("Design a heuristic.", [better, worse])
 
+        self.assertEqual([m["role"] for m in prompt], ["system", "user"])
+        prompt = prompt[-1]["content"]
         self.assertIn("second version performs better", prompt)
         self.assertLess(prompt.index("[Worse code]"), prompt.index("return 1"))
         self.assertLess(prompt.index("return 1"), prompt.index("[Better code]"))
@@ -205,7 +196,7 @@ class ReEvoMechanicsTest(unittest.TestCase):
 
         prompt = llm.prompts[-1][0]
         for reflection in reflections:
-            self.assertIn(reflection, prompt)
+            self.assertIn(reflection, str(prompt))
         self.assertEqual(method._long_term_reflection_str, "long-reflection")
 
     def test_invalid_candidates_count_budget_but_do_not_enter_population(self):

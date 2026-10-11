@@ -16,9 +16,8 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
-import time
 
-from traceaad.common.storage import RESULT_FORMAT, append_jsonl, normalize_live_record, read_json, rows, write_json
+from traceaad.common.storage import RESULT_FORMAT, append_jsonl, read_json, rows, write_json
 
 NATIVE_MIN = {"tsp_construct", "cvrp_aco", "online_bin_packing", "vrptw_construct"}
 TASKS = NATIVE_MIN | {"op_aco"}
@@ -125,9 +124,9 @@ def digest(path):
     return h.hexdigest()
 
 
-def backup(path, root, *, live=False):
+def backup(path, root):
     archive = root / ".archive/minimize_20261007"
-    target = (archive / "live_completion" if live else archive) / path.relative_to(root)
+    target = archive / path.relative_to(root)
     target = target.with_name(target.name + ".gz")
     target.parent.mkdir(parents=True, exist_ok=True)
     if not target.exists():
@@ -136,7 +135,7 @@ def backup(path, root, *, live=False):
     return str(target.relative_to(root))
 
 
-def convert_file(path, root, task=None, *, canonical=False, live=False):
+def convert_file(path, root, task=None, *, canonical=False):
     """Stage a file, preserving byte boundaries, then atomically replace it."""
     task = infer_task(path, None) or task
     context = ("diagnosis_v1016_develop",) if "diagnosis_v1016_develop" in path.parts else ()
@@ -152,19 +151,17 @@ def convert_file(path, root, task=None, *, canonical=False, live=False):
                     if not line.endswith(b"\n"):
                         raise ValueError(f"incomplete journal; stop the writer before migration: {path}")
                     before = json.loads(line)
-                    after = (normalize_live_record(before, task) if live else
-                             transform(before, task, canonical=canonical, context=context))
+                    after = transform(before, task, canonical=canonical, context=context)
                     changed |= before != after
                     dest.write((json.dumps(after, ensure_ascii=False, allow_nan=False, separators=(",", ":")) + "\n").encode())
                     rows += 1
                     old_offsets[rows], new_offsets[rows] = source.tell(), dest.tell()
                     if canonical and before.get("kind") == "candidate" and before.get("fitness") is not None:
                         old, new = before["fitness"], after["fitness"]
-                        if new != (abs(old) if live else -old):
+                        if new != -old:
                             raise ValueError(f"fitness was not negated: {path} row {rows}")
-                        reference = abs(old) if live else old
-                        if incumbent is None or (reference < incumbent if live else reference > incumbent):
-                            incumbent = reference
+                        if incumbent is None or old > incumbent:
+                            incumbent = old
                             frontier.append(before["candidate_id"])
                         if new_incumbent is None or new < new_incumbent:
                             new_incumbent = new
@@ -174,8 +171,7 @@ def convert_file(path, root, task=None, *, canonical=False, live=False):
         else:
             before = json.loads(path.read_text())
             task = infer_task(path, before) or task
-            after = (normalize_live_record(before, task) if live else
-                     transform(before, task, canonical=canonical, context=context))
+            after = transform(before, task, canonical=canonical, context=context)
             if path.name == "run_config.json":
                 after.update(objective="min", score_direction="min", native_objective=before.get(
                     "native_objective", "min" if task in NATIVE_MIN else "max"))
@@ -186,7 +182,7 @@ def convert_file(path, root, task=None, *, canonical=False, live=False):
         if not changed:
             return None
         original_hash = digest(path)
-        archive = backup(path, root, live=live)
+        archive = backup(path, root)
         if original_hash != digest(path):
             raise ValueError(f"file changed during migration: {path}")
         stat = path.stat()
@@ -259,97 +255,14 @@ def convert_run(run, root):
             "frontiers": sum(r["frontiers"] for r in receipt["files"])}
 
 
-def complete_live_run(run, root):
-    """Finalize a legacy writer only after its terminal files stop changing."""
-    marker = run / ".minimize/live.json"
-    info = json.loads(marker.read_text())
-    summary = json.loads((run / "summary.json").read_text())
-    if summary.get("status") != "finished":
-        return None
-    receipt_path = run / ".minimize/live_receipt.json"
-    receipt = read_json(receipt_path, {"files": [], "objective": "min"})
-    for name in ("events.jsonl", "summary.json", "selection.json", "heldout.json", "resume.json"):
-        path = run / name
-        if not path.exists():
-            continue
-        # Read raw JSON here: the ordinary reader already normalizes marked runs.
-        checkpoint = json.loads(path.read_text()) if name == "resume.json" else None
-        original_hash = digest(path)
-        original_backup = backup(path, root, live=True) if checkpoint is not None else None
-        result = convert_file(path, root, info["task"], canonical=True, live=True)
-        if result:
-            offsets = result.pop("offsets")
-            if name == "events.jsonl":
-                receipt["event_offsets"] = offsets
-            receipt["files"].append(result)
-            write_json(receipt_path, receipt)
-        if checkpoint and "event_offsets" in receipt:
-            old, new = receipt["event_offsets"]
-            boundary = checkpoint.get("files", {}).get("events.jsonl")
-            row = next((i for i, size in old.items() if size == boundary), None)
-            if row is None:
-                raise ValueError(f"live checkpoint is not at an event boundary: {run}")
-            updated = normalize_live_record(checkpoint, info["task"])
-            updated["files"]["events.jsonl"] = new[row]
-            write_json(path, updated)
-            if result is None:
-                result = {"path": str(path.relative_to(root)), "before_sha256": original_hash,
-                          "backup": original_backup, "rows": 0, "frontiers": 0}
-                receipt["files"].append(result)
-            result["after_sha256"] = digest(path)
-    receipt.pop("event_offsets", None)
-    receipt["complete"] = True
-    write_json(receipt_path, receipt)
-    marker.unlink()
-    (run / ".cache/history.json").unlink(missing_ok=True)
-    # The old CLI may have derived diagnostics from the mixed snapshot. Rebuild
-    # them from the completed minimized facts, preserving its published copy.
-    if "init_attempts" in summary and (run / "run_config.json").exists():
-        if (run / "diagnostics.json").exists():
-            backup(run / "diagnostics.json", root, live=True)
-        from experiments.infra.diagnose_search import diagnose
-        diagnose(run)
-    return {"run": str(run.relative_to(root)), "files": len(receipt["files"])}
-
-
-def watch_live(root):
-    pending = {p.parent.parent: None for p in root.rglob(".minimize/live.json")}
-    print(f"waiting for {len(pending)} legacy writers; their read views already minimize", flush=True)
-    while pending:
-        for run in list(pending):
-            summary = run / "summary.json"
-            if not summary.exists() or json.loads(summary.read_text()).get("status") != "finished":
-                continue
-            names = ("events.jsonl", "summary.json", "resume.json", "selection.json", "heldout.json", "diagnostics.json")
-            stamp = tuple((p.stat().st_size, p.stat().st_mtime_ns) if p.exists() else None
-                          for p in (run / n for n in names))
-            if stamp != pending[run]:
-                pending[run] = stamp
-                continue
-            result = complete_live_run(run, root)
-            print(json.dumps(result), flush=True)
-            del pending[run]
-            report_path = root / ".archive/minimize_20261007/report.json"
-            report = read_json(report_path, {})
-            report.setdefault("live_completed", []).append(result)
-            report["live_runs"] = [str(p.relative_to(root)) for p in pending]
-            write_json(report_path, report)
-        if pending:
-            time.sleep(15)
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("experiments_result"))
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--auxiliary", action="store_true", help="also migrate diagnostic and historical numeric artifacts")
-    parser.add_argument("--watch-live", action="store_true", help="finish marked legacy writers after their terminal publication")
     args = parser.parse_args(argv)
     root = args.root.resolve()
-    if args.watch_live:
-        watch_live(root)
-        return
     runs = sorted(p.parent for p in root.rglob("run_config.json") if ".archive" not in p.parts)
     pending = [r for r in runs if read_json(r / "run_config.json", {}).get("result_format") == "traceaad-results-v1"]
     if args.dry_run:

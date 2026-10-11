@@ -252,6 +252,7 @@ class MCTS_AHD:
                 sample_order=sample_order,
             )
             return False
+        self._tot_sample_nums += 1
         sample_time = time.time() - sample_start
         self._consecutive_sample_failures = 0
         if thought is None or func is None:
@@ -271,7 +272,6 @@ class MCTS_AHD:
         func.algorithm = thought
         func.sample_time = sample_time
         func.operator = operator or 'Unknown'
-        self._tot_sample_nums += 1
         if self._profiler is not None:
             self._profiler.register_function(func, program=str(program))
             if isinstance(self._profiler, MAProfiler):

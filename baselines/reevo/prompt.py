@@ -25,11 +25,13 @@ class ReEvoPrompt:
 {seed_function}
 Refer to the format of a trivial design above. Be very creative and give `{func_name}_v2`. Output code only and enclose your code with Python code block: ```python ...```.
 '''
-        return '\n'.join([cls._GENERATOR_SYSTEM, prompt])
+        return [{'role': 'system', 'content': cls._GENERATOR_SYSTEM}, {'role': 'user', 'content': prompt}]
 
     @classmethod
     def _worse_better(cls, indivs: List[Function]) -> tuple[Function, Function]:
         assert len(indivs) == 2
+        if indivs[0].score == indivs[1].score:
+            raise ValueError('ReEvo reflection requires parents with different scores.')
         indivs = copy.deepcopy(indivs)
         indivs.sort(key=lambda function: function.score, reverse=True)
         return indivs[0], indivs[1]
@@ -48,7 +50,7 @@ You are provided with two code versions below, where the second version performs
 {better}
 
 You respond with some hints for designing better heuristics, based on the two code versions and using less than 20 words.'''
-        return '\n'.join([cls._REFLECTOR_SYSTEM, prompt])
+        return [{'role': 'system', 'content': cls._REFLECTOR_SYSTEM}, {'role': 'user', 'content': prompt}]
 
     @classmethod
     def get_crossover_prompt(cls, task_prompt: str, short_term_reflection_prompt: str, indivs: List[Function]) -> str:
@@ -70,7 +72,7 @@ You respond with some hints for designing better heuristics, based on the two co
 [Improved code]
 Please write an improved function `{func_name}_v2`, according to the reflection. Output code only and enclose your code with Python code block: ```python ...```.
 '''
-        return '\n'.join([cls._GENERATOR_SYSTEM, prompt])
+        return [{'role': 'system', 'content': cls._GENERATOR_SYSTEM}, {'role': 'user', 'content': prompt}]
 
     @classmethod
     def get_long_term_reflection_prompt(
@@ -87,7 +89,7 @@ Below are some newly gained insights.
 {new_short_term_reflections}
 
 Write constructive hints for designing better heuristics, based on prior reflections and new insights and using less than 50 words.'''
-        return '\n'.join([cls._REFLECTOR_SYSTEM, prompt])
+        return [{'role': 'system', 'content': cls._REFLECTOR_SYSTEM}, {'role': 'user', 'content': prompt}]
 
     @classmethod
     def get_elist_mutation_prompt(cls, task_prompt: str, long_term_reflection_prompt: str, elite_function: Function) -> str:
@@ -105,4 +107,4 @@ Write constructive hints for designing better heuristics, based on prior reflect
 [Improved code]
 Please write a mutated function `{func_name}_v2`, according to the reflection. Output code only and enclose your code with Python code block: ```python ...```.
 '''
-        return '\n'.join([cls._GENERATOR_SYSTEM, prompt])
+        return [{'role': 'system', 'content': cls._GENERATOR_SYSTEM}, {'role': 'user', 'content': prompt}]

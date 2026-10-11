@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from urllib.request import ProxyHandler, Request, build_opener
 
-from .base import BACKENDS, REPO_ROOT
+from .base import BACKENDS, MODEL_SETTINGS, REPO_ROOT
 from .env import resolve_llm_api_key
 from traceaad.common.storage import write_json
 
@@ -32,6 +32,7 @@ def served_models(backends, *, required=False, min_context=None, profiles=None):
                     props = json.load(response)
                 record.update(model_path=props.get('model_path'), build=props.get('build_info'), slots=props.get('total_slots'))
                 record.setdefault('max_model_len', props.get('default_generation_settings', {}).get('n_ctx'))
+            record.setdefault('max_model_len', MODEL_SETTINGS.get(profile.model, {}).get('context'))
             if min_context is not None and (record.get('max_model_len') or 0) < min_context:
                 raise ValueError(f'context shorter than {min_context} or not reported')
         except Exception as exc:

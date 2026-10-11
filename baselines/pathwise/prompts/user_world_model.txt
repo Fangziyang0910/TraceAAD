@@ -1,0 +1,13 @@
+Write a {func_name} function for {problem_desc}
+{func_desc}
+
+I have {num_parents} existing algorithms with their codes and {metric_plural} as follows:
+
+{parent_heuristics}
+
+Directive:
+{directive}
+{reflection_section}
+Write an improved function `{func_name}_v2` that follows the directive and reflection by keeping the same function signature. {fitness_comparison}{func_signature_constraint}
+
+Output algorithm description and code. First write: ```Description: <Algorithmic description of the heuristic's approach using less than 30 words>```. Then enclose your code with Python code block:```python ...```

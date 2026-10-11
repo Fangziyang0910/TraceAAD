@@ -66,15 +66,15 @@ class ScriptedLLM(LLM):
     def draw_sample(self, prompt, *args, **kwargs):
         self.prompts.append((prompt, kwargs))
         prompt = str(prompt)
-        if "PathWise initialization agent" in prompt:
+        if "Create a novel heuristic approach" in prompt:
             return self.init_responses.pop(0) if self.init_responses else "invalid"
-        if "PathWise policy critic" in prompt:
+        if "Analyze heuristic evolution for" in prompt:
             return self.policy_critic_responses.pop(0) if self.policy_critic_responses else "policy reflection"
-        if "PathWise world model critic" in prompt:
+        if "Phrase your hints as design principles" in prompt:
             return self.world_critic_responses.pop(0) if self.world_critic_responses else "world reflection"
-        if "PathWise policy agent" in prompt:
+        if "You are controlling the evolutionary search" in prompt:
             return self.policy_responses.pop(0) if self.policy_responses else "PARENTS: [init_0]\nDIRECTIVE: refine"
-        if "PathWise world model agent" in prompt:
+        if "Write an improved function" in prompt:
             return self.world_responses.pop(0) if self.world_responses else "invalid"
         return "invalid"
 
@@ -238,7 +238,7 @@ class PathWiseMechanicsTest(unittest.TestCase):
         self.assertEqual(method._policy_reflection_history, ["prefer second parent"])
         self.assertEqual(method._world_model_reflection_history, ["simplify the low score variant"])
 
-    def test_invalid_world_model_output_retries_then_falls_back_to_parent_code(self):
+    def test_invalid_world_model_output_consumes_remaining_candidate_budget(self):
         llm = ScriptedLLM(
             init_responses=[make_init_code(1), make_init_code(2)],
             policy_responses=["PARENTS: [init_0]\nDIRECTIVE: improve first"],
@@ -259,7 +259,7 @@ class PathWiseMechanicsTest(unittest.TestCase):
 
         self.assertEqual(method._tot_sample_nums, 3)
         self.assertEqual(method.best_node.score, -2.0)
-        self.assertEqual([node.score for node in method._population.nodes], [-1.0, -2.0])
+        self.assertEqual(sorted(node.score for node in method._population.nodes), [-2.0, -1.0])
 
     def test_invalid_policy_parent_retries_before_accepting_action(self):
         llm = ScriptedLLM(
@@ -280,7 +280,7 @@ class PathWiseMechanicsTest(unittest.TestCase):
 
         self.assertEqual(method._tot_sample_nums, 3)
         self.assertEqual(method.best_node.score, -3.0)
-        policy_prompts = [prompt for prompt, _ in llm.prompts if "PathWise policy agent" in prompt]
+        policy_prompts = [prompt for prompt, _ in llm.prompts if "You are controlling the evolutionary search" in str(prompt)]
         self.assertEqual(len(policy_prompts), 2)
 
     def test_no_valid_action_falls_back_to_best_population_node(self):

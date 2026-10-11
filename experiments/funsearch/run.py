@@ -12,6 +12,7 @@ from baselines.funsearch.config import ProgramsDatabaseConfig
 from experiments.infra.base import (
     ALL_TASKS,
     BACKENDS,
+    DEFAULT_BACKEND,
     RESULTS_ROOT,
     TaskName,
     build_llm_client,
@@ -162,7 +163,7 @@ def run_experiment(spec: RunSpec) -> Path:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run one FunSearch experiment.")
     parser.add_argument("--task", choices=ALL_TASKS, required=True)
-    parser.add_argument("--backend", choices=tuple(BACKENDS), default="local")
+    parser.add_argument("--backend", choices=tuple(BACKENDS), default=DEFAULT_BACKEND)
     parser.add_argument("--base-url")
     parser.add_argument("--model")
     parser.add_argument("--no-proxy")

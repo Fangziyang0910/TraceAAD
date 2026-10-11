@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from experiments.infra.migrations.minimize_results import complete_live_run, convert_run, transform
+from experiments.infra.migrations.minimize_results import convert_run, transform
 from experiments.infra.monitor_history import TrainingHistory
 from traceaad.common.selection import better, weights
 from traceaad.common.storage import RESULT_FORMAT, append_jsonl, read_json, write_json
@@ -66,25 +66,3 @@ def test_lower_cost_is_better_and_parent_sampling_prefers_it():
     probabilities, _ = weights(nodes, {}, {n["id"]: n for n in nodes})
     assert probabilities[0] > probabilities[-1]
     assert sum(probabilities) == pytest.approx(1.)
-
-
-def test_running_legacy_writer_is_normalized_only_in_read_view(tmp_path):
-    run = tmp_path / "cvrp_aco" / "rep1"
-    write_json(run / "run_config.json", {"task": "cvrp_aco", "result_format": RESULT_FORMAT})
-    write_json(run / ".minimize/live.json", {"task": "cvrp_aco"})
-    for i, score in enumerate((10., -9.), 1):
-        append_jsonl(run / "events.jsonl", {"kind": "candidate", "candidate_id": i,
-            "budget_used": i, "fitness": score, "node_id": i, "operator": "Refine",
-            "valid": True, "status": "valid", "attempt": {"id": i}})
-    boundary = (run / "events.jsonl").stat().st_size
-    write_json(run / "resume.json", {"files": {"events.jsonl": boundary}, "state": {"phase": "search"}})
-    original = (run / "events.jsonl").read_bytes()
-    points = TrainingHistory(run, minimize=True).read()[0]
-    assert [p["fitness"] for p in points] == [10., 9.]
-    assert points[-1]["gain"] == 1.
-    assert (run / "events.jsonl").read_bytes() == original
-    write_json(run / "summary.json", {"status": "finished", "best": {"fitness": -9., "score": 9.}})
-    complete_live_run(run, tmp_path)
-    assert not (run / ".minimize/live.json").exists()
-    assert read_json(run / "summary.json")["best"] == {"fitness": 9., "score": 9.}
-    assert read_json(run / "resume.json")["files"]["events.jsonl"] == (run / "events.jsonl").stat().st_size

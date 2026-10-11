@@ -1,0 +1,18 @@
+Below are two {func_name} functions for {problem_desc}
+{func_desc}
+
+You are provided with two code versions below, where the second version performs better than the first one.
+
+Worse code:
+Description: {worst_description}
+{metric_name_cap}: {worst_fitness}
+Code:
+{worst_code}
+
+Better code:
+Description: {best_description}
+{metric_name_cap}: {best_fitness}
+Code:
+{best_code}
+
+You respond with some hints for designing better heuristics to achieve {fitness_goal} {metric_plural}, based on the two code versions. Phrase your hints as design principles, not tied to names, paths, or labels appearing in the code. Write less than 30 words.

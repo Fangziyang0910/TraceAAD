@@ -23,7 +23,7 @@ class MASampler:
     ) -> Tuple[str, Function]:
         response = self.llm.draw_sample(prompt)
         thought = self.__class__.trim_thought_from_response(response)
-        code = SampleTrimmer.trim_preface_of_function(response)
+        code = response
         function = SampleTrimmer.sample_to_function(code, self._template_program)
         self._log_llm_call(
             stage='generate',
@@ -37,7 +37,7 @@ class MASampler:
         if thought is None or function is None:
             return thought, function
         prompt2 = self.get_prompt_refine(task_description, thought, str(function))
-        describe = self.llm.draw_sample(prompt2)
+        describe = self.llm.draw_sample(prompt2, temperature=0)
         self._log_llm_call(
             stage='thought_alignment',
             operator=operator,
@@ -66,7 +66,7 @@ class MASampler:
     def trim_thought_from_response(cls, response: str) -> str | None:
         try:
             pattern = r'\{(.*?)\}'  # Compared with r'\{(.*)\}'
-            bracketed_texts = re.findall(pattern, response)
+            bracketed_texts = re.findall(pattern, response, flags=re.DOTALL)
             return bracketed_texts[0]
         except:
             return None

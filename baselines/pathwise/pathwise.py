@@ -513,6 +513,8 @@ class PathWise:
         self._debug_print("PathWise World Model Prompt", prompt)
         total_sample_time = 0.0
         for attempt in range(self._max_world_model_retries + 1):
+            if not self._has_budget():
+                break
             sample_start = time.time()
             try:
                 response = self._world_model_llm.draw_sample(prompt)
@@ -557,11 +559,12 @@ class PathWise:
                 parent_ids=action.parents,
             )
             if parsed is None:
+                self._count_invalid_sample()
                 if attempt < self._max_world_model_retries:
                     log_event(self, event="world_model_retry", method="pathwise", status="retry",
                               operator="world_model", sample_order=self._tot_sample_nums + 1,
                               action_idx=action_idx, rollout_idx=rollout_idx,
-                              retry=attempt + 1, counts_budget=False)
+                              retry=attempt + 1, counts_budget=True)
                     continue
                 return self._fallback_world_model_rollout(
                     action, state, graph, action_idx, rollout_idx, total_sample_time,
@@ -618,22 +621,17 @@ class PathWise:
     ) -> str:
         if not self._use_policy_critic:
             return self._policy_reflection
-        finite_scores = {rollout.score for rollout in self._finite_rollouts(rollouts_per_action)}
-        if len(finite_scores) <= 1:
+        action_scores = {sum(r.score for r in rollouts) / len(rollouts) if rollouts else float("inf")
+                         for rollouts in rollouts_per_action}
+        if len(action_scores) <= 1:
             return self._policy_reflection
 
-        summaries = []
-        for rollouts in rollouts_per_action:
-            valid = [rollout for rollout in rollouts if rollout.node is not None]
-            if valid:
-                avg = sum(rollout.score for rollout in valid) / len(valid)
-                detail = "\n".join(
-                    f"- {rollout.description} (score: {rollout.score:.6f})"
-                    for rollout in valid
-                )
-                summaries.append(f"Average score: {avg:.6f}\nRollouts:\n{detail}")
-            else:
-                summaries.append("No valid rollouts.")
+        summaries = [
+            "Rollouts:\n" + "\n".join(
+                f"  - rollout_{j} (objective value: {rollout.score:.5f}): {rollout.description}"
+                for j, rollout in enumerate(rollouts)
+            ) for rollouts in rollouts_per_action
+        ]
         prompt = self._prompt.policy_critic_prompt(state, actions, summaries)
         self._debug_print("PathWise Policy Critic Prompt", prompt)
         try:

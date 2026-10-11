@@ -1,0 +1,19 @@
+You are controlling the evolutionary search for {problem_desc}
+
+{func_desc}
+
+{current_state}{reflection_section}
+Task:
+Choose one or more parent(s) and propose a directive for deriving a new heuristic, based on the reflection and current heuristic candidates. Your selected parent(s) and directive should help guide the creation of heuristics that achieve {fitness_goal} {metric_plural} in future generations.{explorative_nudge}
+{parent_constraint}
+
+Consider the following when choosing parent(s) and generating the directive:
+- {metric_name_cap}s and performance trends 
+- Diversity of approaches in current candidates 
+- Derivation history (what has been tried and what has not been explored yet)
+
+Format your response as:
+PARENTS: [list of ID(s) selected from current heuristic candidates]
+DIRECTIVE: [novel instruction less than 2 sentences describing how to modify, extend, or invent new logic from the selected parent(s)]
+
+Do not give additional explanations.

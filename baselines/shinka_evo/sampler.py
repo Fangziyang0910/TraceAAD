@@ -7,8 +7,15 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
+from baselines.shared.sampling import SampleTrimmer
 from core import Function, LLM, Program, TextFunctionProgramConverter
 from .population import ShinkaProgram
+from .prompts import messages, prompt_record
+from .prompts.prompts_base import BASE_SYSTEM_MSG, construct_eval_history_msg, perf_str, format_text_feedback_section
+from .prompts.prompts_diff import DIFF_SYS_FORMAT, DIFF_ITER_MSG
+from .prompts.prompts_full import FULL_SYS_FORMATS, FULL_ITER_MSG
+from .prompts.prompts_cross import CROSS_SYS_FORMAT, CROSS_ITER_MSG, get_cross_component
+from .prompts.prompts_fix import FIX_SYS_FORMAT, FIX_ITER_MSG, format_error_output_section
 
 
 EVOLVE_START = re.compile(r"^[^\S\r\n]*#\s*EVOLVE-BLOCK-START\s*$", re.MULTILINE)
@@ -33,44 +40,7 @@ class PatchResult:
 
 
 class ShinkaSampler:
-    BASE_SYSTEM_MSG = (
-        "You are an expert optimization and algorithm design assistant. "
-        "Improve the program while preserving correctness and immutable regions."
-    )
-
-    DIFF_FORMAT = (
-        "\n\n# Patch Format\n"
-        "Return one or more SEARCH/REPLACE blocks. Only edit text between EVOLVE-BLOCK-START\n"
-        "and EVOLVE-BLOCK-END.\n\n"
-        + "<" * 7 + " SEARCH\n"
-        "old code\n"
-        + "=" * 7 + "\n"
-        "new code\n"
-        + ">" * 7 + " REPLACE\n"
-    )
-
-    FULL_FORMAT = """
-
-# Patch Format
-Return a complete Python function or program in a ```python code block```.
-Keep immutable code, imports, function name, arguments, return type, and docstring
-semantics unchanged. Only the implementation inside the evolve block may change.
-"""
-
-    CROSS_FORMAT = """
-
-# Patch Format
-Return a complete Python function or program in a ```python code block```.
-Combine useful ideas from the current parent and inspiration programs while
-preserving the original function signature and immutable regions.
-"""
-
-    FIX_FORMAT = """
-
-# Patch Format
-Return a complete corrected Python function or program in a ```python code block```.
-Make the program correct first; performance improvements are secondary.
-"""
+    BASE_SYSTEM_MSG = BASE_SYSTEM_MSG
 
     def __init__(
             self,
@@ -131,53 +101,46 @@ Make the program correct first; performance improvements are secondary.
             previous_error: str | None = None,
             fix_mode: bool = False,
     ) -> str:
-        system = self.task_sys_msg
-        if meta_recommendations and meta_recommendations != "none" and patch_type != "cross":
-            system += (
-                "\n\n# Potential Recommendations\n"
-                "The following are potential recommendations for the next program generation:\n"
-                f"{meta_recommendations}"
-            )
+        system = self.task_sys_msg + '\n\n' + self.task_description
+        if meta_recommendations not in (None, 'none') and patch_type != 'cross':
+            system += ('\n\n# Potential Recommendations\n'
+                       'The following are potential recommendations for the next program generation:\n'
+                       f'\n{meta_recommendations}')
+        record = prompt_record(parent, self.to_marked_program(parent.function))
+        feedback = format_text_feedback_section(parent.text_feedback) if self.use_text_feedback else ''
+        values = dict(language='python', code_content=record.code,
+                      performance_metrics=perf_str(record.combined_score, record.public_metrics),
+                      text_feedback_section=feedback)
         if fix_mode:
-            system += self.FIX_FORMAT
-        elif patch_type == "diff":
-            system += self.DIFF_FORMAT
-        elif patch_type == "full":
-            system += self.FULL_FORMAT
-        elif patch_type == "cross":
-            system += self.CROSS_FORMAT
+            system += FIX_SYS_FORMAT
+            values['error_output_section'] = format_error_output_section(
+                stderr_log=str(parent.metadata.get('error', parent.text_feedback or '')))
+            user = FIX_ITER_MSG.format(**values)
+        elif patch_type == 'diff':
+            system += DIFF_SYS_FORMAT
+            user = DIFF_ITER_MSG.format(**values)
+        elif patch_type == 'full':
+            import numpy as np
+            system += FULL_SYS_FORMATS[np.random.randint(len(FULL_SYS_FORMATS))]
+            user = FULL_ITER_MSG.format(**values)
+        elif patch_type == 'cross':
+            system += CROSS_SYS_FORMAT
+            user = CROSS_ITER_MSG.format(**values)
+            user += '\n\n' + get_cross_component(
+                [prompt_record(p) for p in archive_inspirations],
+                [prompt_record(p) for p in top_k_inspirations])
         else:
-            raise ValueError(f"Unsupported patch type: {patch_type}")
-
-        user_parts = [
-            "# Task",
-            self.task_description or "Improve the given algorithm.",
-            "",
-            "# Current Program",
-            "```python",
-            self.to_marked_program(parent.function),
-            "```",
-            "",
-            "# Current Performance",
-            self._performance_block(parent),
-        ]
-        inspiration_block = self._inspiration_block(archive_inspirations, top_k_inspirations)
-        if inspiration_block:
-            user_parts.extend(["", inspiration_block])
+            raise ValueError(f'Unsupported patch type: {patch_type}')
+        inspirations = list(archive_inspirations) + list(top_k_inspirations)
+        if self.inspiration_sort_order == 'ascending':
+            inspirations.sort(key=lambda p: p.combined_score, reverse=True)
+        elif self.inspiration_sort_order == 'chronological':
+            inspirations.sort(key=lambda p: p.timestamp)
+        history = construct_eval_history_msg([prompt_record(p) for p in inspirations],
+                    include_text_feedback=self.use_text_feedback) if inspirations else ''
         if previous_error:
-            user_parts.extend([
-                "",
-                "# Previous Patch Error",
-                previous_error,
-                "Try again with a valid patch that preserves immutable regions.",
-            ])
-        if fix_mode:
-            user_parts.extend([
-                "",
-                "# Error Context",
-                str(parent.metadata.get("error", parent.text_feedback or "The current program did not pass evaluation.")),
-            ])
-        return system.strip() + "\n\n" + "\n".join(user_parts).strip()
+            user += '\n\n# Previous Patch Error\n' + previous_error
+        return messages(system, history + '\n' + user)
 
     def _performance_block(self, program: ShinkaProgram) -> str:
         lines = [
@@ -228,37 +191,28 @@ Make the program correct first; performance improvements are secondary.
         return PatchResult(None, None, error=f"Unsupported patch type: {patch_type}")
 
     def to_marked_program(self, function: Function) -> str:
-        template_function = copy.deepcopy(self.template_function)
-        template_function.body = function.body
-        program = TextFunctionProgramConverter.function_to_program(template_function, self.template_program)
+        program = TextFunctionProgramConverter.function_to_program(function, self.template_program)
         if program is None:
             return str(function)
         return self._insert_markers(str(program))
 
     def _insert_markers(self, program_str: str) -> str:
-        program = TextFunctionProgramConverter.text_to_program(program_str)
-        if program is None or len(program.functions) != 1:
+        # A complete-solver task permits edits to helpers and imports too.
+        if self.template_function.name == 'solve':
+            return '# EVOLVE-BLOCK-START\n' + program_str + '\n# EVOLVE-BLOCK-END'
+        program = SampleTrimmer.sample_to_program(program_str, self.template_program)
+        if program is None:
             return program_str
-        func = program.functions[0]
-        marked = copy.deepcopy(func)
-        body = marked.body.strip("\n")
-        body_lines = body.splitlines() if body else ["    pass"]
-        marked.body = "\n".join(["    # EVOLVE-BLOCK-START"] + body_lines + ["    # EVOLVE-BLOCK-END"])
-        marked_program = TextFunctionProgramConverter.function_to_program(marked, program)
-        return str(marked_program) if marked_program is not None else program_str
+        marked = copy.deepcopy(program.functions[0])
+        marked.body = '\n'.join(['    # EVOLVE-BLOCK-START', marked.body, '    # EVOLVE-BLOCK-END'])
+        return str(marked)
 
     def _apply_full_response(self, response: str, parent: ShinkaProgram, *, patch_type: str) -> PatchResult:
         extracted = self.extract_python_code(response)
         if not extracted:
             return PatchResult(None, None, error="Could not extract Python code from response.")
-        source = self.extract_function_source(extracted) or self.extract_function_source(response)
-        if not source:
-            return PatchResult(None, None, error="Could not extract a Python function from response.")
-        parsed = TextFunctionProgramConverter.text_to_function(source)
-        if parsed is None:
-            return PatchResult(None, None, error="Extracted function is not parseable.")
-        func = self._canonicalize_function(parsed)
-        program = TextFunctionProgramConverter.function_to_program(func, self.template_program)
+        program = SampleTrimmer.sample_to_program(extracted, self.template_program)
+        func = program.functions[0] if program else None
         if program is None:
             return PatchResult(None, None, error="Could not rebuild program from generated function.")
         return PatchResult(func, program, code_diff=self._simple_diff(parent.program, str(program)), metadata={"patch_type": patch_type})
@@ -284,12 +238,8 @@ Make the program correct first; performance improvements are secondary.
             updated = updated[:position] + replace_text + updated[position + len(search_text):]
             mutable_ranges = self.mutable_ranges(updated)
         cleaned = self.strip_markers(updated)
-        program = TextFunctionProgramConverter.text_to_program(cleaned)
-        if program is None or len(program.functions) != 1:
-            return PatchResult(None, None, error="Patched program is not parseable.")
-        parsed = program.functions[0]
-        func = self._canonicalize_function(parsed)
-        rebuilt = TextFunctionProgramConverter.function_to_program(func, self.template_program)
+        rebuilt = SampleTrimmer.sample_to_program(cleaned, self.template_program)
+        func = rebuilt.functions[0] if rebuilt else None
         if rebuilt is None:
             return PatchResult(None, None, error="Could not rebuild program from diff result.")
         return PatchResult(func, rebuilt, code_diff=self._simple_diff(parent.program, str(rebuilt)), metadata={"patch_type": "diff"})

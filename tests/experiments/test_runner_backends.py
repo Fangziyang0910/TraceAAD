@@ -12,7 +12,8 @@ def test_server1_capacity_matches_current_service_limit() -> None:
     assert _common.BACKEND_CAPACITY["server3"] == 9
     assert _common.BACKEND_CAPACITY["server3b"] == 9
     assert _common.BACKEND_CAPACITY["local"] == 3
-    assert _common.PRIMARY_BACKENDS == ("server3", "server3b", "server1", "local")
+    assert _common.BACKEND_CAPACITY["deepseek"] == 24
+    assert _common.PRIMARY_BACKENDS == ("deepseek",)
 
 
 def test_server3_public_labels_do_not_use_legacy_server3b_name() -> None:
@@ -20,7 +21,8 @@ def test_server3_public_labels_do_not_use_legacy_server3b_name() -> None:
     assert _common.BACKEND_DISPLAY_NAMES["server3b"] == "server3-2"
 
 
-def test_select_backend_balances_to_the_side_with_more_free_slots() -> None:
+def test_select_backend_balances_to_the_side_with_more_free_slots(monkeypatch) -> None:
+    monkeypatch.setattr(_common, "PRIMARY_BACKENDS", ("server3", "server3b", "server1", "local"))
     remaining = {"server3": 1, "server3b": 3, "local": 2}
 
     assert _common.select_backend(remaining) == "server3b"
@@ -32,12 +34,14 @@ def test_select_backend_balances_to_the_side_with_more_free_slots() -> None:
     assert _common.select_backend(remaining) == "server3"
 
 
-def test_select_backend_breaks_ties_in_primary_order() -> None:
+def test_select_backend_breaks_ties_in_primary_order(monkeypatch) -> None:
+    monkeypatch.setattr(_common, "PRIMARY_BACKENDS", ("server3", "server3b", "server1", "local"))
     assert _common.select_backend({"server3": 9, "server3b": 9}) == "server3"
     assert _common.select_backend({"server3": 0, "server3b": 0, "local": 0}) is None
 
 
 def test_assign_backends_alternates_equal_primary_slots(monkeypatch) -> None:
+    monkeypatch.setattr(_common, "PRIMARY_BACKENDS", ("server3", "server3b", "server1", "local"))
     pending = [
         _common.LaunchItem(
             task="tsp_construct",

@@ -157,6 +157,9 @@ TASK_HYPERPARAMS: Dict[str, CALMTaskHyperparams] = {
     ),
     # No reference config exists for VRPTW; search behavior uses the generic
     # CALM defaults and only the display metadata is task-specific.
+    'fssp_gls': CALMTaskHyperparams(problem_name='permutation flow shop', problem_unit='percent makespan gap'),
+    'graph_colouring': CALMTaskHyperparams(problem_name='graph colouring', problem_unit='percent colour-count gap'),
+    'jssp_construct': CALMTaskHyperparams(problem_name='job shop scheduling', problem_unit='percent makespan gap'),
     'vrptw_construct': CALMTaskHyperparams(
         problem_name='vehicle routing with time windows',
         problem_unit='units of travel distance',

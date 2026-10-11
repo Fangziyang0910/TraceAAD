@@ -32,12 +32,15 @@ def get_code(response: str):
     return matches[0] if len(matches) == 1 else matches
 
 
-def extract_function_from_string(file_content: str):
+def extract_function_from_string(file_content: str, function_name: str | None = None):
     namespace: dict = {}
     try:
         exec(file_content, namespace)
     except Exception:
         return None
+    if function_name is not None:
+        value = namespace.get(function_name)
+        return value if callable(value) and hasattr(value, '__code__') else None
     functions = [
         value for value in namespace.values()
         if callable(value) and hasattr(value, '__code__')
