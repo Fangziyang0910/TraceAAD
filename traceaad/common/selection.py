@@ -1,17 +1,14 @@
 """Where the next attempt starts: training quality weighted by the experience of each program.
 
-An expert keeps developing a strong design while attempts on it keep paying
-off, and moves on once many attempts have failed. Each valid program is its
-own candidate. Its weight is
+Each valid program is a candidate. Its weight combines current training
+quality with observed attempts that produced a better new program:
 
     exp(-beta * (q_i - q_min)) * (k_i + s * r) / (n_i + s)
 
-where n_i attempts have started from program i and k_i of them produced a new
-program better than it, r is the run's pooled rate of such improvements and
-s = 3 is the prior strength. In V10.15-5/-6 the share of attempts that beat
-their starting program fell from about 18-21% on a program's first attempt to
-about 9% after one to four failures, 3-6% after five to fourteen and 1% after
-fifteen or more, on every task; s = 3 reproduces that decay.
+n_i counts attempts from program i, k_i counts improvements, r is the run's
+pooled improvement rate, and s = 3 is the retained prior strength. Historical
+failure-count groups motivated this setting; they do not establish its net
+search benefit or make it a predictor of long-term development value.
 
 beta only converts score differences into weights: it is the temperature at
 which the score values observed so far spread over an effective number of 8
