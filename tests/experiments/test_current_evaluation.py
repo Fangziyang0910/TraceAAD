@@ -48,6 +48,7 @@ def score(x):
     assert [(row["valid"], row["failure_kind"], row["error_type"]) for row in rows] == [
         (True, None, None), (False, "timeout", "TimeoutError")]
     assert rows[0]["function_seconds_limit"] == FUNCTION_SECONDS
+    assert rows[0]["instance_scores"] == [random.Random(EVALUATION_SEED+i).random() for i in range(2)]
     metadata = runner.baseline_run_config(spec, tmp_path / name, "test", name,
                                            {"max_sample_nums": 1}, task_config={})
     assert metadata["method_params"]["evaluation_seeds"] == [EVALUATION_SEED]
@@ -261,7 +262,7 @@ def test_baseline_entries_accept_complete_solvers(name, task_name, tmp_path, mon
     method = module.build_method(spec, tmp_path / name / 'logs')
     outcome = method._evaluator.evaluate_program_with_details(task.TEMPLATE)
     assert outcome.failure_kind is None, outcome.error
-    assert outcome.result == 0
+    assert outcome.result == task._rows[0]["reference"]
     config = runner.baseline_run_config(spec, tmp_path / name, 'new', name, {'max_sample_nums': 1})
     assert config['task_eval']['interface'] == 'full-solver-v1'
     assert task._instance_execution['timeout_seconds'] == 120

@@ -25,7 +25,8 @@ def heldout_evaluator(config, split, seeds, *, workers, timeout_seconds, measure
                                              timeout_seconds=timeout, n_workers=count,
                                              scheduler_socket=(params.get('scheduler_socket') if scheduler_socket is None
                                                                else scheduler_socket))
-        metadata = {"timeout_seconds": timeout, "function_seconds": evaluator.function_seconds,
+        metadata = {"score_metric": getattr(task, "score_metric", "raw_objective"),
+                    "timeout_seconds": timeout, "function_seconds": evaluator.function_seconds,
                     "function_budget_scope": evaluator.function_budget_scope,
                     "timeout_scope": "instance",
                     "workers": min(count, getattr(task, "n_instance", 1))}

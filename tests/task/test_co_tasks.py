@@ -93,7 +93,7 @@ def test_eval_isolates_module_state_and_measures_calls():
     result = ProgramEvaluator(evaluation, (123,)).evaluate(code, "isolation")
     assert result["failure"] is None
     assert result["calls"] == 2
-    assert result["fitness"] == pytest.approx(-100/8)
+    assert result["fitness"] == pytest.approx(7.)
 
 
 def test_invalid_scores_are_reported_as_invalid_output():
@@ -116,7 +116,7 @@ def test_candidates_reuse_initial_data_and_references(monkeypatch):
     first = runner.evaluate(evaluation.template_program, 'first')
     second = runner.evaluate(evaluation.template_program, 'second')
     assert first['failure'] is second['failure'] is None
-    assert first['fitness'] == second['fitness'] == pytest.approx(-100/8)
+    assert first['fitness'] == second['fitness'] == pytest.approx(7.)
     assert [digest_arrays(data) for data in evaluation._instances] == before
 
 
@@ -218,3 +218,11 @@ def test_complete_solver_search_rejects_a_different_saved_protocol(tmp_path):
         TraceAADV1021(evaluation=evaluation, llm=TokenLLM(), run_dir=tmp_path,
                       config=config, task='jssp_construct')
     assert (tmp_path / 'resume.json').read_bytes() == before
+
+
+def test_raw_objective_is_independent_of_reference_values():
+    evaluation = miniature_evaluation()
+    before = evaluation.evaluate_program(evaluation.template_program, None)
+    evaluation._rows[0]['reference'] = 8000.
+    assert evaluation.evaluate_program(evaluation.template_program, None) == before == 7.
+    assert evaluation.score_metric == 'raw_objective'

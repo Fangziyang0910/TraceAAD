@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-REVISION = "research-protocol-v5-20261012-mean-cpu"
+REVISION = "research-protocol-v6-20261012-raw-objective"
 
 
 @dataclass

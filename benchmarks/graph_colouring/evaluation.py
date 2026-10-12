@@ -27,6 +27,7 @@ def solve(data, solver):
 
 
 class GraphColouringEvaluation(FixedEvaluation):
+    OBJECTIVE_NAME = 'number of colors'
     DATASET = dataset
     TEMPLATE = template_program
     DESCRIPTION = task_description

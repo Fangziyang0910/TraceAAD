@@ -102,6 +102,7 @@ def solve(data, heuristic, iterations=200, local_passes=3):
 
 
 class FSSPGLSEvaluation(FixedEvaluation):
+    OBJECTIVE_NAME = 'makespan'
     DATASET = dataset
     TEMPLATE = template_program
     DESCRIPTION = task_description

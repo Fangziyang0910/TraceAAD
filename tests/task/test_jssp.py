@@ -68,7 +68,9 @@ def test_seeded_instance_reconstruction_and_split_independence():
     assert all(np.array_equal(np.sort(x['machine_order'], axis=1), np.tile(np.arange(20), (20, 1))) for x in train)
 
 
-def test_real_evaluation_recomputes_objective_and_has_zero_template_deviation():
+def test_real_evaluation_recomputes_objective_and_template_matches_reference():
     evaluation = JSSPEvaluation(limit=2, safe_evaluate=False)
-    assert evaluation.evaluate_program(evaluation.TEMPLATE, None) == 0
+    # The starter is the reference construction, so its raw objective is the reference mean.
+    assert evaluation.evaluate_program(evaluation.TEMPLATE, None) == pytest.approx(
+        np.mean([row['reference'] for row in evaluation._rows]))
     assert evaluation.n_instance == 2 and evaluation.outer_settings == {}

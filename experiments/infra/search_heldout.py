@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from benchmarks.tasks import heldout_task, scale_of_split
+from benchmarks.tasks import FIXED_TASKS, heldout_task, scale_of_split
 from traceaad.common.storage import save_heldout, selected_program, stored_heldout
 from .evaluation_execution import heldout_evaluator
 from core.evaluate import EVALUATION_SEED
@@ -29,7 +29,8 @@ def evaluate_run(run_dir, *, split=None, workers=None, timeout_seconds=None, sch
         if (previous["key"] != key or previous.get("node_id") != best["id"]
                 or previous.get("task") != task):
             raise ValueError("existing held-out result belongs to another program")
-        return previous
+        if task not in FIXED_TASKS or previous.get("score_metric") == "raw_objective":
+            return previous
     evaluator, execution = heldout_evaluator(config, split, seeds, workers=workers,
         timeout_seconds=timeout_seconds, measure_calls=True,
         task_factory=heldout_task, scheduler_socket=scheduler_socket)

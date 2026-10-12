@@ -255,7 +255,8 @@ def _append_evaluation(path, program, record):
            "mean_function_cpu_seconds": record["mean_function_cpu_seconds"],
            "function_budget_scope": record["function_budget_scope"], "n_instances": record["n_instances"],
            "timeout_seconds": record["timeout_seconds"], "function_seconds_limit": record["function_seconds_limit"],
-           "protocol": record["protocol"]}
+           "protocol": record["protocol"],
+           "instance_scores": [r["score"] for r in record["instances"]] if record["valid"] else []}
     with _RECORD_LOCK, open(path, "a", encoding="utf-8") as output:
         output.write(json.dumps(row) + "\n")
 

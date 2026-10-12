@@ -35,5 +35,7 @@ def test_modifying_input_cannot_remove_edges_from_validation():
 
 def test_dsatur_starter_matches_reference_without_fixed_repair():
     evaluation = GraphColouringEvaluation(limit=1, safe_evaluate=False)
-    assert evaluation.evaluate_program(evaluation.TEMPLATE, None) == 0
+    # The starter is the reference construction, so its raw objective is the reference mean.
+    assert evaluation.evaluate_program(evaluation.TEMPLATE, None) == pytest.approx(
+        np.mean([row['reference'] for row in evaluation._rows]))
     assert evaluation.outer_settings == {}

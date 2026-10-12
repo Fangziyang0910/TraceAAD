@@ -37,6 +37,7 @@ def solve(data, solver):
 
 
 class JSSPEvaluation(FixedEvaluation):
+    OBJECTIVE_NAME = 'makespan'
     DATASET = dataset
     TEMPLATE = template_program
     DESCRIPTION = task_description
