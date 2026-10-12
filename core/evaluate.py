@@ -252,6 +252,8 @@ def _append_evaluation(path, program, record):
            "cpu_id": failed.get("cpu_id") if failed else None,
            "seconds": record["seconds"], "function_seconds": record["function_seconds"],
            "function_cpu_seconds": record["function_cpu_seconds"],
+           "mean_function_cpu_seconds": record["mean_function_cpu_seconds"],
+           "function_budget_scope": record["function_budget_scope"], "n_instances": record["n_instances"],
            "timeout_seconds": record["timeout_seconds"], "function_seconds_limit": record["function_seconds_limit"],
            "protocol": record["protocol"]}
     with _RECORD_LOCK, open(path, "a", encoding="utf-8") as output:

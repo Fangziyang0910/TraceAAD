@@ -195,6 +195,7 @@ def solve(*args):
     helper()
     return []
 '''
+    code = evaluation.TEMPLATE.replace('def solve(', 'def solve_original(') + code.replace('return []', 'return solve_original(*args)')
     result = runner.evaluate(code, 'helper-budget')
     assert result['failure']['kind'] == 'timeout'
     assert result['failure']['error_type'] == 'FunctionBudgetExceeded'

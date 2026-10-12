@@ -83,6 +83,7 @@ def main(config_class, experiment, module, method, host="local", backends=("serv
                      repeat_ids=getattr(args, 'repeat_ids', None), **execution)
     limits = evaluation_limits(tasks)
     metadata = ({"evaluation_execution": {"timeout_scope": "instance",
+                 "function_budget_scope": "mean_instance",
                  "timeout_seconds": {task: args.eval_timeout_seconds if args.eval_timeout_seconds is not None
                                      else INSTANCE_LIMITS.get(task, INSTANCE_SECONDS) for task in tasks},
                  "function_seconds": {task: FUNCTION_LIMITS.get(task, FUNCTION_SECONDS) for task in tasks},
@@ -90,6 +91,7 @@ def main(config_class, experiment, module, method, host="local", backends=("serv
                  "protocol": "isolated-instances-v1"}} if instance_execution else {})
     if instance_execution:
         limits = {task: {"timeout_scope": "instance", "timeout_seconds": metadata["evaluation_execution"]["timeout_seconds"][task],
+                         "function_budget_scope": "mean_instance",
                          "function_seconds": FUNCTION_LIMITS.get(task, FUNCTION_SECONDS)}
                   for task in tasks}
     if scheduler:

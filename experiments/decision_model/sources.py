@@ -7,7 +7,7 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from benchmarks.tasks import CO_TASKS, training_task
+from benchmarks.tasks import CO_TASKS, FUNCTION_LIMITS, INSTANCE_LIMITS, training_task
 from experiments.infra.scheduled_llm import ScheduledLLM
 from experiments.infra.base import sampling_controls
 from traceaad.common.config import REVISION
@@ -18,6 +18,9 @@ from traceaad.v10_22 import Config, TraceAADV1022
 def run_source(root, task, seed, socket):
     name = f"20261009_decision_sources_{task}_rep{seed + 1}"
     work = root / task / name
+    saved_path = work / 'run_config.json'
+    if saved_path.exists() and json.loads(saved_path.read_text()).get('revision') != REVISION:
+        raise ValueError('mean CPU budget requires a new source directory')
     if (work / "summary.json").exists():
         summary = json.loads((work / "summary.json").read_text())
         if summary["status"] == "finished":
@@ -31,8 +34,9 @@ def run_source(root, task, seed, socket):
         "revision": REVISION, "task_eval": task_kwargs, "method_params": asdict(config),
         "llm": {"model": llm.model, "sampling": sampling_controls(False), "max_tokens": 8192,
                 "enable_thinking": False},
-        "evaluation_execution": {"protocol": "isolated-instances-v1", "function_seconds": 2,
-                                 "timeout_seconds": 20, "timeout_scope": "instance", "n_workers": 4}})
+        "evaluation_execution": {"protocol": "isolated-instances-v1", "function_seconds": FUNCTION_LIMITS[task],
+                                 "function_budget_scope": "mean_instance",
+                                 "timeout_seconds": INSTANCE_LIMITS[task], "timeout_scope": "instance", "n_workers": 4}})
     try:
         method = TraceAADV1022(evaluation=evaluation, llm=llm, run_dir=work, config=config, task=task)
         method.run()

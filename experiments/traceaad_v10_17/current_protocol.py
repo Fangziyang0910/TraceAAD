@@ -15,9 +15,9 @@ class PromptBuilder(HistoricalPrompts):
     def evaluation_text(self, meaning, higher):
         return ("[Evaluation]\nEach program is evaluated on a fixed set of training instances.\n"
                 f"Score: {meaning}. {'Higher' if higher else 'Lower'} is better.\n"
-                f"Within each instance, all calls to the function together may use at most {FUNCTION_LIMITS.get(self.task, FUNCTION_SECONDS):g} "
-                f"seconds of CPU time. Each whole instance must finish within {self.config.eval_timeout_seconds:g} "
-                "seconds of wall time.")
+                f"All calls to the function together may use at most {FUNCTION_LIMITS.get(self.task, FUNCTION_SECONDS):g} "
+                "seconds of CPU time per instance, averaged over all instances. "
+                f"Each whole instance has a safety limit of {self.config.eval_timeout_seconds:g} seconds of wall time.")
 
     def error_text(self, failed):
         if failed["failure"]["kind"] == "runtime_error":

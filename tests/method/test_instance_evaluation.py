@@ -109,10 +109,48 @@ def test_the_budget_counts_cpu_inside_the_function_only():
     assert within['failure'] is None and 0.15 < within['function_cpu_seconds'] < 0.4
     over = evaluator.evaluate(BUSY.format(0.6), 'over', n_workers=2)
     assert over['failure']['kind'] == 'timeout' and over['failure']['error_type'] == 'FunctionBudgetExceeded'
-    assert over['seconds'] < 1.4  # stopped near the budget, not at the end of the computation
+    assert len(over['evaluations'][0]['instances']) == 2
+    assert all(r['valid'] for r in over['evaluations'][0]['instances'])
+    assert over['failure']['instance_index'] is None
+    assert over['mean_function_cpu_seconds'] > 0.2
     hang = InstanceProgramEvaluator(SlowSolver(2), timeout_seconds=0.3, function_seconds=1).evaluate(
         'def score(x): return x', 'hang', n_workers=2)
     assert hang['failure']['kind'] == 'timeout' and hang['failure']['error_type'] == 'TimeoutError'
+
+
+@pytest.mark.parametrize('workers', [1, 2])
+def test_mean_budget_allows_a_slow_instance(workers):
+    code = BUSY.format('0.3 if x == 0 else 0.02')
+    task = IndexedEvaluation(2)
+    evaluator = InstanceProgramEvaluator(task, timeout_seconds=5, function_seconds=0.2)
+    result = evaluator.evaluate(code, 'heterogeneous', n_workers=workers)
+    assert result['fitness'] == 0.5
+    record = result['evaluations'][0]
+    assert len(record['instances']) == 2 and all(r['valid'] for r in record['instances'])
+    assert record['instances'][0]['function_cpu_seconds'] > 0.2
+    assert result['mean_function_cpu_seconds'] < 0.2
+    legacy = InstanceProgramEvaluator(task, timeout_seconds=5, function_seconds=0.2,
+                                     function_budget_scope='instance')
+    assert legacy.protocol != evaluator.protocol
+    assert legacy.evaluate(code, 'legacy', n_workers=workers)['failure']['kind'] == 'timeout'
+
+
+def test_mean_budget_accepts_the_exact_limit_and_logs_aggregate_failure(tmp_path, monkeypatch):
+    from core.evaluate import _append_evaluation
+    evaluator = InstanceProgramEvaluator(IndexedEvaluation(2), function_seconds=0.2)
+    sample = evaluator.evaluate('def score(x): return x', 'sample')['evaluations'][0]['instances']
+    sample[0]['function_cpu_seconds'], sample[1]['function_cpu_seconds'] = 0.3, 0.1
+    monkeypatch.setattr(evaluator, '_instances', lambda *args: (sample, {}))
+    assert evaluator.evaluate('', 'equal')['fitness'] == 0.5
+    sample[1]['function_cpu_seconds'] = 0.2
+    result = evaluator.evaluate('', 'over')
+    assert result['fitness'] is None and result['mean_function_cpu_seconds'] == 0.25
+    log = tmp_path / 'evaluations.jsonl'
+    _append_evaluation(log, '', result['evaluations'][0])
+    record = json.loads(log.read_text())
+    assert record['failure_kind'] == 'timeout' and record['instance_index'] is None
+    assert record['function_budget_scope'] == 'mean_instance'
+    assert record['function_cpu_seconds'] == 0.5 and record['mean_function_cpu_seconds'] == 0.25
 
 
 @pytest.mark.parametrize('task', FIXED_TASKS)
@@ -165,7 +203,8 @@ def test_search_and_heldout_keep_execution_parameters(tmp_path, monkeypatch):
     node = method.programs[1]
     assert node['eval_seconds'] == method.facts.evaluations[0]['instance_seconds']
     assert node['eval_wall_seconds'] == method.facts.evaluations[0]['seconds']
-    (tmp_path / 'run_config.json').write_text(json.dumps({'task': 'tsp_construct', 'method': 'v1021',
+    from traceaad.common.config import REVISION
+    (tmp_path / 'run_config.json').write_text(json.dumps({'task': 'tsp_construct', 'method': 'v1021', 'revision': REVISION,
                                                         'method_params': asdict(config)}))
     for module in (search_heldout, evaluate):
         monkeypatch.setattr(module, 'heldout_task', lambda *args: IndexedEvaluation(2))

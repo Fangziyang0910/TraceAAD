@@ -1,9 +1,6 @@
 # TraceAAD V10.15
 
-本页维护生成目标、形成路径与材料裁剪的运行与复现入口。机制解释见[轨迹用途索引](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)，启动与实现检查不代替算法收益。旧本地模型批次已归档，历史状态按日期读取；新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次使用[历史身份](../../docs/08-实验规范与共识/历史实验身份.md)与源码快照。
-
-
-
+机制说明见[轨迹用途索引](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)，实验条件见[历史实验身份](../../docs/08-实验规范与共识/历史实验身份.md)。
 
 The frozen mechanism is specified in [the design document](../../docs/01-搜索方法/生成目标与形成路径.md). Search draws parents over programs by training quality with a fixed target ESS of 8 (uniform over the top-scoring programs when at least eight tie) and immediately admits each valid unique candidate; finalists are the five best programs. An equal training score does not make two programs the same algorithm; only identical normalized code is a duplicate. The formation path is shown only in generation prompts.
 
@@ -26,6 +23,6 @@ uv run python -m experiments.traceaad_v10_15.launch_batch --from-batch experimen
 uv run python -m experiments.traceaad_v10_15.heldout_batch --batch-manifest experiments_result/traceaad_v10_15/batch_v1015_trial.json --dry-run
 ```
 
-## 2026-10-06 实现整理
+## 实现
 
 本版本的机制保留在版本目录中，生成、评价、记录、实验入口与离线诊断改为[共用实现](../../traceaad/common/README.md)。结果仍写入 `experiments_result/traceaad_v10_15/`。解析器不再补模板依赖，完整尝试结束后才保存恢复点，允许重做未提交的尝试；revision 标记这些运行条件。历史结果已统一迁移，格式与恢复条件见[实验与结果](../infra/SEARCH_FORMAT.md)。

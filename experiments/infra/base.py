@@ -212,6 +212,7 @@ def build_task(task, eval_workers=None, *, condition='shared'):
     evaluation, settings = training_task(task, eval_workers, condition=condition)
     if task in CO_TASKS:
         evaluation._instance_execution = {"timeout_seconds": INSTANCE_LIMITS[task],
+                                          "function_budget_scope": "mean_instance",
                                           "n_workers": 1 if eval_workers is None else eval_workers,
                                           "scheduler_socket": scheduler_socket(),
                                           "record_path": os.environ.get("TRACEAAD_EVALUATION_LOG") or None}

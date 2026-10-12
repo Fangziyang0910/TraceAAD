@@ -67,6 +67,9 @@ class Search:
             "selection_protocol": self.selection.protocol if self.selection else None}))
         # A resumed run continues under the current configuration and evaluator.
         saved = self.facts.state or {}
+        if (saved and getattr(self.training, 'function_budget_scope', None) == 'mean_instance'
+                and saved.get('identity', {}).get('revision') != REVISION):
+            raise ValueError('mean CPU budget requires a new batch; saved evaluation revision differs')
         if (getattr(evaluation, 'interface', None) and saved
                 and saved.get('identity', {}).get('protocol') != self.training.protocol):
             raise ValueError('complete-solver resume requires the same task interface and evaluation protocol')

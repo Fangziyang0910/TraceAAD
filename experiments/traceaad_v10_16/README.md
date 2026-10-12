@@ -1,9 +1,6 @@
 # TraceAAD V10.16
 
-本页维护直接尝试反馈怎样进入选父和生成的运行与复现入口。机制解释见[轨迹用途索引](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)，启动与实现检查不代替算法收益。旧本地模型批次已归档，历史状态按日期读取；新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次使用[历史身份](../../docs/08-实验规范与共识/历史实验身份.md)与源码快照。
-
-
-
+机制说明见[轨迹用途索引](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)，实验条件见[历史实验身份](../../docs/08-实验规范与共识/历史实验身份.md)。
 
 The mechanism is specified in [the design document](../../docs/01-搜索方法/尝试记录与经验使用.md). The search records each program by normalized code and each generation attempt with its inputs and measured outcome, including failures. Duplicates, known failures and repairs are events linked to programs; only identical code counts as a duplicate. Parents are drawn by training quality times a smoothed improvement rate, `(k + 3r) / (n + 3)` over the attempts started from it. Refine, Explore and Crossover see the attempts that started from the current algorithm with their measured outcomes; Explore also sees how the search best improved. Every evaluation records the calls to the target function and the time inside it, also when it times out. A finalist that fails on the selection set is replaced by the next program in the training ranking (at most five replacements).
 
@@ -15,6 +12,6 @@ uv run python -m experiments.traceaad_v10_16.heldout --run-dir experiments_resul
 
 Training, selection and held-out limits and splits are the same as for [V10.15](../traceaad_v10_15/README.md). `launch_server3.py --batch <name> [--launch]` starts the 15-run server3 batch arranged like V10.15-6 (five tasks x three repeats, seeds 0-2, two Qwen services).
 
-## 2026-10-06 实现整理
+## 实现
 
 本版本的机制保留在版本目录中，生成、评价、记录、实验入口与离线诊断改为[共用实现](../../traceaad/common/README.md)。结果仍写入 `experiments_result/traceaad_v10_16/`。解析器不再补模板依赖，完整尝试结束后才保存恢复点，允许重做未提交的尝试；revision 标记这些运行条件。历史结果已统一迁移，格式与恢复条件见[实验与结果](../infra/SEARCH_FORMAT.md)。

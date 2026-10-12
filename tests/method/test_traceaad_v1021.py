@@ -19,7 +19,7 @@ def test_steps_are_refine_explore_and_crossover():
     assert Config().operators == {"Refine": 0.45, "Explore": 0.30, "Crossover": 0.25}
     assert TraceAADV1021.EXPLORING == ("Explore",)
     assert PromptBuilder.ACTIONS == ("Refine", "Explore", "Crossover")
-    assert Config().eval_timeout_seconds == INSTANCE_SECONDS == 20 and FUNCTION_SECONDS == 2
+    assert Config().eval_timeout_seconds == INSTANCE_SECONDS == 120 and FUNCTION_SECONDS == 2
 
 
 def test_deepen_is_rejected_before_search():

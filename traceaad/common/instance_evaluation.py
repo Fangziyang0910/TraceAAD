@@ -1,9 +1,7 @@
 """Bounded instance parallelism with a separate deadline and probe per instance.
 
-Two limits apply to each instance. The function budget bounds the CPU time
-spent inside the candidate function, summed over its calls: it is the computation
-the task grants the candidate, and the fixed solver's time does not count,
-since that time varies with the core and load but not with the candidate.
+The function budget bounds mean candidate CPU time across all instances,
+summed over each instance's calls. The fixed solver's time does not count.
 CPU time rather than wall time, so that waiting while other processes use
 the core does not count.
 The instance limit bounds the whole instance (process start, solver and
@@ -40,7 +38,7 @@ def validate_execution(timeout_seconds, n_workers, function_seconds=None):
     if not _positive(timeout_seconds):
         raise ValueError("timeout_seconds must be a finite positive per-instance limit")
     if function_seconds is not None and not _positive(function_seconds):
-        raise ValueError("function_seconds must be a finite positive per-instance budget")
+        raise ValueError("function_seconds must be a finite positive CPU budget")
     if type(n_workers) is not int or n_workers < 1:
         raise ValueError("n_workers must be a positive integer")
 
@@ -90,7 +88,7 @@ def _run_instance(evaluator, code, function_name, sender, seed, cpu, scheduler_s
 class InstanceProgramEvaluator:
     """Evaluate one program with runtime limits supplied on each call.
 
-    ``function_seconds`` is each instance's budget inside the candidate function;
+    ``function_seconds`` is the mean instance budget inside the candidate function;
     ``timeout_seconds`` bounds each whole instance, including the fixed solver
     and program initialization. Waiting for a worker is excluded.
     Instance i starts from candidate seed (seed + i) mod 2**32, with fresh globals;
@@ -99,17 +97,21 @@ class InstanceProgramEvaluator:
     """
 
     def __init__(self, evaluation, seeds=(730241,), role="search", *, measure_calls=True,
-                 timeout_seconds=None, n_workers=1, scheduler_socket=None, function_seconds=_TASK_BUDGET):
+                 timeout_seconds=None, n_workers=1, scheduler_socket=None, function_seconds=_TASK_BUDGET,
+                 function_budget_scope='mean_instance'):
         task = getattr(evaluation, "task", None)
         if function_seconds is _TASK_BUDGET:
             function_seconds = FUNCTION_LIMITS.get(task, FUNCTION_SECONDS)
         if timeout_seconds is None:
             timeout_seconds = INSTANCE_LIMITS.get(task, 10)
         validate_execution(timeout_seconds, n_workers, function_seconds)
+        if function_budget_scope not in ('mean_instance', 'instance'):
+            raise ValueError('unknown function_budget_scope')
         if function_seconds is not None and not measure_calls:
             raise ValueError("a function budget needs the call measurement")
         self.evaluation, self.seeds, self.role = evaluation, tuple(seeds), role
         self.measure_calls, self.function_seconds = measure_calls, function_seconds
+        self.function_budget_scope = function_budget_scope
         self.timeout_seconds, self.n_workers = timeout_seconds, n_workers
         self.scheduler_socket = scheduler_socket
         self.n_instance = int(getattr(evaluation, "n_instance", 1))
@@ -125,15 +127,20 @@ class InstanceProgramEvaluator:
         self.protocol = self.protocol_for(timeout_seconds)
 
     def protocol_for(self, timeout_seconds):
-        return fingerprint({"environment": self.environment, "seeds": self.seeds,
-                            "role": self.role, "measure_calls": self.measure_calls,
-                            "execution": EXECUTION, "revision": REVISION,
-                            "timeout_seconds": float(timeout_seconds),
-                            "function_seconds": self.function_seconds, "function_clock": "process_cpu",
-                            "timeout_scope": "instance", "candidate_seed": "seed+index:uint32"})
+        # Old held-out configurations keep their original fingerprint.
+        revision = REVISION if self.function_budget_scope == 'mean_instance' else 'research-protocol-v4-20261008'
+        identity = {"environment": self.environment, "seeds": self.seeds,
+                    "role": self.role, "measure_calls": self.measure_calls,
+                    "execution": EXECUTION, "revision": revision,
+                    "timeout_seconds": float(timeout_seconds),
+                    "function_seconds": self.function_seconds, "function_clock": "process_cpu",
+                    "timeout_scope": "instance", "candidate_seed": "seed+index:uint32"}
+        if self.function_budget_scope == 'mean_instance':
+            identity['function_budget_scope'] = self.function_budget_scope
+        return fingerprint(identity)
 
     def _instances(self, code, seed, timeout, workers):
-        budget = self.function_seconds
+        budget = self.function_seconds if self.function_budget_scope == 'instance' else None
         context = multiprocessing.get_context("spawn" if self.evaluation.fork_proc is False else "fork")
         active, completed, next_index = {}, {}, 0
         cpus, released = {}, []
@@ -258,6 +265,13 @@ class InstanceProgramEvaluator:
                         "function_seconds": sum(r["function_seconds"] for r in instances) if self.measure_calls else None,
                         "function_cpu_seconds": sum(r["function_cpu_seconds"] for r in instances) if self.measure_calls else None,
                         "call_running": any(r["call_running"] for r in instances)}
+            mean_cpu = (measured['function_cpu_seconds'] / self.n_instance
+                        if self.measure_calls and len(instances) == self.n_instance and failed is None else None)
+            if (failed is None and self.function_budget_scope == 'mean_instance'
+                    and self.function_seconds is not None and mean_cpu > self.function_seconds):
+                failed = {"failure_kind": "timeout", "error_type": "FunctionBudgetExceeded",
+                          "error": f"mean function CPU time {mean_cpu:g}s exceeded {self.function_seconds:g}s across {self.n_instance} instances",
+                          "traceback": None, "instance_index": None, "seconds": elapsed, **measured}
             instance_seconds = sum(r["seconds"] for r in instances)
             record = {"key": source_key, "role": self.role, "protocol": self.protocol_for(timeout),
                       "seed": seed, "valid": failed is None,
@@ -269,6 +283,7 @@ class InstanceProgramEvaluator:
                       "seconds": elapsed, "instance_seconds": instance_seconds,
                       "cpu_seconds": sum(r["cpu_seconds"] or 0. for r in instances),
                       "timeout_seconds": timeout, "function_seconds_limit": self.function_seconds,
+                      "function_budget_scope": self.function_budget_scope, "mean_function_cpu_seconds": mean_cpu,
                       "timeout_scope": "instance", "n_workers": workers,
                       "n_instances": self.n_instance,
                       "instances": instances, **measured}
@@ -284,12 +299,15 @@ class InstanceProgramEvaluator:
                         "instance_index": failed["instance_index"], "line": failing_line(error, code),
                         "error_type": failed["error_type"], "seconds": failed["seconds"],
                         "timeout_seconds": timeout, "function_seconds_limit": self.function_seconds,
+                        "function_budget_scope": self.function_budget_scope, "mean_function_cpu_seconds": mean_cpu,
                         **{name: failed[name] for name in ("calls", "function_seconds", "function_cpu_seconds", "call_running")}},
-                        "seconds": elapsed, "instance_seconds": instance_seconds, **measured, "evaluations": records}
+                        "seconds": elapsed, "instance_seconds": instance_seconds,
+                        "mean_function_cpu_seconds": mean_cpu, **measured, "evaluations": records}
         return {"fitness": statistics.fmean(r["score"] for r in records), "failure": None,
                 "seconds": statistics.fmean(r["seconds"] for r in records),
                 "instance_seconds": statistics.fmean(r["instance_seconds"] for r in records),
                 "calls": round(statistics.fmean(r["calls"] for r in records)) if self.measure_calls else None,
                 "function_seconds": statistics.fmean(r["function_seconds"] for r in records) if self.measure_calls else None,
                 "function_cpu_seconds": statistics.fmean(r["function_cpu_seconds"] for r in records) if self.measure_calls else None,
+                "mean_function_cpu_seconds": statistics.fmean(r["mean_function_cpu_seconds"] for r in records) if self.measure_calls else None,
                 "call_running": False, "evaluations": records}

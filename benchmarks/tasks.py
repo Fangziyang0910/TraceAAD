@@ -28,12 +28,12 @@ CLASSES = dict(zip(ALL_TASKS, (TSPEvaluation, CVRPACOEvaluation, OPACOEvaluation
                                     FSSPGLSEvaluation, GraphColouringEvaluation, JSSPEvaluation)))
 SELECTION_SEED = 20260927
 DEFAULT_WORKERS = 4
-# Fixed-framework tasks budget only candidate calls; complete solvers include all search.
+# Mean candidate CPU per instance; complete solvers include all search.
 FUNCTION_SECONDS = 2
-INSTANCE_SECONDS = 20
+INSTANCE_SECONDS = 120
 FULL_SOLVER_TASKS = ('graph_colouring', 'jssp_construct')
 FUNCTION_LIMITS = {task: 10 if task in FULL_SOLVER_TASKS else FUNCTION_SECONDS for task in CO_TASKS}
-INSTANCE_LIMITS = {task: 30 if task in FULL_SOLVER_TASKS else INSTANCE_SECONDS for task in CO_TASKS}
+INSTANCE_LIMITS = {task: INSTANCE_SECONDS for task in CO_TASKS}
 TRAIN_INSTANCES, TEST_INSTANCES = 16, 50
 TRAIN_TIMEOUT = {'online_bin_packing': 30, 'vrptw_construct': 30}
 TRAIN_TIMEOUT.update({task: TRAIN_INSTANCES * INSTANCE_LIMITS[task] for task in CO_TASKS})

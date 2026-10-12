@@ -9,7 +9,7 @@ from pathlib import Path
 import random
 import statistics
 
-from benchmarks.tasks import CO_TASKS, training_task
+from benchmarks.tasks import CO_TASKS, FUNCTION_LIMITS, INSTANCE_LIMITS, training_task
 from traceaad.common.config import REVISION
 from traceaad.common.selection import choose_reference
 from traceaad.common.state import Facts
@@ -24,7 +24,9 @@ def compatible(config, prompt_policy="v1022"):
     execution = config.get("evaluation_execution", {})
     return (config.get("revision") == REVISION and config.get("method") == prompt_policy
             and config.get("task") in CO_TASKS and config.get("objective") == "min"
-            and execution.get("function_seconds") == 2 and execution.get("timeout_seconds") == 20
+            and execution.get("function_seconds") == FUNCTION_LIMITS[config['task']]
+            and execution.get("timeout_seconds") == INSTANCE_LIMITS[config['task']]
+            and execution.get("function_budget_scope") == 'mean_instance'
             and config.get("method_params", {}).get("evaluation_seeds") == [730241])
 
 

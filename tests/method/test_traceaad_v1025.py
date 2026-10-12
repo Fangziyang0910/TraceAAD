@@ -198,7 +198,7 @@ def test_six_task_protocol_and_unambiguous_score_direction(task):
     assert "Lower is better" in initial["prompt"]
     assert "SEARCH" not in initial["prompt"]
     assert "time limit" not in initial["prompt"]
-    assert Config().eval_timeout_seconds == 20
+    assert Config().eval_timeout_seconds == 120
 
 
 def test_launcher_uses_a_new_batch_and_keeps_eighteen_runs():

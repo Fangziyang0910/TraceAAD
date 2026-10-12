@@ -56,6 +56,7 @@ def main(method_class, config_class, experiment, description, argv=None):
     config = config_class(budget=args.budget, output_tokens=args.output_tokens,
                     evaluation_seeds=tuple(args.evaluation_seeds), seed=args.seed, **execution)
     metadata = ({"evaluation_execution": {"timeout_scope": "instance",
+                 "function_budget_scope": "mean_instance",
                  "timeout_seconds": config.eval_timeout_seconds, "function_seconds": FUNCTION_LIMITS.get(args.task, FUNCTION_SECONDS),
                  "n_workers": config.eval_workers,
                  "protocol": "isolated-instances-v1"}} if execution else {})

@@ -1,9 +1,6 @@
 # TraceAAD V10.17：科研实现
 
-本页维护探索后的有限续写及其结果记录的运行与复现入口。机制解释见[轨迹用途索引](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)，启动与实现检查不代替算法收益。旧本地模型批次已归档，历史状态按日期读取；新实验遵守[当前规范](../../docs/08-实验规范与共识/README.md)，旧批次使用[历史身份](../../docs/08-实验规范与共识/历史实验身份.md)与源码快照。
-
-
-
+机制说明见[轨迹用途索引](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)，实验条件见[历史实验身份](../../docs/08-实验规范与共识/历史实验身份.md)。
 
 机制见[提出后的短程改写](../../docs/01-搜索方法/提出后的短程改写.md)。父代按训练质量乘尝试经验选择，Refine / Explore / Crossover 默认份额为 45:30:25。新的有效 Explore 程序中，按探索编号抽取 1/8，继续至多三步 Refine，每步从该探索达到的最好程序出发。失败的新程序至多修复一次，所有生成都计入预算。最终在独立选择集评价前五名，失败时按训练排名替补。
 
@@ -19,8 +16,6 @@
 uv run python -m experiments.traceaad_v10_17.run_current --task tsp_construct --dry-run
 uv run python -m experiments.traceaad_v10_17.launch_current --batch 20261010_server3_v1017_original_co6 --suite co6 --repeats 3 --budget 1000 --eval-workers 8 --scheduler-socket /tmp/traceaad-1005/scheduler.sock --launch
 ```
-
-新批次已于东京时间2026-10-10 19:52启动。19:53:15核验18路均存活且已有候选，累计48次（44次新有效、1次重复、2次超时、1次运行错误），模型服务错误和上下文裁剪均为0。所有路次机制身份正确，144个实现文件与启动快照一致。每分钟由本地 `watch_v1017_co6` 同步。
 
 - [批次清单](../../archive/local_models_20261011/traceaad_v10_17/batch_20261010_server3_v1017_original_co6.json)、[源码身份](../../archive/local_models_20261011/traceaad_v10_17/source_20261010_server3_v1017_original_co6.json)与[源码快照](../../archive/local_models_20261011/traceaad_v10_17/source_20261010_server3_v1017_original_co6.tar.gz)
 - [首次健康核验](../../archive/local_models_20261011/traceaad_v10_17/health_20261010_server3_v1017_original_co6_initial.json)

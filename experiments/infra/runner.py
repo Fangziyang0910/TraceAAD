@@ -137,6 +137,8 @@ def setup_experiment_run(
     if saved:
         from benchmarks.tasks import validate_task_interface
         validate_task_interface(args.task, saved)
+        if args.task in CO_TASKS and saved.get('revision') != REVISION:
+            raise ValueError('evaluation budget changed; use a new batch instead of rewriting the saved configuration')
     phase = read_json(run_dir / "resume.json", {}).get("state", {}).get("phase")
     if phase not in {"finished", "search_complete", "selection_failed", "no_valid_root"}:
         write_run_config(
@@ -245,6 +247,7 @@ def baseline_run_config(spec, run_dir: Path, run_name: str, method: str,
     if spec.task in CO_TASKS:
         method_params = {**method_params, "evaluation_seeds": [EVALUATION_SEED],
                          "eval_timeout_seconds": INSTANCE_LIMITS[spec.task], "function_seconds": FUNCTION_LIMITS[spec.task],
+                         "function_budget_scope": "mean_instance",
                          "eval_workers": 1 if spec.eval_workers is None else spec.eval_workers,
                          "scheduler_socket": scheduler_socket()}
     return {

@@ -1,7 +1,5 @@
 # 代码前文字与算法表示
 
-本文区分本次推理、候选描述、可继承说明与独立设计表示。
-
 [相关工作目录](README.md) · [方法总览](AAD代表方法与机制.md)
 
 多数 LLM-AAD 方法会让模型在代码之外写一段自然语言，名称有 thought、description、reflection、plan、rationale、knowledge 等。

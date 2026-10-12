@@ -132,7 +132,7 @@ def test_collection_cannot_resume_with_changed_prompts(tmp_path):
 def test_source_acceptance_requires_the_measured_prompt_policy():
     from traceaad.common.config import REVISION
     config = {"revision": REVISION, "method": "v1023", "task": "tsp_construct", "objective": "min",
-              "evaluation_execution": {"function_seconds": 2, "timeout_seconds": 20},
+              "evaluation_execution": {"function_seconds": 2, "timeout_seconds": 120, "function_budget_scope": "mean_instance"},
               "method_params": {"evaluation_seeds": [730241]}}
     assert compatible(config, "v1023")
     assert not compatible(config, "v1022")

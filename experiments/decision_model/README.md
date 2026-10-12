@@ -1,6 +1,6 @@
 # 决策模型的数据与训练入口
 
-**历史运行记录（2026-10-09）：当晚server2的GPU 5、6训练“普通算子加自动Repair”的9B请求模型。旧本地模型与数据现已归档，下文命令和进程状态按当时条件读取。** 旧目标两轮均已完成，但收益排序没有超过简单状态规则。当前真实数据、标签设计与推进条件见[训练计划](../../docs/04-研究认识与构想/2026-10-09-决策模型训练计划.md)，结果与认识见[实际请求收益](../../docs/03-现象与检验/2026-10-09-算子选择与实际请求收益.md)。
+历史数据与模型的训练入口。研究目标见[训练计划](../../docs/04-研究认识与构想/2026-10-09-决策模型训练计划.md)，结果见[实际请求收益](../../docs/03-现象与检验/2026-10-09-算子选择与实际请求收益.md)。
 
 此入口实现从搜索请求与后续反馈学习算子选择，是[轨迹使用](../../docs/01-搜索方法/搜索轨迹的记录与使用.md)的一种途径。标签核对、预测表现与真实搜索收益分别评价。
 
@@ -13,7 +13,7 @@
 | 5 | 发布版 Clef-Flash | `traceaad-request-base-gpu5-20261009` | `logs/request-v1023-base.log` |
 | 6 | 旧 AAD checkpoint 292 | `traceaad-request-warm-gpu6-20261009` | `logs/request-v1023-warm.log` |
 
-数据为 `data/current-v1023-requests-fit`：训练 1,468、标定 1,321、测试 1,380。训练有 50 个正收益请求。测试只做结构和编码检查，不计算模型测试指标。最大输入 4,852 token；父程序与参考全文保留，预设的历史片段不需进一步缩短。两种初始化的两步硬件检查通过，峰值保留显存 12,510 MiB。
+数据为 `data/current-v1023-requests-fit`：训练 1,468、标定 1,321、测试 1,380。训练有 50 个正收益请求。测试只做结构和编码检查，不计算模型测试指标。最大输入 4,852 token；父程序与参考全文保留，预设的历史片段不需进一步缩短。峰值保留显存为 12,510 MiB。
 
 独立审计 4,169 条请求的代码、历史、收益与成本，零错配；4,102 个有效程序的原始实例平均分与档案一致。两步硬件检查后的实际参数核验确认 LoRA 和决策头都更新。报告为本地本轮档案的 `request-v1023-{data-audit,score-vector-audit,encoder-check}.json`。
 
@@ -27,7 +27,7 @@ ssh B3-server2 'tmux list-sessions'
 
 当前使用正确但较慢的 PyTorch 因果卷积参考实现。原来两个 `aad-outcome-v1-warm-server2-seed*` 训练均已完成 292 步并保存标定 adapter；在固定 427 案例中的增益捕获为 29.3%／22.5%，简单状态表为 46.9%。完整结果保留在本地 `campaign_20261009/checkpoint292-calibration-screen-seed*/`。
 
-## server3 当前采集
+## 数据采集
 
 根目录 `/home/fzy/code/traceaad-decision-data/campaign_20261009`。采集使用冻结的 `runtime-v1023` 和已有 CPU／模型槽调度器；不改正在运行的其他实验。原始结果以每条 `chains/<run>/<state>/<action>/repN/result.json` 及其逐步事件为准。
 
@@ -43,10 +43,10 @@ ssh B3-server2 'tmux list-sessions'
 
 ## 自动导出、训练与实际选择评价
 
-本地 tmux `traceaad-decision-research-20261009` 已启动当前后台流程：
+后台流程入口：
 
 ```bash
-# 当前会话已经在运行；这个入口用于复现或检查中断后的流程。
+# 复现或恢复后台流程
 .venv/bin/python -u -m experiments.decision_model.campaign experiments_result/decision_model/campaign_20261009
 ```
 
@@ -122,7 +122,7 @@ Unsloth 给出的 Qwen3.5 BF16 LoRA 参考显存为 4B 约 10 GB、9B 约 22 GB�
 
 ## 下载底座
 
-优先使用 ModelScope。2026-10-09 已通过仓库 API 核验 [Cloudflare/clef-flash](https://modelscope.cn/models/Cloudflare/clef-flash)、[Qwen/Qwen3.5-9B](https://modelscope.cn/models/Qwen/Qwen3.5-9B) 和 [Qwen/Qwen3.5-4B](https://modelscope.cn/models/Qwen/Qwen3.5-4B) 均存在。四台机器已安装 ModelScope 1.40.1。Clef-Flash 完整权重已在 server2、server3 就绪；server1 保留部分下载，本地只有配置。其他两个底座的完整权重未准备。
+底座可从 ModelScope 下载，使用模型目录的固定 revision。
 
 在训练入口目录执行。下面使用已实测的 CLI 语法，不需要 Hugging Face 连接：
 
@@ -230,7 +230,7 @@ CUDA_VISIBLE_DEVICES=0 /home/fang/venvs/traceaad-decision/bin/python \
 
 长训练放进 tmux：先 `tmux new -s decision-train`，执行训练命令，用 `Ctrl-b d` 离开，用 `tmux attach -t decision-train` 返回。同一张 GPU 上的多个进程并不会自动排队；启动前检查占用。
 
-本次 server1 直连 Hugging Face 超时，按上节先从 ModelScope 下载完整目录，随后离线训练：
+下载完整权重后离线训练：
 
 ```bash
 HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=0 \

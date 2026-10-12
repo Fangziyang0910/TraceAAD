@@ -53,6 +53,8 @@ def score(x):
     assert metadata["method_params"]["evaluation_seeds"] == [EVALUATION_SEED]
     assert metadata["method_params"]["eval_timeout_seconds"] == INSTANCE_SECONDS
     assert metadata["method_params"]["function_seconds"] == FUNCTION_SECONDS
+    assert rows[0]['function_budget_scope'] == metadata['method_params']['function_budget_scope'] == 'mean_instance'
+    assert rows[0]['mean_function_cpu_seconds'] == pytest.approx(rows[0]['function_cpu_seconds'] / 2)
     assert metadata["method_params"]["eval_workers"] == 2
     task._instance_execution["scheduler_socket"] = str(tmp_path / "missing.socket")
     with pytest.raises(SchedulerError):
@@ -121,12 +123,37 @@ def test_new_baseline_heldout_uses_the_current_executor(tmp_path, monkeypatch):
                            config=Config(budget=1, roots=1))
     method.run()
     (tmp_path / "run_config.json").write_text(json.dumps({"task": "tsp_construct", "method": "eoh",
-                                                         "method_params": {}}))
+                                                         "revision": REVISION, "method_params": {}}))
     monkeypatch.setattr(evaluate, "heldout_task", lambda *args: IndexedEvaluation(2))
     result = evaluate.evaluate_run(tmp_path, ["eval"])[0]
     assert result["timeout_scope"] == "instance" and result["timeout_seconds"] == INSTANCE_SECONDS
     assert result["function_seconds"] == FUNCTION_SECONDS
     assert result["evaluation_seeds"] == [EVALUATION_SEED] and result["fitness"] == 1
+    assert result['function_budget_scope'] == 'mean_instance'
+
+
+def test_historical_heldout_keeps_instance_budget(monkeypatch):
+    from experiments.infra.evaluation_execution import heldout_evaluator
+    config = {'task': 'tsp_construct', 'revision': 'research-protocol-v4-20261008',
+              'method_params': {'eval_timeout_seconds': 20, 'function_seconds': 2}}
+    evaluator, metadata = heldout_evaluator(config, 'eval', (730241,), workers=1,
+        timeout_seconds=None, measure_calls=True, task_factory=lambda *args: IndexedEvaluation(2))
+    assert evaluator.function_budget_scope == metadata['function_budget_scope'] == 'instance'
+    assert metadata['timeout_seconds'] == 20
+
+
+def test_old_batch_is_rejected_before_configuration_write(tmp_path, monkeypatch):
+    from experiments.infra.search_run import build_parser
+    args = build_parser('test', Config).parse_args(['--task', 'tsp_construct', '--run-name', 'old'])
+    run = tmp_path / 'tsp_construct' / 'old'
+    run.mkdir(parents=True)
+    path = run / 'run_config.json'
+    path.write_text(json.dumps({'revision': 'research-protocol-v4-20261008'}))
+    before = path.read_bytes()
+    monkeypatch.setattr(runner, 'build_task', lambda *args, **kwargs: (IndexedEvaluation(2), {}))
+    with pytest.raises(ValueError, match='new batch'):
+        runner.setup_experiment_run(args, method='v1021', results_root=tmp_path)
+    assert path.read_bytes() == before
 
 
 def test_baseline_freeze_rechecks_five_distinct_programs_and_preserves_candidates(tmp_path):
@@ -237,14 +264,14 @@ def test_baseline_entries_accept_complete_solvers(name, task_name, tmp_path, mon
     assert outcome.result == 0
     config = runner.baseline_run_config(spec, tmp_path / name, 'new', name, {'max_sample_nums': 1})
     assert config['task_eval']['interface'] == 'full-solver-v1'
-    assert task._instance_execution['timeout_seconds'] == 30
-    assert config['method_params']['eval_timeout_seconds'] == 30
+    assert task._instance_execution['timeout_seconds'] == 120
+    assert config['method_params']['eval_timeout_seconds'] == 120
     assert config['method_params']['function_seconds'] == 10
 
 
 @pytest.mark.parametrize('task_name,cpu,wall', [
-    ('tsp_construct', 2, 20), ('cvrp_aco', 2, 20), ('fssp_gls', 2, 20),
-    ('op_aco', 2, 20), ('graph_colouring', 10, 30), ('jssp_construct', 10, 30),
+    ('tsp_construct', 2, 120), ('cvrp_aco', 2, 120), ('fssp_gls', 2, 120),
+    ('op_aco', 2, 120), ('graph_colouring', 10, 120), ('jssp_construct', 10, 120),
 ])
 def test_task_budgets_reach_search_baselines_and_heldout(task_name, cpu, wall, monkeypatch, capsys):
     from experiments.traceaad_v10_21.run import main

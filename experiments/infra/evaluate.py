@@ -59,7 +59,7 @@ def evaluate_run(run_dir, splits, *, condition='shared', workers=None, timeout_s
         outcome = evaluator.evaluate(code, key)
         records = outcome['evaluations']
         score = outcome['fitness']
-        result.update(condition=condition, revision=REVISION, protocol=evaluator.protocol,
+        result.update(condition=condition, revision=config.get('revision', REVISION), protocol=evaluator.protocol,
                       evaluation_seeds=list(seeds), **execution, fitness=score, evaluations=records,
                       objective=score,
                       seconds=sum(row['seconds'] for row in records), scores=[row['score'] for row in records if row['valid']],

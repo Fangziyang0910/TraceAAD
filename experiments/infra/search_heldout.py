@@ -38,7 +38,7 @@ def evaluate_run(run_dir, *, split=None, workers=None, timeout_seconds=None, sch
     records = outcome["evaluations"]
     result = {"task": task, "split": split, "scale": scale,
               "verification": "verified", "variant": "", "node_id": best["id"],
-              "key": key, "protocol": protocol, "revision": REVISION, "fitness": outcome["fitness"],
+              "key": key, "protocol": protocol, "revision": config.get('revision', REVISION), "fitness": outcome["fitness"],
               "scores": [r["score"] for r in records if r["valid"]], "evaluation_seeds": list(seeds),
               **execution, "evaluations": records,
               "failures": [{"kind": r["failure_kind"], "error": r["error"]} for r in records if not r["valid"]]}
