@@ -147,12 +147,13 @@ def reevaluate_final(directory, workers=8):
     summary['score_metric'] = 'raw_objective'
     summary['best']['fitness'] = summary['best']['score'] = training['fitness']
     summary['final_training_evaluation'] = training
-    write_json(directory/'summary.json', summary)
     selection = read_json(directory/'selection.json')
     selection['score_metric'] = 'raw_objective'
     for result in selection['results']:
         if result['node_id'] == chosen['node_id']:
             result['fitness'] = training['fitness']
+    summary['selection_results'] = selection['results']
+    write_json(directory/'summary.json', summary)
     write_json(directory/'selection.json', selection)
     payload = {'score_metric': 'raw_objective', 'task': task, 'selected_node': chosen['node_id'],
                'selected_key': key, 'training': training['fitness'],
