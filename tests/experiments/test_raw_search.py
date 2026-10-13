@@ -64,6 +64,20 @@ def test_publish_keeps_decisions_and_counts_but_replaces_reported_scores(tmp_pat
     assert read_json(tmp_path / 'resume.json')['files']['events.jsonl'] == (tmp_path / 'events.jsonl').stat().st_size
 
 
+def test_publish_preserves_failed_legacy_recovery_profiles(tmp_path):
+    _, key, refs, event, record, profile = fixture(tmp_path)
+    backup = tmp_path / 'logs/raw_search_originals'
+    append_jsonl(backup / 'evaluations.jsonl', record)
+    append_jsonl(backup / 'recovery_profiles.jsonl', {'key': key, 'score': -25., 'instance_scores': [-50., 0.]})
+    append_jsonl(backup / 'recovery_profiles.jsonl', {'key': 'failed', 'score': None, 'instance_scores': []})
+    candidates, jobs, exact = raw_search.plan([event, profile], [record], refs)
+    raw_search.publish(tmp_path, backup, [event, profile], candidates, exact, refs)
+    profiles = list(rows(tmp_path / 'recovery_profiles.jsonl'))
+    assert profiles[0]['score'] == 52.5 and profiles[0]['instance_scores'] == [5, 100]
+    assert profiles[1] == {'key': 'failed', 'score': None, 'instance_scores': [], 'score_metric': 'raw_objective'}
+    assert list(rows(backup / 'recovery_profiles.jsonl'))[1]['score'] is None
+
+
 @pytest.mark.parametrize('has_program', [True, False])
 def test_resume_does_not_repeat_evaluation_and_failed_backfill_stays_missing(tmp_path, monkeypatch, has_program):
     code, key, refs, event, record, profile = fixture(tmp_path)

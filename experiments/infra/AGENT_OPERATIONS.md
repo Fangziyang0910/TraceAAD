@@ -49,7 +49,7 @@ uv run python -m experiments.monitor --host 0.0.0.0 --port 8765
 
 `experiments.infra.migrations.raw_search` 处理已结束的相对评分批次。已有逐实例成绩直接换算，缺失时按该条历史评价的 CPU 规则、限时和种子补评；仅有平均改进率不能精确换算。程序和最终选择不变。超时补评按用户要求取消 CPU 时间限制、将单实例墙钟上限放宽到至少 600 秒重试；此前缓存的超时也重试。结果来源记为 `cpu_reevaluation_relaxed`，保留原失败记录和实际条件，不改变历史有效性。其他失败按原条件重试一次；仍失败则保留缺失，不能写成零分。
 
-20261011 四种基线的三项相对评分任务共 12 路，在 server3 的 `experiments_result/raw_objective_conversion/` 独立目录执行，tmux 为 `raw_objective_conversion`，3 路 × 4 worker 共享现有调度器。批次状态读该目录 `status.json`，逐路读 `raw_search.json`，逐次成绩与来源读 `raw_search_evaluations.jsonl`。本机 tmux `raw_objective_sync` 每 60 秒同步，补全结束或失败后停止；原同期对比表在同步时更新，缺失值不参与排名。
+20261011 四种基线的三项相对评分任务共 12 路，在 server3 的 `experiments_result/raw_objective_conversion/` 独立目录执行，tmux 为 `raw_objective_conversion`，6 路 × 4 worker（最多 24 个 CPU 槽） 共享现有调度器。批次状态读该目录 `status.json`，逐路读 `raw_search.json`，逐次成绩与来源读 `raw_search_evaluations.jsonl`。本机 tmux `raw_objective_sync` 每 60 秒同步，补全结束或失败后停止；原同期对比表在同步时更新，缺失值不参与排名。
 
 每路补评结束后替换候选、评价和种群的公开分数字段，清除曲线缓存。`score_source` 区分精确换算与 CPU 补评；原件保存在 `logs/raw_search_originals/`。历史决策分数使用 `historical_*` 字段，恢复状态与调用原文保留当时含义，不代表按原始目标值重新搜索。已转换的档案用于分析；复现历史搜索使用原件及其配置。
 

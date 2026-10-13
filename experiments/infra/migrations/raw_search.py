@@ -142,6 +142,11 @@ def publish(directory, backup, events, candidates, results, references):
     profiles = []
     recovery_scores = {}
     for row in rows(backup / 'recovery_profiles.jsonl'):
+        if 'previous_score' in row:
+            row['historical_previous_score'] = row.pop('previous_score')
+        if row['score'] is None:
+            profiles.append({**row, 'score_metric': 'raw_objective'})
+            continue
         restored = restore_record({'valid': True, 'score': row['score'], 'instances': [
             {'instance_index': i, 'score': v, 'valid': True}
             for i, v in enumerate(row['instance_scores'])]}, references)
