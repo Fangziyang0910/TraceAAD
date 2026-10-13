@@ -1,4 +1,4 @@
-"""Small deterministic stand-ins shared by the V10.13 method and experiment tests."""
+"""Small deterministic stand-ins for method and experiment tests."""
 
 from core import Evaluation
 

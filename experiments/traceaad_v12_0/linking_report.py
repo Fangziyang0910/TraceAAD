@@ -35,7 +35,7 @@ def outcome(facts, attempt):
     """The proposal's own result after its repair, and its start."""
     final = final_attempt(attempt, facts.attempts)
     program = facts.programs.get(final.get("program_id"))
-    return (program if final["status"] == "valid" and program and program["valid"] else None,
+    return (program if program and program["valid"] else None,
             facts.programs[attempt["parent_id"]])
 
 
@@ -50,7 +50,7 @@ def record(facts, attempt, link):
             "linked_beats_first": bool(linked and (first is None or better(linked["fitness"], first["fitness"]))),
             "first_beats_linked": bool(linked and first and better(first["fitness"], linked["fitness"])),
             "linked_beats_parent": bool(linked and better(linked["fitness"], parent["fitness"])),
-            "copied_linked": bool(linked and attempt.get("program_id") == linked["id"])}
+            "copied_linked": bool(linked and first and first["id"] == linked["id"])}
 
 
 def replay(run_dir, k, llm, embed):

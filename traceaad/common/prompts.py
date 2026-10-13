@@ -1,6 +1,6 @@
-"""Measured program history and prompt trimming shared by V10.16–V10.20.
+"""Measured program history and prompt trimming for TraceAAD.
 
-Version builders supply the goals and any development context. Facts stay
+V12.0 supplies the goals and task context. Facts stay
 next to the programs they describe; each instruction states one goal.
 """
 
@@ -15,7 +15,7 @@ SCORES = {
     "vrptw_construct": ("the average total travel distance of the constructed routes", False),
 }
 
-OPERATORS = ("Refine", "Explore", "Crossover", "Develop", "Deepen")
+OPERATORS = ("Refine", "Explore", "Crossover")
 
 INITIAL = """[Your Task: Design an Algorithm]
 Write an algorithm for this task that scores as well as possible, built on a clear core idea."""
@@ -33,7 +33,6 @@ KNOWN = "Every version and attempt shown above has already been evaluated."
 REFINE = f"""[Your Task: Refine]
 Develop the current algorithm further: keep its core idea and write a version that scores better than it. {KNOWN}"""
 
-REFINE_ROOT = REFINE
 
 # Explore stays anchored on the current algorithm: a "different algorithm" instruction
 # drifted into rewording known ideas, while the structural jumps came from changing
@@ -96,14 +95,13 @@ def short_error(text):
 
 class PromptBuilder:
     # The generation steps ``build`` writes; a version adds its own steps by
-    # extending ``build`` (V10.20: Deepen).
+    # extending ``build``.
     ACTIONS = ("Refine", "Explore", "Crossover")
-    # How an initial program without recorded changes is named (V10.16/V10.17: "an initial design").
+    # How an initial program without recorded changes is named.
     UNCHANGED_ROOT = "the {origin}"
     INITIAL = INITIAL
     ANOTHER_INITIAL = ANOTHER_INITIAL
     REFINE = REFINE
-    REFINE_ROOT = REFINE_ROOT
     REPAIR = REPAIR
     EXPLORE = EXPLORE
     CROSSOVER = CROSSOVER
@@ -123,7 +121,6 @@ class PromptBuilder:
         notes = getattr(evaluation, "design_notes", "")
         if notes and notes.strip() not in description:
             description += "\n\n" + notes.strip()
-        self.timeout = evaluation.timeout_seconds
         self.common = [
             "[Task]\n" + description,
             self.evaluation_text(meaning, higher),
@@ -133,15 +130,6 @@ class PromptBuilder:
             "Within the time limit, the function may perform any computation on its inputs.",
         ]
 
-    def task_text(self, description):
-        """The task description as the version states it."""
-        return description
-
-    def evaluation_text(self, meaning, higher):
-        timeout = format(self.timeout, "g") if self.timeout is not None else "an unspecified number of"
-        return ("[Evaluation]\nEach program is evaluated on a fixed set of training instances.\n"
-                f"Score: {meaning}. {'Higher' if higher else 'Lower'} is better.\n"
-                f"The whole evaluation must finish within {timeout} seconds.")
 
     # ---------- facts about one program ----------
 
@@ -161,53 +149,10 @@ class PromptBuilder:
                 "reference_history_edge_ids": [], "attempt_ids": [], "progress_ids": [],
                 "token_count_mode": getattr(self.llm, "prompt_token_count_mode", "serving_tokenizer")}
 
-    @staticmethod
-    def _seconds(seconds):
-        return "under 0.1 s" if seconds < 0.05 else f"about {seconds:.1f} s"
-
-    @classmethod
-    def _calls(cls, calls, seconds):
-        return (f"{calls} call{'' if calls == 1 else 's'} to the function, {cls._seconds(seconds)} inside it"
-                if calls is not None else "")
-
-    def measured(self, program):
-        """Score, evaluation time and calls of a valid program."""
-        parts = [f"Score: {score_text(program['score'])}"]
-        if program.get("eval_seconds"):
-            parts.append(f"Evaluation time: {self.evaluation_time(program['eval_seconds'])}")
-        calls = self._calls(program.get("calls"), program.get("function_seconds") or 0.0)
-        if calls:
-            parts.append(calls)
-        return " · ".join(parts)
-
-    def evaluation_time(self, seconds):
-        return f"about {max(seconds, 0.1):.1f} s"
-
-    def _timed(self, seconds, separator):
-        text = self.elapsed(seconds)
-        return separator + text if text else ""
-
-    def limit_text(self):
-        return f"the {format(self.timeout, 'g')} s time limit" if self.timeout is not None else "the time limit"
-
-    def elapsed(self, seconds):
-        """The time of a program in history and attempt lines."""
-        return f"evaluation time about {max(seconds, 0.1):.1f} s"
-
     def failure(self, program):
         """What happened when a failed program was evaluated."""
         failure = program["failure"]
         kind = failure["kind"]
-        if kind == "timeout":
-            limit = self.limit_text()
-            calls, inside = failure.get("calls"), failure.get("function_seconds") or 0.0
-            if calls is None:
-                return f"stopped at {limit}"
-            if failure.get("call_running"):
-                return (f"stopped at {limit} inside call {calls + 1} to the function, "
-                        f"after {calls} completed call{'' if calls == 1 else 's'} "
-                        f"({self._seconds(inside)} inside the function in total)")
-            return f"stopped at {limit} after {self._calls(calls, inside)}"
         if kind == "invalid_source":
             return "the program could not be used: " + short_error(failure.get("error"))
         where = f" at `{failure['line']}`" if failure.get("line") else ""
@@ -215,8 +160,6 @@ class PromptBuilder:
             return "invalid output: " + short_error(failure.get("error")) + where
         return "runtime error: " + short_error(failure.get("error")) + where
 
-    def _current(self, node, title="Current Algorithm"):
-        return f"[{title}]\n{self.measured(node)}\n```python\n{node['code'].rstrip()}\n```"
 
     # ---------- formation path ----------
 
@@ -249,8 +192,6 @@ class PromptBuilder:
             heading += f" (latest: produced the {subject} algorithm)"
         end = (f"score {score_text(child['score'])} "
                f"({verdict(parent['score'], child['score'], self.higher_is_better)})")
-        if child.get("eval_seconds"):
-            end += self._timed(child["eval_seconds"], ", ")
         result = f"{heading} · {action} · score {score_text(parent['score'])} → {end}"
         if failed is not None:
             result += f"\n  First version failed: {self.failure(failed)}"
@@ -293,8 +234,7 @@ class PromptBuilder:
             return "the reply contained no usable program"
         if status == "valid":
             return (f"score {score_text(program['score'])} "
-                    f"({verdict(start['score'], program['score'], self.higher_is_better)})"
-                    + (self._timed(program["eval_seconds"], ", ") if program.get("eval_seconds") else ""))
+                    f"({verdict(start['score'], program['score'], self.higher_is_better)})")
         if status == "copied_reference":
             return "the same code as its reference algorithm"
         if status in {"duplicate", "known_failure"} and program is not None:
@@ -325,9 +265,6 @@ class PromptBuilder:
             design = idea_view(attempt.get("idea")) or "(none)"
             lines.append(f"Attempt {attempt['id']} · {action} · Design: {design}\n  → {outcome}")
         return lines
-
-    def _repairs(self):
-        return {a["repair_of"]: a for a in self.attempts.values() if a.get("repair_of") is not None}
 
     def _attempts_section(self, node, attempts, shown, sequence_ids):
         if not attempts or shown == 0:
@@ -376,10 +313,9 @@ class PromptBuilder:
                     source = self.programs.get(source["parent_id"])
                 origin = ("as an initial algorithm" if source is None
                           else f"from an algorithm scoring {score_text(source['score'])}")
-                timing = self._timed(program["eval_seconds"], " · ") if program.get("eval_seconds") else ""
                 entries.append(f"Attempt {event['id']} · {action} {origin} → "
                                f"{score_text(program['score'])} (previous best {score_text(previous['score'])})"
-                               f"{timing}\n  Design: {idea_view(program['idea'])}")
+                               f"\n  Design: {idea_view(program['idea'])}")
             text += "\n\n".join(entries) + "\n\n"
         text += f"Best score found so far in this search: {score_text(best['score'])}."
         return text, [program["id"] for _, program in listed]
@@ -424,7 +360,7 @@ class PromptBuilder:
             while True:
                 history, ids = self._formation(sequence, count)
                 tried, tried_ids = self._attempts_section(parent, attempts, shown, sequence_ids)
-                sections = self.common + [current, history, tried, self.REFINE_ROOT if depth == 0 else self.REFINE,
+                sections = self.common + [current, history, tried, self.REFINE,
                                           self.output_format("Refine")]
                 result = self._result(sections, "Refine", ids, trims)
                 result["attempt_ids"] = tried_ids
@@ -489,20 +425,11 @@ class PromptBuilder:
         fallback["trims"] = trims + ["crossover_context_fallback"] + fallback["trims"]
         return fallback
 
-
     def output_format(self, action):
         return output_format(action, self.ANALYSIS, self.CLOSING)
 
     def error_text(self, failed):
         failure = failed["failure"]
-        if failure["kind"] == "timeout":
-            text = "The evaluation " + self.failure(failed) + "."
-            source = self.programs.get(failed["parent_id"])
-            if source is not None and source.get("valid") and source.get("calls") is not None:
-                text += (f" The algorithm it was developed from completes the evaluation with {source['calls']} "
-                         f"calls in about {max(source.get('eval_seconds') or 0.0, 0.1):.1f} s, "
-                         f"{self._seconds(source.get('function_seconds') or 0.0)} inside the function.")
-            return text
         if failure["kind"] == "invalid_source":
             return f"The program could not be used: {failure['error']}"
         # The evaluator's own traceback, without the harness frames; nothing is added to it.

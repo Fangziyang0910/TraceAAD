@@ -21,7 +21,7 @@ def load_scored_samples(run_dir, *, max_sample_order=None, include_source=True):
     for row in committed_rows(run_dir):
         if row.get("program"):
             programs[row["program"]["id"]] = row["program"]
-        if row["kind"] != "candidate" or not row["valid"]:
+        if row["kind"] != "candidate" or not row["valid"] or row["fitness"] is None:
             continue
         order = row["candidate_id"]
         if max_sample_order is not None and order > max_sample_order:

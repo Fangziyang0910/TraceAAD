@@ -11,7 +11,7 @@ from tests.support import TinyEvaluation, TokenLLM, response, small_task
 from benchmarks.tasks import CO_TASKS, FIXED_TASKS, CLASSES, FUNCTION_SECONDS
 from traceaad.common.evaluation import ProgramEvaluator
 from traceaad.common.instance_evaluation import InstanceProgramEvaluator
-from traceaad.v10_21 import Config, TraceAADV1021
+from traceaad.v12_0 import BaseConfig as Config, TraceAADV120
 
 
 class IndexedEvaluation(TinyEvaluation):
@@ -193,9 +193,9 @@ def test_six_task_scores_match_serial_fixed_solvers(task):
 
 
 def test_search_and_heldout_keep_execution_parameters(tmp_path, monkeypatch):
-    from experiments.infra import search_heldout, evaluate
+    from experiments.infra import evaluate
     config = Config(budget=1, roots=1, eval_timeout_seconds=2.5, eval_workers=2)
-    method = TraceAADV1021(evaluation=IndexedEvaluation(2), llm=TokenLLM(response(2)),
+    method = TraceAADV120(evaluation=IndexedEvaluation(2), llm=TokenLLM(response(2)),
                            run_dir=tmp_path, config=config, task='tsp_construct')
     method.run()
     assert method.config.eval_timeout_seconds == 2.5
@@ -204,34 +204,38 @@ def test_search_and_heldout_keep_execution_parameters(tmp_path, monkeypatch):
     assert node['eval_seconds'] == method.facts.evaluations[0]['instance_seconds']
     assert node['eval_wall_seconds'] == method.facts.evaluations[0]['seconds']
     from traceaad.common.config import REVISION
-    (tmp_path / 'run_config.json').write_text(json.dumps({'task': 'tsp_construct', 'method': 'v1021', 'revision': REVISION,
+    (tmp_path / 'run_config.json').write_text(json.dumps({'task': 'tsp_construct', 'method': 'v12_0', 'revision': REVISION,
                                                         'method_params': asdict(config)}))
-    for module in (search_heldout, evaluate):
-        monkeypatch.setattr(module, 'heldout_task', lambda *args: IndexedEvaluation(2))
-    frozen = search_heldout.evaluate_run(tmp_path)
-    generic = evaluate.evaluate_run(tmp_path, ['eval'], condition='traceaad')[0]
-    for result in (frozen, generic):
-        assert result['timeout_scope'] == 'instance' and result['timeout_seconds'] == 2.5
-        assert result['function_seconds'] == FUNCTION_SECONDS
-        assert result['workers'] == 2 and result['fitness'] == 2
-        assert result['evaluations'][0]['calls'] == 2
-    assert generic['protocol'] == frozen['protocol']
+    monkeypatch.setattr(evaluate, 'heldout_task', lambda *args: IndexedEvaluation(2))
+    result = evaluate.evaluate_run(tmp_path, ['eval'], condition='traceaad')[0]
+    assert result['timeout_scope'] == 'instance' and result['timeout_seconds'] == 2.5
+    assert result['function_seconds'] == FUNCTION_SECONDS
+    assert result['workers'] == 2 and result['fitness'] == 2
+    assert result['evaluations'][0]['calls'] == 2
     from experiments.infra.diagnose_search import diagnose
     assert diagnose(tmp_path)['computation']['time_limit'] == 5
+    saved_diagnostics = (tmp_path / 'diagnostics.json').read_bytes()
+    summary_path = tmp_path / 'summary.json'
+    summary = json.loads(summary_path.read_text())
+    summary['method'] = 'v1024'
+    summary_path.write_text(json.dumps(summary))
+    with pytest.raises(ValueError, match='V12.0 run'):
+        diagnose(tmp_path)
+    assert (tmp_path / 'diagnostics.json').read_bytes() == saved_diagnostics
 
 
-def test_resume_continues_under_changed_execution(tmp_path):
-    method = TraceAADV1021(evaluation=IndexedEvaluation(2), llm=TokenLLM(response(1)),
-                           run_dir=tmp_path, config=Config(budget=4, roots=2))
+def test_resume_rejects_changed_execution(tmp_path):
+    method = TraceAADV120(evaluation=IndexedEvaluation(2), llm=TokenLLM(response(1)),
+                         run_dir=tmp_path, config=Config(budget=4, roots=2))
     method._roots()
-    resumed = TraceAADV1021(evaluation=IndexedEvaluation(2), llm=TokenLLM(), run_dir=tmp_path,
-                            config=Config(budget=4, roots=2, eval_timeout_seconds=20))
-    assert resumed.attempts == 1 and resumed.config.eval_timeout_seconds == 20
+    with pytest.raises(ValueError, match="V12.0 resume"):
+        TraceAADV120(evaluation=IndexedEvaluation(2), llm=TokenLLM(), run_dir=tmp_path,
+                     config=Config(budget=4, roots=2, eval_timeout_seconds=20))
 
 
 def test_cli_and_batch_forward_execution_parameters(capsys):
-    from experiments.traceaad_v10_21.run import main
-    from experiments.traceaad_v10_21.launch_local import main as launch
+    from experiments.traceaad_v12_0.run_base import main
+    from experiments.traceaad_v12_0.launch_host import main as launch
     main(['--task', 'tsp_construct', '--dry-run', '--eval-timeout-seconds', '3.5', '--eval-workers', '4'])
     payload = json.loads(capsys.readouterr().out)
     assert payload['config']['eval_workers'] == 4 and payload['search_timeout'] == 3.5
@@ -245,7 +249,7 @@ def test_cli_and_batch_forward_execution_parameters(capsys):
 def test_freeze_keeps_the_best_program_valid_under_the_current_evaluator(tmp_path):
     slow = 'import time\ndef score(x):\n    time.sleep(0.5)\n    return -100\n'
     answers = [response(1), response(2), response(3)]
-    method = TraceAADV1021(evaluation=IndexedEvaluation(2), llm=TokenLLM(*answers), run_dir=tmp_path,
+    method = TraceAADV120(evaluation=IndexedEvaluation(2), llm=TokenLLM(*answers), run_dir=tmp_path,
                            config=Config(budget=3, roots=3, eval_timeout_seconds=0.3))
     for _ in range(3):
         method._roots()

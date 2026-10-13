@@ -105,8 +105,10 @@ def test_baseline_lifecycle_runs_once_and_writes_config(tmp_path, monkeypatch):
 
 
 def test_traceaad_entry_accepts_thinking_and_preserves_its_own_output_limit(capsys):
-    from experiments.traceaad_v10_25 import run
-    args = run.build_parser().parse_args(['--task', 'graph_colouring'])
+    from experiments.traceaad_v12_0 import run
+    from experiments.infra.search_run import build_parser
+    from traceaad.v12_0 import Config
+    args = build_parser('traceaad_v12_0', Config).parse_args(['--task', 'graph_colouring'])
     assert args.thinking is None and args.output_tokens == 8192
     run.main(['--task', 'graph_colouring', '--thinking', '--dry-run'])
     payload = json.loads(capsys.readouterr().out)

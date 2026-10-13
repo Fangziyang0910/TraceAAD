@@ -11,8 +11,7 @@ failure-count groups motivated this setting; they do not establish its net
 search benefit or make it a predictor of long-term development value.
 
 beta only converts score differences into weights: it is the temperature at
-which the score values observed so far spread over an effective number of 8
-(V10.13's quality ESS). Fitting it on the observed values rather than on
+which the score values observed so far spread over an effective number of 8. Fitting it on the observed values rather than on
 programs keeps it finite when many programs share the top score.
 """
 
@@ -24,7 +23,7 @@ from .canonical import similarity
 
 TARGET_ESS = 8.0
 PRIOR_STRENGTH = 3.0
-OPERATORS = ("Refine", "Explore", "Crossover", "Develop", "Deepen")
+OPERATORS = ("Refine", "Explore", "Crossover")
 
 
 def better(child, parent):

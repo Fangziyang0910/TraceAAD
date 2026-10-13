@@ -13,6 +13,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from traceaad.common.storage import read_json
+
 HOST = "B3-server3"
 REMOTE = "/home/fzy/code/LLM4AD/TraceAAD"
 ROOT = Path(__file__).resolve().parents[2]
@@ -79,10 +81,28 @@ def prune(experiment, batch, heldout=True):
     return left
 
 
+def sync(experiment, batch, interval):
+    """Keep a local copy until all searches finish; never prune remote data."""
+    local = results(experiment)[1]
+    while True:
+        try:
+            pull(experiment, batch)
+        except subprocess.CalledProcessError as exc:
+            print(f"sync failed (exit {exc.returncode}); retrying in {interval}s", flush=True)
+        else:
+            plan = read_json(local / f"batch_{batch}.json", {}).get("plan", [])
+            completed = sum(read_json(local / row["task"] / row["run_name"] / "summary.json", {})
+                            .get("status") in TERMINAL for row in plan)
+            print(time.strftime("%F %T"), f"synced; {completed}/{len(plan)} searches complete", flush=True)
+            if plan and completed == len(plan):
+                return
+        time.sleep(interval)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("push", "pull", "prune", "watch"))
-    parser.add_argument("--experiment", default="traceaad_v10_21")
+    parser.add_argument("action", choices=("push", "pull", "prune", "watch", "sync"))
+    parser.add_argument("--experiment", default="traceaad_v12_0")
     parser.add_argument("--batch")
     parser.add_argument("--interval", type=int, default=60)
     parser.add_argument("--no-heldout", action="store_true", help="prune finished runs without a held-out result")
@@ -91,6 +111,10 @@ def main(argv=None):
         return push()
     if not args.batch:
         parser.error("--batch is required")
+    if args.interval < 1:
+        parser.error("--interval must be positive")
+    if args.action == "sync":
+        return sync(args.experiment, args.batch, args.interval)
     while True:
         pull(args.experiment, args.batch)
         if args.action == "pull":

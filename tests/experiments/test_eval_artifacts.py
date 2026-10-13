@@ -30,3 +30,12 @@ def test_pick_best_sample_joins_compact_node_to_its_event(tmp_path):
     assert best["node_id"] == records[0]["node_id"] == 3
     assert best["key"] == records[0]["key"]
     assert best["program"] == "def score(x):\n    return x"
+
+
+def test_missing_backfill_score_is_not_ranked(tmp_path):
+    write_json(tmp_path / 'summary.json', {'status': 'error'})
+    missing = candidate(1, None, code='def solve():\n    return 1\n')
+    missing['valid'] = True
+    append_records(tmp_path / 'events.jsonl', [missing, candidate(2, 42., code='def solve():\n    return 2\n')])
+    best, samples = pick_best_sample(tmp_path, allow_incomplete=True)
+    assert best['sample_order'] == 2 and len(samples) == 1

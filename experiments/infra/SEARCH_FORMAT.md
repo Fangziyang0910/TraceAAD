@@ -1,6 +1,6 @@
 # 搜索实验与结果格式
 
-当前结果统一为 `traceaad-results-v2`。运行目录是 `experiments_result/<实验>/<任务>/<运行>/`，例如 `traceaad_v10_17/tsp_construct/<运行>/`。实验条件保存在 `run_config.json`，实现改动用 revision 区分，当前科研实现为 `research-minimize-v3-20261007`。
+当前结果统一为 `traceaad-results-v2`。运行目录是 `experiments_result/<实验>/<任务>/<运行>/`，例如 `traceaad_v12_0/tsp_construct/<运行>/`。实验条件保存在 `run_config.json`，实现改动用 revision 区分，当前科研实现为 `research-protocol-v6-20261012-raw-objective`。
 
 ## 文件各存一类事实
 
@@ -17,7 +17,7 @@
 | `best_program.py` | 最终程序的便捷导出；内容必须与选中 `key` 一致 |
 | `.cache/history.json` | 可删除并重建的可视化投影；不保存源码、提示或回复 |
 
-`diagnostics.json` 是离线分析产物，按需生成。基线的额外研究轨迹可以保留；普通可视化和成绩读取只依赖上表中的文件。`finalists.json`、分片样本文件和逐规模 held-out 文件不再重复保存同一结果。
+`diagnostics.json` 是离线分析产物，按需生成；当前诊断入口针对 V12.0，旧版本使用已保存的诊断产物或当时源码。基线的额外研究轨迹可以保留；普通可视化和成绩读取只依赖上表中的文件。`finalists.json`、分片样本文件和逐规模 held-out 文件不再重复保存同一结果。
 
 ## 事件与程序身份
 
@@ -66,12 +66,12 @@ OBP 的规模写为 `1k_100,5k_500,10k_500`。未完成搜索必须显式使用 
 
 ## 实验和分析入口
 
-V10.15–V10.19 的 `run.py`、`heldout.py`、`heldout_batch.py`、`launch_batch.py` 和主机启动入口调用共用的 `experiments/infra/search_*.py`。批次计划按清单生成，held-out 按实际路次生成；跨主机复制后用清单所在目录定位运行目录。
+V12.0 的运行与主机启动入口调用共用的 `experiments/infra/search_*.py`；独立测试使用 `experiments.infra.evaluate`。批次计划按清单生成，held-out 按实际路次生成；跨主机复制后用清单所在目录定位运行目录。
 
 ```bash
-uv run python -m experiments.traceaad_v10_17.diagnose --run-dir <运行目录>
+uv run python -m experiments.infra.diagnose_search --run-dir <运行目录>
 uv run python -m experiments.infra.batch_status --manifest <批次清单>
-uv run python -m experiments.monitor --host 0.0.0.0 --port 8765 --experiment traceaad_v10_17
+uv run python -m experiments.monitor --host 0.0.0.0 --port 8765 --experiment traceaad_v12_0
 ```
 
 可视化按追加字节刷新曲线，打开程序详情时才读取源码。列表、最近候选、有效率和预算共用一个投影。页面、样式和交互分别位于 `monitor.html`、`monitor.css`、`monitor.js`。

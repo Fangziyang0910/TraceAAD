@@ -238,8 +238,8 @@ def test_scheduled_llm_routes_and_records_queue_time(daemon):
 
 
 def test_host_partition_and_cli_defaults(daemon, capsys):
-    from experiments.traceaad_v10_21.launch_host import main
-    from experiments.traceaad_v10_21.run import main as run
+    from experiments.traceaad_v12_0.launch_host import main
+    from experiments.traceaad_v12_0.run_base import main as run
     path, _ = daemon
     plans = []
     for ids in (['1', '2'], ['3']):
@@ -296,7 +296,7 @@ def score(x):
 def test_real_http_clients_share_slots_and_search_uses_both_schedulers(daemon, tmp_path):
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     from experiments.infra.scheduled_llm import ScheduledLLM
-    from traceaad.v10_21 import Config, TraceAADV1021
+    from traceaad.v12_0 import BaseConfig as Config, TraceAADV120
     path, server = daemon
     class Handler(BaseHTTPRequestHandler):
         active, peak, requests = {}, {}, []
@@ -347,7 +347,7 @@ def test_real_http_clients_share_slots_and_search_uses_both_schedulers(daemon, t
         task = TinyEvaluation()
         task.fork_proc = False
         try:
-            method = TraceAADV1021(evaluation=task, llm=client, run_dir=tmp_path,
+            method = TraceAADV120(evaluation=task, llm=client, run_dir=tmp_path,
                 config=Config(budget=1, roots=1, scheduler_socket=path, eval_workers=2))
             assert method.run()['status'] == 'finished'
             assert method.facts.evaluations[0]['scheduler']['socket'] == path

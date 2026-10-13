@@ -1,13 +1,32 @@
-"""V12.0 prompts: V10.21's prompts, plus the match step and the implementation step of Explore.
+"""Match earlier Designs and build the implementation prompt with the selected program."""
 
-The proposal step is V10.21's Explore prompt unchanged; generation stops before the code.
-The implementation step keeps that prompt's material and goal, then adds the proposal,
-the earlier program (when linked) and the request for code. Nothing is said about the
-earlier program beyond facts: it was evaluated in this search and shares the computation.
-"""
+import copy
+import re
 
-from traceaad.common.prompts import idea_view
-from traceaad.v10_21.prompts import PromptBuilder as V1021Prompts
+from benchmarks.tasks import FIXED_TASKS
+from traceaad.common.history import score_text
+from traceaad.common.prompts import ContextTooLong, idea_view, PromptBuilder as MeasuredPrompts
+
+CALLED_ONCE = "The function is called once per instance, before the ant colony starts."
+MANY_TIMES = re.compile(r"Use efficient NumPy operations because the function is evaluated many\s+times\.")
+SERVICE = ("At a customer, the vehicle waits until the time window opens if it arrives early, then spends the "
+           "customer's service duration before moving on. The current time passed to the function already includes "
+           "the waiting and service durations of the customers served so far; the service durations themselves are "
+           "not passed to the function.")
+
+
+CVRP_COMPUTATION = ("Within the evaluation time limit, the function\n"
+                    "may perform any computation on the complete instance before returning its prior.")
+# The interface ends with the contract; no statement about how much to compute.
+COMPUTATION = (" Within the time limit, the function may perform any computation on its inputs.", "")
+# Said once, in the score line.
+OP_OBJECTIVE = "\nThe evaluation objective is the negative mean collected prize; lower is better."
+FIXED_SCORE = ("the mean deviation of the final objective from a reference value, in percent of the reference; "
+               "a negative score beats the reference")
+
+
+REPAIR = """[Your Task: Repair]
+The program failed during evaluation. Fix it, keeping the algorithm it was meant to implement."""
 
 MATCH = """Each design below describes an algorithm for the same task.
 
@@ -34,13 +53,27 @@ IMPLEMENT = """[Your Task: Implement]
 Implement your Design in the current algorithm."""
 
 
+def corrected_description(task, description):
+    """The task text with the facts about computation corrected."""
+    if task in ("cvrp_aco", "op_aco"):
+        description, replaced = MANY_TIMES.subn(CALLED_ONCE, description)
+        if replaced != 1 and CALLED_ONCE not in description:
+            raise ValueError(f"{task}: the task text no longer has the expected computation sentence")
+    if task == "vrptw_construct":
+        description += "\n\n" + SERVICE
+    return description
+
+
 def match_prompt(design, ranked):
     """The match request for a proposal's Design and the ranked earlier programs (also used offline)."""
     listed = "\n".join(f"[{program['id']}] {idea_view(program['idea'])}" for program, _ in ranked)
     return MATCH.format(design=idea_view(design), listed=listed)
 
 
-class PromptBuilder(V1021Prompts):
+class PromptBuilder(MeasuredPrompts):
+    ACTIONS = ("Refine", "Explore", "Crossover")
+    REPAIR = REPAIR
+    UNCHANGED_ROOT = "an initial design"
     PROPOSAL = PROPOSAL
     EARLIER = EARLIER
     IMPLEMENT = IMPLEMENT
@@ -71,4 +104,44 @@ class PromptBuilder(V1021Prompts):
             trims.append("explore_material")
             prompt = self._render(self.common + [self._current(parent), proposal_block, *tail])
             tokens = self.count(prompt)
+        if tokens > self.config.max_input_tokens:
+            raise ContextTooLong("minimum implementation prompt exceeds context")
         return {"prompt": prompt, "input_tokens": tokens, "trims": trims}
+
+    def _current(self, node):
+        return f"[Current Algorithm]\n{self.measured(node)}\n```python\n{node['code'].rstrip()}\n```"
+
+    def __init__(self, llm, task, evaluation, programs, attempts, config):
+        evaluation = copy.copy(evaluation)
+        if task in FIXED_TASKS:
+            # The problem and the solver's settings; the evaluator's bookkeeping
+            # (seeding, copies, reference handling) is left out.
+            settings = ", ".join(f"{name}={value}" for name, value in evaluation.outer_settings.items())
+            evaluation.task_description = evaluation.DESCRIPTION + (
+                f"\nThe fixed solver settings are {settings}." if settings else "")
+            evaluation.design_notes = ""
+            evaluation.score_meaning = FIXED_SCORE
+        else:
+            evaluation.task_description = (evaluation.task_description.replace(CVRP_COMPUTATION, "")
+                                           .replace(OP_OBJECTIVE, "").rstrip())
+        super().__init__(llm, task, evaluation, programs, attempts, config)
+        self.common[2] = self.common[2].replace(*COMPUTATION)
+
+    def task_text(self, description):
+        return corrected_description(self.task, description)
+
+    def evaluation_text(self, meaning, higher):
+        return f"Score: {meaning}. {'Higher' if higher else 'Lower'} is better."
+
+    def measured(self, program):
+        return f"Score: {score_text(program['score'])}"
+
+    def failure(self, program):
+        if program["failure"]["kind"] == "timeout":
+            return "timed out"
+        return super().failure(program)
+
+    def error_text(self, failed):
+        if failed["failure"]["kind"] == "timeout":
+            return "Timed out."
+        return super().error_text(failed)

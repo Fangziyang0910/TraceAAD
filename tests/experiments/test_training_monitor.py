@@ -365,14 +365,14 @@ def test_invalid_scores_never_create_breakthroughs(tmp_path):
 
 
 def test_overview_exposes_same_curve_as_detail_with_candidate_axis(tmp_path):
-    run = tmp_path / "traceaad_v10_14" / "op_aco" / "rep1"
-    write_json(run / "run_config.json", {"method": "v1014", "task": "op_aco", "repeat": 1})
+    run = tmp_path / "traceaad_v12_0" / "op_aco" / "rep1"
+    write_json(run / "run_config.json", {"method": "v12_0", "task": "op_aco", "repeat": 1})
     write_json(run / "summary.json", {"status": "running", "budget": 1000,
                "best": None})
     append_records(run / "events.jsonl", [candidate(1, -1), candidate(2, -3)])
     monitor = ResultsMonitor(tmp_path)
-    row = monitor.overview("traceaad_v10_14")["tasks"][0]["runs"][0]
-    detail = monitor.run_detail("traceaad_v10_14", "op_aco", "rep1")
+    row = monitor.overview("traceaad_v12_0")["tasks"][0]["runs"][0]
+    detail = monitor.run_detail("traceaad_v12_0", "op_aco", "rep1")
     # The overview carries a slim projection of the detail curve.
     fields = ("evaluation", "fitness", "kind", "gain", "candidate", "operator")
     assert row["curve"] == [{k: p[k] for k in fields if p.get(k) is not None} for p in detail["curve"]]

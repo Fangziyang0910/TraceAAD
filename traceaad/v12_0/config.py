@@ -1,14 +1,25 @@
-"""V12.0 parameters: V10.17 search under the current protocol, plus re-proposal linking in Explore."""
+"""V12.0 parameters: search, per-instance execution and re-proposal linking in Explore."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from traceaad.v10_21.config import Config as V1021Config
+from benchmarks.tasks import INSTANCE_SECONDS
+from traceaad.common.config import SearchConfig
+from traceaad.common.instance_evaluation import validate_execution
 
 EXPERIMENT = "traceaad_v12_0"
+OPERATORS = {"Refine": 0.45, "Explore": 0.30, "Crossover": 0.25}
 
 
 @dataclass
-class Config(V1021Config):
+class Config(SearchConfig):
+    attempts_shown: int = 8
+    progress_shown: int = 8
+    development_steps: int = 3
+    development_probability: float = 0.125
+    operators: dict[str, float] = field(default_factory=lambda: dict(OPERATORS))
+    eval_timeout_seconds: float = float(INSTANCE_SECONDS)
+    eval_workers: int = 1
+    scheduler_socket: str | None = None
     linking: bool = True
     # Nearest earlier Designs shown to the match step; the model judges which share the computation.
     match_candidates: int = 20
@@ -18,6 +29,14 @@ class Config(V1021Config):
 
     def __post_init__(self):
         super().__post_init__()
+        if not self.operators or min(self.operators.values()) < 0 or sum(self.operators.values()) <= 0:
+            raise ValueError("operator weights must be nonnegative with a positive total")
+        if not 0 <= self.development_probability <= 1 or self.development_steps < 0:
+            raise ValueError("invalid development probability or steps")
+        unknown = set(self.operators) - set(OPERATORS)
+        if unknown:
+            raise ValueError(f"unknown operators: {sorted(unknown)}")
+        validate_execution(self.eval_timeout_seconds, self.eval_workers)
         if self.match_candidates < 1 or self.match_output_tokens < 1:
             raise ValueError("match limits must be positive")
         if not 0 <= self.display_probability <= 1:

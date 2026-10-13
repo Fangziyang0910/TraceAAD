@@ -19,8 +19,8 @@ OP函数在每实例开始时调用一次，返回与距离矩阵同形的边先
 ## 命令
 
 ```bash
-uv run python -m experiments.traceaad_v10_17.run_current --task jssp_construct --dry-run
-uv run python -m experiments.traceaad_v10_17.launch_current --suite co6 --batch <新批次> --repeats 3 --budget 1000
+uv run python -m experiments.traceaad_v12_0.run --task jssp_construct --dry-run
+uv run python -m experiments.traceaad_v12_0.launch_host --suite co6 --batch <新批次> --repeats 3 --budget 1000
 ```
 
 启动入口默认仅打印计划；加 `--launch` 才启动。各基线使用同一任务注册：

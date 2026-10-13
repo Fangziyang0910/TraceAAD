@@ -1,4 +1,4 @@
-"""V12.0: V10.17 search under the current protocol, with re-proposal linking in Explore."""
+"""V12.0: standalone search with re-proposal linking in Explore."""
 
 from .config import BaseConfig, Config, DisplayConfig
 from .traceaad import TraceAADV120

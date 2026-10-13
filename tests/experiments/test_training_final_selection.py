@@ -6,12 +6,12 @@ import pytest
 
 from experiments.infra import evaluate
 from tests.support import TinyEvaluation, TokenLLM, response
-from traceaad.v10_20 import Config, TraceAADV1020
+from traceaad.v12_0 import BaseConfig as Config, TraceAADV120
 
 
 @pytest.mark.parametrize('fail_best', (False, True))
 def test_heldout_does_not_replace_the_training_winner(tmp_path, monkeypatch, fail_best):
-    method = TraceAADV1020(evaluation=TinyEvaluation(), llm=TokenLLM(response(2), response(5), response(1)),
+    method = TraceAADV120(evaluation=TinyEvaluation(), llm=TokenLLM(response(2), response(5), response(1)),
                            run_dir=tmp_path, config=Config(budget=3, roots=3))
     summary = method.run()
     assert summary['status'] == 'finished'
@@ -19,7 +19,8 @@ def test_heldout_does_not_replace_the_training_winner(tmp_path, monkeypatch, fai
     assert summary['final_selection'] == 'training' and summary['selection_evaluations'] == 0
     choice = json.loads((tmp_path / 'selection.json').read_text())
     assert choice['criterion'] == 'training' and choice['selection_protocol'] is None
-    assert choice['results'] == []
+    assert len(choice['results']) == 3
+    assert all(result['fitness'] is not None for result in choice['results'])
     frozen = (tmp_path / 'best_program.py').read_text()
 
     class OppositeTest(TinyEvaluation):
@@ -39,7 +40,7 @@ def test_heldout_does_not_replace_the_training_winner(tmp_path, monkeypatch, fai
 
 
 def test_cli_defaults_to_training_selection(capsys):
-    from experiments.traceaad_v10_20.run import main
+    from experiments.traceaad_v12_0.run_base import main
     main(['--task', 'tsp_construct', '--dry-run'])
     plan = json.loads(capsys.readouterr().out)
     assert plan['final_selection'] == 'training' and plan['selection'] is None

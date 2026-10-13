@@ -13,11 +13,11 @@ from core.scheduling import SchedulerError
 from baselines.shared.observability import is_search_aborted
 from baselines.shared.profiler import ProfilerBase
 from benchmarks.tasks import FUNCTION_SECONDS, INSTANCE_SECONDS
-from experiments.infra import base, evaluate, runner, search_heldout
+from experiments.infra import base, evaluate, runner
 from tests.method.test_instance_evaluation import IndexedEvaluation
 from tests.support import TokenLLM, response
 from traceaad.common.config import REVISION
-from traceaad.v10_21 import Config, TraceAADV1021
+from traceaad.v12_0 import BaseConfig as Config, TraceAADV120
 
 
 @pytest.mark.parametrize("name", ["eoh", "reevo", "mcts_ahd", "pathwise", "calm", "funsearch", "shinka_evo"])
@@ -75,16 +75,16 @@ def test_resume_updates_active_parameters_and_keeps_finished_config(finished, tm
     monkeypatch.setattr(runner, "build_task", lambda *args, **kwargs: (IndexedEvaluation(2), {}))
     monkeypatch.setattr(runner, "build_llm_client", lambda **kwargs: TokenLLM(response(1)))
     old = Config(budget=1 if finished else 4, roots=1, eval_timeout_seconds=1)
-    ctx = runner.setup_experiment_run(args, method="v1021", results_root=tmp_path, resume_file="events.jsonl",
+    ctx = runner.setup_experiment_run(args, method="v12_0", results_root=tmp_path, resume_file="events.jsonl",
                                       method_params=asdict(old))
-    method = TraceAADV1021(evaluation=ctx.evaluation, llm=ctx.llm, run_dir=ctx.run_dir, config=old)
+    method = TraceAADV120(evaluation=ctx.evaluation, llm=ctx.llm, run_dir=ctx.run_dir, config=old)
     if finished:
         method.run()
     else:
         method._roots()
     before = (ctx.run_dir / "run_config.json").read_bytes()
     current = Config(budget=4, roots=1, eval_timeout_seconds=3, eval_workers=2)
-    resumed = runner.setup_experiment_run(args, method="v1021", results_root=tmp_path, resume_file="events.jsonl",
+    resumed = runner.setup_experiment_run(args, method="v12_0", results_root=tmp_path, resume_file="events.jsonl",
                                           method_params=asdict(current))
     assert resumed.resumed
     if finished:
@@ -95,13 +95,12 @@ def test_resume_updates_active_parameters_and_keeps_finished_config(finished, tm
         assert saved["method_params"]["eval_workers"] == 2
 
 
-@pytest.mark.parametrize("entry", ["search", "generic"])
-def test_existing_heldout_scores_are_returned_without_protocol_checks(entry, tmp_path, monkeypatch):
-    method = TraceAADV1021(evaluation=IndexedEvaluation(2), llm=TokenLLM(response(1)), run_dir=tmp_path,
+def test_existing_heldout_scores_are_returned_without_protocol_checks( tmp_path, monkeypatch):
+    method = TraceAADV120(evaluation=IndexedEvaluation(2), llm=TokenLLM(response(1)), run_dir=tmp_path,
                            config=Config(budget=1, roots=1))
     summary = method.run()
     (tmp_path / "run_config.json").write_text(json.dumps({"task": "tsp_construct", "method_params": {}}))
-    variant = "" if entry == "search" else f"shared:{REVISION}"
+    variant = f"shared:{REVISION}"
     previous = {"task": "tsp_construct", "split": "eval", "scale": "50", "variant": variant,
                 "key": summary["best"]["key"], "node_id": 1, "verification": "verified",
                 "fitness": 432.1, "protocol": "different", "timeout_seconds": 987}
@@ -112,15 +111,13 @@ def test_existing_heldout_scores_are_returned_without_protocol_checks(entry, tmp
     def should_not_evaluate(*args, **kwargs):
         raise AssertionError("existing results must not be reevaluated")
 
-    module = search_heldout if entry == "search" else evaluate
-    monkeypatch.setattr(module, "heldout_task", should_not_evaluate)
-    result = (module.evaluate_run(tmp_path, timeout_seconds=.1) if entry == "search" else
-              module.evaluate_run(tmp_path, ["eval"], timeout_seconds=.1)[0])
+    monkeypatch.setattr(evaluate, "heldout_task", should_not_evaluate)
+    result = evaluate.evaluate_run(tmp_path, ["eval"], timeout_seconds=.1)[0]
     assert result == previous and path.read_bytes() == before
 
 
 def test_new_baseline_heldout_uses_the_current_executor(tmp_path, monkeypatch):
-    method = TraceAADV1021(evaluation=IndexedEvaluation(2), llm=TokenLLM(response(1)), run_dir=tmp_path,
+    method = TraceAADV120(evaluation=IndexedEvaluation(2), llm=TokenLLM(response(1)), run_dir=tmp_path,
                            config=Config(budget=1, roots=1))
     method.run()
     (tmp_path / "run_config.json").write_text(json.dumps({"task": "tsp_construct", "method": "eoh",
@@ -153,7 +150,7 @@ def test_old_batch_is_rejected_before_configuration_write(tmp_path, monkeypatch)
     before = path.read_bytes()
     monkeypatch.setattr(runner, 'build_task', lambda *args, **kwargs: (IndexedEvaluation(2), {}))
     with pytest.raises(ValueError, match='new batch'):
-        runner.setup_experiment_run(args, method='v1021', results_root=tmp_path)
+        runner.setup_experiment_run(args, method='v12_0', results_root=tmp_path)
     assert path.read_bytes() == before
 
 
@@ -205,30 +202,6 @@ def test_baseline_freeze_without_a_valid_result_is_not_finished(candidates, tmp_
     TrainingHistory(tmp_path, minimize=True).read()
 
 
-@pytest.mark.parametrize("first", ["generic", "search"])
-def test_heldout_entries_share_one_result(first, tmp_path, monkeypatch):
-    method = TraceAADV1021(evaluation=IndexedEvaluation(1), llm=TokenLLM(response(1)), run_dir=tmp_path,
-                           config=Config(budget=1, roots=1))
-    method.run()
-    (tmp_path / "run_config.json").write_text(json.dumps({"task": "tsp_construct", "method_params": {}}))
-    for module in (search_heldout, evaluate):
-        monkeypatch.setattr(module, "heldout_task", lambda *args: IndexedEvaluation(1))
-    read = {"generic": lambda: evaluate.evaluate_run(tmp_path, ["eval_50"])[0],
-            "search": lambda: search_heldout.evaluate_run(tmp_path)}
-    result = read[first]()
-    path = tmp_path / "heldout.json"
-    before = path.read_bytes()
-
-    def should_not_evaluate(*args, **kwargs):
-        raise AssertionError("the other entry must read the existing result")
-
-    for module in (search_heldout, evaluate):
-        monkeypatch.setattr(module, "heldout_task", should_not_evaluate)
-    second = "generic" if first == "search" else "search"
-    assert read[second]() == result and path.read_bytes() == before
-    assert len(json.loads(path.read_text())) == 1
-
-
 def test_local_queue_advances_when_a_run_exits_before_writing_results(tmp_path, monkeypatch):
     from experiments.infra import local_queue
     plan = [base.LaunchItem(task="tsp_construct", repeat=1, backend="local", session=name,
@@ -275,7 +248,7 @@ def test_baseline_entries_accept_complete_solvers(name, task_name, tmp_path, mon
     ('op_aco', 2, 120), ('graph_colouring', 10, 120), ('jssp_construct', 10, 120),
 ])
 def test_task_budgets_reach_search_baselines_and_heldout(task_name, cpu, wall, monkeypatch, capsys):
-    from experiments.traceaad_v10_21.run import main
+    from experiments.traceaad_v12_0.run_base import main
     from experiments.infra.evaluation_execution import heldout_evaluator
     from traceaad.common.instance_evaluation import InstanceProgramEvaluator
     task = IndexedEvaluation(1)
@@ -297,7 +270,7 @@ def test_task_budgets_reach_search_baselines_and_heldout(task_name, cpu, wall, m
 
 
 def test_mixed_task_launch_uses_per_task_budgets(capsys):
-    from experiments.traceaad_v10_21.launch_local import main, plan_for
+    from experiments.traceaad_v12_0.launch_host import main
     from experiments.infra.search_run import build_parser
     from benchmarks.tasks import INSTANCE_LIMITS
     main(['--batch', 'budget_check', '--suite', 'co6'])
@@ -305,7 +278,7 @@ def test_mixed_task_launch_uses_per_task_budgets(capsys):
     for task, limits in manifest['evaluation_limits'].items():
         assert limits['timeout_seconds'] == INSTANCE_LIMITS[task]
         assert limits['function_seconds'] == (10 if task in ('graph_colouring', 'jssp_construct') else 2)
-    for entry in plan_for('budget_check'):
+    for entry in manifest['plan']:
         command = entry['command']
         args = build_parser('budget_check', Config).parse_args(command[command.index('--task'):])
         assert args.eval_timeout_seconds is None

@@ -6,9 +6,6 @@ from benchmarks.tasks import (CO_TASKS, PRIMARY_SPLITS, SCALES, SPLITS, TEST_INS
                               training_task, FIXED_TASKS)
 from experiments import launch
 from experiments.infra.search_host_launch import plan_for
-from traceaad.v10_20.prompts import PromptBuilder
-from traceaad.v10_20 import Config
-from tests.support import TokenLLM
 
 TASKS = tuple(task for task in CO_TASKS if task in FIXED_TASKS)
 
@@ -26,13 +23,13 @@ def test_baseline_co6_plan_contains_every_new_task(method):
 
 
 def test_traceaad_suite_budget_and_run_names_are_consistent():
-    plan = plan_for("test", "traceaad_v10_20_co6", "experiments.traceaad_v10_20.run", tasks=CO_TASKS, repeats=2, budget=100)
+    plan = plan_for("test", "traceaad_v12_0", "experiments.traceaad_v12_0.run_base", tasks=CO_TASKS, repeats=2, budget=100)
     assert len(plan) == 12 and len({item["run_dir"] for item in plan}) == 12
     assert all("--budget=100" in item["command"] for item in plan)
 
 
 @pytest.mark.parametrize("task", TASKS)
-def test_task_conditions_and_prompt_match_primary_data(task):
+def test_task_conditions_match_primary_data(task):
     training, _ = training_task(task)
     testing = heldout_task(task, PRIMARY_SPLITS[task][0])
     assert testing.outer_settings == training.outer_settings
@@ -40,11 +37,6 @@ def test_task_conditions_and_prompt_match_primary_data(task):
     assert testing.timeout_seconds / testing.n_instance == training.timeout_seconds / training.n_instance
     assert SCALES[task] == (training.problem_size,)
     assert SPLITS[task] == PRIMARY_SPLITS[task]
-    text = "\n".join(PromptBuilder(TokenLLM(), task, training, {}, {}, Config()).common)
-    assert training.instance_description in text
-    assert f"{TEST_INSTANCES} fixed generated test" in text
-    assert "Lower is better" in text
-    assert text.count(training.design_notes) == 1
 
 
 @pytest.mark.parametrize('task', TASKS)

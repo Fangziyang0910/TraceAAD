@@ -18,10 +18,9 @@ def test_aggregate_deviation_cannot_be_converted():
         restore_record({'valid': True, 'score': -25., 'instances': []}, [{'reference': 10.}])
 
 
-@pytest.mark.parametrize('entry', ['generic', 'search'])
-def test_relative_heldout_cache_is_recomputed(entry, tmp_path, monkeypatch):
+def test_relative_heldout_cache_is_recomputed( tmp_path, monkeypatch):
     import json
-    from experiments.infra import evaluate, search_heldout
+    from experiments.infra import evaluate
     from traceaad.common.storage import read_json
     config = {'task': 'jssp_construct', 'method_params': {}, 'revision': 'old'}
     (tmp_path/'run_config.json').write_text(json.dumps(config))
@@ -36,8 +35,6 @@ def test_relative_heldout_cache_is_recomputed(entry, tmp_path, monkeypatch):
     monkeypatch.setattr(evaluate, 'pick_best_sample', lambda *a, **k: (chosen, []))
     monkeypatch.setattr(evaluate, 'load_run_summary', lambda *a, **k: {'status': 'finished'})
     monkeypatch.setattr(evaluate, 'heldout_identity', lambda *a: 'verified')
-    monkeypatch.setattr(search_heldout, 'selected_program', lambda *a: {
-        'id': 1, 'key': previous['key'], 'code': 'source', 'verified': True})
     calls = []
 
     class Evaluator:
@@ -47,10 +44,9 @@ def test_relative_heldout_cache_is_recomputed(entry, tmp_path, monkeypatch):
             calls.append(key)
             return {'fitness': 42., 'evaluations': [{'valid': True, 'score': 42., 'seconds': 0.}]}
 
-    module = evaluate if entry == 'generic' else search_heldout
-    monkeypatch.setattr(module, 'heldout_evaluator', lambda *a, **k: (
+    monkeypatch.setattr(evaluate, 'heldout_evaluator', lambda *a, **k: (
         Evaluator(), {'score_metric': 'raw_objective'}))
-    result = evaluate.evaluate_run(tmp_path, ['test_20'])[0] if entry == 'generic' else search_heldout.evaluate_run(tmp_path, split='test_20')
+    result = evaluate.evaluate_run(tmp_path, ['test_20'])[0]
     assert calls == [previous['key']]
     assert result['fitness'] == 42.
     assert read_json(tmp_path/'heldout.json')[0]['score_metric'] == 'raw_objective'

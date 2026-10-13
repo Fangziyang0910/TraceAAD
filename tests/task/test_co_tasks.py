@@ -161,13 +161,13 @@ def test_packaged_splits_have_no_base_group_or_content_overlap():
 def test_offline_training_winner_and_heldout_use_the_new_task(tmp_path):
     from experiments.infra.evaluate import evaluate_run
     from tests.support import TokenLLM, text_candidate
-    from traceaad.v10_20 import Config, TraceAADV1020
+    from traceaad.v12_0 import BaseConfig as Config, TraceAADV120
     from traceaad.common.storage import write_json
     evaluation = miniature_evaluation()
     run = tmp_path / "run"
     llm = TokenLLM(text_candidate(code=evaluation.template_program))
     config = Config(budget=1, roots=1, final_candidates=1)
-    method = TraceAADV1020(evaluation=evaluation,
+    method = TraceAADV120(evaluation=evaluation,
                            llm=llm, run_dir=run, task="jssp_construct", config=config)
     summary = method.run()
     assert summary['status'] == 'finished' and summary['selection_evaluations'] == 0
@@ -203,19 +203,19 @@ def solve(*args):
 
 def test_complete_solver_search_rejects_a_different_saved_protocol(tmp_path):
     from tests.support import TokenLLM, text_candidate
-    from traceaad.v10_21 import Config, TraceAADV1021
+    from traceaad.v12_0 import BaseConfig as Config, TraceAADV120
     evaluation = miniature_evaluation()
     config = Config(budget=1, roots=1)
-    method = TraceAADV1021(evaluation=evaluation, llm=TokenLLM(text_candidate(code=evaluation.TEMPLATE)),
+    method = TraceAADV120(evaluation=evaluation, llm=TokenLLM(text_candidate(code=evaluation.TEMPLATE)),
                           run_dir=tmp_path, config=config, task='jssp_construct')
     method.run()
     before = (tmp_path / 'resume.json').read_bytes()
-    resumed = TraceAADV1021(evaluation=evaluation, llm=TokenLLM(), run_dir=tmp_path,
+    resumed = TraceAADV120(evaluation=evaluation, llm=TokenLLM(), run_dir=tmp_path,
                            config=config, task='jssp_construct')
     assert resumed.attempts == 1
     evaluation.interface = 'different-interface'
     with pytest.raises(ValueError, match='same task interface'):
-        TraceAADV1021(evaluation=evaluation, llm=TokenLLM(), run_dir=tmp_path,
+        TraceAADV120(evaluation=evaluation, llm=TokenLLM(), run_dir=tmp_path,
                       config=config, task='jssp_construct')
     assert (tmp_path / 'resume.json').read_bytes() == before
 

@@ -70,6 +70,9 @@ def convert_final_results(directory):
     updated_heldout = copy.deepcopy(heldout)
     tests = {}
     for result in updated_heldout:
+        if result.get('score_metric') == 'raw_objective':
+            tests[result['split']] = result['fitness']
+            continue
         evaluation = CLASSES[config['task']](split=result['split'], safe_evaluate=False)
         result['evaluations'] = [restore_record(r, evaluation._rows) for r in result['evaluations']]
         valid = [r for r in result['evaluations'] if r['valid']]
@@ -77,7 +80,6 @@ def convert_final_results(directory):
             result['fitness'] = result['objective'] = statistics.fmean(r['score'] for r in valid)
             result['scores'] = [r['score'] for r in valid]
         result['score_metric'] = 'raw_objective'
-        result['scoring_revision'] = REVISION
         tests[result['split']] = result['fitness']
     payload = {'score_metric': 'raw_objective', 'task': config['task'],
                'selected_node': selection['selected_node'], 'selected_key': selection['selected_key'],

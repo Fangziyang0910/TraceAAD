@@ -156,29 +156,28 @@ def test_native_clock_uses_completed_candidate_and_latest_checkpoint_phase(tmp_p
 
 def test_api_overview_and_detail_use_native_elapsed(tmp_path, monkeypatch):
     monkeypatch.setattr("experiments.monitor.time.time", lambda: NOW)
-    directory = tmp_path / "traceaad_v10_14" / "op_aco" / "rep1"
-    write_json(directory / "run_config.json", {"method": "v1014", "task": "op_aco", "repeat": 1})
+    directory = tmp_path / "traceaad_v12_0" / "op_aco" / "rep1"
+    write_json(directory / "run_config.json", {"method": "v12_0", "task": "op_aco", "repeat": 1})
     write_json(directory / "summary.json", {**summary(), **run(), "best": None})
     append_records(directory / "events.jsonl", [{**candidate(10, None), "ts": LAST, "progress": {
         "attempts": 10, "elapsed": 300, "started_at": START, "phase": "search"}}])
     monitor = ResultsMonitor(tmp_path)
-    state = monitor.overview("traceaad_v10_14")
+    state = monitor.overview("traceaad_v12_0")
     timing = state["tasks"][0]["runs"][0]["timing"]
     assert timing["unit"] == "候选" and timing["rate_per_minute"] == 2
-    assert timing == monitor.run_detail("traceaad_v10_14", "op_aco", "rep1")["timing"]
+    assert timing == monitor.run_detail("traceaad_v12_0", "op_aco", "rep1")["timing"]
     assert state["summary"]["timing"]["eta_seconds"] == timing["eta_seconds"]
 
 
-@pytest.mark.parametrize("method,experiment", [
-    ("v1015", "traceaad_v10_15"), ("v1016", "traceaad_v10_16")])
 @pytest.mark.parametrize("clock_offset_hours", [-1, 8])
 @pytest.mark.parametrize("log_age", [0, 1000])
 def test_copied_checkpoint_eta_uses_preserved_file_time(
-        tmp_path, monkeypatch, method, experiment, clock_offset_hours, log_age):
+        tmp_path, monkeypatch, clock_offset_hours, log_age):
     monkeypatch.setattr("experiments.monitor.time.time", lambda: NOW)
+    experiment = "traceaad_v12_0"
     directory = tmp_path / experiment / "op_aco" / "rep1"
     write_json(directory / "run_config.json", {
-        "method": method, "task": "op_aco", "budget": 100, "method_params": {"budget": 100}})
+        "method": "v12_0", "task": "op_aco", "budget": 100, "method_params": {"budget": 100}})
     # Copying preserves the file timestamp, but a server's naive clock can be
     # either ahead of or behind the viewer's local timezone.
     foreign_start = (datetime.fromtimestamp(NOW - 600 - log_age)

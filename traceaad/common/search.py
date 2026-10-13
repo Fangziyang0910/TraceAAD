@@ -1,4 +1,4 @@
-"""Execution, budget, evaluation and selection shared by V10.15–V10.20."""
+"""Execution, budget, evaluation and selection for TraceAAD."""
 
 from dataclasses import asdict
 from datetime import datetime
@@ -74,9 +74,9 @@ class Search:
                 and saved.get('identity', {}).get('protocol') != self.training.protocol):
             raise ValueError('complete-solver resume requires the same task interface and evaluation protocol')
         self.progress = Progress(**{name: saved[name] for name in Progress.__dataclass_fields__ if name in saved})
-        self.parent_rng = random.Random(f"{self.METHOD.replace('v10', 'v10.')}:{self.config.seed}:parent")
-        self.action_rng = random.Random(f"{self.METHOD.replace('v10', 'v10.')}:{self.config.seed}:action")
-        self.reference_rng = random.Random(f"{self.METHOD.replace('v10', 'v10.')}:{self.config.seed}:reference")
+        self.parent_rng = random.Random(f"{self.METHOD}:{self.config.seed}:parent")
+        self.action_rng = random.Random(f"{self.METHOD}:{self.config.seed}:action")
+        self.reference_rng = random.Random(f"{self.METHOD}:{self.config.seed}:reference")
         for name, state in saved.get("rng", {}).items():
             getattr(self, name + "_rng").setstate(_tuple_tree(state))
         self._clock = time.monotonic()
@@ -110,43 +110,43 @@ class Search:
     def _save(self, **record):
         self.facts.commit(self._state(), **record)
 
-    def _generate(self, request):
+    def _call(self, calls, prompt, input_tokens, stage=None, **kwargs):
+        """Generate and account for a request, preserving earlier stages if it fails."""
         try:
-            details = generate(self.llm, request['prompt'], max_tokens=self.config.output_tokens)
-            calls, failed = details['calls'], None
+            details, failed = generate(self.llm, prompt, **kwargs), None
+            made = details["calls"]
         except ModelCallError as exc:
-            details, calls, failed = {}, exc.calls, exc
-        for call in calls:
+            details, made, failed = {}, exc.calls, exc
+        for call in made:
             self.progress.model_calls += 1
-            call['request_id'] = self.progress.model_calls
-            usage = call['usage']
-            self.progress.input_tokens += usage.get('prompt_tokens', request['input_tokens']) or request['input_tokens']
-            self.progress.output_tokens += usage.get('completion_tokens',
-                self.config.output_tokens if not call['error'] else 0) or 0
-            self.progress.service_failures += bool(call['error'])
+            call["request_id"] = self.progress.model_calls
+            if stage is not None:
+                call["stage"] = stage
+            usage = call["usage"]
+            self.progress.input_tokens += usage.get("prompt_tokens", input_tokens) or input_tokens
+            self.progress.output_tokens += usage.get("completion_tokens",
+                kwargs["max_tokens"] if not call["error"] else 0) or 0
+            self.progress.service_failures += bool(call["error"])
+        calls.extend(made)
         if failed:
             self._save(calls=calls)
             if failed.transient:
-                raise RuntimeError(f'model service unavailable after {len(calls)} calls: {failed}') from failed
+                raise RuntimeError(f"model service unavailable after {len(calls)} calls: {failed}") from failed
             raise failed
-        return calls[-1]['request_id'], details, calls
+        return details
 
-    def _prepare_attempt(self, request, details, parent):
-        """Resolve version-specific response metadata before evaluating code."""
-        return parent
+    def _generate(self, request):
+        calls = []
+        details = self._call(calls, request["prompt"], request["input_tokens"],
+                             max_tokens=self.config.output_tokens)
+        return calls[-1]["request_id"], details, calls
 
     def _parse_candidate(self, request, details, parent):
         return parse_response(details.get("content", ""), details.get("finish_reason"), self.template)
 
-    def _normalize_source(self, code):
-        return canonical(code)
-
-    def _known_program(self, code, source_key):
-        return self.facts.by_key.get(source_key)
 
     def _attempt(self, request, *, parent=None, reference=None, repair_of=None):
         rid, details, calls = self._generate(request)
-        parent = self._prepare_attempt(request, details, parent)
         aid = self.attempts + 1
         if self.phase == "roots":
             self.progress.init_attempts += 1
@@ -169,11 +169,11 @@ class Search:
         program = None
         if code is not None:
             try:
-                code = self._normalize_source(code)
+                code = canonical(code)
             except (SyntaxError, ValueError):
                 code = code.rstrip() + "\n"
             source_key = key(code)
-            known = self._known_program(code, source_key)
+            known = self.facts.by_key.get(source_key)
             if known is not None:
                 status = ("copied_reference" if reference and known["id"] == reference["id"] else
                           "duplicate" if known["valid"] else "known_failure")
@@ -255,16 +255,6 @@ class Search:
     def _choose_parent(self, eligible):
         return sample_parent(eligible, self.attempts_table, self.programs, self.parent_rng)
 
-    def _search(self):
-        if self.progress.repair_id is not None:
-            self._repair()
-            return
-        if self.attempts >= self.config.budget:
-            self.progress.phase = "freeze"
-            self._save()
-            return
-        self._ordinary_search()
-
     def _ordinary_search(self, sampled=None):
         eligible = [node for node in self.archive.values() if node["id"] not in self.progress.too_long]
         if not eligible:
@@ -304,14 +294,11 @@ class Search:
                        reference_selection=reference_selection)
         self._attempt(request, parent=parent, reference=reference)
 
-
     def _open_exploration(self):
         """The exploration still in progress, read from the attempts (so a resumed run continues it).
 
-        Returns its proposal, the program it started from, the new program the
-        proposal produced (None if it produced none), its development attempts, the
-        best version reached so far (where the next step starts) and how many
-        development steps in a row have not produced a better version.
+        Returns its proposal, the new program it produced (None if it produced
+        none), its development attempts and the best version reached so far.
         """
         tagged = [a for a in self.attempts_table.values() if a.get("exploration")]
         if not tagged:
@@ -323,16 +310,13 @@ class Search:
         proposal, development = attempts[0], attempts[1:]
         final = final_attempt(proposal, self.attempts_table)
         proposed = self.archive.get(final["program_id"]) if final["status"] == "valid" else None
-        best, stalled = proposed, 0
+        best = proposed
         for attempt in development:
             final = final_attempt(attempt, self.attempts_table)
             reached = self.archive.get(final["program_id"]) if final["status"] == "valid" else None
             if reached is not None and better(reached["fitness"], best["fitness"]):
-                best, stalled = reached, 0
-            else:
-                stalled += 1
-        return {"id": eid, "proposal": proposal, "source": self.programs[proposal["parent_id"]],
-                "proposed": proposed, "development": development, "best": best, "stalled": stalled}
+                best = reached
+        return {"id": eid, "proposal": proposal, "proposed": proposed, "development": development, "best": best}
 
     def _ranking(self):
         return [n["id"] for n in sorted(self.archive.values(), key=lambda n: (n["fitness"], n["id"]))]
@@ -435,63 +419,3 @@ class Search:
                 return self._summary("service_unavailable", str(exc))
             raise
         return self._summary(self.progress.phase)
-
-
-class DevelopingSearch(Search):
-    """An Explore draw develops the open proposal before proposing another."""
-
-    RECORD_EXPLORATIONS = True
-
-    def _search(self):
-        if self.progress.repair_id is not None:
-            self._repair()
-            return
-        opened = self._open_exploration()
-        if self.attempts >= self.config.budget:
-            if opened is not None:
-                self._close_exploration(opened, "budget")
-            self.progress.phase = "freeze"
-            self._save()
-            return
-        if opened is not None:
-            reason = self._ending(opened)
-            if reason is not None:
-                self._close_exploration(opened, reason)
-                return
-        sampled = self.action_rng.choices(list(self.config.operators), list(self.config.operators.values()))[0]
-        if sampled == "Explore" and opened is not None:
-            self._develop(opened)
-            return
-        self._ordinary_search(sampled)
-
-    def _rank(self, program):
-        """How many programs of the search score strictly better than ``program``."""
-        return sum(better(n["fitness"], program["fitness"]) for n in self.archive.values())
-
-    def _develop(self, exploration):
-        best = exploration["best"]
-        try:
-            request = self.prompts.develop(best, exploration["source"], exploration["development"])
-        except ContextTooLong:
-            self._close_exploration(exploration, "context")
-            return
-        request.update(sampled_action="Explore", fallbacks=[], parent_id=best["id"], reference_id=None,
-                       selection=None, reference_selection=None,
-                       exploration={"id": exploration["id"], "step": len(exploration["development"]) + 1})
-        self._attempt(request, parent=best)
-
-    def _close_exploration(self, exploration, reason):
-        proposal, proposed, best = exploration["proposal"], exploration["proposed"], exploration["best"]
-        search_best = min(self.archive.values(), key=lambda n: (n["fitness"], n["id"]))
-        record = {
-            "id": exploration["id"], "start_id": proposal["parent_id"], "proposal_attempt": proposal["id"],
-            "idea": proposal["idea"], "first_status": final_attempt(proposal, self.attempts_table)["status"],
-            "proposed_id": proposed["id"] if proposed else None,
-            "first_score": proposed["score"] if proposed else None,
-            "first_rank": self._rank(proposed) if proposed else None,
-            "development_attempts": [a["id"] for a in exploration["development"]],
-            "best_id": best["id"] if best else None, "best_score": best["score"] if best else None,
-            "best_rank": self._rank(best) if best else None, "reason": reason,
-            "search_best_id": search_best["id"], "search_best_score": search_best["score"],
-            "closed_after": self.attempts}
-        self._save(exploration=record)

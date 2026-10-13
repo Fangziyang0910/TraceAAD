@@ -428,7 +428,7 @@ class ResultsMonitor:
                     runs.append({
                         "name": row["name"], "rep": row.get("repeat") or rep_of(row["name"]),
                         "status": row.get("status"),
-                        # the final program's training score (selected node for V10.14+)
+                        # the frozen program's training score
                         "train": row.get("best_fitness") if row.get("status") == "finished"
                         else (row.get("curve") or [{}])[-1].get("fitness", row.get("best_fitness")),
                         "heldout": {str(k): v for k, v in named.get(row["name"], {}).items()},

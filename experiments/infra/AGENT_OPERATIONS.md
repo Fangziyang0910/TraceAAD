@@ -28,11 +28,12 @@ server3 用作执行机，保留统一 `.venv` 和在跑数据。代码同步使
 ```bash
 uv run python -m experiments.infra.remote push
 uv run python -m experiments.infra.remote pull --experiment <方法> --batch <批次>
+uv run python -m experiments.infra.remote sync --experiment <方法> --batch <批次>
 uv run python -m experiments.infra.remote watch --experiment <方法> --batch <批次>
 uv run python -m experiments.infra.remote prune --experiment <方法> --batch <批次>
 ```
 
-`push` 镜像代码，删除远端多余代码但保留 `.venv` 与结果；依赖变化时执行 `uv sync --frozen`。`watch` 每 60 秒拉取并清理已完成档案。`prune` 仅清理已完成、已有独立测试且与本地逐字节一致的数据。冻结档案先固定清单，再同步并核验哈希；增长中的日志不用于冻结档案的一致性判断。
+`push` 镜像代码，删除远端多余代码但保留 `.venv` 与结果；依赖变化时执行 `uv sync --frozen`。`sync` 每 60 秒只拉取，连接失败后重试，整批搜索结束后停止，不等待后续独立测试；可在本机 tmux 中运行。`watch` 每 60 秒拉取并清理已完成档案。`prune` 仅清理已完成、已有独立测试且与本地逐字节一致的数据。冻结档案先固定清单，再同步并核验哈希；增长中的日志不用于冻结档案的一致性判断。
 
 ## 看板与结果读取
 
@@ -43,6 +44,14 @@ uv run python -m experiments.monitor --host 0.0.0.0 --port 8765
 看板地址 `http://127.0.0.1:8765/`。`#b=<方法>&rb=<批次>` 固定批次，`rb=latest` 跟随最新批次。API 为 `/api/state?batch=<方法>&run_batch=<批次>`，跨方法结果为 `/api/compare?cohorts=eoh,reevo`。修改 Python 后重启服务，修改 HTML、CSS、JS 后刷新页面。
 
 日常读取 `events.jsonl`、`programs.jsonl`、`resume.json`、`summary.json`、`selection.json`、`heldout.json`；原始请求在 `calls.jsonl` 或其 gzip 档案。基线失败类型与超时率读 `evaluations.jsonl`。测试结果须与最终选中程序的哈希和节点一致。`.cache/history.json` 可删除重建。格式见[SEARCH_FORMAT](SEARCH_FORMAT.md)。
+
+## 历史原始目标值补全
+
+`experiments.infra.migrations.raw_search` 处理已结束的相对评分批次。已有逐实例成绩直接换算，缺失时按该条历史评价的 CPU 规则、限时和种子补评；仅有平均改进率不能精确换算。程序和最终选择不变。超时补评按用户要求取消 CPU 时间限制、将单实例墙钟上限放宽到至少 600 秒重试；此前缓存的超时也重试。结果来源记为 `cpu_reevaluation_relaxed`，保留原失败记录和实际条件，不改变历史有效性。其他失败按原条件重试一次；仍失败则保留缺失，不能写成零分。
+
+20261011 四种基线的三项相对评分任务共 12 路，在 server3 的 `experiments_result/raw_objective_conversion/` 独立目录执行，tmux 为 `raw_objective_conversion`，3 路 × 4 worker 共享现有调度器。批次状态读该目录 `status.json`，逐路读 `raw_search.json`，逐次成绩与来源读 `raw_search_evaluations.jsonl`。本机 tmux `raw_objective_sync` 每 60 秒同步，补全结束或失败后停止；原同期对比表在同步时更新，缺失值不参与排名。
+
+每路补评结束后替换候选、评价和种群的公开分数字段，清除曲线缓存。`score_source` 区分精确换算与 CPU 补评；原件保存在 `logs/raw_search_originals/`。历史决策分数使用 `historical_*` 字段，恢复状态与调用原文保留当时含义，不代表按原始目标值重新搜索。已转换的档案用于分析；复现历史搜索使用原件及其配置。
 
 <a id="中断后的基线恢复"></a>
 

@@ -16,13 +16,6 @@ from traceaad.common.selection import better
 from traceaad.common.state import Facts
 
 TRIED_OUT = 15
-# The generation steps each method samples; the others write Refine, Explore and Crossover.
-METHOD_ACTIONS = {"v1018": ("Refine", "Explore", "Crossover", "Develop"),
-                  "v1019": ("Refine", "Explore", "Crossover", "Develop"),
-                  "v1020": ("Refine", "Explore", "Crossover", "Deepen"),
-                  "v1021": ("Refine", "Explore", "Crossover"),
-                  "v1022": ("Refine", "Explore", "Crossover")}
-METHOD_ACTIONS["v1024"] = ("Refine", "Explore", "Crossover", "Develop")
 # A program whose work depends on the wall clock: its result depends on the host and its load.
 CLOCK = re.compile(r"\btime\.(time|perf_counter|monotonic|process_time)\s*\(|"
                    r"\bfrom\s+time\s+import\b|\bdatetime\.now\s*\(")
@@ -61,15 +54,14 @@ def computation_stats(facts, attempts, time_limit, final_candidates):
             "clock_programs_in_top": sum(bool(CLOCK.search(n["code"])) for n in top)}
 
 
-def diagnostics(facts, budget, init_attempts, final_candidates=5, method="v1017", time_limit=None):
+def diagnostics(facts, budget, init_attempts, final_candidates=5, time_limit=None):
     programs, archive = facts.programs, facts.valid
     attempts_table = facts.attempts
     attempts = sorted(attempts_table.values(), key=lambda a: a["id"])
     counts = dict(Counter(a["status"] for a in attempts))
     repairs = {a["repair_of"]: a for a in attempts if a.get("repair_of") is not None}
     actions = {}
-    operators = METHOD_ACTIONS.get(method, ("Refine", "Explore", "Crossover"))
-    for name in (*operators, "Repair"):
+    for name in (*OPERATORS, "Repair"):
         proposed = [a for a in attempts if a["action"] == name]
         new = [a for a in proposed if a["status"] == "valid"]
         started = [(a, programs.get(a["parent_id"])) for a in new]
@@ -122,7 +114,7 @@ def diagnostics(facts, budget, init_attempts, final_candidates=5, method="v1017"
             "valid_cpu_seconds": {"median": cpu[len(cpu) // 2], "p95": cpu[int(len(cpu) * .95)],
                                   "max": cpu[-1]} if cpu else None,
             "best_training_depth": best["depth"] if best else None,
-            "explorations": exploration_stats(facts, attempts, init_attempts, final_candidates, method),
+            "explorations": random_development_stats(facts, attempts, init_attempts, final_candidates),
             "computation": computation_stats(facts, attempts, time_limit, final_candidates),
             "too_long_nodes": len((facts.state or {}).get("too_long", []))}
 
@@ -143,7 +135,6 @@ def random_development_stats(facts, attempts, init_attempts, final_candidates):
             moved.append(similarity(reached["code"], start["code"]) - similarity(first["code"], start["code"]))
     produced = {a.get("program_id") for a in inside if a["status"] == "valid"}
     top = [n["id"] for n in sorted(facts.valid.values(), key=lambda n: (n["fitness"], n["id"]))][:final_candidates]
-    # V10.20 opens explorations from Explore and Deepen proposals.
     by_action = {}
     for e, gain in zip(developed, gains):
         by_action.setdefault(facts.attempts[e["proposal_attempt"]]["action"], []).append(gain)
@@ -162,114 +153,13 @@ def random_development_stats(facts, attempts, init_attempts, final_candidates):
             "top_programs_from_explorations": sum(i in produced for i in top)}
 
 
-
-def v1018_development_stats(facts, attempts, init_attempts, final_candidates):
-    programs = facts.programs
-    ranking = [p["id"] for p in sorted(facts.valid.values(), key=lambda p: (p["fitness"], p["id"]))]
-    """How development used the budget, what it changed and where its designs ended."""
-    records = sorted(facts.explorations.values(), key=lambda e: e["id"])
-    tagged = {a["id"] for a in attempts if a.get("exploration") and a["exploration"]["step"] > 0}
-    inside = [a for a in attempts if a["id"] in tagged or a.get("repair_of") in tagged]
-    proposals = [a for a in attempts if a.get("exploration") and a["exploration"]["step"] == 0]
-    search = [a for a in attempts if a["id"] > init_attempts]  # initialization comes first
-    developed = [e for e in records if e["development_attempts"]]
-    gains, moved = [], []
-    for e in developed:
-        first, reached = programs[e["proposed_id"]], programs[e["best_id"]]
-        gains.append((first["fitness"] - reached["fitness"]) / max(abs(first["fitness"]), 1e-12))
-        start = programs.get(e["start_id"])
-        if start is not None and reached["id"] != first["id"]:
-            moved.append(similarity(reached["code"], start["code"]) - similarity(first["code"], start["code"]))
-    produced = {a.get("program_id") for a in inside if a["status"] == "valid"}
-    proposed = {e["proposed_id"] for e in records if e["proposed_id"] is not None}
-    top = ranking[:final_candidates]
-    steps = [len(e["development_attempts"]) for e in developed]
-    return {"count": len(records), "proposal_generations": len(proposals),
-            "new_programs": len(proposed), "developed": len(developed),
-            "reasons": dict(Counter(e["reason"] for e in records)),
-            "competitive_at_proposal": sum(e["reason"] == "competitive" and not e["development_attempts"]
-                                           for e in records),
-            "competitive_after_development": sum(e["reason"] == "competitive" and bool(e["development_attempts"])
-                                                 for e in records),
-            "development_steps_mean": statistics.fmean(steps) if steps else None,
-            "development_generations": len(inside),
-            "development_share_of_search_generations": len(inside) / len(search) if search else None,
-            "proposal_share_of_search_generations": len(proposals) / len(search) if search else None,
-            "development_gain_median": statistics.median(gains) if gains else None,
-            "development_improved": sum(g > 0 for g in gains),
-            "similarity_to_start_change_median": statistics.median(moved) if moved else None,
-            "top_programs_from_development": sum(i in produced for i in top),
-            "top_programs_from_proposals": sum(i in proposed for i in top)}
-
-
-def v1019_development_stats(facts, attempts, init_attempts, final_candidates):
-    programs = facts.programs
-    ranking = [p["id"] for p in sorted(facts.valid.values(), key=lambda p: (p["fitness"], p["id"]))]
-    """How changes used the budget, what their development did and where they ended."""
-    records = sorted(facts.explorations.values(), key=lambda e: e["id"])
-    tagged = {a["id"] for a in attempts if a.get("exploration") and a["exploration"]["step"] > 0}
-    inside = [a for a in attempts if a["id"] in tagged or a.get("repair_of") in tagged]
-    proposals = [a for a in attempts if a.get("exploration") and a["exploration"]["step"] == 0]
-    search = [a for a in attempts if a["id"] > init_attempts]  # initialization comes first
-    made = [e for e in records if e["proposed_id"] is not None]
-    developed = [e for e in made if e["development_attempts"]]
-    by_steps = Counter()
-    source_similarity, first_similarity, kept = [], [], []
-    for e in developed:
-        source, best = programs[e["start_id"]], programs[e["best_id"]]
-        if e["improved_start"]:
-            by_steps[len(e["development_attempts"])] += 1
-            first = programs[e["proposed_id"]]
-            # Where the successful version sits between the algorithm and the change's first version.
-            source_similarity.append(similarity(best["code"], source["code"]))
-            first_similarity.append(similarity(best["code"], first["code"]))
-    for e in made:
-        first, source = programs[e["proposed_id"]], programs.get(e["start_id"])
-        if source is not None and source.get("valid"):
-            kept.append(similarity(first["code"], source["code"]))
-    starts = {e["id"]: e["start_id"] for e in records}
-    reverted = sum(1 for a in inside if a.get("exploration") and a["status"] == "duplicate"
-                   and a.get("program_id") == starts.get(a["exploration"]["id"]))
-    produced = {a.get("program_id") for a in inside if a["status"] == "valid"}
-    proposed = {e["proposed_id"] for e in made}
-    top = ranking[:final_candidates]
-    steps = [len(e["development_attempts"]) for e in developed]
-    median = lambda values: statistics.median(values) if values else None
-    return {"count": len(records), "proposal_generations": len(proposals),
-            "new_programs": len(made), "developed": len(developed),
-            "reasons": dict(Counter(e["reason"] for e in records)),
-            "first_version_improved_start": sum(e["improved_start"] and not e["development_attempts"]
-                                                for e in made),
-            "developed_improved_start": sum(e["improved_start"] for e in developed),
-            "developed_improved_start_by_steps": dict(sorted(by_steps.items())),
-            "development_steps_mean": statistics.fmean(steps) if steps else None,
-            "development_generations": len(inside),
-            "development_returned_start_code": reverted,
-            "development_share_of_search_generations": len(inside) / len(search) if search else None,
-            "proposal_share_of_search_generations": len(proposals) / len(search) if search else None,
-            "first_version_similarity_to_start_median": median(kept),
-            "improved_development_similarity_to_start_median": median(source_similarity),
-            "improved_development_similarity_to_first_median": median(first_similarity),
-            "top_programs_from_development": sum(i in produced for i in top),
-            "top_programs_from_proposals": sum(i in proposed for i in top)}
-
-
-def exploration_stats(facts, attempts, init_attempts, final_candidates, method):
-    if method == "v1024":
-        from traceaad.v10_24.diagnostics import development_stats
-        return development_stats(facts)
-    if method == "v1018":
-        return v1018_development_stats(facts, attempts, init_attempts, final_candidates)
-    if method == "v1019":
-        return v1019_development_stats(facts, attempts, init_attempts, final_candidates)
-    return random_development_stats(facts, attempts, init_attempts, final_candidates)
-
-
 def diagnose(run_dir):
     run_dir = Path(run_dir)
     facts = Facts(run_dir)
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
     config = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8")) if (run_dir / "run_config.json").exists() else {}
+    if summary.get("method", config.get("method")) != "v12_0":
+        raise ValueError("diagnostics require a V12.0 run; use saved diagnostics or historical source for older runs")
     time_limit = (config.get("task_eval") or {}).get("timeout_seconds")
     instance_record = next((r for r in facts.evaluations if r.get("role") == "search"
                             and r.get("timeout_scope") == "instance"), None)
@@ -277,8 +167,7 @@ def diagnose(run_dir):
         time_limit = instance_record["timeout_seconds"] * instance_record["n_instances"]
     result = diagnostics(facts, summary["budget"], summary["init_attempts"],
                          config.get("method_params", {}).get("final_candidates", 5),
-                         summary.get("method", config.get("method", "v1017")),
-                         time_limit)
+                         time_limit=time_limit)
     write_json(run_dir / "diagnostics.json", result)
     return result
 
