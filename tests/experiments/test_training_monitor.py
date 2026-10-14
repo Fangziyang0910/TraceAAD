@@ -11,6 +11,25 @@ def write_json(path, value):
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
+def test_raw_curve_units_preserve_legacy_until_search_conversion_finishes(tmp_path):
+    from traceaad.common.config import REVISION
+    results = tmp_path / 'results'
+    for name, revision, score in [('raw', REVISION, 42.), ('legacy', 'old', -2.)]:
+        run = results / 'graph_colouring' / name
+        write_json(run / 'run_config.json', {'task': 'graph_colouring', 'revision': revision, 'budget': 1})
+        append_records(run / 'events.jsonl', [candidate(1, score, code='def solve(x): return x')])
+        # Final summaries can be raw even while the search journal is still relative.
+        write_json(run / 'summary.json', {'status': 'finished', 'score_metric': 'raw_objective'})
+    monitor = ResultsMonitor(tmp_path, 'results')
+    assert monitor.run_detail('results', 'graph_colouring', 'raw')['task_meta']['unit'] == '颜色数'
+    assert monitor.run_detail('results', 'graph_colouring', 'legacy')['task_meta']['unit'] == '参考偏差 %'
+    assert monitor.overview()['tasks'][0]['unit'] == '评分口径混合'
+    write_json(results / 'graph_colouring/legacy/summary.json', {
+        'status': 'finished', 'score_metric': 'raw_objective', 'raw_search': {'status': 'complete'}})
+    assert monitor.run_detail('results', 'graph_colouring', 'legacy')['task_meta']['unit'] == '颜色数'
+    assert monitor.overview()['tasks'][0]['unit'] == '颜色数'
+
+
 def make_run(tmp_path):
     results = tmp_path / "results"
     run_name = "batch_tsp_v1013_rep1"

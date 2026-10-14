@@ -18,7 +18,8 @@ from urllib.parse import parse_qs, urlparse
 from experiments.infra.monitor_history import TrainingHistory, finite
 from experiments.infra.monitor_results import (
     batch_result_files, load_batch_heldout, rep_of)
-from benchmarks.tasks import SCALES, TEST_SCALES
+from benchmarks.tasks import FIXED_TASKS, SCALES, TEST_SCALES
+from traceaad.common.config import REVISION
 from experiments.infra.monitor_timing import batch_timing, search_timing
 from traceaad.common.storage import JOURNAL_NAME, selected_program
 
@@ -33,9 +34,9 @@ TASKS = {
     "op_aco": {"label": "OP-ACO", "unit": "负收益"},
     "online_bin_packing": {"label": "在线装箱", "unit": "箱数"},
     "vrptw_construct": {"label": "VRPTW 构造", "unit": "距离"},
-    "fssp_gls": {"label": "FSSP-GLS", "unit": "参考偏差 %"},
-    "graph_colouring": {"label": "图着色", "unit": "参考偏差 %"},
-    "jssp_construct": {"label": "作业车间调度", "unit": "参考偏差 %"},
+    "fssp_gls": {"label": "FSSP-GLS", "unit": "makespan"},
+    "graph_colouring": {"label": "图着色", "unit": "颜色数"},
+    "jssp_construct": {"label": "作业车间调度", "unit": "makespan"},
 }
 
 
@@ -313,6 +314,10 @@ class ResultsMonitor:
             task = config.get("task", run_dir.parent.name)
             if task not in TASKS:
                 continue
+            score_unit = TASKS[task]['unit']
+            if (task in FIXED_TASKS and config.get('revision') != REVISION
+                    and summary.get('raw_search', {}).get('status') not in ('complete', 'complete_with_missing')):
+                score_unit = '参考偏差 %'
             history = _history(run_dir, task)
             curve = history.read()[0]
             progress = history.progress_snapshot()
@@ -331,6 +336,7 @@ class ResultsMonitor:
                 "status": status, "raw_status": raw_status, "budget": int(budget or 0),
                 "budget_used": int(used or 0), "valid_nodes": int(nodes or 0),
                 "best_fitness": score,
+                "score_unit": score_unit,
                 "updated_at": summary.get("finished_at") or history.clock.get("completed_at") or metadata.get("started_at"), "run_dir": run_dir,
                 "error": None if status == "running" else summary.get("error") or metadata.get("last_error"),
                 "curve": _list_curve(curve),
@@ -357,7 +363,9 @@ class ResultsMonitor:
         for task, meta in TASKS.items():
             task_runs = [row for row in runs if row["task"] == task]
             if task_runs:
-                groups.append({"key": task, **meta, "runs": [
+                units = {row['score_unit'] for row in task_runs}
+                groups.append({"key": task, **meta,
+                    "unit": next(iter(units)) if len(units) == 1 else '评分口径混合', "runs": [
                     {key: value for key, value in row.items() if key != "run_dir"}
                     for row in task_runs
                 ]})
@@ -457,7 +465,7 @@ class ResultsMonitor:
         summary = _read_json(run_dir / "summary.json")
         curve, recent, operators, outcomes = _search_trend(run_dir, task)
         return {**{key: value for key, value in row.items() if key != "run_dir"},
-                "task_meta": TASKS[task], "curve": curve, "operators": operators,
+                "task_meta": {**TASKS[task], "unit": row['score_unit']}, "curve": curve, "operators": operators,
                 "outcomes": outcomes, "recent": recent,
                 "development": _history(run_dir, task).development_snapshot(),
                 **_programs(run_dir, task, summary, curve)}
