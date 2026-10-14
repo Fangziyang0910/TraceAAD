@@ -41,3 +41,12 @@ def test_a_client_error_is_not_retried(monkeypatch):
     with pytest.raises(core_llm.ModelCallError) as caught:
         core_llm.generate(Flaky(1, ValueError("bad request")), "p")
     assert not caught.value.transient and len(caught.value.calls) == 1
+
+
+def test_a_gateway_upstream_failure_is_retried(monkeypatch):
+    class Upstream(Exception):
+        status_code = 400
+    monkeypatch.setattr(core_llm.time, "sleep", lambda s: None)
+    error = Upstream("Upstream request failed: [invalid_request_error] Extra inputs are not permitted")
+    result = core_llm.generate(Flaky(2, error), "p")
+    assert result["content"] == "ok" and len(result["calls"]) == 3

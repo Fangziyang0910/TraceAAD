@@ -34,7 +34,7 @@ class Facts:
         self.summary_path = self.run_dir / "summary.json"
         self.checkpoint_path = self.run_dir / "resume.json"
         self.sources = Programs(run_dir)
-        self.programs, self.attempts, self.explorations = {}, {}, {}
+        self.programs, self.attempts, self.explorations, self.verdicts = {}, {}, {}, {}
         self.evaluations = []
         checkpoint = read_json(self.checkpoint_path, {})
         self.state = checkpoint.get("state")
@@ -51,6 +51,8 @@ class Facts:
         self.evaluations.extend(row.get("evaluations", []))
         if exploration := row.get("exploration"):
             self.explorations[exploration["id"]] = exploration
+        if verdict := row.get("verdict"):
+            self.verdicts[verdict["program_id"]] = verdict
 
     @property
     def valid(self):
@@ -61,7 +63,7 @@ class Facts:
         return {p["key"]: p for p in self.programs.values()}
 
     def commit(self, state, *, attempt=None, program=None, evaluations=(), calls=(), exploration=None,
-               development=None):
+               development=None, verdict=None):
         # Reading never changes files. A resumed writer discards uncommitted tails.
         for name, size in self.files.items():
             path = self.run_dir / name
@@ -95,6 +97,8 @@ class Facts:
             row["exploration"] = exploration
         if development is not None:
             row["development"] = development
+        if verdict is not None:
+            row["verdict"] = verdict
         row["progress"] = {k: state[k] for k in ("phase", "attempts", "elapsed", "started_at",
                                                 "model_calls", "input_tokens", "output_tokens")}
         row["ts"] = datetime.now().astimezone().isoformat(timespec="seconds")

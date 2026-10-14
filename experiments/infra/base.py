@@ -86,6 +86,8 @@ BACKENDS: dict[BackendName, BackendProfile] = {
     ),
 }
 
+# Hosted models are called directly; a host scheduler serves only its own GPU endpoints.
+HOSTED_BACKENDS = ("deepseek",)
 BACKEND_CAPACITY = {name: profile.capacity for name, profile in BACKENDS.items()}
 BACKEND_DISPLAY_NAMES = {name: profile.label or name for name, profile in BACKENDS.items()}
 BACKEND_MARKERS = {name: (profile.marker or urlparse(profile.base_url).netloc,) for name, profile in BACKENDS.items()}

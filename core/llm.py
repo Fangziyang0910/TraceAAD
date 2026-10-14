@@ -119,7 +119,9 @@ def generate(llm, prompt, **kwargs):
         if error is None:
             return {**details, 'calls': calls}
         status = getattr(error, 'status_code', None)
-        transient = (status == 429 or isinstance(status, int) and status >= 500 or
+        # The hosted gateway reports a failure of the provider it routed to as 400; the same request succeeds again.
+        upstream = status == 400 and 'Upstream request failed' in str(error)
+        transient = (status == 429 or isinstance(status, int) and status >= 500 or upstream or
                      isinstance(error, (openai.APIConnectionError, openai.APITimeoutError,
                                         ConnectionError, TimeoutError, OSError)))
         if not transient or waited >= SERVICE_WAIT_SECONDS:

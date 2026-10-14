@@ -257,6 +257,16 @@ def test_host_partition_and_cli_defaults(daemon, capsys):
     assert payload['resource_scheduler']['gpu']['capacity'] == 3
 
 
+def test_hosted_model_runs_use_the_scheduler_for_cpu_only(daemon, capsys):
+    from experiments.traceaad_v12_1.launch_host import main
+    path, _ = daemon
+    for backends, expected in (([], {"deepseek"}), (["--backends", "server3", "server3b"], {"scheduled"})):
+        main(["--batch", "hosted", "--scheduler-socket", path, "--repeats", "2", *backends])
+        plan = json.loads(capsys.readouterr().out)["plan"]
+        assert {row["backend"] for row in plan} == expected and len(plan) == 12
+        assert all("--scheduler-socket" in row["command"] for row in plan)
+
+
 def test_cpu_configuration_uses_host_affinity():
     from experiments.infra.scheduler import cpu_ids
     allowed = sorted(os.sched_getaffinity(0))

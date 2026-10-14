@@ -78,6 +78,9 @@ def launch_plan(path, manifest, *, min_context=None):
         models = served_models(profiles, profiles=profiles, required=True, min_context=min_context)
         for name, record in models.items():
             record['scheduled_slots'] = current['endpoints'][int(name)]['slots']
+        # Runs on a hosted model use the scheduler for CPU only.
+        hosted = {item['backend'] for item in plan} - {'scheduled'}
+        models.update(served_models(hosted, required=True, min_context=min_context))
     else:
         models = served_models((item['backend'] for item in plan), required=True, min_context=min_context)
         for name, record in models.items():

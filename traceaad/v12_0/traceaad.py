@@ -40,6 +40,10 @@ class TraceAADV120(Search):
             self._vectors[text] = self.embed(text)
         return self._vectors[text]
 
+    def _implementations(self):
+        """The programs a proposal may be matched to."""
+        return self.archive
+
     def _link(self, calls, design, parent):
         """The matched earlier programs and the one to show, recorded whether or not it is shown."""
         link = {"design": design, "candidates": [], "similarities": [], "matched": [],
@@ -47,7 +51,8 @@ class TraceAADV120(Search):
         if not design:
             return link, None
         try:
-            ranked = rank_candidates(design, self.archive, parent["id"], self._vector, self.config.match_candidates)
+            ranked = rank_candidates(design, self._implementations(), parent["id"], self._vector,
+                                     self.config.match_candidates)
         except Exception as exc:  # the embedding service is outside the search: this proposal stays unlinked
             link["error"] = f"{type(exc).__name__}: {exc}"
             return link, None
@@ -149,6 +154,9 @@ class TraceAADV120(Search):
         self._attempt(request, parent=best)
 
     def _close_exploration(self, exploration):
+        self._save(exploration=self._exploration_record(exploration))
+
+    def _exploration_record(self, exploration):
         proposal, proposed, best = exploration["proposal"], exploration["proposed"], exploration["best"]
         search_best = min(self.archive.values(), key=lambda n: (n["fitness"], n["id"]))
         record = {
@@ -161,7 +169,7 @@ class TraceAADV120(Search):
             "best_id": best["id"] if best else None, "best_score": best["score"] if best else None,
             "search_best_id": search_best["id"], "search_best_score": search_best["score"],
             "closed_after": self.attempts}
-        self._save(exploration=record)
+        return record
 
     def _evaluation_options(self):
         return {"timeout_seconds": self.config.eval_timeout_seconds,

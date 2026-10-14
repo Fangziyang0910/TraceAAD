@@ -4,7 +4,7 @@
 
 ## 当前实现入口
 
-当前仅保留 [V12.0 复提接续](traceaad_v12_0/README.md)，提供关闭接续的基础组、完整接续组与随机展示诊断组。搜索、配置和提示均位于 `traceaad/v12_0/`，执行与存储工具位于 `traceaad/common/`。
+当前保留 [V12.0 复提接续](traceaad_v12_0/README.md)，提供关闭接续的基础组、完整接续组与随机展示诊断组；[V12.1 设计核验](traceaad_v12_1/README.md)在其上阅读 Explore 版本是否实现了 Design、是否保留了起点，提供完整组、随机补全组与重采样组。搜索、配置和提示位于 `traceaad/v12_0/` 与 `traceaad/v12_1/`，执行与存储工具位于 `traceaad/common/`。
 
 V10.15–V10.25 与旧决策模型实验代码已移除。历史研究文档和实验结果保留；复现历史批次应使用其启动时的源码快照或 Git 历史。
 
@@ -14,7 +14,7 @@ V10.15–V10.25 与旧决策模型实验代码已移除。历史研究文档和�
 
 2026-10-11起，新实验采用四项固定框架（TSP、CVRP、FSSP、OP）与两项完整求解器（图着色、JSSP）。后两项的 `solve` 可整体改写；旧评分函数批次仍按启动时的协议解释，不能用新评价器续跑或补测。
 
-V12.0 的运行命令见[实验入口](traceaad_v12_0/README.md)，结果读取共用[实验与结果实现](infra/SEARCH_FORMAT.md)。
+V12.0 与 V12.1 的运行命令见各自入口（[V12.0](traceaad_v12_0/README.md)、[V12.1](traceaad_v12_1/README.md)），结果读取共用[实验与结果实现](infra/SEARCH_FORMAT.md)。
 
 任务注册与统一预算在 `benchmarks/tasks.py`；任务专属的数据、配置、模板和评价器位于各自任务目录，共用数据与评价逻辑位于 `benchmarks/shared/`。通用测试命令为 `uv run python -m experiments.infra.evaluate <运行目录> --primary`。
 

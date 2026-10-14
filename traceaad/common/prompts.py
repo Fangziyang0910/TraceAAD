@@ -161,6 +161,14 @@ class PromptBuilder:
         return "runtime error: " + short_error(failure.get("error")) + where
 
 
+    def design(self, program):
+        """How a program's Design is shown; a version may add what is known about it."""
+        return idea_view(program.get("idea"))
+
+    def followup(self, attempt, node, sequence_ids):
+        """What happened after an attempt, appended to its outcome; nothing by default."""
+        return ""
+
     # ---------- formation path ----------
 
     @staticmethod
@@ -195,7 +203,7 @@ class PromptBuilder:
         result = f"{heading} · {action} · score {score_text(parent['score'])} → {end}"
         if failed is not None:
             result += f"\n  First version failed: {self.failure(failed)}"
-        result += f"\n  Design: {idea_view(child['idea'])}"
+        result += f"\n  Design: {self.design(child)}"
         result += f"\n  Code diff (previous → current):\n```diff\n{code_diff(parent['code'], child['code'])}\n```"
         return result
 
@@ -206,12 +214,12 @@ class PromptBuilder:
         failed_note = f" (its first version failed: {self.failure(root_failed)})" if root_failed else ""
         if len(steps) == 1:
             return (f"[{title}]\nThe {subject} algorithm is {self.UNCHANGED_ROOT.format(origin=origin)}{failed_note}; no changes have been "
-                    f"recorded yet.\nDesign: {idea_view(root['idea'])}"), []
+                    f"recorded yet.\nDesign: {self.design(root)}"), []
         start = max(1, len(steps) - count)
         lines = [f"[{title}]", self.FORMATION_INTRO.replace("current algorithm", f"{subject} algorithm")]
         if start == 1:
             lines.append(f"Start · {origin} · score {score_text(root['score'])}{failed_note}\n"
-                         f"  Design: {idea_view(root['idea'])}")
+                         f"  Design: {self.design(root)}")
         else:
             lines.append(f"The path has {len(steps)-1} steps; showing the most recent {len(steps)-start} steps.")
         for index in range(start, len(steps)):
@@ -262,6 +270,7 @@ class PromptBuilder:
                     outcome += "; the repair returned the same failing program"
                 else:
                     outcome += "; repaired: " + self._outcome(repair, node, sequence_ids)
+            outcome += self.followup(attempt, node, sequence_ids)
             design = idea_view(attempt.get("idea")) or "(none)"
             lines.append(f"Attempt {attempt['id']} · {action} · Design: {design}\n  → {outcome}")
         return lines
@@ -315,7 +324,7 @@ class PromptBuilder:
                           else f"from an algorithm scoring {score_text(source['score'])}")
                 entries.append(f"Attempt {event['id']} · {action} {origin} → "
                                f"{score_text(program['score'])} (previous best {score_text(previous['score'])})"
-                               f"\n  Design: {idea_view(program['idea'])}")
+                               f"\n  Design: {self.design(program)}")
             text += "\n\n".join(entries) + "\n\n"
         text += f"Best score found so far in this search: {score_text(best['score'])}."
         return text, [program["id"] for _, program in listed]
@@ -395,7 +404,7 @@ class PromptBuilder:
         if reference is None:
             raise ValueError("Crossover requires a reference")
         ref_section = (f"[Reference Algorithm]\nAnother evaluated algorithm from this search.\n"
-                       f"{self.measured(reference)}\nDesign: {idea_view(reference['idea'])}\n"
+                       f"{self.measured(reference)}\nDesign: {self.design(reference)}\n"
                        f"```python\n{reference['code'].rstrip()}\n```")
         reference_sequence = path(reference, self.programs)
         counts = [min(4, depth), min(4, len(self.steps(reference_sequence)) - 1)]

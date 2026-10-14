@@ -5,7 +5,7 @@ from dataclasses import asdict
 import json
 
 from benchmarks.tasks import FUNCTION_SECONDS, FUNCTION_LIMITS, INSTANCE_LIMITS, INSTANCE_SECONDS, SELECTION_SEED, selection_task, training_task
-from experiments.infra.base import RESULTS_ROOT
+from experiments.infra.base import HOSTED_BACKENDS, RESULTS_ROOT
 from experiments.infra.runner import add_common_run_args, setup_experiment_run
 from traceaad.common.config import REVISION
 from .diagnose_search import diagnose
@@ -46,10 +46,11 @@ def main(method_class, config_class, experiment, description, argv=None):
         args.scheduler_socket = str(Path(args.scheduler_socket).expanduser().resolve())
         scheduler = scheduler_status(args.scheduler_socket)
         execution['scheduler_socket'] = args.scheduler_socket
-        endpoint = scheduler['endpoints'][0]
-        profile = BackendProfile(endpoint['base_url'], endpoint['model'], endpoint.get('no_proxy', ''))
-        llm_factory = lambda **kw: ScheduledLLM(args.scheduler_socket, max_tokens=kw['max_tokens'],
-                                               label=args.run_name or args.task, enable_thinking=kw['enable_thinking'])
+        if args.backend not in HOSTED_BACKENDS:
+            endpoint = scheduler['endpoints'][0]
+            profile = BackendProfile(endpoint['base_url'], endpoint['model'], endpoint.get('no_proxy', ''))
+            llm_factory = lambda **kw: ScheduledLLM(args.scheduler_socket, max_tokens=kw['max_tokens'],
+                                                   label=args.run_name or args.task, enable_thinking=kw['enable_thinking'])
     if execution and execution['eval_workers'] is None:
         execution['eval_workers'] = scheduler['cpu']['capacity'] if scheduler else 1
         args.eval_workers = execution['eval_workers']

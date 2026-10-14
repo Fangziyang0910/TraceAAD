@@ -158,8 +158,8 @@ def diagnose(run_dir):
     facts = Facts(run_dir)
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
     config = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8")) if (run_dir / "run_config.json").exists() else {}
-    if summary.get("method", config.get("method")) != "v12_0":
-        raise ValueError("diagnostics require a V12.0 run; use saved diagnostics or historical source for older runs")
+    if summary.get("method", config.get("method")) not in ("v12_0", "v12_1"):
+        raise ValueError("diagnostics require a V12 run; use saved diagnostics or historical source for older runs")
     time_limit = (config.get("task_eval") or {}).get("timeout_seconds")
     instance_record = next((r for r in facts.evaluations if r.get("role") == "search"
                             and r.get("timeout_scope") == "instance"), None)

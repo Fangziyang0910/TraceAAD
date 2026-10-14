@@ -219,7 +219,7 @@ def test_search_and_heldout_keep_execution_parameters(tmp_path, monkeypatch):
     summary = json.loads(summary_path.read_text())
     summary['method'] = 'v1024'
     summary_path.write_text(json.dumps(summary))
-    with pytest.raises(ValueError, match='V12.0 run'):
+    with pytest.raises(ValueError, match='V12 run'):
         diagnose(tmp_path)
     assert (tmp_path / 'diagnostics.json').read_bytes() == saved_diagnostics
 

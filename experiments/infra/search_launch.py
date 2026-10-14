@@ -2,7 +2,7 @@
 
 import hashlib
 
-from experiments.infra.base import REPO_ROOT, RESULTS_ROOT, TASK_SHORT
+from experiments.infra.base import HOSTED_BACKENDS, REPO_ROOT, RESULTS_ROOT, TASK_SHORT
 
 
 def build_plan(previous, batch, experiment, module, budget=1000, *, eval_workers=4, eval_timeout_seconds=None,
@@ -29,7 +29,7 @@ def build_plan(previous, batch, experiment, module, budget=1000, *, eval_workers
                      "session": session, "run_name": name,
                      "run_dir": str(RESULTS_ROOT / experiment / task / name),
                      "command": command, "status": "planned"})
-        if scheduler_socket:
+        if scheduler_socket and backend not in HOSTED_BACKENDS:
             plan[-1]['backend'] = 'scheduled'
     if len({item["run_name"] for item in plan}) != len(plan):
         raise ValueError("duplicate run identities")
