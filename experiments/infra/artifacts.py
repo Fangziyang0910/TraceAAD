@@ -1,7 +1,7 @@
 """Scored programs and frozen winners from canonical result files."""
 
 from pathlib import Path
-from traceaad.common.storage import Programs, committed_rows, read_json, selected_program
+from traceaad.v12_1.storage import Programs, committed_rows, read_json, selected_program
 
 
 def load_run_summary(run_dir, *, require_finished=True):

@@ -7,7 +7,13 @@ from .run import VerifiedSearch
 
 
 def main(argv=None):
-    return run(VerifiedSearch, ResampleConfig, EXPERIMENT, "V12.1 resample arm: independent implementations", argv)
+    return run(
+        VerifiedSearch,
+        ResampleConfig,
+        EXPERIMENT,
+        "V12.1 resample arm: independent implementations",
+        argv,
+    )
 
 
 if __name__ == "__main__":

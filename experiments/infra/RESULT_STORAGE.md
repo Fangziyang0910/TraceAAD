@@ -11,4 +11,4 @@ mkdir -p /tmp/traceaad-original-run
 tar -xzf <原档.tar.gz> -C /tmp/traceaad-original-run
 ```
 
-归档供只读查阅，看板不再向归档写入派生缓存；.cache单独标记，不作为原始实验证据。需要恢复或复算时复制到新目录，并按原条件使用original_metadata；不要在封存目录直接续跑。原有硬链接保留，追加写入须先分离共享inode。archive目录被Git与代码镜像排除，后续push不会上传或清除封存数据。
+归档供只读查阅，看板不再向归档写入派生缓存。.cache单独标记，不作为原始实验证据。需要恢复或复算时复制到新目录，并按原条件使用original_metadata。不要在封存目录直复用已有实现跑。原有硬链接保留，追加写入须先分离共享inode。archive目录被Git与代码镜像排除，后续push不会上传或清除封存数据。

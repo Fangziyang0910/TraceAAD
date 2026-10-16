@@ -14,8 +14,8 @@ import shutil
 
 from benchmarks.tasks import CLASSES, FIXED_TASKS
 from experiments.infra.raw_objectives import convert_final_results, restore_record
-from traceaad.common.instance_evaluation import InstanceProgramEvaluator
-from traceaad.common.storage import Programs, append_jsonl, read_json, repair_jsonl_tail, rows, write_json
+from traceaad.v12_1.instance_evaluation import InstanceProgramEvaluator
+from traceaad.v12_1.storage import Programs, append_jsonl, read_json, repair_jsonl_tail, rows, write_json
 
 
 def signature(record):

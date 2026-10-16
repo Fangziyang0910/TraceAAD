@@ -12,8 +12,8 @@ import subprocess
 import time
 
 from benchmarks.tasks import SCALES, SPLITS, scale_of_split
-from traceaad.common.storage import heldout_identity
-from traceaad.common.storage import committed_size, selected_program, read_json as result_json
+from traceaad.v12_1.storage import heldout_identity
+from traceaad.v12_1.storage import committed_size, selected_program, read_json as result_json
 from experiments.infra.monitor_timing import batch_timing, search_timing
 
 

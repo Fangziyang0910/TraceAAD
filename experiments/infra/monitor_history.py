@@ -6,7 +6,7 @@ from threading import RLock
 import json
 import math
 
-from traceaad.common.storage import Programs, committed_size, read_json, write_json
+from traceaad.v12_1.storage import Programs, committed_size, read_json, write_json
 
 
 def finite(value):
@@ -89,6 +89,10 @@ class TrainingHistory:
                     if row.get("program"):
                         program = row["program"]
                         self.programs[str(program["id"])] = program
+                        if row["kind"] != "candidate":
+                            for event in self.streams["events"]:
+                                if event.get("node_id") == program["id"] and event["status"] == "pending":
+                                    event.update(status=program["status"], valid=program["valid"], fitness=program["fitness"])
                     if dev := row.get("development"):
                         self.development['active'] = dev['scheduler'].get('active')
                         for key, fields in (
@@ -97,9 +101,9 @@ class TrainingHistory:
                             ('block', ('id', 'unit_id', 'purpose', 'spent', 'limit', 'frontier_gain'))):
                             if item := dev.get(key):
                                 self.development[key + 's'][str(item['id'])] = {k: item.get(k) for k in fields}
-                    if row["kind"] == "candidate":
+                    if row["kind"] in {"candidate", "delivery_failed"}:
                         self.node_offsets[str(row["candidate_id"])] = row.get("node_id")
-                        attempt = row["attempt"]
+                        attempt = row.get("attempt") or row.get("program") or {}
                         self.streams["events"].append({
                             "evaluation": row["budget_used"], "candidate": row["candidate_id"],
                             "node_id": row.get("node_id"), "fitness": row["fitness"],
@@ -109,7 +113,7 @@ class TrainingHistory:
                             "idea": (attempt.get("idea") or "")[:280]})
                     if row.get("progress"):
                         progress = row["progress"]
-                        if row["kind"] == "candidate" or not self.clock:
+                        if row["kind"] in {"candidate", "delivery_failed"} or not self.clock:
                             self.clock = {"completed": progress["attempts"], "elapsed": progress.get("elapsed"),
                                           "started_at": progress.get("started_at"), "completed_at": row["ts"]}
                         self.clock["phase"] = progress["phase"]

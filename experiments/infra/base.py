@@ -257,7 +257,7 @@ def llm_payload(
 
 
 def write_run_config(run_dir: Path, payload: dict[str, Any]) -> None:
-    from traceaad.common.storage import RESULT_FORMAT, write_json
+    from traceaad.v12_1.storage import RESULT_FORMAT, write_json
     payload = {"result_format": RESULT_FORMAT, **payload}
     write_json(run_dir / "run_config.json", payload)
 

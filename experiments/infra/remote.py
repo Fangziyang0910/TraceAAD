@@ -13,7 +13,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from traceaad.common.storage import read_json
+from traceaad.v12_1.storage import read_json
 
 HOST = "B3-server3"
 REMOTE = "/home/fzy/code/LLM4AD/TraceAAD"
@@ -102,7 +102,7 @@ def sync(experiment, batch, interval):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("push", "pull", "prune", "watch", "sync"))
-    parser.add_argument("--experiment", default="traceaad_v12_0")
+    parser.add_argument("--experiment", default="traceaad_v12_1")
     parser.add_argument("--batch")
     parser.add_argument("--interval", type=int, default=60)
     parser.add_argument("--no-heldout", action="store_true", help="prune finished runs without a held-out result")

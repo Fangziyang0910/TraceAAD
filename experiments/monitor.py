@@ -19,9 +19,9 @@ from experiments.infra.monitor_history import TrainingHistory, finite
 from experiments.infra.monitor_results import (
     batch_result_files, load_batch_heldout, rep_of)
 from benchmarks.tasks import FIXED_TASKS, SCALES, TEST_SCALES
-from traceaad.common.config import REVISION
+from traceaad.v12_1.config import REVISION
 from experiments.infra.monitor_timing import batch_timing, search_timing
-from traceaad.common.storage import JOURNAL_NAME, selected_program
+from traceaad.v12_1.storage import JOURNAL_NAME, selected_program
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

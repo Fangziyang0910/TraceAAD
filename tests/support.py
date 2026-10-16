@@ -1,6 +1,9 @@
 """Small deterministic stand-ins for method and experiment tests."""
 
+import json
+
 from core import Evaluation
+from traceaad.v12_1.delivery import BLOCK, extract_idea
 
 
 class TinyEvaluation(Evaluation):
@@ -25,8 +28,14 @@ class FakeLLM:
 
     def draw_sample_with_details(self, prompt, **kwargs):
         self.calls.append((prompt, kwargs))
+        content = next(self.responses)
+        if kwargs.get("response_format") and not content.lstrip().startswith("{"):
+            # Text-format fixtures answer a structured request with the same Design and code.
+            blocks = BLOCK.findall(content)
+            content = json.dumps({"analysis": "", "design": extract_idea(content),
+                                  "code": blocks[-1] if blocks else content})
         return {
-            "content": next(self.responses),
+            "content": content,
             "finish_reason": "stop",
             "usage": {},
             "model": "test",

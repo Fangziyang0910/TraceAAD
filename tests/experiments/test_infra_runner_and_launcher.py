@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from traceaad.common.storage import read_json
+from traceaad.v12_1.storage import read_json
 from experiments.infra.runner import (
     add_common_run_args,
     resolve_resumable_run_dir,
@@ -105,11 +105,12 @@ def test_baseline_lifecycle_runs_once_and_writes_config(tmp_path, monkeypatch):
 
 
 def test_traceaad_entry_accepts_thinking_and_preserves_its_own_output_limit(capsys):
-    from experiments.traceaad_v12_0 import run
+    from experiments.traceaad_v12_1 import run
     from experiments.infra.search_run import build_parser
-    from traceaad.v12_0 import Config
+    from traceaad.v12_1 import Config
     args = build_parser('traceaad_v12_0', Config).parse_args(['--task', 'graph_colouring'])
-    assert args.thinking is None and args.output_tokens == 8192
+    assert args.thinking is None and args.output_tokens == 16384
     run.main(['--task', 'graph_colouring', '--thinking', '--dry-run'])
     payload = json.loads(capsys.readouterr().out)
-    assert payload['config']['output_tokens'] == 8192
+    assert payload['config']['output_tokens'] == 16384
+    assert 'max_input_tokens' not in payload['config']

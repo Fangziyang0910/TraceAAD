@@ -8,9 +8,9 @@ from pathlib import Path
 import statistics
 
 from benchmarks.tasks import CLASSES, FIXED_TASKS, FUNCTION_LIMITS, PRIMARY_SPLITS, heldout_task, training_task
-from traceaad.common.config import REVISION
-from traceaad.common.storage import read_json, write_json, save_heldout
-from traceaad.common.instance_evaluation import InstanceProgramEvaluator
+from traceaad.v12_1.config import REVISION
+from traceaad.v12_1.storage import read_json, write_json, save_heldout
+from traceaad.v12_1.instance_evaluation import InstanceProgramEvaluator
 from experiments.infra.artifacts import pick_best_sample
 
 

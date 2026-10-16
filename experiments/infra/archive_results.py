@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from traceaad.common.storage import write_json
+from traceaad.v12_1.storage import write_json
 
 
 def archive_results(source, destination, paths):

@@ -1,9 +1,9 @@
 """Evaluate frozen programs with the current task execution defaults."""
 
 from benchmarks.tasks import CO_TASKS, FUNCTION_LIMITS, FULL_SOLVER_TASKS, INSTANCE_LIMITS, PRIMARY_SPLITS, TEST_INSTANCES, heldout_task, validate_task_interface
-from traceaad.common.evaluation import ProgramEvaluator
-from traceaad.common.instance_evaluation import InstanceProgramEvaluator
-from traceaad.common.config import REVISION
+from traceaad.v12_1.evaluation import ProgramEvaluator
+from traceaad.v12_1.instance_evaluation import InstanceProgramEvaluator
+from traceaad.v12_1.config import REVISION
 
 
 def heldout_evaluator(config, split, seeds, *, workers, timeout_seconds, measure_calls,

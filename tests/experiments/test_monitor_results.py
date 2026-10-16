@@ -1,6 +1,6 @@
 import json
 import pytest
-from traceaad.common.storage import save_heldout
+from traceaad.v12_1.storage import save_heldout
 
 from experiments.infra.monitor_results import load_batch_heldout
 from benchmarks.tasks import scale_of_split

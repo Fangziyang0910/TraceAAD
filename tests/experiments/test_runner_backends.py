@@ -53,7 +53,7 @@ def test_assign_backends_alternates_equal_primary_slots(monkeypatch) -> None:
             run_name=f"run_{index}",
             run_dir=Path(f"/tmp/run_{index}"),
             seed=index,
-            module="experiments.traceaad_v12_0.run_base",
+            module="experiments.traceaad_v12_1.run",
         )
         for index in range(1, 5)
     ]
@@ -75,7 +75,7 @@ def test_assign_backends_alternates_equal_primary_slots(monkeypatch) -> None:
 
 def test_backend_usage_deduplicates_forked_evaluator_cmdlines(monkeypatch) -> None:
     client = (
-        "/repo/.venv/bin/python3 -m experiments.traceaad_v12_0.run_base "
+        "/repo/.venv/bin/python3 -m experiments.traceaad_v12_1.run "
         "--task tsp_construct --backend server3 --run-name run_a"
     )
     other = client.replace("run_a", "run_b")

@@ -25,7 +25,7 @@ from baselines.shared.observability import close_llm, shutdown_executor
 from baselines.shared.sampling import SampleTrimmer
 from baselines.shared.checkpoint import FIELDS, read_checkpoint, restore_checkpoint
 from experiments.infra.runner import baseline_run_lock
-from traceaad.common.storage import Programs, append_jsonl, read_json, rows, write_json
+from traceaad.v12_1.storage import Programs, append_jsonl, read_json, rows, write_json
 
 METHODS = ('eoh', 'reevo', 'funsearch', 'mcts_ahd', 'calm', 'pathwise', 'shinka_evo')
 
@@ -510,7 +510,7 @@ def main():
                 report['resumed_at'] = datetime.now(timezone.utc).isoformat()
                 report['implementation_files'] = {
                     str(p): __import__('hashlib').sha256(p.read_bytes()).hexdigest()
-                    for folder in ('core', 'baselines', 'benchmarks', 'experiments/infra', 'traceaad/common')
+                    for folder in ('core', 'baselines', 'benchmarks', 'experiments/infra', 'traceaad/v12_1')
                     for p in Path(folder).rglob('*.py')}
                 append_jsonl(directory / 'recovery.jsonl', report)
                 for path in directory.parent.parent.glob('batch_*.json'):

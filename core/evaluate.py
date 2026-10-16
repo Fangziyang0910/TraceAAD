@@ -303,7 +303,7 @@ class SecureEvaluator:
         try:
             program_str = str(program)
             if execution := getattr(self._evaluator, "_instance_execution", None):
-                from traceaad.common.instance_evaluation import InstanceProgramEvaluator
+                from traceaad.v12_1.instance_evaluation import InstanceProgramEvaluator
                 options = {name: value for name, value in execution.items() if name != "record_path"}
                 evaluator = InstanceProgramEvaluator(self._evaluator,
                     seeds=(kwargs.get("seed", EVALUATION_SEED),), **options)

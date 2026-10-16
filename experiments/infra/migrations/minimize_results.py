@@ -17,7 +17,7 @@ import re
 import shutil
 import tempfile
 
-from traceaad.common.storage import RESULT_FORMAT, append_jsonl, read_json, rows, write_json
+from traceaad.v12_1.storage import RESULT_FORMAT, append_jsonl, read_json, rows, write_json
 
 NATIVE_MIN = {"tsp_construct", "cvrp_aco", "online_bin_packing", "vrptw_construct"}
 TASKS = NATIVE_MIN | {"op_aco"}

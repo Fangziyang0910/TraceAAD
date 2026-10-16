@@ -5,7 +5,7 @@ import json
 import pytest
 
 from experiments.infra.migrations import raw_search
-from traceaad.common.storage import append_jsonl, read_json, rows, write_json
+from traceaad.v12_1.storage import append_jsonl, read_json, rows, write_json
 
 
 def fixture(tmp_path):

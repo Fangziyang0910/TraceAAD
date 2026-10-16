@@ -14,7 +14,13 @@ class VerifiedSearch(TraceAADV121):
 
 
 def main(argv=None):
-    return run(VerifiedSearch, Config, EXPERIMENT, "V12.1: search with design verification", argv)
+    return run(
+        VerifiedSearch,
+        Config,
+        EXPERIMENT,
+        "V12.1: search with design verification",
+        argv,
+    )
 
 
 if __name__ == "__main__":

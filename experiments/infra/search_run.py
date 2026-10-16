@@ -7,13 +7,14 @@ import json
 from benchmarks.tasks import FUNCTION_SECONDS, FUNCTION_LIMITS, INSTANCE_LIMITS, INSTANCE_SECONDS, SELECTION_SEED, selection_task, training_task
 from experiments.infra.base import HOSTED_BACKENDS, RESULTS_ROOT
 from experiments.infra.runner import add_common_run_args, setup_experiment_run
-from traceaad.common.config import REVISION
+from traceaad.v12_1.config import REVISION, Config, INDIVIDUAL_FORMAT
+from traceaad.v12_1.storage import read_json
 from .diagnose_search import diagnose
 
 
 def build_parser(experiment, config_class=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    add_common_run_args(parser, default_output_tokens=8192)
+    add_common_run_args(parser, default_output_tokens=Config.output_tokens)
     if config_class is not None and hasattr(config_class, "eval_timeout_seconds"):
         parser.add_argument('--scheduler-socket', help='shared CPU/GPU scheduler on this host')
         parser.add_argument("--eval-timeout-seconds", type=float, default=None,
@@ -66,7 +67,7 @@ def main(method_class, config_class, experiment, description, argv=None):
     if args.dry_run:
         evaluation, task_config = training_task(args.task, args.eval_workers, condition="traceaad")
         selection = selection_task(args.task, evaluation) if args.final_selection == 'validation' else None
-        print(json.dumps({"method": method_class.METHOD, "revision": REVISION, "task": args.task, "config": asdict(config),
+        print(json.dumps({"method": method_class.METHOD, "revision": REVISION, "individual_format": INDIVIDUAL_FORMAT, "task": args.task, "config": asdict(config),
             "task_eval": task_config,
             "search_timeout": config.eval_timeout_seconds if execution else evaluation.timeout_seconds,
             **metadata,
@@ -79,13 +80,19 @@ def main(method_class, config_class, experiment, description, argv=None):
     root = RESULTS_ROOT / args.experiment
     if args.run_name:
         existing = root / args.task / args.run_name
+        if (existing / "events.jsonl").exists() and (existing / "events.jsonl").stat().st_size:
+            saved_state = read_json(existing / "resume.json", {}).get("state", {})
+            if saved_state.get("individual_format") != INDIVIDUAL_FORMAT:
+                raise ValueError("this run uses the old attempt/program format; start a new V12.1 run")
+            if saved_state.get("identity", {}).get("config") != json.loads(json.dumps(asdict(config))):
+                raise ValueError("V12.1 resume requires the same configuration; use a new run directory")
         if existing.is_dir() and any(existing.iterdir()) and not (existing / "events.jsonl").exists():
             raise ValueError(f"refusing to overwrite a non-resumable run directory: {existing}")
     ctx = setup_experiment_run(args, method=method_class.METHOD, results_root=root,
         resume_file="events.jsonl", method_params=asdict(config), condition="traceaad",
-        extra_config={"revision": REVISION, "budget_axis": "候选尝试", "final_selection": args.final_selection, **metadata},
+        extra_config={"revision": REVISION, "individual_format": INDIVIDUAL_FORMAT, "budget_axis": "候选尝试", "final_selection": args.final_selection, **metadata},
         llm_factory=llm_factory, backend_profile=profile,
-        budget_basis="Completed model-generated candidates including initialization, failures, duplicates and repair.")
+        budget_basis="Program-generation replies including initialization, parse failures and repair; every parsed program is a distinct individual.")
     try:
         method = method_class(evaluation=ctx.evaluation, llm=ctx.llm, run_dir=ctx.run_dir,
                                config=config, task=args.task,

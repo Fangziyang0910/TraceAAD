@@ -12,10 +12,10 @@ import json
 from pathlib import Path
 
 from benchmarks.tasks import FIXED_TASKS, ALL_TASKS, PRIMARY_SPLITS, SPLITS, heldout_task, scale_of_split, split_of_scale
-from traceaad.common.config import REVISION
+from traceaad.v12_1.config import REVISION
 from core.evaluate import EVALUATION_SEED
 from .evaluation_execution import heldout_evaluator
-from traceaad.common.storage import heldout_identity, read_json, save_heldout, stored_heldout, write_json
+from traceaad.v12_1.storage import heldout_identity, read_json, save_heldout, stored_heldout, write_json
 from .artifacts import load_run_summary, pick_best_sample
 
 

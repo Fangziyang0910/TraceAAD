@@ -7,7 +7,13 @@ from .run import VerifiedSearch
 
 
 def main(argv=None):
-    return run(VerifiedSearch, DrawConfig, EXPERIMENT, "V12.1 randomized arm: completion at random", argv)
+    return run(
+        VerifiedSearch,
+        DrawConfig,
+        EXPERIMENT,
+        "V12.1 randomized arm: completion at random",
+        argv,
+    )
 
 
 if __name__ == "__main__":

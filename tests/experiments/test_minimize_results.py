@@ -5,8 +5,9 @@ import pytest
 
 from experiments.infra.migrations.minimize_results import convert_run, transform
 from experiments.infra.monitor_history import TrainingHistory
-from traceaad.common.selection import better, weights
-from traceaad.common.storage import RESULT_FORMAT, append_jsonl, read_json, write_json
+from traceaad.v12_1.selection import better, weights
+from traceaad.v12_1 import Program
+from traceaad.v12_1.storage import RESULT_FORMAT, append_jsonl, read_json, write_json
 
 
 # Archived CO-Bench results still need migration after removal of the adapter.
@@ -62,7 +63,7 @@ def test_scalar_conversion_keeps_improvements_failures_and_physical_counts():
 def test_lower_cost_is_better_and_parent_sampling_prefers_it():
     assert better(-10., -9.) and better(9., 10.)
     assert not better(10., 9.) and not better(9., 9.)
-    nodes = [{"id": i, "fitness": float(i), "valid": True} for i in range(20)]
-    probabilities, _ = weights(nodes, {}, {n["id"]: n for n in nodes})
+    nodes = [Program(id=i, generation=i, code="", idea="", analysis="", action="Init", fitness=float(i), status="valid") for i in range(20)]
+    probabilities, _ = weights(nodes, {n.id: n for n in nodes})
     assert probabilities[0] > probabilities[-1]
     assert sum(probabilities) == pytest.approx(1.)

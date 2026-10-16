@@ -34,9 +34,9 @@ from experiments.infra.base import (
 )
 from benchmarks.tasks import CO_TASKS, FUNCTION_LIMITS, INSTANCE_LIMITS, NATIVE_MINIMIZE
 from core.evaluate import EVALUATION_SEED
-from traceaad.common.storage import read_json, write_json, repair_jsonl_tail
+from traceaad.v12_1.storage import read_json, write_json, repair_jsonl_tail
 from core.llm import OpenAIAPI
-from traceaad.common.config import REVISION
+from traceaad.v12_1.config import REVISION
 
 FORMAL_BUDGET = 1000
 

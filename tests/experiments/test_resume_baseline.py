@@ -14,7 +14,7 @@ from baselines.funsearch.config import ProgramsDatabaseConfig
 from baselines.mcts_ahd.mcts_ahd import MCTS_AHD
 from baselines.shared.profiler import ProfilerBase
 from experiments.infra.resume_baseline import equivalent_source, history, recover_database, recover_tree, reprofile_saved
-from traceaad.common.storage import append_jsonl, write_json
+from traceaad.v12_1.storage import append_jsonl, write_json
 
 
 def test_quota_errors_and_unfinished_alignment_do_not_spend_budget(tmp_path):
@@ -64,7 +64,7 @@ def test_completed_baseline_freezes_with_the_real_logging_configuration(tmp_path
         def evaluate(self, code, key):
             return {'fitness': 1.0, 'key': key, 'evaluations': []}
 
-    monkeypatch.setattr('traceaad.common.instance_evaluation.InstanceProgramEvaluator', FreezeEvaluator)
+    monkeypatch.setattr('traceaad.v12_1.instance_evaluation.InstanceProgramEvaluator', FreezeEvaluator)
     write_json(tmp_path / 'run_config.json', {'method': 'eoh', 'budget': 1,
         'method_params': {'evaluation_seeds': [730241]}})
     profiler = ProfilerBase(tmp_path)
@@ -265,7 +265,7 @@ def test_hard_kill_releases_writer_lock(tmp_path):
 import sys, time
 from pathlib import Path
 from experiments.infra.runner import baseline_run_lock
-from traceaad.common.storage import write_json
+from traceaad.v12_1.storage import write_json
 p = Path(sys.argv[1])
 with baseline_run_lock(p):
     write_json(p / 'summary.json', {'status': 'running', 'writer_lock': True})
@@ -344,7 +344,7 @@ def test_funsearch_saved_vectors_resume_without_cpu_reevaluation(tmp_path, monke
 def test_resumed_writer_preserves_and_removes_an_incomplete_jsonl_tail(tmp_path):
     import os
     from experiments.infra.runner import baseline_run_lock
-    from traceaad.common.storage import rows
+    from traceaad.v12_1.storage import rows
     path = tmp_path / 'events.jsonl'
     append_jsonl(path, {'complete': 1})
     with path.open('ab') as handle:
@@ -359,7 +359,7 @@ def test_resumed_writer_preserves_and_removes_an_incomplete_jsonl_tail(tmp_path)
 
 
 def test_interrupted_call_compression_keeps_previous_archive_and_source(tmp_path, monkeypatch):
-    from traceaad.common import storage
+    from traceaad.v12_1 import storage
     append_jsonl(tmp_path / 'calls.jsonl', {'transport_id': 'old'})
     storage.seal_calls(tmp_path)
     previous = (tmp_path / 'calls.jsonl.gz').read_bytes()

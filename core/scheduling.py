@@ -214,12 +214,14 @@ class SchedulerSession:
 
     def __init__(self, path, kind='cpu', label=''):
         self.path, self.kind, self.label = str(path), kind, label
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.settimeout(5)
+        self.sock = None
         try:
+            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.sock.settimeout(5)
             self.sock.connect(self.path)
         except OSError as exc:
-            self.sock.close()
+            if self.sock is not None:
+                self.sock.close()
             raise SchedulerError(f'cannot connect to scheduler {self.path}: {exc}') from exc
         self.buffer = b''
 

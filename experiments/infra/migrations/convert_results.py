@@ -12,7 +12,7 @@ import shutil
 import tarfile
 import time
 
-from traceaad.common.storage import Programs, RESULT_FORMAT as CURRENT_RESULT_FORMAT, append_jsonl, read_json, rows, write_json
+from traceaad.v12_1.storage import Programs, RESULT_FORMAT as CURRENT_RESULT_FORMAT, append_jsonl, read_json, rows, write_json
 from .legacy_facts import Facts as LegacyFacts
 from .legacy_history import TrainingHistory as LegacyHistory
 from .legacy_results import load_batch_heldout, load_selection, selection_identity

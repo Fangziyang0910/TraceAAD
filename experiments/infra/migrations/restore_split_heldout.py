@@ -15,7 +15,7 @@ import json
 import math
 from pathlib import Path
 
-from traceaad.common.storage import read_json, write_json
+from traceaad.v12_1.storage import read_json, write_json
 
 from .legacy_results import SCALES, _entries, _task_of, variant_of
 

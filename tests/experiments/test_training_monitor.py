@@ -1,7 +1,7 @@
 import json
 import math
 from datetime import datetime
-from traceaad.common.storage import Programs
+from traceaad.v12_1.storage import Programs
 
 from experiments.monitor import ResultsMonitor
 
@@ -12,7 +12,7 @@ def write_json(path, value):
 
 
 def test_raw_curve_units_preserve_legacy_until_search_conversion_finishes(tmp_path):
-    from traceaad.common.config import REVISION
+    from traceaad.v12_1.config import REVISION
     results = tmp_path / 'results'
     for name, revision, score in [('raw', REVISION, 42.), ('legacy', 'old', -2.)]:
         run = results / 'graph_colouring' / name

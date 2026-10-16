@@ -9,7 +9,7 @@ from experiments.infra import batch_status
 from experiments.monitor import ResultsMonitor
 from tests.experiments.test_training_monitor import make_run, write_json
 from tests.experiments.test_batch_status import batch, freeze
-from traceaad.common.storage import selected_program
+from traceaad.v12_1.storage import selected_program
 
 
 def test_archive_preserves_payload_and_original_hardlinked_metadata(tmp_path):

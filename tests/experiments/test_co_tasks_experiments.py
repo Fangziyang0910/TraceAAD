@@ -23,7 +23,7 @@ def test_baseline_co6_plan_contains_every_new_task(method):
 
 
 def test_traceaad_suite_budget_and_run_names_are_consistent():
-    plan = plan_for("test", "traceaad_v12_0", "experiments.traceaad_v12_0.run_base", tasks=CO_TASKS, repeats=2, budget=100)
+    plan = plan_for("test", "traceaad_v12_0", "experiments.traceaad_v12_1.run", tasks=CO_TASKS, repeats=2, budget=100)
     assert len(plan) == 12 and len({item["run_dir"] for item in plan}) == 12
     assert all("--budget=100" in item["command"] for item in plan)
 
@@ -41,7 +41,7 @@ def test_task_conditions_match_primary_data(task):
 
 @pytest.mark.parametrize('task', TASKS)
 def test_primary_aliases_have_the_same_evaluation_identity(task):
-    from traceaad.common.evaluation import ProgramEvaluator
+    from traceaad.v12_1.evaluation import ProgramEvaluator
     primary = heldout_task(task, PRIMARY_SPLITS[task][0])
     alias = heldout_task(task, 'eval')
     assert ProgramEvaluator(primary).protocol == ProgramEvaluator(alias).protocol

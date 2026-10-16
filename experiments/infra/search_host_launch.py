@@ -13,7 +13,7 @@ from experiments.infra.base import SAMPLING_PROFILES, TASKS
 from experiments.infra.launcher import launch_plan
 from experiments.infra.search_launch import build_plan, implementation_files
 from benchmarks.tasks import ALL_TASKS, FUNCTION_SECONDS, FUNCTION_LIMITS, INSTANCE_SECONDS, INSTANCE_LIMITS, SUITES, evaluation_limits
-from traceaad.common.config import REVISION
+from traceaad.v12_1.config import REVISION
 
 ROOT = Path(__file__).resolve().parents[2]
 

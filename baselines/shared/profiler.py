@@ -29,7 +29,7 @@ from threading import RLock
 from datetime import datetime
 
 from pathlib import Path
-from traceaad.common.storage import Programs, append_jsonl, read_json, seal_calls, write_json
+from traceaad.v12_1.storage import Programs, append_jsonl, read_json, seal_calls, write_json
 from core.evaluate import EVALUATION_SEED
 from core.scheduling import SchedulerError
 
@@ -269,9 +269,11 @@ class ProfilerBase:
         return (datetime.now(ZoneInfo('Asia/Shanghai'))-self._process_start_time).total_seconds() + getattr(self, '_resume_elapsed', 0)
 
     def _freeze_training(self, config):
-        from traceaad.common.instance_evaluation import InstanceProgramEvaluator
-        from traceaad.common.state import Facts
-        nodes = list(Facts(self.run_dir).valid.values())
+        from traceaad.v12_1.instance_evaluation import InstanceProgramEvaluator
+        from traceaad.v12_1.storage import committed_rows, Programs
+        sources = Programs(self.run_dir)
+        programs = {row["program"]["id"]: row["program"] for row in committed_rows(self.run_dir) if row.get("program")}
+        nodes = [{**p, "code": sources.get(p["key"])} for p in programs.values() if p["valid"]]
         if profiles := getattr(self, '_recovery_profiles', None):
             refreshed = []
             for node in nodes:

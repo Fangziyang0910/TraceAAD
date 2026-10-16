@@ -21,7 +21,7 @@ def test_aggregate_deviation_cannot_be_converted():
 def test_relative_heldout_cache_is_recomputed( tmp_path, monkeypatch):
     import json
     from experiments.infra import evaluate
-    from traceaad.common.storage import read_json
+    from traceaad.v12_1.storage import read_json
     config = {'task': 'jssp_construct', 'method_params': {}, 'revision': 'old'}
     (tmp_path/'run_config.json').write_text(json.dumps(config))
     previous = {'task': 'jssp_construct', 'split': 'test_20', 'scale': '20', 'variant': '',

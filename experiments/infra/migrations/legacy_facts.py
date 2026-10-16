@@ -7,9 +7,9 @@ import os
 from pathlib import Path
 import shutil
 
-from traceaad.common.storage import write_json
-from traceaad.common.canonical import canonical, key
-from traceaad.common.evaluation import failing_line
+from traceaad.v12_1.storage import write_json
+from traceaad.v12_1.canonical import canonical, key
+from traceaad.v12_1.evaluation import failing_line
 
 
 @dataclass
