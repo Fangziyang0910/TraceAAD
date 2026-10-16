@@ -236,14 +236,10 @@ class SecureEvaluator:
             if execution := getattr(self._evaluator, "_instance_execution", None):
                 from traceaad.instance_evaluation import InstanceProgramEvaluator
 
-                if execution.get("function_budget_scope", "mean_instance") != "mean_instance":
-                    raise ValueError(
-                        "historical instance CPU budgets require the saved source snapshot"
-                    )
                 options = {
                     name: value
                     for name, value in execution.items()
-                    if name not in {"record_path", "function_budget_scope"}
+                    if name != "record_path"
                 }
                 evaluator = InstanceProgramEvaluator(
                     self._evaluator, seeds=(kwargs.get("seed", EVALUATION_SEED),), **options

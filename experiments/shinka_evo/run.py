@@ -9,19 +9,17 @@ from pathlib import Path
 from .embedding import CodeEmbedding, embedding_settings
 from baselines.shinka_evo import ShinkaEvo, ShinkaEvoProfiler
 
+from benchmarks.tasks import ALL_TASKS
 from experiments.infra.base import (
-    ALL_TASKS,
     BACKENDS,
     DEFAULT_BACKEND,
     RESULTS_ROOT,
-    TaskName,
     build_llm_client,
     build_task,
     resolve_backend,
-    resolve_run_dir as resolve_run_dir_file,
     set_random_seed,
-    write_run_config as write_run_config_file,
 )
+from traceaad.storage import write_json
 from experiments.infra.runner import baseline_run_config, run_baseline_experiment
 
 # Paper Circle Packing table used generations=150. Fair comparison across
@@ -46,13 +44,13 @@ PAPER_META_REC_INTERVAL = 10
 PAPER_LLM_UCB_EXPLORATION_COEF = 1.0
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class RunSpec:
-    task: TaskName
-    backend: str
-    base_url: str
-    model: str
-    no_proxy: str
+    task: str
+    backend: str = DEFAULT_BACKEND
+    base_url: str | None = None
+    model: str | None = None
+    no_proxy: str | None = None
     max_sample_nums: int = FAIR_MAX_SAMPLE_NUMS
     num_generations: int = FAIR_NUM_GENERATIONS
     num_islands: int = PAPER_NUM_ISLANDS
@@ -80,82 +78,24 @@ class RunSpec:
     def experiment_root(self) -> Path:
         return self.experiments_root / "shinka_evo" / self.task
 
-
-def make_run_spec(
-    *,
-    task: TaskName,
-    backend: str = DEFAULT_BACKEND,
-    base_url: str | None = None,
-    model: str | None = None,
-    no_proxy: str | None = None,
-    max_sample_nums: int = FAIR_MAX_SAMPLE_NUMS,
-    num_generations: int = FAIR_NUM_GENERATIONS,
-    num_islands: int = PAPER_NUM_ISLANDS,
-    archive_size: int = PAPER_ARCHIVE_SIZE,
-    elite_selection_ratio: float = PAPER_ELITE_SELECTION_RATIO,
-    num_archive_inspirations: int = PAPER_NUM_ARCHIVE_INSPIRATIONS,
-    num_top_k_inspirations: int = PAPER_NUM_TOP_K_INSPIRATIONS,
-    migration_interval: int = PAPER_MIGRATION_INTERVAL,
-    migration_rate: float = PAPER_MIGRATION_RATE,
-    parent_selection_strategy: str = PAPER_PARENT_SELECTION_STRATEGY,
-    parent_selection_lambda: float = PAPER_PARENT_SELECTION_LAMBDA,
-    patch_types: tuple[str, ...] = PAPER_PATCH_TYPES,
-    patch_type_probs: tuple[float, ...] = PAPER_PATCH_TYPE_PROBS,
-    max_patch_resamples: int = PAPER_MAX_PATCH_RESAMPLES,
-    meta_rec_interval: int = PAPER_META_REC_INTERVAL,
-    llm_ucb_exploration_coef: float = PAPER_LLM_UCB_EXPLORATION_COEF,
-    eval_workers: int | None = None,
-    output_tokens: int = 16384,
-    seed: int = 0,
-    repeat: int | None = None,
-    run_name: str | None = None,
-    experiments_root: Path = RESULTS_ROOT,
-) -> RunSpec:
-    profile = resolve_backend(backend, base_url, model, no_proxy)
-    spec = RunSpec(
-        task=task,
-        backend=backend,
-        base_url=profile.base_url,
-        model=profile.model,
-        no_proxy=profile.no_proxy,
-        max_sample_nums=max_sample_nums,
-        num_generations=num_generations,
-        num_islands=num_islands,
-        archive_size=archive_size,
-        elite_selection_ratio=elite_selection_ratio,
-        num_archive_inspirations=num_archive_inspirations,
-        num_top_k_inspirations=num_top_k_inspirations,
-        migration_interval=migration_interval,
-        migration_rate=migration_rate,
-        parent_selection_strategy=parent_selection_strategy,
-        parent_selection_lambda=parent_selection_lambda,
-        patch_types=patch_types,
-        patch_type_probs=patch_type_probs,
-        max_patch_resamples=max_patch_resamples,
-        meta_rec_interval=meta_rec_interval,
-        llm_ucb_exploration_coef=llm_ucb_exploration_coef,
-        eval_workers=eval_workers,
-        output_tokens=output_tokens,
-        seed=seed,
-        repeat=repeat,
-        run_name=run_name,
-        experiments_root=experiments_root.resolve(),
-    )
-    if spec.max_sample_nums <= 0:
-        raise ValueError("max_sample_nums must be positive")
-    if spec.num_generations <= 0:
-        raise ValueError("num_generations must be positive")
-    if spec.num_islands <= 0:
-        raise ValueError("num_islands must be positive")
-    if spec.archive_size <= 0:
-        raise ValueError("archive_size must be positive")
-    if not 0.0 < spec.elite_selection_ratio <= 1.0:
-        raise ValueError("elite_selection_ratio must be in (0, 1]")
-    if spec.eval_workers is not None and spec.eval_workers <= 0:
-        raise ValueError("eval_workers must be positive")
-    if spec.output_tokens <= 0:
-        raise ValueError("output_tokens must be positive")
-    return spec
+    def __post_init__(self):
+        profile = resolve_backend(self.backend, self.base_url, self.model, self.no_proxy)
+        self.base_url, self.model, self.no_proxy = profile.base_url, profile.model, profile.no_proxy
+        self.experiments_root = self.experiments_root.resolve()
+        if self.max_sample_nums <= 0:
+            raise ValueError("max_sample_nums must be positive")
+        if self.num_generations <= 0:
+            raise ValueError("num_generations must be positive")
+        if self.num_islands <= 0:
+            raise ValueError("num_islands must be positive")
+        if self.archive_size <= 0:
+            raise ValueError("archive_size must be positive")
+        if not 0.0 < self.elite_selection_ratio <= 1.0:
+            raise ValueError("elite_selection_ratio must be in (0, 1]")
+        if self.eval_workers is not None and self.eval_workers <= 0:
+            raise ValueError("eval_workers must be positive")
+        if self.output_tokens <= 0:
+            raise ValueError("output_tokens must be positive")
 
 
 def build_method(spec: RunSpec, log_dir: Path) -> ShinkaEvo:
@@ -212,8 +152,8 @@ def build_method(spec: RunSpec, log_dir: Path) -> ShinkaEvo:
 
 
 def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
-    write_run_config_file(
-        run_dir,
+    write_json(
+        run_dir / "run_config.json",
         baseline_run_config(spec, run_dir, run_name, "shinka_evo", {
                 "max_sample_nums": spec.max_sample_nums,
                 "num_generations": spec.num_generations,
@@ -247,11 +187,6 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
     )
 
 
-def resolve_run_dir(spec: RunSpec) -> tuple[Path, str]:
-    """Create (or return) the run directory for a spec (legacy convenience API)."""
-    return resolve_run_dir_file(spec.experiment_root, spec.run_name)
-
-
 def run_experiment(spec: RunSpec) -> Path:
     return run_baseline_experiment(
         spec, write_config=write_run_config, build_method=build_method,
@@ -283,7 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     run_experiment(
-        make_run_spec(
+        RunSpec(
             task=args.task,
             backend=args.backend,
             base_url=args.base_url,

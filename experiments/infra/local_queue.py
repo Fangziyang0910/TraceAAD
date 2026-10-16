@@ -13,12 +13,14 @@ import argparse
 import time
 from datetime import datetime
 
-from benchmarks.tasks import SUITES
+from benchmarks.tasks import ALL_TASKS, SUITES, TASK_SHORT
 from experiments.infra.base import (
-    ALL_TASKS, BACKENDS, DEFAULT_BACKEND, RESULTS_ROOT, TASK_SHORT,
-    LaunchItem, pending_items, validate_new_items,
+    BACKENDS,
+    DEFAULT_BACKEND,
+    RESULTS_ROOT,
 )
-from experiments.infra.launcher import is_session_alive, launch_command
+from experiments.infra.launcher import LaunchItem, pending_items, validate_new_items, is_session_alive, launch_command
+
 METHODS = ("eoh", "funsearch", "reevo", "mcts_ahd", "pathwise", "calm", "shinka_evo")
 
 
@@ -38,33 +40,39 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def build_plan(args: argparse.Namespace) -> list[LaunchItem]:
-    if args.repeats < 1:
-        raise ValueError("--repeats must be positive")
+    if args.repeats < 1 or len(set(args.tasks or SUITES[args.suite])) != len(args.tasks or SUITES[args.suite]):
+        raise ValueError("repeats must be positive and tasks must be distinct")
     plan = []
     for repeat in range(1, args.repeats + 1):
         for task in args.tasks or SUITES[args.suite]:
             short = TASK_SHORT[task]
             name = f"{args.batch}_{short}_{args.method}_rep{repeat}"
-            plan.append(LaunchItem(
-                task=task, repeat=repeat, backend=None,
-                session=f"{args.batch}_{args.method}_{short}_r{repeat}",
-                run_name=name, run_dir=RESULTS_ROOT / args.method / task / name,
-                seed=repeat - 1, module=f"experiments.{args.method}.run",
-            ))
+            plan.append(
+                LaunchItem(
+                    task=task,
+                    repeat=repeat,
+                    backend=args.backend,
+                    session=f"{args.batch}_{args.method}_{short}_r{repeat}",
+                    run_name=name,
+                    run_dir=RESULTS_ROOT / args.method / task / name,
+                    seed=repeat - 1,
+                    module=f"experiments.{args.method}.run",
+                )
+            )
     return plan
 
 
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    if args.slots < 1:
-        raise ValueError("--slots must be positive")
+    if args.slots < 1 or args.interval < 1:
+        raise ValueError("slots and interval must be positive")
     slots = range(args.slots)
     plan = build_plan(args)
     if args.dry_run:
         for item in plan:
-            print(f"{item.session} {' '.join(item.with_backend(args.backend).command())}")
+            print(f"{item.session} {' '.join(item.command())}")
         return
-    # ponytail: queue state stays in memory; restart only after its running jobs end.
+    # Queue state is in memory; existing runs need explicit recovery.
     running = {}
     started = set()
     while True:
@@ -76,7 +84,7 @@ def main(argv: list[str] | None = None) -> None:
         for slot in (s for s in slots if s not in running):
             if not pending:
                 break
-            item = pending.pop(0).with_backend(args.backend)
+            item = pending.pop(0)
             validate_new_items([item])
             launch_command(item.session, ("env", f"TRACEAAD_SCHEDULER_SOCKET={args.scheduler_socket}", *item.command()))
             running[slot] = item

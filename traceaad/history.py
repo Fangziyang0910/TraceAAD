@@ -27,8 +27,3 @@ def code_diff(before, after):
         2:
     ]
     return "\n".join(lines)
-
-
-def final_program(program, programs):
-    """The repaired individual, if this version has one."""
-    return next((p for p in programs.values() if p.repair_of == program.id), program)

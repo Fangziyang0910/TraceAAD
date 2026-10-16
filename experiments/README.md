@@ -53,12 +53,9 @@ TraceAAD 入口为 [run.py](traceaad/run.py) 与 [launch_host.py](traceaad/launc
 ```bash
 uv run python -m experiments.infra.batch_status \
   --manifest MANIFEST_PATH --details
-
-uv run python -m experiments.infra.diagnose_search \
-  --run-dir RUN_DIR
 ```
 
-`batch_status` 查询状态；`diagnose_search` 为当前 TraceAAD 写入派生诊断结果。后者不启动模型生成。
+`batch_status` 只读查询批次状态。具体程序、评价和来源关系从结果文件读取。
 
 ## 3. 独立测试
 

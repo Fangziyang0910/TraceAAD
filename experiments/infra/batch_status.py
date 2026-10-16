@@ -71,9 +71,6 @@ def run_path(root, row):
     return root / task / name
 
 
-def expected_splits(task):
-    return list(SPLITS[task])
-
 
 def run_status(root, row, budget, now):
     directory = run_path(root, row)
@@ -112,7 +109,7 @@ def run_status(root, row, budget, now):
     frozen = bool(best and best["verified"])
     heldout = {"valid": [], "failed": [], "missing": [], "mismatched": [], "unverified": []}
     results = {r["scale"]: r for r in result_json(directory / "heldout.json", []) if not r["variant"]}
-    for split in expected_splits(row["task"]):
+    for split in SPLITS[row["task"]]:
         result = results.get(str(scale_of_split(row["task"], split)))
         if result is None:
             heldout["missing"].append(split)

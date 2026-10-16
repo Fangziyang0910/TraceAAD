@@ -15,7 +15,6 @@ from experiments.infra.base import HOSTED_BACKENDS, RESULTS_ROOT
 from experiments.infra.runner import add_common_run_args, setup_experiment_run
 from traceaad.config import Config, EXPERIMENT
 from traceaad import TraceAAD
-from .diagnose_search import diagnose
 
 
 def build_parser(experiment=EXPERIMENT):
@@ -140,6 +139,5 @@ def main(argv=None):
             task=args.task,
         )
         ctx.run(method.run, ["TraceAAD: Refine, Explore and Crossover"])
-        diagnose(ctx.run_dir)
     finally:
         ctx.llm.close()

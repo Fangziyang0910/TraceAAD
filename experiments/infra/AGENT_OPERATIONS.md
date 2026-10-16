@@ -85,7 +85,7 @@ HF_HUB_OFFLINE=1 .venv/bin/python -m experiments.infra.resume_baseline \
   --run-dir RUN_DIR --execute
 ```
 
-支持的方法与恢复边界见 [resume_baseline.py](resume_baseline.py)。旧日志不一定保存随机状态。恢复到日志边界与完整检查点恢复需要分开记录。FunSearch 缺少评分向量时，`--prepare-profiles` 先做 CPU 补评，不自动恢复模型请求。
+支持的方法与恢复边界见 [resume_baseline.py](resume_baseline.py)。CALM、PathWise 和 ShinkaEvo 读取完整检查点；其他基线从当前日志中保存的种群、树或数据库记录恢复。日志恢复不还原完整随机状态。FunSearch 使用已记录的逐实例评分；缺失时停止恢复，不补评旧数据。
 
 TraceAAD 使用原入口、原目录和相同参数读取恢复点。操作前核对源码与配置，确认旧进程已退出。历史运行的评价规则以对应源码快照为准。恢复继续已提交的状态；最好程序不能重建缺失的搜索状态。锁与日志尾部由现有入口处理。
 
@@ -101,7 +101,7 @@ TraceAAD 使用原入口、原目录和相同参数读取恢复点。操作前�
 | server3 常用物理核 | `0–51`。 |
 | 本地生成服务 | `http://127.0.0.1:8001/v1`；脚本 `~/models/gguf/qwen3.8-27b/update_ud_q4_k_xl.sh`。 |
 
-实际可用资源需要现场核对。本地基线排队入口为 `experiments.infra.local_queue`，先用 `--dry-run` 查看计划。它只在内存跟踪任务；排队器中断后，先检查已启动的任务，再重新排队。
+实际可用资源需要现场核对。本地基线排队入口为 `experiments.infra.local_queue`，先用 `--dry-run` 查看计划。它只在内存跟踪任务，跳过已有运行目录与活动会话，不自动创建重试目录。失败运行通过恢复入口处理。排队器中断后，先检查已启动的任务，再重新排队。
 
 ## 历史数据与修复
 

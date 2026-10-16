@@ -17,9 +17,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from benchmarks.tasks import ALL_TASKS
 from experiments.infra.base import (
     scheduler_socket,
-    ALL_TASKS,
     BACKENDS,
     DEFAULT_BACKEND,
     RESULTS_ROOT,
@@ -30,7 +30,6 @@ from experiments.infra.base import (
     resolve_backend,
     run_in_tmux_log,
     set_random_seed,
-    write_run_config,
 )
 from benchmarks.tasks import CO_TASKS, FUNCTION_LIMITS, INSTANCE_LIMITS, NATIVE_MINIMIZE
 from core.evaluate import EVALUATION_SEED
@@ -41,10 +40,7 @@ FORMAL_BUDGET = 1000
 
 
 def add_common_run_args(
-    parser: argparse.ArgumentParser,
-    *,
-    default_output_tokens: int = 16384,
-    default_budget: int = FORMAL_BUDGET,
+    parser: argparse.ArgumentParser, *, default_output_tokens: int = 16384, default_budget: int = FORMAL_BUDGET
 ) -> None:
     """Add standard arguments required by all experiment runners."""
     parser.add_argument("--task", choices=ALL_TASKS, required=True)
@@ -66,19 +62,14 @@ def add_common_run_args(
     )
 
 
-
 @dataclass(frozen=True, slots=True)
 class RunContext:
-    task: str
     run_dir: Path
-    run_name: str
     resumed: bool
-    seed: int
     llm: OpenAIAPI
     evaluation: Any
     profile: BackendProfile
     log_dir: Path
-    args: argparse.Namespace
 
     def run(self, body: Callable[[], None], header: list[str] | None = None) -> None:
         """Run the experiment body within the tmux run log context."""
@@ -87,8 +78,8 @@ class RunContext:
             f"llm={self.profile.model} @ {self.profile.base_url}",
             f"resumed={self.resumed}",
         ]
-        full_header = (header or []) + meta_header if header else meta_header
-        run_in_tmux_log(self.run_dir, self.log_dir, full_header, body)
+        full_header = (header or []) + meta_header
+        run_in_tmux_log(self.run_dir, full_header, body)
 
 
 def resolve_resumable_run_dir(
@@ -100,8 +91,7 @@ def resolve_resumable_run_dir(
     if run_dir.exists():
         if resume_file and (run_dir / resume_file).exists():
             return run_dir, run_name, True
-        print(f"run dir exists without resumable state, starting fresh: {run_dir}")
-        return run_dir, run_name, False
+        raise FileExistsError(f"run directory has no resumable state: {run_dir}")
     run_dir.mkdir(parents=True, exist_ok=True)
     return run_dir, run_name, False
 
@@ -120,9 +110,7 @@ def setup_experiment_run(
     backend_profile=None,
 ) -> RunContext:
     """Set up the standard environment, LLM, task evaluation, and configuration."""
-    profile = backend_profile or resolve_backend(
-        args.backend, args.base_url, args.model, args.no_proxy
-    )
+    profile = backend_profile or resolve_backend(args.backend, args.base_url, args.model, args.no_proxy)
     task_root = (results_root or RESULTS_ROOT / method) / args.task
     run_dir, run_name, resumed = resolve_resumable_run_dir(task_root, args.run_name, resume_file)
     log_dir = run_dir / "logs"
@@ -134,18 +122,16 @@ def setup_experiment_run(
     if budget_basis:
         params["budget_basis"] = budget_basis
 
-    evaluation, task_config = build_task(
-        args.task, getattr(args, "eval_workers", None), condition=condition
-    )
+    evaluation, task_config = build_task(args.task, getattr(args, "eval_workers", None), condition=condition)
     saved = read_json(run_dir / "run_config.json", {})
     if saved:
         from benchmarks.tasks import validate_task_interface
 
         validate_task_interface(args.task, saved)
     phase = read_json(run_dir / "resume.json", {}).get("state", {}).get("phase")
-    if phase not in {"finished", "search_complete", "selection_failed", "no_valid_root"}:
-        write_run_config(
-            run_dir,
+    if phase not in {"finished", "no_valid_root"}:
+        write_json(
+            run_dir / "run_config.json",
             {
                 "created_at": saved.get("created_at", datetime.now().isoformat(timespec="seconds")),
                 "budget": getattr(args, "budget", params.get("max_sample_nums", 0)),
@@ -183,16 +169,7 @@ def setup_experiment_run(
     )
 
     return RunContext(
-        task=args.task,
-        run_dir=run_dir,
-        run_name=run_name,
-        resumed=resumed,
-        seed=args.seed,
-        llm=llm,
-        evaluation=evaluation,
-        profile=profile,
-        log_dir=log_dir,
-        args=args,
+        run_dir=run_dir, resumed=resumed, llm=llm, evaluation=evaluation, profile=profile, log_dir=log_dir
     )
 
 
@@ -205,11 +182,6 @@ def baseline_run_lock(run_dir):
         except BlockingIOError as exc:
             raise ValueError(f"Run has an active writer: {run_dir}") from exc
         summary_path = Path(run_dir) / "summary.json"
-        summary = read_json(summary_path, {})
-        if summary.get("status") == "running" and not summary.get("writer_lock"):
-            raise ValueError(
-                "Legacy run marked running; verify its process has stopped before updating its status"
-            )
         for path in Path(run_dir).rglob("*.jsonl"):
             repair_jsonl_tail(path, Path(run_dir) / "logs/interrupted_tails")
         try:
@@ -234,7 +206,6 @@ def run_baseline_experiment(spec, *, write_config, build_method, description: st
         print(f"run_dir={run_dir}")
         run_in_tmux_log(
             run_dir,
-            log_dir,
             [f"log_dir={log_dir}", f"llm={spec.model} @ {spec.base_url}", description],
             lambda: build_method(spec, log_dir).run(),
         )

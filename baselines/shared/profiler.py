@@ -276,22 +276,12 @@ class ProfilerBase:
         sources = Programs(self.run_dir)
         programs = {row["program"]["id"]: row["program"] for row in committed_rows(self.run_dir) if row.get("program")}
         nodes = [{**p, "code": sources.get(p["id"])} for p in programs.values() if p["valid"]]
-        if profiles := getattr(self, '_recovery_profiles', None):
-            refreshed = []
-            for node in nodes:
-                if node['id'] <= self._recovery_candidate_cutoff and node['id'] in profiles:
-                    score = profiles[node['id']]['score']
-                    if score is None:
-                        continue
-                    node = {**node, 'fitness': score, 'score': score}
-                refreshed.append(node)
-            nodes = refreshed
         nodes.sort(key=lambda n: (n['fitness'], n['id']))
         candidates = nodes[:5]
         evaluator = InstanceProgramEvaluator(self._evaluation,
             seeds=config.get('method_params', {}).get('evaluation_seeds', [EVALUATION_SEED]),
             **{k: v for k, v in self._evaluation._instance_execution.items()
-               if k not in {'record_path', 'function_budget_scope'}})
+               if k != 'record_path'})
         results = []
         payload = {'final_selection': 'training', 'finalists': [n['id'] for n in candidates]}
         self._append_jsonl(self._method_events_path, {'kind': 'progress',

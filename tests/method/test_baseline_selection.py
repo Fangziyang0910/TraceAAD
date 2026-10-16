@@ -92,7 +92,6 @@ def test_baseline_finishes_with_instance_reevaluation_and_a_readable_winner(tmp_
     task = TinyEvaluation()
     task._instance_execution = {
         "timeout_seconds": 3,
-        "function_budget_scope": "mean_instance",
         "n_workers": 1,
         "record_path": str(tmp_path / "evaluations.jsonl"),
     }

@@ -8,19 +8,17 @@ from pathlib import Path
 
 from baselines.reevo import ReEvo, ReEvoProfiler
 
+from benchmarks.tasks import ALL_TASKS
 from experiments.infra.base import (
-    ALL_TASKS,
     BACKENDS,
     DEFAULT_BACKEND,
     RESULTS_ROOT,
-    TaskName,
     build_llm_client,
     build_task,
     resolve_backend,
-    resolve_run_dir as resolve_run_dir_file,
     set_random_seed,
-    write_run_config as write_run_config_file,
 )
+from traceaad.storage import write_json
 from experiments.infra.runner import baseline_run_config, run_baseline_experiment
 
 # Paper table / original cfg/config.yaml used max_fe=100 for sample-efficiency
@@ -32,13 +30,13 @@ PAPER_INIT_POP_SIZE = 30
 PAPER_MUTATION_RATE = 0.5
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class RunSpec:
-    task: TaskName
-    backend: str
-    base_url: str
-    model: str
-    no_proxy: str
+    task: str
+    backend: str = DEFAULT_BACKEND
+    base_url: str | None = None
+    model: str | None = None
+    no_proxy: str | None = None
     max_sample_nums: int = FAIR_MAX_SAMPLE_NUMS
     pop_size: int = PAPER_POP_SIZE
     init_pop_size: int = PAPER_INIT_POP_SIZE
@@ -54,56 +52,22 @@ class RunSpec:
     def experiment_root(self) -> Path:
         return self.experiments_root / "reevo" / self.task
 
-
-def make_run_spec(
-    *,
-    task: TaskName,
-    backend: str = DEFAULT_BACKEND,
-    base_url: str | None = None,
-    model: str | None = None,
-    no_proxy: str | None = None,
-    max_sample_nums: int = FAIR_MAX_SAMPLE_NUMS,
-    pop_size: int = PAPER_POP_SIZE,
-    init_pop_size: int = PAPER_INIT_POP_SIZE,
-    mutation_rate: float = PAPER_MUTATION_RATE,
-    eval_workers: int | None = None,
-    output_tokens: int = 16384,
-    seed: int = 0,
-    repeat: int | None = None,
-    run_name: str | None = None,
-    experiments_root: Path = RESULTS_ROOT,
-) -> RunSpec:
-    profile = resolve_backend(backend, base_url, model, no_proxy)
-    spec = RunSpec(
-        task=task,
-        backend=backend,
-        base_url=profile.base_url,
-        model=profile.model,
-        no_proxy=profile.no_proxy,
-        max_sample_nums=max_sample_nums,
-        pop_size=pop_size,
-        init_pop_size=init_pop_size,
-        mutation_rate=mutation_rate,
-        eval_workers=eval_workers,
-        output_tokens=output_tokens,
-        seed=seed,
-        repeat=repeat,
-        run_name=run_name,
-        experiments_root=experiments_root.resolve(),
-    )
-    if spec.max_sample_nums <= 0:
-        raise ValueError("max_sample_nums must be positive")
-    if spec.pop_size <= 0:
-        raise ValueError("pop_size must be positive")
-    if spec.init_pop_size <= 0:
-        raise ValueError("init_pop_size must be positive")
-    if not 0.0 < spec.mutation_rate <= 1.0:
-        raise ValueError("mutation_rate must be in (0, 1]")
-    if spec.eval_workers is not None and spec.eval_workers <= 0:
-        raise ValueError("eval_workers must be positive")
-    if spec.output_tokens <= 0:
-        raise ValueError("output_tokens must be positive")
-    return spec
+    def __post_init__(self):
+        profile = resolve_backend(self.backend, self.base_url, self.model, self.no_proxy)
+        self.base_url, self.model, self.no_proxy = profile.base_url, profile.model, profile.no_proxy
+        self.experiments_root = self.experiments_root.resolve()
+        if self.max_sample_nums <= 0:
+            raise ValueError("max_sample_nums must be positive")
+        if self.pop_size <= 0:
+            raise ValueError("pop_size must be positive")
+        if self.init_pop_size <= 0:
+            raise ValueError("init_pop_size must be positive")
+        if not 0.0 < self.mutation_rate <= 1.0:
+            raise ValueError("mutation_rate must be in (0, 1]")
+        if self.eval_workers is not None and self.eval_workers <= 0:
+            raise ValueError("eval_workers must be positive")
+        if self.output_tokens <= 0:
+            raise ValueError("output_tokens must be positive")
 
 
 def build_method(spec: RunSpec, log_dir: Path) -> ReEvo:
@@ -137,8 +101,8 @@ def build_method(spec: RunSpec, log_dir: Path) -> ReEvo:
 
 
 def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
-    write_run_config_file(
-        run_dir,
+    write_json(
+        run_dir / "run_config.json",
         baseline_run_config(spec, run_dir, run_name, "reevo", {
                 "max_sample_nums": spec.max_sample_nums,
                 "population_size": spec.pop_size,
@@ -161,11 +125,6 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                 ),
             }, llm_options={"temperature": 1.0}),
     )
-
-
-def resolve_run_dir(spec: RunSpec) -> tuple[Path, str]:
-    """Create (or return) the run directory for a spec (legacy convenience API)."""
-    return resolve_run_dir_file(spec.experiment_root, spec.run_name)
 
 
 def run_experiment(spec: RunSpec) -> Path:
@@ -198,7 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     run_experiment(
-        make_run_spec(
+        RunSpec(
             task=args.task,
             backend=args.backend,
             base_url=args.base_url,

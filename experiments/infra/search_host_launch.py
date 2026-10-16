@@ -1,246 +1,167 @@
-"""Plan or launch explicit legacy and six-task AHD suites on the current host."""
+"""Preview or launch a TraceAAD batch on this host."""
 
 import argparse
 from dataclasses import asdict
 from datetime import datetime
 import json
 import os
-from pathlib import Path
 import platform
 import subprocess
 
-from experiments.infra.base import SAMPLING_PROFILES, TASKS
-from experiments.infra.launcher import launch_plan
-from experiments.infra.search_launch import build_plan
 from benchmarks.tasks import (
     ALL_TASKS,
+    SUITES,
+    TASK_SHORT,
     FUNCTION_SECONDS,
     FUNCTION_LIMITS,
     INSTANCE_SECONDS,
     INSTANCE_LIMITS,
-    SUITES,
-    evaluation_limits,
 )
+from core.scheduling import scheduler_status
+from traceaad import Config
+from traceaad.config import EXPERIMENT
+from .base import BACKENDS, DEFAULT_BACKEND, HOSTED_BACKENDS, REPO_ROOT, RESULTS_ROOT, llm_payload
+from .launcher import LaunchItem, launch_plan
 
-ROOT = Path(__file__).resolve().parents[2]
 
-
-def plan_for(
-    batch,
-    experiment,
-    module,
-    backends=("server3", "server3b"),
-    repeats=3,
-    tasks=TASKS,
-    budget=1000,
-    *,
-    eval_workers=4,
-    eval_timeout_seconds=None,
-    scheduler_socket=None,
-    repeat_ids=None,
-):
+def plan_for(args, tasks):
+    repeats = args.repeat_ids or range(1, args.repeats + 1)
     if (
-        repeats < 1
-        or budget < 1
+        args.repeats < 1
+        or args.budget < 1
         or not tasks
         or len(set(tasks)) != len(tasks)
-        or any(task not in ALL_TASKS for task in tasks)
+        or len(set(repeats)) != len(repeats)
+        or any(repeat < 1 or repeat > args.repeats for repeat in repeats)
     ):
-        raise ValueError("require positive repeats/budget and distinct registered tasks")
-    source = {
-        "plan": [
-            {
-                "task": task,
-                "repeat": repeat,
-                "seed": repeat - 1,
-                "backend": backends[0] if (i + repeat) % 2 else backends[1],
-            }
-            for i, task in enumerate(tasks)
-            for repeat in range(1, repeats + 1)
-        ]
-    }
-    if repeat_ids is not None:
-        if (
-            not repeat_ids
-            or len(set(repeat_ids)) != len(repeat_ids)
-            or not set(repeat_ids) <= set(range(1, repeats + 1))
-        ):
-            raise ValueError("repeat IDs must be distinct and within 1..repeats")
-        source["plan"] = [item for item in source["plan"] if item["repeat"] in repeat_ids]
-    plan = build_plan(
-        source,
-        batch,
-        experiment,
-        module,
-        budget,
-        eval_workers=eval_workers,
-        eval_timeout_seconds=eval_timeout_seconds,
-        scheduler_socket=scheduler_socket,
-    )
-    for item in plan:
-        item["command"][:3] = [str(ROOT / ".venv/bin/python")]
-        item["startup_log"] = str(
-            ROOT / "experiments_result" / experiment / "launch_logs" / (item["session"] + ".log")
-        )
+        raise ValueError("require positive budget/repeats, distinct tasks and repeat IDs within range")
+    plan = []
+    for index, task in enumerate(tasks):
+        for repeat in repeats:
+            backend = args.backends[(index + repeat + 1) % len(args.backends)]
+            name = f"{args.batch}_{TASK_SHORT[task]}_{args.experiment}_rep{repeat}"
+            session = f"{args.batch}_{TASK_SHORT[task]}_{args.experiment.removeprefix('traceaad_')}_r{repeat}"
+            extra = [f"--budget={args.budget}", f"--eval-workers={args.eval_workers}", "--experiment", args.experiment]
+            if args.eval_timeout_seconds is not None:
+                extra.append(f"--eval-timeout-seconds={args.eval_timeout_seconds:g}")
+            if args.scheduler_socket:
+                extra.extend(["--scheduler-socket", args.scheduler_socket])
+            item = LaunchItem(
+                task,
+                repeat,
+                backend,
+                session,
+                name,
+                RESULTS_ROOT / args.experiment / task / name,
+                repeat - 1,
+                "experiments.traceaad.run",
+                tuple(extra),
+            )
+            plan.append(
+                {
+                    **{k: v for k, v in asdict(item).items() if k not in {"module", "extra_args"}},
+                    "run_dir": str(item.run_dir),
+                    "command": item.command(),
+                    "backend": "scheduled" if args.scheduler_socket and backend not in HOSTED_BACKENDS else backend,
+                    "startup_log": str(RESULTS_ROOT / args.experiment / "launch_logs" / f"{session}.log"),
+                    "status": "planned",
+                }
+            )
     return plan
 
 
 def git(*args):
-    """Record Git facts when this tree is a checkout."""
     try:
-        return (
-            subprocess.check_output(["git", *args], cwd=ROOT, stderr=subprocess.DEVNULL)
-            .decode()
-            .strip()
-        )
+        return subprocess.check_output(["git", *args], cwd=REPO_ROOT, stderr=subprocess.DEVNULL).decode().strip()
     except OSError, subprocess.CalledProcessError:
         return None
 
 
-def main(
-    config_class,
-    experiment,
-    module,
-    method,
-    host="local",
-    backends=("server3", "server3b"),
-    argv=None,
-):
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch", required=True)
-    parser.add_argument("--experiment", default=experiment, help="separate result series")
+    parser.add_argument("--experiment", default=EXPERIMENT)
     parser.add_argument("--launch", action="store_true")
-    parser.add_argument("--suite", choices=tuple(SUITES), default="legacy")
-    parser.add_argument(
-        "--tasks", choices=ALL_TASKS, nargs="+", help="override suite with explicit tasks"
-    )
+    parser.add_argument("--suite", choices=tuple(SUITES), default="co6")
+    parser.add_argument("--tasks", choices=ALL_TASKS, nargs="+")
+    parser.add_argument("--backends", choices=tuple(BACKENDS), nargs="+", default=[DEFAULT_BACKEND])
     parser.add_argument("--repeats", type=int, default=3)
-    parser.add_argument("--budget", type=int, default=1000)
-    instance_execution = hasattr(config_class, "eval_timeout_seconds")
-    if instance_execution:
-        parser.set_defaults(suite="co6")
-        parser.add_argument(
-            "--eval-workers",
-            type=int,
-            help="per-evaluation ceiling; scheduled default: host CPU capacity",
-        )
-        parser.add_argument("--eval-timeout-seconds", type=float, default=None)
-        parser.add_argument("--scheduler-socket", help="shared CPU/GPU scheduler on this host")
-        parser.add_argument(
-            "--repeat-ids",
-            type=int,
-            nargs="+",
-            help="run only these repeats on this host, preserving seeds",
-        )
+    parser.add_argument("--repeat-ids", type=int, nargs="+")
+    parser.add_argument("--budget", type=int, default=Config.budget)
+    parser.add_argument("--eval-workers", type=int)
+    parser.add_argument("--eval-timeout-seconds", type=float)
+    parser.add_argument("--scheduler-socket")
     args = parser.parse_args(argv)
-    if (
-        not args.experiment.replace("_", "").isalnum()
-        or not args.batch.replace("_", "").replace("-", "").isalnum()
-    ):
+    if not args.experiment.replace("_", "").isalnum() or not args.batch.replace("_", "").replace("-", "").isalnum():
         raise ValueError("experiment and batch must be safe directory names")
-    experiment = args.experiment
     tasks = tuple(args.tasks or SUITES[args.suite])
     scheduler = None
-    if getattr(args, "scheduler_socket", None):
-        from core.scheduling import scheduler_status
+    if args.scheduler_socket:
+        from pathlib import Path
 
         args.scheduler_socket = str(Path(args.scheduler_socket).expanduser().resolve())
         scheduler = scheduler_status(args.scheduler_socket)
-    if instance_execution and args.eval_workers is None:
+    if args.eval_workers is None:
         args.eval_workers = scheduler["cpu"]["capacity"] if scheduler else 1
-    execution = (
-        {"eval_workers": args.eval_workers, "eval_timeout_seconds": args.eval_timeout_seconds}
-        if instance_execution
-        else {}
+    policy = Config(
+        budget=args.budget,
+        eval_workers=args.eval_workers,
+        scheduler_socket=args.scheduler_socket,
+        eval_timeout_seconds=args.eval_timeout_seconds
+        if args.eval_timeout_seconds is not None
+        else Config.eval_timeout_seconds,
     )
-    if scheduler:
-        execution["scheduler_socket"] = args.scheduler_socket
-    policy = config_class(
-        budget=args.budget, **{k: v for k, v in execution.items() if v is not None}
-    )
-    plan = plan_for(
-        args.batch,
-        experiment,
-        module,
-        backends,
-        args.repeats,
-        tasks,
-        args.budget,
-        repeat_ids=getattr(args, "repeat_ids", None),
-        **execution,
-    )
-    limits = evaluation_limits(tasks)
-    metadata = (
-        {
-            "evaluation_execution": {
-                "timeout_scope": "instance",
-                "function_budget_scope": "mean_instance",
-                "timeout_seconds": {
-                    task: args.eval_timeout_seconds
-                    if args.eval_timeout_seconds is not None
-                    else INSTANCE_LIMITS.get(task, INSTANCE_SECONDS)
-                    for task in tasks
-                },
-                "function_seconds": {
-                    task: FUNCTION_LIMITS.get(task, FUNCTION_SECONDS) for task in tasks
-                },
-                "n_workers": policy.eval_workers,
-            }
+    limits = {
+        task: {
+            "timeout_scope": "instance",
+            "function_budget_scope": "mean_instance",
+            "timeout_seconds": args.eval_timeout_seconds
+            if args.eval_timeout_seconds is not None
+            else INSTANCE_LIMITS.get(task, INSTANCE_SECONDS),
+            "function_seconds": FUNCTION_LIMITS.get(task, FUNCTION_SECONDS),
         }
-        if instance_execution
-        else {}
-    )
-    if instance_execution:
-        limits = {
-            task: {
-                "timeout_scope": "instance",
-                "timeout_seconds": metadata["evaluation_execution"]["timeout_seconds"][task],
-                "function_budget_scope": "mean_instance",
-                "function_seconds": FUNCTION_LIMITS.get(task, FUNCTION_SECONDS),
+        for task in tasks
+    }
+    plan = plan_for(args, tasks)
+    path = RESULTS_ROOT / args.experiment / f"batch_{args.batch}.json"
+    used_backends = {item["backend"] for item in plan}
+    profiles = {name: BACKENDS[name] for name in used_backends if name != "scheduled"}
+    if "scheduled" in used_backends:
+        from .base import BackendProfile
+
+        profiles.update(
+            {
+                f"scheduled-{i}": BackendProfile(e["base_url"], e["model"], e.get("no_proxy", ""))
+                for i, e in enumerate(scheduler["endpoints"])
             }
-            for task in tasks
-        }
-    if scheduler:
-        metadata["resource_scheduler"] = scheduler
-    manifest_path = ROOT / "experiments_result" / experiment / f"batch_{args.batch}.json"
-    if not args.launch:
-        print(
-            json.dumps(
-                {
-                    "manifest": str(manifest_path),
-                    "plan": plan,
-                    "suite": args.suite,
-                    "final_selection": "training",
-                    "evaluation_limits": limits,
-                    **metadata,
-                },
-                indent=2,
-            )
         )
-        return
     manifest = {
         "batch": args.batch,
-        "method": method,
-        "experiment": experiment,
+        "method": "traceaad",
+        "experiment": args.experiment,
         "created_at": datetime.now().astimezone().isoformat(),
-        "execution_host": platform.node() if scheduler else host,
         "host": {"node": platform.node(), "cpus": os.cpu_count()},
-        "status": "launching",
+        "execution_host": platform.node(),
         "suite": args.suite,
         "repeats": args.repeats,
-        "eval_workers": policy.eval_workers if instance_execution else 4,
-        **metadata,
-        "repeat_ids": getattr(args, "repeat_ids", None),
+        "repeat_ids": list(args.repeat_ids) if args.repeat_ids else None,
+        "eval_workers": policy.eval_workers,
         "final_selection": "training",
         "budget_per_run": args.budget,
         "total_budget": len(plan) * args.budget,
         "search_policy": asdict(policy),
-        "sampling": {**SAMPLING_PROFILES[False], "enable_thinking": False},
         "evaluation_limits": limits,
+        "llm": {
+            name: llm_payload(base_url=p.base_url, model=p.model, no_proxy=p.no_proxy, max_tokens=policy.output_tokens)
+            for name, p in profiles.items()
+        },
         "git_commit": git("rev-parse", "HEAD"),
         "git_status": git("status", "--porcelain"),
-        "load_average_at_launch": list(os.getloadavg()),
-        "heldout": "separate evaluation of the frozen training-best program",
         "plan": plan,
     }
-    launch_plan(manifest_path, manifest, min_context=32768)
+    if scheduler:
+        manifest["resource_scheduler"] = scheduler
+    if args.launch:
+        launch_plan(path, manifest, min_context=32768)
+    else:
+        print(json.dumps({"manifest": str(path), **manifest}, indent=2))

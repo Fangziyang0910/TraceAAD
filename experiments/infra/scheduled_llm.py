@@ -11,7 +11,6 @@ from .base import build_llm_client
 
 class ScheduledLLM(LLM):
     def __init__(self, socket_path, *, max_tokens=8192, label='', enable_thinking=None, client_factory=build_llm_client):
-        super().__init__()
         self.socket_path, self.label = str(socket_path), label
         self.scheduler = scheduler_status(socket_path)
         self.endpoints = self.scheduler['endpoints']

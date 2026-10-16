@@ -172,3 +172,31 @@ def test_failed_checkpoint_write_preserves_previous_snapshot(tmp_path, monkeypat
         save_checkpoint(method, "shinka_evo", "generation")
     assert (tmp_path / NAME).read_bytes() == previous
     assert read_checkpoint(tmp_path)["budget_used"] == 1
+
+
+def test_funsearch_resumes_from_recorded_profiles_without_reprofiling(tmp_path):
+    from baselines.funsearch import FunSearch, FunSearchProfiler
+    from baselines.funsearch.config import ProgramsDatabaseConfig
+
+    setup_config(tmp_path, "funsearch", budget=4)
+
+    def create(values, stop=True):
+        task = TinyEvaluation()
+        task._instance_execution = {"timeout_seconds": 3, "n_workers": 1}
+        return FunSearch(
+            ScriptedLLM(values, stop=stop), task, FunSearchProfiler(tmp_path),
+            max_sample_nums=4, samples_per_prompt=1,
+            database_config=ProgramsDatabaseConfig(num_islands=2),
+        )
+
+    first = create([-1])
+    first.run()
+    before = history(tmp_path)
+    resumed = create([-2, -3], stop=False)
+    report = recover(resumed, tmp_path)
+    assert report["budget_used"] == 2 and report["boundary"] == "new_prompt_batch"
+    assert resumed._database.best_score_per_island == first._database.best_score_per_island
+    assert history(tmp_path) == before
+    resumed.run()
+    assert resumed._tot_sample_nums == 4
+    assert read_json(tmp_path / "summary.json")["best"]["fitness"] == -3

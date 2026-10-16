@@ -21,7 +21,7 @@ class WholeTaskEvaluator:
         self.evaluator = SecureEvaluator(self.seeded)
         self.seeds, self.role = tuple(seeds), role
 
-    def evaluate(self, code, source_key):
+    def evaluate(self, code, program_id):
         records = []
         for seed in self.seeds:
             started = time.monotonic()
@@ -45,7 +45,7 @@ class WholeTaskEvaluator:
             )
             records.append(
                 {
-                    "key": source_key,
+                    "program_id": program_id,
                     "role": self.role,
                     "seed": seed,
                     "valid": valid,

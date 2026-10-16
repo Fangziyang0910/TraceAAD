@@ -49,7 +49,7 @@ def test_baseline_entry_accepts_and_evaluates_a_complete_solver(name, tmp_path, 
         base, "training_task", lambda *a, **k: (task, {"interface": task.interface})
     )
     monkeypatch.setattr(module, "build_llm_client", lambda **k: TokenLLM())
-    spec = module.make_run_spec(task="jssp_construct", eval_workers=1, experiments_root=tmp_path)
+    spec = module.RunSpec(task="jssp_construct", eval_workers=1, experiments_root=tmp_path)
     method = module.build_method(spec, tmp_path / name / "logs")
     try:
         outcome = method._evaluator.evaluate_program_with_details(task.TEMPLATE)
@@ -144,3 +144,57 @@ def test_baseline_queue_skips_existing_runs_and_does_not_relaunch_finished_sessi
         "experiments.eoh.run" in command and "--backend" in command for _, command in launched
     )
     assert not any(p.run_dir.exists() for p in plan[2:])
+
+
+def test_batch_plan_uses_actual_model_settings_and_preserves_repeat_seeds(capsys):
+    from experiments.infra.search_host_launch import main
+
+    main(
+        [
+            "--batch",
+            "preview",
+            "--tasks",
+            "cvrp_aco",
+            "jssp_construct",
+            "--backends",
+            "deepseek",
+            "local",
+            "--repeats",
+            "3",
+            "--repeat-ids",
+            "2",
+            "--eval-workers",
+            "2",
+        ]
+    )
+    batch = json.loads(capsys.readouterr().out)
+    assert batch["total_budget"] == 2000
+    for item in batch["plan"]:
+        assert item["seed"] == 1 and item["repeat"] == 2
+        assert item["command"][1:3] == ["-m", "experiments.traceaad.run"]
+        assert "--eval-workers=2" in item["command"]
+    assert batch["llm"]["deepseek"]["temperature"] == 1.0
+    assert batch["llm"]["local"]["temperature"] == 0.7
+    assert batch["evaluation_limits"]["jssp_construct"]["function_seconds"] == 10
+    assert batch["evaluation_limits"]["cvrp_aco"]["function_seconds"] == 2
+
+
+def test_model_client_and_saved_settings_use_the_same_sampling(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(base, "OpenAIAPI", lambda **options: SimpleNamespace(**options))
+    args = dict(
+        base_url="http://localhost/v1",
+        model="deepseek-v4.1-flash",
+        no_proxy="localhost",
+        max_tokens=1024,
+        enable_thinking=True,
+        temperature=0.3,
+    )
+    client, saved = base.build_llm_client(**args), base.llm_payload(**args)
+    assert saved["sampling"] == {
+        "temperature": client.temperature,
+        "top_p": client.top_p,
+        **client.extra_body,
+    }
+    assert client.reasoning_effort == saved["reasoning_effort"] == "high"

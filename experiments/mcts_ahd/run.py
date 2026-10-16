@@ -8,18 +8,16 @@ from pathlib import Path
 
 from baselines.mcts_ahd import MAProfiler, MCTS_AHD
 
+from benchmarks.tasks import ALL_TASKS
 from experiments.infra.base import (
-    ALL_TASKS,
     BACKENDS,
     DEFAULT_BACKEND,
     RESULTS_ROOT,
-    TaskName,
     build_llm_client,
     build_task,
     resolve_backend,
-    resolve_run_dir as resolve_run_dir_file,
-    write_run_config as write_run_config_file,
 )
+from traceaad.storage import write_json
 from experiments.infra.runner import baseline_run_config, run_baseline_experiment
 
 # Paper-aligned defaults (MCTS-AHD icml2025: N_I=4, lambda_0=0.1, alpha=0.5).
@@ -37,13 +35,13 @@ MAX_CONSECUTIVE_SAMPLE_FAILURES = 20
 EVAL_EXECUTOR = "thread"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class RunSpec:
-    task: TaskName
-    backend: str
-    base_url: str
-    model: str
-    no_proxy: str
+    task: str
+    backend: str = DEFAULT_BACKEND
+    base_url: str | None = None
+    model: str | None = None
+    no_proxy: str | None = None
     max_sample_nums: int = MAX_SAMPLE_NUMS
     init_size: int = INIT_SIZE
     pop_size: int = POP_SIZE
@@ -63,68 +61,26 @@ class RunSpec:
     def experiment_root(self) -> Path:
         return self.experiments_root / "mcts_ahd" / self.task
 
-
-def make_run_spec(
-    *,
-    task: TaskName,
-    backend: str = DEFAULT_BACKEND,
-    base_url: str | None = None,
-    model: str | None = None,
-    no_proxy: str | None = None,
-    max_sample_nums: int = MAX_SAMPLE_NUMS,
-    init_size: int = INIT_SIZE,
-    pop_size: int = POP_SIZE,
-    selection_num: int = SELECTION_NUM,
-    num_samplers: int = NUM_SAMPLERS,
-    num_evaluators: int = NUM_EVALUATORS,
-    alpha: float = ALPHA,
-    lambda_0: float = LAMBDA_0,
-    eval_workers: int | None = None,
-    output_tokens: int = 16384,
-    seed: int = 0,
-    repeat: int | None = None,
-    run_name: str | None = None,
-    experiments_root: Path = RESULTS_ROOT,
-) -> RunSpec:
-    profile = resolve_backend(backend, base_url, model, no_proxy)
-    spec = RunSpec(
-        task=task,
-        backend=backend,
-        base_url=profile.base_url,
-        model=profile.model,
-        no_proxy=profile.no_proxy,
-        max_sample_nums=max_sample_nums,
-        init_size=init_size,
-        pop_size=pop_size,
-        selection_num=selection_num,
-        num_samplers=num_samplers,
-        num_evaluators=num_evaluators,
-        alpha=alpha,
-        lambda_0=lambda_0,
-        eval_workers=eval_workers,
-        output_tokens=output_tokens,
-        seed=seed,
-        repeat=repeat,
-        run_name=run_name,
-        experiments_root=experiments_root.resolve(),
-    )
-    if spec.max_sample_nums <= 0:
-        raise ValueError("max_sample_nums must be positive")
-    if spec.init_size <= 0:
-        raise ValueError("init_size must be positive")
-    if spec.pop_size <= 0:
-        raise ValueError("pop_size must be positive")
-    if not 1 <= spec.selection_num <= spec.pop_size:
-        raise ValueError("selection_num must be between 1 and pop_size")
-    if spec.num_samplers <= 0:
-        raise ValueError("num_samplers must be positive")
-    if spec.num_evaluators <= 0:
-        raise ValueError("num_evaluators must be positive")
-    if spec.eval_workers is not None and spec.eval_workers <= 0:
-        raise ValueError("eval_workers must be positive")
-    if spec.output_tokens <= 0:
-        raise ValueError("output_tokens must be positive")
-    return spec
+    def __post_init__(self):
+        profile = resolve_backend(self.backend, self.base_url, self.model, self.no_proxy)
+        self.base_url, self.model, self.no_proxy = profile.base_url, profile.model, profile.no_proxy
+        self.experiments_root = self.experiments_root.resolve()
+        if self.max_sample_nums <= 0:
+            raise ValueError("max_sample_nums must be positive")
+        if self.init_size <= 0:
+            raise ValueError("init_size must be positive")
+        if self.pop_size <= 0:
+            raise ValueError("pop_size must be positive")
+        if not 1 <= self.selection_num <= self.pop_size:
+            raise ValueError("selection_num must be between 1 and pop_size")
+        if self.num_samplers <= 0:
+            raise ValueError("num_samplers must be positive")
+        if self.num_evaluators <= 0:
+            raise ValueError("num_evaluators must be positive")
+        if self.eval_workers is not None and self.eval_workers <= 0:
+            raise ValueError("eval_workers must be positive")
+        if self.output_tokens <= 0:
+            raise ValueError("output_tokens must be positive")
 
 
 def build_method(spec: RunSpec, log_dir: Path) -> MCTS_AHD:
@@ -154,8 +110,8 @@ def build_method(spec: RunSpec, log_dir: Path) -> MCTS_AHD:
 
 
 def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
-    write_run_config_file(
-        run_dir,
+    write_json(
+        run_dir / "run_config.json",
         baseline_run_config(spec, run_dir, run_name, "mcts_ahd", {
                 "max_sample_nums": spec.max_sample_nums,
                 "init_size": spec.init_size,
@@ -170,11 +126,6 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                 "debug": False,
             }, extra={"timestamp": run_name}),
     )
-
-
-def resolve_run_dir(spec: RunSpec) -> tuple[Path, str]:
-    """Create (or return) the run directory for a spec (legacy convenience API)."""
-    return resolve_run_dir_file(spec.experiment_root, spec.run_name)
 
 
 def run_experiment(spec: RunSpec) -> Path:
@@ -214,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     run_experiment(
-        make_run_spec(
+        RunSpec(
             task=args.task,
             backend=args.backend,
             base_url=args.base_url,
