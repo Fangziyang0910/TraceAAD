@@ -12,9 +12,10 @@ import subprocess
 import time
 
 from benchmarks.tasks import SCALES, SPLITS, scale_of_split
-from traceaad.v12_1.storage import heldout_identity
-from traceaad.v12_1.storage import committed_size, selected_program, read_json as result_json
-from experiments.infra.monitor_timing import batch_timing, search_timing
+from experiments.infra.result_storage import heldout_identity
+from traceaad.storage import committed_size, read_json as result_json
+from experiments.infra.result_storage import selected_program
+from experiments.infra.timing import batch_timing, search_timing
 
 
 TAIL_BYTES = 1_048_576

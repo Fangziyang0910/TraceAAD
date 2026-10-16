@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import multiprocessing
 from typing import Any, Callable
 
 import numpy as np
 
-from core import Evaluation, set_kill_with_parent
+from core import Evaluation
+from benchmarks.shared.aco import run_jobs, validate_parameters
 from benchmarks.op_aco.dataset import (
     DEFAULT_SPLIT,
     gen_distance_matrix,
@@ -186,17 +186,7 @@ class OPACOEvaluation(Evaluation):
             timeout_seconds=timeout_seconds,
         )
         self.design_notes = design_notes
-        if (
-            not isinstance(n_ants, int)
-            or isinstance(n_ants, bool)
-            or not isinstance(n_iterations, int)
-            or isinstance(n_iterations, bool)
-            or n_ants < 1
-            or n_iterations < 1
-        ):
-            raise ValueError("n_ants and n_iterations must be positive integers.")
-        if not isinstance(n_workers, int) or isinstance(n_workers, bool) or n_workers < 1:
-            raise ValueError("n_workers must be a positive integer.")
+        validate_parameters(n_ants, n_iterations, n_workers)
         self._datasets, self.dataset_metadata = load_split_instances(split)
         self.split = split
         self.n_instance = len(self._datasets)
@@ -223,23 +213,6 @@ class OPACOEvaluation(Evaluation):
         prior = np.maximum(prior + 1e-9, 1e-9)
         return prizes, distances, prior
 
-    def _solve_instance(
-        self, coordinates: np.ndarray, heuristic: Callable, instance_index: int
-    ) -> float:
-        prizes, distances, prior = self._build_prior(coordinates, heuristic)
-        return _run_aco_job(
-            (
-                prizes,
-                distances,
-                prior,
-                self.max_len,
-                self.n_ants,
-                self.n_iterations,
-                self.aco_seed,
-                instance_index,
-            )
-        )
-
     def evaluate(self, heuristic: Callable) -> float | None:
         try:
             return self._evaluate_or_raise(heuristic)
@@ -262,15 +235,7 @@ class OPACOEvaluation(Evaluation):
                     index,
                 )
             )
-        if self.n_workers <= 1 or len(jobs) <= 1:
-            objs = [_run_aco_job(job) for job in jobs]
-        else:
-            workers = min(self.n_workers, len(jobs))
-            context = multiprocessing.get_context("spawn")
-            with context.Pool(
-                processes=workers, initializer=set_kill_with_parent
-            ) as pool:
-                objs = pool.map(_run_aco_job, jobs)
+        objs = run_jobs(_run_aco_job, jobs, self.n_workers)
         return -float(np.mean(objs))
 
     def evaluate_program(

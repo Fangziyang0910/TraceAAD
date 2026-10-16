@@ -1,25 +1,5 @@
-# This file is part of the LLM4AD project (https://github.com/Optima-CityU/llm4ad).
-# Last Revision: 2025/2/16
-#
-# ------------------------------- Copyright --------------------------------
-# Copyright (c) 2025 Optima Group.
-#
-# Permission is granted to use the LLM4AD platform for research purposes.
-# All publications, software, or other works that utilize this platform
-# or any part of its codebase must acknowledge the use of "LLM4AD" and
-# cite the following reference:
-#
-# Fei Liu, Rui Zhang, Zhuoliang Xie, Rui Sun, Kai Li, Xi Lin, Zhenkun Wang,
-# Zhichao Lu, and Qingfu Zhang, "LLM4AD: A Platform for Algorithm Design
-# with Large Language Model," arXiv preprint arXiv:2412.17287 (2024).
-#
-# For inquiries regarding commercial use or licensing, please contact
-# http://www.llm4ad.com/contact.html
-# --------------------------------------------------------------------------
-
 from __future__ import annotations
 
-import hashlib
 import json
 import multiprocessing
 import os
@@ -31,12 +11,11 @@ import threading
 import time
 import traceback
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
-from pathlib import Path
-from typing import Any, Literal
 from contextlib import contextmanager
+from dataclasses import dataclass, replace
+from typing import Any, Literal
 
-from .code import TextFunctionProgramConverter, Program
+from .code import Program, parse_program
 from .scheduling import SchedulerError
 
 
@@ -54,12 +33,7 @@ class EvaluationOutcome:
 
 
 class InvalidEvaluationResult(Exception):
-    """Evaluator-detected reason why a candidate construction yields no result.
-
-    Task evaluations raise this instead of returning None when they can name
-    the exact violated condition; SecureEvaluator maps it to an
-    ``invalid_result`` outcome that carries the reason.
-    """
+    """The task rejected the generated solution."""
 
 
 # Every method evaluates a candidate from the same Python/NumPy random state.
@@ -69,7 +43,9 @@ EVALUATION_SEED = 730241
 @contextmanager
 def seeded_random_state(seed=EVALUATION_SEED):
     import random
+
     import numpy as np
+
     py_state, np_state = random.getstate(), np.random.get_state()
     random.seed(seed)
     np.random.seed(seed)
@@ -88,27 +64,16 @@ class Evaluation(ABC):
             yield source, self, kwargs
 
     def __init__(
-            self,
-            template_program: str | Program,
-            task_description: str = '',
-            timeout_seconds: int | float = None,
-            *,
-            safe_evaluate: bool = True,
-            daemon_eval_process: bool = False,
-            fork_proc: Literal['auto'] | bool = 'auto'
+        self,
+        template_program: str | Program,
+        task_description: str = "",
+        timeout_seconds: int | float = None,
+        *,
+        safe_evaluate: bool = True,
+        daemon_eval_process: bool = False,
+        fork_proc: Literal["auto"] | bool = "auto",
     ):
-        """Evaluation interface for executing generated code.
-        Args:
-            timeout_seconds     : Terminate the evaluation after timeout seconds.
-            safe_evaluate       : Evaluate in safe mode using a new process. If is set to False,
-                the evaluation will not be terminated after timeout seconds. The user should consider how to
-                terminate evaluating in time.
-            daemon_eval_process : Set the evaluate process as a daemon process. If set to True,
-                you can not set new processes in the evaluator. Which means in self.evaluate_program(),
-                you can not create new processes.
-            fork_proc           : This arg is valid when safe_evaluate=True, which determines to 'fork' process or 'spawn' a safe process.
-                If set to 'auto', the process creating method will depend on OS. Set to 'True' to use 'fork', 'False' to use 'spawn'.
-        """
+        """Configure the task template and isolated execution."""
         self.template_program = template_program
         self.task_description = task_description
         self.timeout_seconds = timeout_seconds
@@ -118,24 +83,12 @@ class Evaluation(ABC):
 
     @abstractmethod
     def evaluate_program(self, program_str: str, callable_func: callable, **kwargs) -> Any | None:
-        r"""Evaluate a given function. You can use compiled function (function_callable),
-        as well as the original function strings for evaluation.
-        Args:
-            program_str: The function in string. You can _ignore this argument when implementation. (See below).
-            callable_func: The callable heuristic function. You can call it using `callable_func(args, kwargs)`.
-        Return:
-            Returns the minimized fitness value (lower is better).
-            Maximization tasks return the negative of their original objective.
-        """
-        raise NotImplementedError('Must provide a evaluator for a function.')
+        """Return minimized fitness; use a negative value for maximization objectives."""
+        raise NotImplementedError("Must provide a evaluator for a function.")
 
 
 def set_kill_with_parent() -> None:
-    """Kill this process if its parent dies.
-
-    Secure-eval subprocesses and ACO pool workers call this so a timeout or
-    a killed search process cannot leave grandchildren attached to init.
-    """
+    """Terminate orphan evaluation workers on Linux."""
     if not sys.platform.startswith("linux"):
         return
     try:
@@ -160,33 +113,12 @@ def _enter_eval_session() -> None:
 
 
 def _descendant_pids(pid: int) -> list[int]:
-    proc = Path("/proc")
-    if not proc.is_dir():
+    import psutil
+
+    try:
+        return [child.pid for child in psutil.Process(pid).children(recursive=True)]
+    except psutil.NoSuchProcess, psutil.AccessDenied:
         return []
-    children_by_ppid: dict[int, list[int]] = {}
-    for entry in proc.iterdir():
-        if not entry.name.isdigit():
-            continue
-        child_pid = int(entry.name)
-        try:
-            text = (entry / "status").read_text()
-        except OSError:
-            continue
-        ppid = None
-        for line in text.splitlines():
-            if line.startswith("PPid:"):
-                ppid = int(line.split()[1])
-                break
-        if ppid is None:
-            continue
-        children_by_ppid.setdefault(ppid, []).append(child_pid)
-    found: list[int] = []
-    stack = list(children_by_ppid.get(pid, []))
-    while stack:
-        current = stack.pop()
-        found.append(current)
-        stack.extend(children_by_ppid.get(current, []))
-    return found
 
 
 def _own_cpu_seconds() -> float:
@@ -197,7 +129,7 @@ def _own_cpu_seconds() -> float:
 def _signal_pid(pid: int, sig: int) -> None:
     try:
         os.kill(pid, sig)
-    except (ProcessLookupError, PermissionError, OSError):
+    except OSError:
         return
 
 
@@ -210,7 +142,7 @@ def _stop_eval_process(process: multiprocessing.Process) -> None:
     if hasattr(os, "getpgid"):
         try:
             candidate = os.getpgid(pid)
-        except (ProcessLookupError, PermissionError, OSError):
+        except OSError:
             candidate = None
         else:
             if candidate == pid:
@@ -222,7 +154,7 @@ def _stop_eval_process(process: multiprocessing.Process) -> None:
             try:
                 os.killpg(pgid, sig)
                 return
-            except (ProcessLookupError, PermissionError, OSError):
+            except OSError:
                 pass
         for child in descendants:
             _signal_pid(child, sig)
@@ -240,94 +172,109 @@ _RECORD_LOCK = threading.Lock()
 
 
 def _append_evaluation(path, program, record):
-    """One line per evaluation: methods that keep no failure kind still leave it here."""
-    failed = next((r for r in record["instances"] if r["failure_kind"] not in (None, "cancelled")), None)
-    row = {"key": hashlib.sha256(program.encode()).hexdigest(), "valid": record["valid"],
-           "score": record["score"], "failure_kind": record["failure_kind"], "error_type": record["error_type"],
-           "error": (record["error"] or "")[:300] or None,
-           "instance_index": failed["instance_index"] if failed else None,
-           "instance_function_seconds": failed["function_seconds"] if failed else None,
-           "instance_function_cpu_seconds": failed["function_cpu_seconds"] if failed else None,
-           "instance_seconds": failed["seconds"] if failed else None,
-           "cpu_id": failed.get("cpu_id") if failed else None,
-           "seconds": record["seconds"], "function_seconds": record["function_seconds"],
-           "function_cpu_seconds": record["function_cpu_seconds"],
-           "mean_function_cpu_seconds": record["mean_function_cpu_seconds"],
-           "function_budget_scope": record["function_budget_scope"], "n_instances": record["n_instances"],
-           "timeout_seconds": record["timeout_seconds"], "function_seconds_limit": record["function_seconds_limit"],
-           "protocol": record["protocol"],
-           "instance_scores": [r["score"] for r in record["instances"]] if record["valid"] else []}
+    """Keep baseline scores, failures and timing in the evaluation log."""
+    failed = next(
+        (r for r in record["instances"] if r["failure_kind"] not in (None, "cancelled")), None
+    )
+    row = {
+        "code": program,
+        "valid": record["valid"],
+        "score": record["score"],
+        "failure_kind": record["failure_kind"],
+        "error_type": record["error_type"],
+        "error": (record["error"] or "")[:300] or None,
+        "instance_index": failed["instance_index"] if failed else None,
+        "instance_function_seconds": failed["function_seconds"] if failed else None,
+        "instance_function_cpu_seconds": failed["function_cpu_seconds"] if failed else None,
+        "instance_seconds": failed["seconds"] if failed else None,
+        "cpu_id": failed.get("cpu_id") if failed else None,
+        "seconds": record["seconds"],
+        "function_seconds": record["function_seconds"],
+        "function_cpu_seconds": record["function_cpu_seconds"],
+        "mean_function_cpu_seconds": record["mean_function_cpu_seconds"],
+        "function_budget_scope": record["function_budget_scope"],
+        "n_instances": record["n_instances"],
+        "timeout_seconds": record["timeout_seconds"],
+        "function_seconds_limit": record["function_seconds_limit"],
+        "instance_scores": [r["score"] for r in record["instances"]] if record["valid"] else [],
+    }
     with _RECORD_LOCK, open(path, "a", encoding="utf-8") as output:
         output.write(json.dumps(row) + "\n")
 
 
 class SecureEvaluator:
-    def __init__(self,
-                 evaluator: Evaluation,
-                 debug_mode=False,
-                 **kwargs):
+    """Run a generated program and retain its score or failure reason."""
+
+    def __init__(self, evaluator: Evaluation, debug_mode=False):
         self._evaluator = evaluator
         self._debug_mode = debug_mode
         self.scheduler_error = None
-        fork_proc = self._evaluator.fork_proc
-
-        if self._evaluator.safe_evaluate:
-            if fork_proc == 'auto':
-                # force MacOS and Linux use 'fork' to generate new process
-                if sys.platform.startswith('darwin') or sys.platform.startswith('linux'):
-                    multiprocessing.set_start_method('fork', force=True)
-            elif fork_proc is True:
-                multiprocessing.set_start_method('fork', force=True)
-            elif fork_proc is False:
-                multiprocessing.set_start_method('spawn', force=True)
+        self._context = multiprocessing.get_context(
+            "spawn" if evaluator.fork_proc is False else "fork"
+        )
 
     def evaluate_program(self, program: str | Program, **kwargs):
         return self.evaluate_program_with_details(program, **kwargs).result
 
     def _wait(self, result_queue) -> EvaluationOutcome:
         timeout = self._evaluator.timeout_seconds
-        if timeout is None:
-            return result_queue.get()
         try:
             return result_queue.get(timeout=timeout)
         except queue.Empty:
             if self._debug_mode:
-                print(f'DEBUG: the evaluation time exceeds {timeout}s.')
-            return EvaluationOutcome(result=None, failure_kind='timeout',
-                                     error_type='TimeoutError',
-                                     error=f'evaluation exceeded {timeout}s')
+                print(f"DEBUG: the evaluation time exceeds {timeout}s.")
+            return EvaluationOutcome(
+                result=None,
+                failure_kind="timeout",
+                error_type="TimeoutError",
+                error=f"evaluation exceeded {timeout}s",
+            )
 
-    def evaluate_program_with_details(
-            self, program: str | Program, **kwargs
-    ) -> EvaluationOutcome:
+    def evaluate_program_with_details(self, program: str | Program, **kwargs) -> EvaluationOutcome:
         try:
             program_str = str(program)
             if execution := getattr(self._evaluator, "_instance_execution", None):
-                from traceaad.v12_1.instance_evaluation import InstanceProgramEvaluator
-                options = {name: value for name, value in execution.items() if name != "record_path"}
-                evaluator = InstanceProgramEvaluator(self._evaluator,
-                    seeds=(kwargs.get("seed", EVALUATION_SEED),), **options)
+                from traceaad.instance_evaluation import InstanceProgramEvaluator
+
+                if execution.get("function_budget_scope", "mean_instance") != "mean_instance":
+                    raise ValueError(
+                        "historical instance CPU budgets require the saved source snapshot"
+                    )
+                options = {
+                    name: value
+                    for name, value in execution.items()
+                    if name not in {"record_path", "function_budget_scope"}
+                }
+                evaluator = InstanceProgramEvaluator(
+                    self._evaluator, seeds=(kwargs.get("seed", EVALUATION_SEED),), **options
+                )
                 result = evaluator.evaluate(program_str, "")
                 record = result["evaluations"][-1]
                 if execution.get("record_path"):
                     _append_evaluation(execution["record_path"], program_str, record)
-                return EvaluationOutcome(result["fitness"],
-                    **{name: record[name] for name in ("failure_kind", "error_type", "error", "traceback")},
+                return EvaluationOutcome(
+                    result["fitness"],
+                    **{
+                        name: record[name]
+                        for name in ("failure_kind", "error_type", "error", "traceback")
+                    },
                     cpu_seconds=sum(r["cpu_seconds"] for r in result["evaluations"]),
-                    instance_scores=tuple(r["score"] for r in record["instances"]) if result["fitness"] is not None else ())
+                    instance_scores=tuple(r["score"] for r in record["instances"])
+                    if result["fitness"] is not None
+                    else (),
+                )
             function_name = self._target_function_name()
 
             if self._debug_mode:
-                print(f'DEBUG: evaluated program:\n{program_str}\n')
+                print(f"DEBUG: evaluated program:\n{program_str}\n")
 
-            # safe evaluate
             if self._evaluator.safe_evaluate:
-                result_queue = multiprocessing.Queue()
-                process = multiprocessing.Process(
+                result_queue = self._context.Queue()
+                process = self._context.Process(
                     target=self._evaluate_in_safe_process_with_details,
                     args=(program_str, function_name, result_queue),
                     kwargs=kwargs,
-                    daemon=self._evaluator.daemon_eval_process
+                    daemon=self._evaluator.daemon_eval_process,
                 )
                 process.start()
                 try:
@@ -336,57 +283,50 @@ class SecureEvaluator:
                     _stop_eval_process(process)
                 return outcome
             else:
-                return self._evaluate_with_details(
-                    program_str, function_name, **kwargs
-                )
+                return self._evaluate_with_details(program_str, function_name, **kwargs)
         except SchedulerError as exc:
             self.scheduler_error = exc
             raise
         except Exception as e:
             if self._debug_mode:
                 print("DEBUG: Exception occurred in evaluate_program:")
-                traceback.print_exc()  # 这将打印完整红色报错信息
-            return self._failure('prepare_error', e)
+                traceback.print_exc()
+            return self._failure("prepare_error", e)
 
     def evaluate_program_record_time(self, program: str | Program, **kwargs):
-        evaluate_start = time.time()
-        result = self.evaluate_program(program, **kwargs)
-        return result, time.time() - evaluate_start
+        outcome, seconds = self.evaluate_program_record_time_with_details(program, **kwargs)
+        return outcome.result, seconds
 
     def evaluate_program_record_time_with_details(
-            self, program: str | Program, **kwargs
+        self, program: str | Program, **kwargs
     ) -> tuple[EvaluationOutcome, float]:
-        evaluate_start = time.time()
+        evaluate_start = time.monotonic()
         outcome = self.evaluate_program_with_details(program, **kwargs)
-        return outcome, time.time() - evaluate_start
+        return outcome, time.monotonic() - evaluate_start
 
     def _target_function_name(self) -> str:
         source = self._evaluator.template_program
-        template = (
-            source
-            if isinstance(source, Program)
-            else TextFunctionProgramConverter.text_to_program(source)
-        )
+        template = source if isinstance(source, Program) else parse_program(source)
         if template is None or len(template.functions) != 1:
-            raise ValueError('evaluation template must define one target function')
+            raise ValueError("evaluation template must define one target function")
         return template.functions[0].name
 
     def _evaluate_in_safe_process_with_details(
-            self,
-            program_str: str,
-            function_name: str,
-            result_queue: multiprocessing.Queue,
-            **kwargs,
+        self, program_str: str, function_name: str, result_queue: multiprocessing.Queue, **kwargs
     ) -> None:
         _enter_eval_session()
         try:
             outcome = self._evaluate_with_details(program_str, function_name, **kwargs)
         except Exception as exc:
-            outcome = self._failure('prepare_error', exc)
+            outcome = self._failure("prepare_error", exc)
         result_queue.put(replace(outcome, cpu_seconds=_own_cpu_seconds()))
 
     def _evaluate_with_details(self, program_str: str, function_name, **kwargs):
-        with self._evaluator.program_context(program_str, function_name, **kwargs) as (code, task, task_kwargs):
+        with self._evaluator.program_context(program_str, function_name, **kwargs) as (
+            code,
+            task,
+            task_kwargs,
+        ):
             function = None
             if not getattr(task, "executes_source", False):
                 try:
@@ -394,33 +334,29 @@ class SecureEvaluator:
                     exec(code, namespace)
                     function = namespace[function_name]
                 except Exception as exc:
-                    return self._failure('exec_error', exc)
+                    return self._failure("exec_error", exc)
             try:
-                return self._outcome(task.evaluate_program(code, function, **task_kwargs))
+                result = task.evaluate_program(code, function, **task_kwargs)
+                if result is None:
+                    raise InvalidEvaluationResult("evaluator returned None")
+                return EvaluationOutcome(result=result)
             except InvalidEvaluationResult as exc:
-                return EvaluationOutcome(result=None, failure_kind='invalid_result',
-                                         error_type='InvalidEvaluationResult', error=str(exc))
+                return EvaluationOutcome(
+                    result=None,
+                    failure_kind="invalid_result",
+                    error_type="InvalidEvaluationResult",
+                    error=str(exc),
+                )
             except Exception as exc:
                 if self._debug_mode:
                     traceback.print_exc()
-                return self._failure('runtime_error', exc)
-
-    @staticmethod
-    def _outcome(result: Any | None) -> EvaluationOutcome:
-        if result is None:
-            return EvaluationOutcome(
-                result=None,
-                failure_kind='invalid_result',
-                error_type='InvalidEvaluationResult',
-                error='evaluator returned None',
-            )
-        return EvaluationOutcome(result=result)
+                return self._failure("runtime_error", exc)
 
     @staticmethod
     def _failure(kind: str, exc: Exception) -> EvaluationOutcome:
         message = str(exc)
         if len(message) > 20000:
-            message = message[:19997] + '...'
+            message = message[:19997] + "..."
         return EvaluationOutcome(
             result=None,
             failure_kind=kind,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import multiprocessing
 import os
 import time
 from pathlib import Path
@@ -35,8 +36,7 @@ class NestedHangEvaluation(Evaluation):
 
         context = multiprocessing.get_context("fork")
         workers = [
-            context.Process(target=_hang_and_report, args=(self._pid_file,))
-            for _ in range(3)
+            context.Process(target=_hang_and_report, args=(self._pid_file,)) for _ in range(3)
         ]
         pids: list[str] = []
         for worker in workers:
@@ -58,9 +58,10 @@ def _alive(pid: int) -> bool:
 
 def test_timeout_kills_nested_spawn_workers(tmp_path: Path) -> None:
     pid_file = tmp_path / "workers.txt"
-    outcome = SecureEvaluator(NestedHangEvaluation(pid_file)).evaluate_program_with_details(
-        TEMPLATE
-    )
+    start_method = multiprocessing.get_start_method(allow_none=True)
+    evaluator = SecureEvaluator(NestedHangEvaluation(pid_file))
+    assert multiprocessing.get_start_method(allow_none=True) == start_method
+    outcome = evaluator.evaluate_program_with_details(TEMPLATE)
     assert outcome.failure_kind == "timeout"
 
     deadline = time.time() + 5
@@ -68,9 +69,7 @@ def test_timeout_kills_nested_spawn_workers(tmp_path: Path) -> None:
     while time.time() < deadline:
         if pid_file.is_file():
             pids = [
-                int(line)
-                for line in pid_file.read_text(encoding="utf-8").split()
-                if line.strip()
+                int(line) for line in pid_file.read_text(encoding="utf-8").split() if line.strip()
             ]
             if pids:
                 break

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import multiprocessing
 from typing import Any, Callable
 
 import numpy as np
 
-from core import Evaluation, set_kill_with_parent
+from core import Evaluation
+from benchmarks.shared.aco import run_jobs, validate_parameters
 from benchmarks.cvrp_aco.dataset import (
     CAPACITY,
     DEFAULT_SPLIT,
@@ -164,17 +164,7 @@ class CVRPACOEvaluation(Evaluation):
             task_description=task_description,
             timeout_seconds=timeout_seconds,
         )
-        if (
-            not isinstance(n_ants, int)
-            or isinstance(n_ants, bool)
-            or not isinstance(n_iterations, int)
-            or isinstance(n_iterations, bool)
-            or n_ants < 1
-            or n_iterations < 1
-        ):
-            raise ValueError("n_ants and n_iterations must be positive integers.")
-        if not isinstance(n_workers, int) or isinstance(n_workers, bool) or n_workers < 1:
-            raise ValueError("n_workers must be a positive integer.")
+        validate_parameters(n_ants, n_iterations, n_workers)
         self._datasets, self.dataset_metadata = load_split_instances(split)
         self.split = split
         self.n_instance = len(self._datasets)
@@ -207,23 +197,6 @@ class CVRPACOEvaluation(Evaluation):
         prior = np.maximum(prior + 1e-9, 1e-9)
         return distances, demands, prior
 
-    def _solve_instance(
-        self, instance: np.ndarray, heuristic: Callable, instance_index: int
-    ) -> float:
-        distances, demands, prior = self._build_prior(instance, heuristic)
-        return _run_aco_job(
-            (
-                distances,
-                demands,
-                prior,
-                self.capacity,
-                self.n_ants,
-                self.n_iterations,
-                self.aco_seed,
-                instance_index,
-            )
-        )
-
     def evaluate(self, heuristic: Callable) -> float | None:
         try:
             return self._evaluate_or_raise(heuristic)
@@ -246,15 +219,7 @@ class CVRPACOEvaluation(Evaluation):
                     index,
                 )
             )
-        if self.n_workers <= 1 or len(jobs) <= 1:
-            costs = [_run_aco_job(job) for job in jobs]
-        else:
-            workers = min(self.n_workers, len(jobs))
-            context = multiprocessing.get_context("spawn")
-            with context.Pool(
-                processes=workers, initializer=set_kill_with_parent
-            ) as pool:
-                costs = pool.map(_run_aco_job, jobs)
+        costs = run_jobs(_run_aco_job, jobs, self.n_workers)
         return float(np.mean(costs))
 
     def evaluate_program(

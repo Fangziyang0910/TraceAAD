@@ -13,7 +13,7 @@ from .population import Population
 from .profiler import PathWiseProfiler
 from .prompt import PathWisePrompt
 from .sampler import PathWiseSampler
-from core import Evaluation, Function, LLM, Program, SecureEvaluator, TextFunctionProgramConverter
+from core import Evaluation, Function, LLM, Program, SecureEvaluator
 from baselines.shared.profiler import ProfilerBase
 from baselines.shared.checkpoint import save_checkpoint
 from baselines.shared.observability import (
@@ -29,6 +29,7 @@ from baselines.shared.observability import (
     reset_sample_failures,
     shutdown_executor,
 )
+from core.code import parse_program, replace_function
 
 
 @dataclass
@@ -131,7 +132,7 @@ class PathWise:
         self._max_world_model_retries = max(0, int(max_world_model_retries))
         self._max_policy_retries = max(0, int(max_policy_retries))
 
-        raw_template_program = TextFunctionProgramConverter.text_to_program(self._template_program_str)
+        raw_template_program = parse_program(self._template_program_str)
         if raw_template_program is None or len(raw_template_program.functions) != 1:
             raise ValueError("PathWise requires an evaluation template with exactly one evolvable function.")
         self._template_program: Program = PathWiseSampler.with_global_imports(raw_template_program)
@@ -267,7 +268,7 @@ class PathWise:
         func.operator = operator
         func.algorithm = description
         if program is None:
-            program = TextFunctionProgramConverter.function_to_program(func, self._template_program)
+            program = replace_function(func, self._template_program)
         if program is None:
             self._tot_sample_nums += 1
             log_event(self, event="sample_rejected", method="pathwise", status="program_parse_failed",

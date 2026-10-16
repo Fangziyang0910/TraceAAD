@@ -5,7 +5,7 @@ from threading import Lock
 from typing import List
 import numpy as np
 
-from core import *
+from core import Function
 
 
 class Population:

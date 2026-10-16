@@ -1,4 +1,4 @@
-"""Compute search and development diagnostics from committed facts."""
+"""Compute search diagnostics from committed program individuals."""
 
 import argparse
 from collections import Counter
@@ -7,12 +7,11 @@ import math
 from pathlib import Path
 import re
 import statistics
-from traceaad.v12_1.storage import write_json
-from traceaad.v12_1.canonical import similarity
-from traceaad.v12_1.selection import OPERATORS
-from traceaad.v12_1.history import final_program
-from traceaad.v12_1.selection import better
-from traceaad.v12_1.state import Facts
+from traceaad.storage import write_json
+from traceaad.config import DEFAULT_OPERATOR_WEIGHTS
+from traceaad.history import final_program
+from traceaad.selection import better
+from traceaad.state import Facts
 
 TRIED_OUT = 15
 CLOCK = re.compile(
@@ -81,7 +80,7 @@ def diagnostics(facts, budget, init_attempts, final_candidates=5, time_limit=Non
     counts = dict(Counter((a.status for a in attempts)))
     repairs = {a.repair_of: a for a in attempts if a.repair_of is not None}
     actions = {}
-    for name in (*OPERATORS, "Repair"):
+    for name in (*DEFAULT_OPERATOR_WEIGHTS, "Repair"):
         proposed = [a for a in attempts if a.action == name]
         new = [a for a in proposed if a.status == "valid"]
         started = [(a, programs.get(a.parent_id)) for a in new]
@@ -107,7 +106,7 @@ def diagnostics(facts, budget, init_attempts, final_candidates=5, time_limit=Non
         frontier = min(frontier, node.fitness)
     tried, improved, on_tried_out = (Counter(), Counter(), 0)
     operator_attempts = [
-        a for a in attempts if a.repair_of is None and a.action in OPERATORS
+        a for a in attempts if a.repair_of is None and a.action in DEFAULT_OPERATOR_WEIGHTS
     ]
     for a in operator_attempts:
         source = programs.get(a.parent_id)
@@ -177,62 +176,8 @@ def diagnostics(facts, budget, init_attempts, final_candidates=5, time_limit=Non
         if cpu
         else None,
         "best_training_depth": best.depth if best else None,
-        "explorations": random_development_stats(
-            facts, attempts, init_attempts, final_candidates
-        ),
         "computation": computation_stats(facts, attempts, time_limit, final_candidates),
         "too_long_nodes": len((facts.state or {}).get("too_long", [])),
-    }
-
-
-def random_development_stats(facts, attempts, init_attempts, final_candidates):
-    """How development used the budget, what it added and where it led."""
-    programs = facts.programs
-    records = sorted(facts.explorations.values(), key=lambda e: e["id"])
-    tagged = {a.id for a in attempts if a.exploration and a.exploration["step"] > 0}
-    inside = [a for a in attempts if a.id in tagged or a.repair_of in tagged]
-    search = [a for a in attempts if a.generation > init_attempts]
-    developed = [e for e in records if e.get("developed")]
-    gains, moved = ([], [])
-    for e in developed:
-        first, reached = (programs[e["proposed_id"]], programs[e["best_id"]])
-        gains.append((first.fitness - reached.fitness) / max(abs(first.fitness), 1e-12))
-        start = programs.get(e["start_id"])
-        if start is not None and reached.id != first.id:
-            moved.append(
-                similarity(reached.code, start.code)
-                - similarity(first.code, start.code)
-            )
-    produced = {a.id for a in inside if a.status == "valid"}
-    top = [n.id for n in sorted(facts.valid.values(), key=lambda n: (n.fitness, n.id))][
-        :final_candidates
-    ]
-    by_action = {}
-    for e, gain in zip(developed, gains):
-        by_action.setdefault(facts.programs[e["proposal_id"]].action, []).append(gain)
-    proposals = Counter((facts.programs[e["proposal_id"]].action for e in records))
-    return {
-        "count": len(records),
-        "new_programs": sum((e["proposed_id"] is not None for e in records)),
-        "by_proposal_action": {
-            action: {
-                "count": proposals[action],
-                "developed": len(by_action.get(action, [])),
-                "development_improved": sum((g > 0 for g in by_action.get(action, []))),
-            }
-            for action in sorted(proposals)
-        },
-        "developed": len(developed),
-        "development_generations": len(inside),
-        "development_share_of_search_generations": len(inside) / len(search)
-        if search
-        else None,
-        "development_gain_median": statistics.median(gains) if gains else None,
-        "development_improved": sum((g > 0 for g in gains)),
-        "similarity_to_start_change_median": statistics.median(moved)
-        if moved
-        else None,
-        "top_programs_from_explorations": sum((i in produced for i in top)),
     }
 
 
@@ -245,9 +190,9 @@ def diagnose(run_dir):
         if (run_dir / "run_config.json").exists()
         else {}
     )
-    if summary.get("method", config.get("method")) != "v12_1":
+    if summary.get("method", config.get("method")) != "traceaad":
         raise ValueError(
-            "diagnostics require a V12 run; use saved diagnostics or historical source for older runs"
+            "diagnostics require a TraceAAD run; use saved diagnostics or historical source for older runs"
         )
     time_limit = (config.get("task_eval") or {}).get("timeout_seconds")
     instance_record = next(

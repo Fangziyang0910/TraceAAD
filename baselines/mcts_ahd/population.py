@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import math
-import random
 from threading import Lock
 from typing import List
 import numpy as np
 
-from core import *
+from core import Function
 
 
 class Population:
@@ -81,7 +80,7 @@ class Population:
             # update: perform survival if reach the pop size
             if len(self._next_gen_pop) >= self._pop_size:
                 self.survival()
-        except Exception as e:
+        except Exception:
             return
         finally:
             self._lock.release()

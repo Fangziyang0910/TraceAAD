@@ -30,7 +30,7 @@ from collections.abc import Callable, Sequence
 import numpy as np
 import scipy.special
 
-from core import Function, Program, TextFunctionProgramConverter
+from core import Function, Program
 
 from . import code_manipulation
 from .config import ProgramsDatabaseConfig

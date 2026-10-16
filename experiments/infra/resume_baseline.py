@@ -5,7 +5,6 @@ method boundary, preserves spent budget, and explicitly records this difference.
 Checking is read-only and never calls the model or runs task evaluations.
 """
 import argparse
-import ast
 import copy
 import importlib
 import inspect
@@ -25,7 +24,8 @@ from baselines.shared.observability import close_llm, shutdown_executor
 from baselines.shared.sampling import SampleTrimmer
 from baselines.shared.checkpoint import FIELDS, read_checkpoint, restore_checkpoint
 from experiments.infra.runner import baseline_run_lock
-from traceaad.v12_1.storage import Programs, append_jsonl, read_json, rows, write_json
+from traceaad.storage import append_jsonl, read_json, rows, write_json
+from experiments.infra.result_storage import Programs
 
 METHODS = ('eoh', 'reevo', 'funsearch', 'mcts_ahd', 'calm', 'pathwise', 'shinka_evo')
 
@@ -42,7 +42,7 @@ def reprofile_saved(item):
     """Reprofile one program at a time, with the original per-instance workers."""
     key, code, score, task, workers = item
     outcome = profile_evaluator(task, workers).evaluate_program_with_details(code)
-    return {'key': key, 'score': outcome.result, 'previous_score': score,
+    return {'program_id': key, 'score': outcome.result, 'previous_score': score,
             'instance_scores': list(outcome.instance_scores), 'failure_kind': outcome.failure_kind}
 
 
@@ -129,7 +129,7 @@ def recover(method, directory, *, evaluate_profiles=False):
             continue
         if not row.get('valid'):
             continue
-        code = sources.get(row['program']['key'])
+        code = sources.get(row['program']['id'])
         function = SampleTrimmer.sample_to_function(code, template)
         if function is None:
             raise ValueError(f"Cannot restore candidate {row['candidate_id']}")
@@ -193,12 +193,7 @@ def recover(method, directory, *, evaluate_profiles=False):
         index, snapshot = snapshots[-1]
         members = []
         for member in snapshot['members']:
-            member_source = sources.get(member['function_key'])
-            matching = [r for r in candidates if r['candidate_id'] in functions and
-                        r['fitness'] == member['score'] and
-                        equivalent_source(sources.get(r['program']['key']), member_source)]
-            if not matching:
-                raise ValueError('Population member has no matching source and score')
+            member_source = member['function']
             function = SampleTrimmer.sample_to_function(member_source, template)
             if function is None:
                 raise ValueError('Cannot parse saved population source')
@@ -253,18 +248,6 @@ def recover(method, directory, *, evaluate_profiles=False):
     return report
 
 
-def equivalent_source(a, b):
-    """The evaluator can insert the fixed template docstring before recording."""
-    def normalized(source):
-        tree = ast.parse(source)
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                if node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant) and isinstance(node.body[0].value.value, str):
-                    node.body.pop(0)
-        return ast.dump(tree, include_attributes=False)
-    return normalized(a) == normalized(b)
-
-
 def recover_tree(method, events, candidates, functions, *, calls=()):
     from baselines.mcts_ahd.mcts import MCTS, MCTSNode
     tree = MCTS('Root', method.alpha, method.lambda_0)
@@ -315,13 +298,13 @@ def recover_tree(method, events, candidates, functions, *, calls=()):
 
 
 def saved_profiles(directory, events, candidates):
-    profiles = {r['key']: r for r in rows(directory / 'recovery_profiles.jsonl')}
+    profiles = {r['program_id']: r for r in rows(directory / 'recovery_profiles.jsonl')}
     candidate_index = {r['candidate_id']: r for r in candidates}
     for row in events:
         data = row.get('data', {})
         candidate = candidate_index.get(row.get('profiler_sample_order'))
         if data.get('event') == 'evaluation_profile' and data.get('instance_scores') and candidate and candidate.get('valid'):
-            profiles[candidate['program']['key']] = {'score': candidate['fitness'],
+            profiles[candidate['program']['id']] = {'score': candidate['fitness'],
                 'instance_scores': [-v for v in data['instance_scores']]}
     return profiles
 
@@ -329,9 +312,9 @@ def saved_profiles(directory, events, candidates):
 def restore_profile_ranking(method, candidates, functions, profiles):
     method._profiler._recovery_profiles = profiles
     method._profiler._recovery_candidate_cutoff = max(r['candidate_id'] for r in candidates)
-    rescored = [{**r['program'], 'fitness': profiles[r['program']['key']]['score'],
-                 'score': profiles[r['program']['key']]['score']}
-                for r in candidates if r['candidate_id'] in functions and profiles[r['program']['key']]['score'] is not None]
+    rescored = [{**r['program'], 'fitness': profiles[r['program']['id']]['score'],
+                 'score': profiles[r['program']['id']]['score']}
+                for r in candidates if r['candidate_id'] in functions and profiles[r['program']['id']]['score'] is not None]
     method._profiler._canonical_best = min(rescored, key=lambda r: r['fitness']) if rescored else None
 
 
@@ -341,21 +324,21 @@ def recover_database(method, directory, events, state, candidates, functions, *,
         raise ValueError('Legacy island reset founders were not recorded; cannot reconstruct them')
     profiles = saved_profiles(directory, events, candidates)
     candidate_index = {r['candidate_id']: r for r in candidates}
-    required = {r['program']['key'] for r in candidates if r['candidate_id'] in functions}
+    required = {r['program']['id'] for r in candidates if r['candidate_id'] in functions}
     use_profiles = evaluate_profiles or required <= profiles.keys()
     db._clock = lambda: 0.0  # Replay excludes downtime and cannot trigger island resets.
     db._last_reset_time = 0.0
 
     if evaluate_profiles:
-        missing = {r['program']['key']: functions[r['candidate_id']] for r in candidates
-                   if r['candidate_id'] in functions and r['program']['key'] not in profiles}
+        missing = {r['program']['id']: functions[r['candidate_id']] for r in candidates
+                   if r['candidate_id'] in functions and r['program']['id'] not in profiles}
         sources = Programs(directory)
         config = read_json(directory / 'run_config.json')
         tasks = [(key, sources.get(key), function.score, config['task'], config['method_params']['eval_workers'])
                  for key, function in missing.items()]
         for index, item in enumerate(tasks, 1):
             record = reprofile_saved(item)
-            profiles[record['key']] = record
+            profiles[record['program_id']] = record
             append_jsonl(directory / 'recovery_profiles.jsonl', record)
             if index % 10 == 0:
                 print(json.dumps({'reprofile_completed': index, 'reprofile_total': len(missing)}), flush=True)
@@ -365,7 +348,7 @@ def recover_database(method, directory, events, state, candidates, functions, *,
         if function is None:
             return
         row = candidate_index[identity]
-        key = row['program']['key']
+        key = row['program']['id']
         if use_profiles:
             if profiles[key]['score'] is None:
                 return
@@ -508,10 +491,6 @@ def main():
             try:
                 report = recover(method, directory, evaluate_profiles=True)
                 report['resumed_at'] = datetime.now(timezone.utc).isoformat()
-                report['implementation_files'] = {
-                    str(p): __import__('hashlib').sha256(p.read_bytes()).hexdigest()
-                    for folder in ('core', 'baselines', 'benchmarks', 'experiments/infra', 'traceaad/v12_1')
-                    for p in Path(folder).rglob('*.py')}
                 append_jsonl(directory / 'recovery.jsonl', report)
                 for path in directory.parent.parent.glob('batch_*.json'):
                     with (path.parent / '.batch.lock').open('a') as lock:
@@ -520,7 +499,7 @@ def main():
                         matching = [p for p in manifest.get('plan', []) if p.get('run_name') == config['run_name']]
                         if matching:
                             matching[0]['status'] = 'resuming'
-                            matching[0]['recovery'] = {k: v for k, v in report.items() if k != 'implementation_files'}
+                            matching[0]['recovery'] = dict(report)
                             manifest['status'] = 'partially_resumed'
                             write_json(path, manifest)
                 summary = read_json(directory / 'summary.json', {})

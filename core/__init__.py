@@ -1,18 +1,6 @@
-"""Shared core from the LLM4AD platform (kept with attribution):
+"""Program representations, model requests and isolated evaluation."""
 
-- ``core.code``: code representation (Function/Program/TextFunctionProgramConverter).
-- ``core.evaluate``: secure multiprocess evaluation (Evaluation/SecureEvaluator).
-- ``core.llm``: LLM client interface (LLM/OpenAIAPI).
-
-Methods and tasks live in the top-level ``traceaad``, ``baselines`` and
-``benchmarks`` packages.
-"""
-
-from .code import (
-    Function,
-    Program,
-    TextFunctionProgramConverter
-)
+from .code import Function, Program, parse_function, parse_program, replace_function
 from .evaluate import (
     Evaluation,
     EvaluationOutcome,

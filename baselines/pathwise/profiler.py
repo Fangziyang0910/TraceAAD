@@ -6,7 +6,7 @@ import os
 from .graph import PathWiseAction, PathWiseEdge, PathWiseNode
 from .population import Population
 from pathlib import Path
-from traceaad.v12_1.storage import append_jsonl
+from traceaad.storage import append_jsonl
 from baselines.shared.profiler import ProfilerBase
 
 
@@ -30,7 +30,7 @@ class PathWiseProfiler(ProfilerBase):
                     "node_id": node.node_id,
                     "description": node.description,
                     "rationale": node.rationale,
-                    "function_key": self._sources.add(str(node.function)),
+                    "function": str(node.function),
                     "score": node.score,
                     "parents": [parent.__dict__ for parent in node.parents],
                 })

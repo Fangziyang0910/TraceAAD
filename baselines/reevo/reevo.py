@@ -46,11 +46,10 @@ from baselines.shared.observability import (
     reset_sample_failures,
     shutdown_executor,
 )
-from core import (
-    Evaluation, LLM, Function, Program, TextFunctionProgramConverter, SecureEvaluator
-)
+from core import Evaluation, LLM, Function, Program, SecureEvaluator
 from baselines.shared.sampling import SampleTrimmer
 from baselines.shared.profiler import ProfilerBase
+from core.code import parse_function, parse_program, replace_function
 
 
 class ReEvo:
@@ -93,9 +92,9 @@ class ReEvo:
         llm.debug_mode = debug_mode
         self._multi_thread_or_process_eval = multi_thread_or_process_eval
 
-        self._function_to_evolve: Function = TextFunctionProgramConverter.text_to_function(self._template_program_str)
+        self._function_to_evolve: Function = parse_function(self._template_program_str)
         self._function_to_evolve_name: str = self._function_to_evolve.name
-        self._template_program: Program = TextFunctionProgramConverter.text_to_program(self._template_program_str)
+        self._template_program: Program = parse_program(self._template_program_str)
 
         self._population = Population(pop_size=self._pop_size)
         self._sampler = SampleTrimmer(llm)
@@ -169,7 +168,7 @@ class ReEvo:
 
         self._tag_function(func, operator)
         if program is None:
-            program = TextFunctionProgramConverter.function_to_program(func, self._template_program)
+            program = replace_function(func, self._template_program)
         if program is None:
             self._tot_sample_nums += 1
             return None
@@ -235,7 +234,7 @@ class ReEvo:
             )
             return None
 
-        program = TextFunctionProgramConverter.function_to_program(func, self._template_program)
+        program = replace_function(func, self._template_program)
         if program is None:
             self._tot_sample_nums += 1
             log_event(

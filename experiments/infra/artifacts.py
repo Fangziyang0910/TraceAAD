@@ -1,7 +1,8 @@
 """Scored programs and frozen winners from canonical result files."""
 
 from pathlib import Path
-from traceaad.v12_1.storage import Programs, committed_rows, read_json, selected_program
+from traceaad.storage import committed_rows, read_json
+from experiments.infra.result_storage import Programs, selected_program
 
 
 def load_run_summary(run_dir, *, require_finished=True):
@@ -28,10 +29,14 @@ def load_scored_samples(run_dir, *, max_sample_order=None, include_source=True):
             continue
         program = programs.get(row["node_id"])
         if program is not None:
-            sample = {"sample_order": order, "score": row["fitness"],
-                      "operator": row["operator"], "node_id": program["id"], "key": program["key"]}
+            sample = {
+                "sample_order": order,
+                "score": row["fitness"],
+                "operator": row["operator"],
+                "node_id": program["id"],
+            }
             if include_source:
-                sample["program"] = sources.get(program["key"])
+                sample["program"] = sources.get(program["id"])
             samples.append(sample)
     return samples
 
@@ -45,10 +50,15 @@ def pick_best_sample(run_dir, *, max_sample_order=None, sample_order=None, allow
         best = selected_program(run_dir)
         if not best["verified"]:
             raise ValueError(f"selected program changed after selection: {run_dir}")
-        selected = next((dict(r) for r in samples if r["key"] == best["key"]), None)
+        selected = next((dict(r) for r in samples if r["node_id"] == best["id"]), None)
         if selected is None:
-            selected = {"sample_order": best["id"], "score": best["fitness"],
-                        "program": best["code"], "operator": best["action"], "key": best["key"], "node_id": best["id"]}
+            selected = {
+                "sample_order": best["id"],
+                "score": best["fitness"],
+                "program": best["code"],
+                "operator": best["action"],
+                "node_id": best["id"],
+            }
         selected["score"] = best["fitness"]
     else:
         selected = min(samples, key=lambda r: r["score"], default=None)
@@ -56,5 +66,5 @@ def pick_best_sample(run_dir, *, max_sample_order=None, sample_order=None, allow
         raise RuntimeError(f"no matching scored program: {run_dir}")
     selected = dict(selected)
     if "program" not in selected:
-        selected["program"] = Programs(run_dir).get(selected["key"])
+        selected["program"] = Programs(run_dir).get(selected["node_id"])
     return selected, samples

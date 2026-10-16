@@ -1,7 +1,6 @@
 """JSON snapshots at completed search boundaries; never serialize clients or executors."""
 import dataclasses
 import gzip
-import hashlib
 import json
 import math
 import os
@@ -12,7 +11,6 @@ from functools import lru_cache
 
 import numpy as np
 
-from traceaad.v12_1.storage import read_json
 
 NAME = 'search_checkpoint.json.gz'
 # shortcut: unfinished phases restart at a saved boundary; persist pending work for exact mid-phase replay.
@@ -104,12 +102,6 @@ def decode(value, memo=None):
     return obj
 
 
-def config_digest(config):
-    identity = {k: config.get(k) for k in ('method', 'task', 'budget', 'seed', 'backend',
-                                          'llm', 'task_eval', 'method_params')}
-    return hashlib.sha256(json.dumps(identity, sort_keys=True, allow_nan=False).encode()).hexdigest()
-
-
 def read_checkpoint(directory):
     path = Path(directory) / NAME
     if not path.exists():
@@ -135,8 +127,7 @@ def save_checkpoint(method, name, boundary):
             rng['local'] = method._rs.get_state()
         if name == 'shinka_evo':
             rng.update(local=method._rng.getstate(), bandit=method._bandit.rng.getstate())
-        payload = {'format': 1, 'method': name, 'boundary': boundary,
-                   'config_digest': config_digest(read_json(directory / 'run_config.json', {})),
+        payload = {'method': name, 'boundary': boundary,
                    'budget_used': method._tot_sample_nums, 'candidate_count': profiler._num_samples,
                    'files': {f: (directory / f).stat().st_size if (directory / f).exists() else 0
                              for f in ('events.jsonl', 'programs.jsonl')},
@@ -155,9 +146,8 @@ def restore_checkpoint(method, directory, name):
     payload = read_checkpoint(directory)
     if payload is None:
         raise ValueError(f'{name} needs a search checkpoint; old logs do not contain its complete search state')
-    if (payload['format'], payload['method'], payload['config_digest']) != (
-            1, name, config_digest(read_json(Path(directory) / 'run_config.json', {}))):
-        raise ValueError('Checkpoint identity or original experiment conditions differ')
+    if payload['method'] != name:
+        raise ValueError('Checkpoint belongs to another method')
     for file, size in payload['files'].items():
         path = Path(directory) / file
         if file not in ('events.jsonl', 'programs.jsonl') or (path.stat().st_size if path.exists() else 0) < size:

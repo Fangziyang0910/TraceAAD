@@ -1,11 +1,9 @@
 """Fixed in-memory datasets; task modules own their distributions and references."""
 
-import hashlib
 from itertools import islice
 
 import numpy as np
 
-PROTOCOL = 'ahd-six-tasks-v4-seeded-runtime'
 SEED = 20261007
 
 
@@ -22,16 +20,6 @@ def rng_for(stream, split, index):
     return np.random.default_rng(np.random.SeedSequence(entropy)), entropy
 
 
-def digest_arrays(arrays):
-    digest = hashlib.sha256()
-    for key, value in sorted(arrays.items()):
-        value = np.asarray(value)
-        digest.update(key.encode())
-        digest.update(str((value.shape, value.dtype.str)).encode())
-        digest.update(value.tobytes())
-    return digest.hexdigest()
-
-
 def generate_dataset(dataset, split, limit=None):
     """Build inputs and references once, outside candidate execution and timing."""
     phase = canonical_split(split, dataset.SCALE)
@@ -45,7 +33,7 @@ def generate_dataset(dataset, split, limit=None):
         if metadata['scale'] != dataset.SCALE or metadata['dimensions'] != dataset.DIMENSIONS:
             raise ValueError(f'generated dimensions do not match {dataset.TASK}')
         rows.append({**metadata, 'split': phase, 'reference': float(reference),
-                     'reference_kind': kind, 'content': digest_arrays(arrays)})
+                     'reference_kind': kind})
         instances.append(arrays)
     if len(rows) != count or not rows:
         raise ValueError(f'incorrect instance count for {dataset.TASK}/{phase}')

@@ -49,17 +49,3 @@ class GetData:
 
             instance_data.append((coordinates, distances, demands, capacity, serviceTime, time_windows))
         return instance_data
-
-
-if __name__ == '__main__':
-    import pickle
-
-    gd = GetData(10, 50)
-    data = gd.generate_instances()
-    with open('data_vrptw.pkl', 'wb') as f:
-        pickle.dump(data, f)
-    with open('data_vrptw.pkl', 'rb') as f:
-        data = pickle.load(f)
-    coordinates, distances, demands, capacity, serviceTime, time_windows = data[0]
-    print(time_windows)
-    print(time_windows[0])

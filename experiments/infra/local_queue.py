@@ -14,9 +14,12 @@ import time
 from datetime import datetime
 
 from benchmarks.tasks import SUITES
-from experiments.infra.base import ALL_TASKS, BACKENDS, DEFAULT_BACKEND, pending_items, validate_new_items
+from experiments.infra.base import (
+    ALL_TASKS, BACKENDS, DEFAULT_BACKEND, RESULTS_ROOT, TASK_SHORT,
+    LaunchItem, pending_items, validate_new_items,
+)
 from experiments.infra.launcher import is_session_alive, launch_command
-from experiments.launch import METHODS, build_plan
+METHODS = ("eoh", "funsearch", "reevo", "mcts_ahd", "pathwise", "calm", "shinka_evo")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,12 +37,28 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_plan(args: argparse.Namespace) -> list[LaunchItem]:
+    if args.repeats < 1:
+        raise ValueError("--repeats must be positive")
+    plan = []
+    for repeat in range(1, args.repeats + 1):
+        for task in args.tasks or SUITES[args.suite]:
+            short = TASK_SHORT[task]
+            name = f"{args.batch}_{short}_{args.method}_rep{repeat}"
+            plan.append(LaunchItem(
+                task=task, repeat=repeat, backend=None,
+                session=f"{args.batch}_{args.method}_{short}_r{repeat}",
+                run_name=name, run_dir=RESULTS_ROOT / args.method / task / name,
+                seed=repeat - 1, module=f"experiments.{args.method}.run",
+            ))
+    return plan
+
+
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     if args.slots < 1:
         raise ValueError("--slots must be positive")
     slots = range(args.slots)
-    args.session_prefix, args.run_arg = f"{args.batch}_{args.method}", []
     plan = build_plan(args)
     if args.dry_run:
         for item in plan:

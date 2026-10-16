@@ -10,6 +10,7 @@ dependencies = [
     "numpy>=2",
     "onnxruntime",
     "openai",
+    "psutil>=7.2.2",
     "requests",
     "scikit-learn",
     "scipy",
@@ -29,3 +30,13 @@ pythonpath = ["."]
 dev = [
     "pytest",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+
+[tool.ruff.lint.isort]
+split-on-trailing-comma = false

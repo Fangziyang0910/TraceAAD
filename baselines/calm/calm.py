@@ -27,13 +27,7 @@ from baselines.shared.observability import (
     record_sample_failure,
     reset_sample_failures,
 )
-from core import (
-    Evaluation,
-    Function,
-    LLM,
-    SecureEvaluator,
-    TextFunctionProgramConverter,
-)
+from core import Evaluation, LLM, SecureEvaluator
 from baselines.shared.sampling import SampleTrimmer
 from baselines.shared.checkpoint import save_checkpoint
 from .numeric_refine import code_signature, run_numeric_refinement
@@ -50,6 +44,7 @@ from .sampler import CALMSampler
 from .schedule import prepare_round_messages
 from .seeds import load_seed
 from .task_config import get_task_hyperparams, resolve_task_key
+from core.code import replace_function
 
 
 class CALM:
@@ -242,7 +237,7 @@ class CALM:
 
     def _code_to_program(self, code: str):
         func = SampleTrimmer.sample_to_function(code, self._template_program_str)
-        program = (TextFunctionProgramConverter.function_to_program(func, self._template_program_str)
+        program = (replace_function(func, self._template_program_str)
                    if func is not None else None)
         return func, program
 

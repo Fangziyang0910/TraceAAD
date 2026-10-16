@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import copy
-from typing import List, Dict
+from typing import List
 
-from core import *
+from core import Function
 
 
 class EoHPrompt:

@@ -2,26 +2,21 @@
 
 Mechanical infrastructure common to every method entry: backend profiles,
 LLM client construction, task evaluation construction, run-directory layout,
-tmux log redirection, and the launch-side slot scheduler. Method-specific
+tmux log redirection, and queue bookkeeping. Method-specific
 parameters and the search method itself stay in each runner package.
 """
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import json
 import os
 import random
-import shlex
-import subprocess
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import urlparse
 
 import numpy as np
 
@@ -88,10 +83,6 @@ BACKENDS: dict[BackendName, BackendProfile] = {
 
 # Hosted models are called directly; a host scheduler serves only its own GPU endpoints.
 HOSTED_BACKENDS = ("deepseek",)
-BACKEND_CAPACITY = {name: profile.capacity for name, profile in BACKENDS.items()}
-BACKEND_DISPLAY_NAMES = {name: profile.label or name for name, profile in BACKENDS.items()}
-BACKEND_MARKERS = {name: (profile.marker or urlparse(profile.base_url).netloc,) for name, profile in BACKENDS.items()}
-PRIMARY_BACKENDS = ('deepseek',)
 DEFAULT_BACKEND: BackendName = 'deepseek'
 
 # Qwen3.8-27B's official sampling settings per mode (model card). Every
@@ -179,7 +170,6 @@ def build_llm_client(
     top_p: float | None = None,
     top_k: int | None = None,
     enable_thinking: bool | None = None,
-    chars_per_token: float | None = None,
 ) -> OpenAIAPI:
     set_no_proxy(no_proxy)
     settings = MODEL_SETTINGS.get(model, {})
@@ -199,7 +189,6 @@ def build_llm_client(
         extra_body=extra_body,
         enable_thinking=enable_thinking,
         reasoning_effort=settings.get("reasoning_effort") if enable_thinking else None,
-        chars_per_token=chars_per_token,
         tokenizer=settings.get("tokenizer"),
         prompt_format=settings.get("prompt_format", "{}"),
     )
@@ -231,7 +220,6 @@ def llm_payload(
     top_p: float | None = None,
     top_k: int | None = None,
     enable_thinking: bool | None = None,
-    chars_per_token: float | None = None,
 ) -> dict[str, Any]:
     settings = MODEL_SETTINGS.get(model, {})
     if enable_thinking is None:
@@ -251,14 +239,11 @@ def llm_payload(
         "no_proxy": no_proxy,
         "api_key_configured": resolve_llm_api_key(base_url=base_url) != "EMPTY",
     }
-    if chars_per_token is not None:
-        payload["chars_per_token"] = chars_per_token
     return payload
 
 
 def write_run_config(run_dir: Path, payload: dict[str, Any]) -> None:
-    from traceaad.v12_1.storage import RESULT_FORMAT, write_json
-    payload = {"result_format": RESULT_FORMAT, **payload}
+    from traceaad.storage import write_json
     write_json(run_dir / "run_config.json", payload)
 
 
@@ -331,97 +316,6 @@ class LaunchItem:
         )
 
 
-def build_launch_plan(
-    args: argparse.Namespace,
-    *,
-    module: str,
-    method: str,
-) -> list[LaunchItem]:
-    plan = []
-    for repeat in range(1, args.repeats + 1):
-        for task in (getattr(args, "tasks", None) or SUITES[getattr(args, "suite", "legacy")]):
-            short = TASK_SHORT[task]
-            run_name = f"{args.batch}_{short}_{method}_rep{repeat}"
-            session = f"{args.session_prefix}_{short}_r{repeat}"
-            run_dir = RESULTS_ROOT / method / task / run_name
-            plan.append(
-                LaunchItem(
-                    task=task,
-                    repeat=repeat,
-                    backend=None,
-                    session=session,
-                    run_name=run_name,
-                    run_dir=run_dir,
-                    seed=repeat - 1,
-                    module=module,
-                )
-            )
-    return plan
-
-
-def _process_cmdlines() -> list[str]:
-    result = subprocess.run(
-        ["ps", "-eo", "args="],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    lines: set[str] = set()
-    for line in result.stdout.splitlines():
-        text = line.strip()
-        if not text or "uv run" in text or "python" not in text:
-            continue
-        if "experiments." not in text and "run_experiment" not in text:
-            continue
-        if ".launch" in text:
-            # Capacity watchers orchestrate jobs but never call an LLM backend.
-            continue
-        # SecureEvaluator workers inherit the parent's complete command line.
-        # Count one logical LLM client command, not every forked evaluator
-        # process. Distinct runs and shards retain distinct CLI arguments.
-        lines.add(text)
-    return sorted(lines)
-
-
-def detect_backend(cmdline: str) -> BackendName | None:
-    """Identify backend from a process cmdline.
-
-    Prefer the ``--backend`` token (exact name). Fall back to host:port markers
-    for older processes that embed the service URL.
-    """
-    try:
-        tokens = shlex.split(cmdline)
-    except ValueError:
-        tokens = cmdline.split()
-    try:
-        name = tokens[tokens.index("--backend") + 1]
-    except (ValueError, IndexError):
-        name = None
-    if name in BACKENDS:
-        return name  # type: ignore[return-value]
-    for backend, markers in BACKEND_MARKERS.items():
-        if any(marker in cmdline for marker in markers):
-            return backend
-    return None
-
-
-def count_backend_usage() -> dict[BackendName, int]:
-    counts: dict[BackendName, int] = {name: 0 for name in BACKEND_CAPACITY}
-    for cmdline in _process_cmdlines():
-        matched = detect_backend(cmdline)
-        if matched is not None:
-            counts[matched] += 1
-    return counts
-
-
-def free_slots() -> dict[BackendName, int]:
-    usage = count_backend_usage()
-    return {
-        backend: max(0, BACKEND_CAPACITY[backend] - usage[backend])
-        for backend in BACKEND_CAPACITY
-    }
-
-
 def _summary_status(item: LaunchItem) -> str | None:
     summary = item.run_dir / "summary.json"
     if not summary.exists():
@@ -474,26 +368,6 @@ def item_active_attempt(item: LaunchItem) -> LaunchItem | None:
             return None
 
 
-def select_backend(remaining: dict[BackendName, int]) -> BackendName | None:
-    """Pick the primary backend with the most free slots; ties keep listed order."""
-    candidates = [name for name in PRIMARY_BACKENDS if remaining.get(name, 0) > 0]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda name: remaining[name])
-
-
-def assign_backends(pending: list[LaunchItem]) -> list[LaunchItem]:
-    remaining = dict(free_slots())
-    assigned: list[LaunchItem] = []
-    for item in pending:
-        chosen = select_backend(remaining)
-        if chosen is None:
-            break
-        remaining[chosen] -= 1
-        assigned.append(item.with_backend(chosen))
-    return assigned
-
-
 def validate_new_items(items: list[LaunchItem]) -> None:
     sessions = [item.session for item in items]
     run_dirs = [item.run_dir for item in items]
@@ -507,20 +381,6 @@ def validate_new_items(items: list[LaunchItem]) -> None:
     active = [item.session for item in items if item_is_running(item)]
     if active:
         raise RuntimeError(f"tmux sessions already exist: {active}")
-
-
-def launch_items(items: list[LaunchItem], *, dry_run: bool) -> None:
-    for item in items:
-        printable = shlex.join(item.command())
-        print(
-            f"{item.backend:7s} {item.task:20s} rep={item.repeat} "
-            f"session={item.session} command={printable}",
-            flush=True,
-        )
-        if dry_run:
-            continue
-        from .launcher import launch_command
-        launch_command(item.session, item.command())
 
 
 def item_has_successful_result(item: LaunchItem) -> bool:
@@ -577,69 +437,3 @@ def pending_items(plan: list[LaunchItem]) -> list[LaunchItem]:
             continue
         pending.append(item)
     return pending
-
-
-def fill_once(plan: list[LaunchItem], *, dry_run: bool) -> list[LaunchItem]:
-    pending = pending_items(plan)
-    assigned = assign_backends(pending)
-    if not assigned:
-        print(
-            "no free slots or no pending runs; "
-            f"free={free_slots()} pending={len(pending)}",
-            flush=True,
-        )
-        return []
-    if not dry_run:
-        validate_new_items(assigned)
-    launch_items(assigned, dry_run=dry_run)
-    return assigned
-
-
-def watch_and_fill(
-    plan: list[LaunchItem],
-    *,
-    interval_sec: int,
-    dry_run: bool,
-    method_label: str,
-) -> None:
-    print(
-        f"watching {method_label} batch; interval={interval_sec}s; "
-        f"capacity={BACKEND_CAPACITY}",
-        flush=True,
-    )
-    while True:
-        remaining = pending_items(plan)
-        running = sum(1 for item in plan if item_active_attempt(item) is not None)
-        done = sum(1 for item in plan if item_has_successful_result(item))
-        print(
-            f"[{datetime.now().isoformat(timespec='seconds')}] "
-            f"done={done} running={running} pending={len(remaining)} "
-            f"free={free_slots()}",
-            flush=True,
-        )
-        if done == len(plan):
-            print(f"all {method_label} runs finished", flush=True)
-            return
-        fill_once(plan, dry_run=dry_run)
-        if dry_run:
-            return
-        time.sleep(interval_sec)
-
-
-def add_launch_parser_args(
-    parser: argparse.ArgumentParser,
-    *,
-    watch: bool = True,
-    session_prefix: str = "batch",
-) -> None:
-    parser.add_argument("--repeats", type=int, default=3)
-    parser.add_argument("--batch", default=datetime.now().strftime("%Y%m%d_%H%M%S"))
-    parser.add_argument("--session-prefix", default=session_prefix)
-    parser.add_argument("--dry-run", action="store_true")
-    if watch:
-        parser.add_argument(
-            "--watch",
-            action="store_true",
-            help="keep filling free slots until the whole batch finishes",
-        )
-        parser.add_argument("--watch-interval", type=int, default=60)

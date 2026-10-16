@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 from baselines.shared.sampling import SampleTrimmer
-from core import Function, LLM, Program, TextFunctionProgramConverter
+from core import Function, LLM, Program
 from .population import ShinkaProgram
 from .prompts import messages, prompt_record
 from .prompts.prompts_base import BASE_SYSTEM_MSG, construct_eval_history_msg, perf_str, format_text_feedback_section
@@ -16,6 +16,7 @@ from .prompts.prompts_diff import DIFF_SYS_FORMAT, DIFF_ITER_MSG
 from .prompts.prompts_full import FULL_SYS_FORMATS, FULL_ITER_MSG
 from .prompts.prompts_cross import CROSS_SYS_FORMAT, CROSS_ITER_MSG, get_cross_component
 from .prompts.prompts_fix import FIX_SYS_FORMAT, FIX_ITER_MSG, format_error_output_section
+from core.code import replace_function
 
 
 EVOLVE_START = re.compile(r"^[^\S\r\n]*#\s*EVOLVE-BLOCK-START\s*$", re.MULTILINE)
@@ -191,7 +192,7 @@ class ShinkaSampler:
         return PatchResult(None, None, error=f"Unsupported patch type: {patch_type}")
 
     def to_marked_program(self, function: Function) -> str:
-        program = TextFunctionProgramConverter.function_to_program(function, self.template_program)
+        program = replace_function(function, self.template_program)
         if program is None:
             return str(function)
         return self._insert_markers(str(program))

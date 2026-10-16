@@ -116,107 +116,14 @@ class OBPEvaluation(Evaluation):
 
         return self.evaluate(callable_func, fresh=fresh)
 
-    def plot_solution(self, bins_packed: np.ndarray, items: list, capacity: int, max_unused_bins: int = 5):
-        """
-        Plot the solution of the 1D Online Bin Packing Problem, omitting unused bins.
-
-        Args:
-            bins_packed: A numpy array of remaining capacities in the bins after packing.
-            items: A list of item sizes.
-            capacity: The capacity of each bin.
-            max_unused_bins: Maximum number of unused bins to include in the plot (for sampling).
-        """
-        # Plotting is an opt-in debugging helper. Keep matplotlib out of the
-        # evaluator's import path used by every training worker.
-        import matplotlib.pyplot as plt
-
-        # Calculate the number of bins used
-        num_bins = (bins_packed != capacity).sum()
-
-        #
-        n_show = 15
-
-        # Check for empty bins or invalid inputs
-        if num_bins == 0:
-            print("No bins used.")
-            return
-        if len(items) == 0:
-            print("No items to pack.")
-            return
-
-        # Track which items are assigned to which bins
-        item_assignment = [[] for _ in range(len(bins_packed))]
-        current_bin = 0
-        current_position = 0
-
-        for item in items:
-            if current_bin >= len(bins_packed):
-                break  # No more bins available
-            if current_position + item <= capacity - bins_packed[current_bin]:
-                item_assignment[current_bin].append((current_position, item))
-                current_position += item
-            else:
-                current_bin += 1
-                current_position = 0
-                if current_bin >= len(bins_packed):
-                    break
-                item_assignment[current_bin].append((current_position, item))
-                current_position += item
-
-        # Filter out bins with no items
-        bins_with_items = [bin_idx for bin_idx, items_in_bin in enumerate(item_assignment) if items_in_bin]
-
-        # Include a sample of unused bins (if any)
-        unused_bins = [bin_idx for bin_idx, items_in_bin in enumerate(item_assignment) if not items_in_bin]
-        if unused_bins:
-            unused_bins_sample = unused_bins[:max_unused_bins]  # Sample a subset of unused bins
-            bins_to_plot = bins_with_items + unused_bins_sample
-        else:
-            bins_to_plot = bins_with_items
-
-        bins_to_plot = bins_to_plot[:n_show]
-
-        # Adjust figure size based on the number of bins to plot
-        bin_height = 0.5  # Height per bin in inches
-        fig_height = max(3, len(bins_to_plot) * bin_height)  # Minimum height of 3 inches
-
-        # Create a figure and axis
-        fig, ax = plt.subplots(figsize=(10, fig_height))
-
-        # Plot each bin and its items
-        for plot_idx, bin_idx in enumerate(bins_to_plot):
-            # Plot the bin as a horizontal bar
-            ax.barh(plot_idx, capacity, height=0.6, color='lightgray', edgecolor='black', label='Bin' if plot_idx == 0 else None)
-
-            # Plot the items packed into the bin (if any)
-            for position, item in item_assignment[bin_idx]:
-                ax.barh(plot_idx, item, left=position, height=0.6, color='skyblue', edgecolor='black')
-
-        # Set axis labels and title
-        ax.set_yticks(range(len(bins_to_plot)))
-        ax.set_yticklabels([f'Bin {bin_idx + 1}' for bin_idx in bins_to_plot])
-        ax.set_xlabel('Capacity')
-        ax.set_title('1D Online Bin Packing Solution')
-
-        # Add a legend
-        ax.legend(['Bin', 'Item'], loc='upper right')
-
-        # Adjust layout to prevent overlap
-        plt.tight_layout()
-
-        # Show the plot
-        plt.show()
-
     def get_valid_bin_indices(self, item: float, bins: np.ndarray) -> np.ndarray:
         """Returns indices of bins in which item can fit."""
         return np.nonzero((bins - item) >= 0)[0]
 
     def online_binpack(self,
                        items: tuple[float, ...], bins: np.ndarray, priority: callable
-                       ) -> tuple[list[list[float, ...], ...], np.ndarray]:
-        """Performs online binpacking of `items` into `bins`."""
-        # Track which items are added to each bin.
-        packing = [[] for _ in bins]
+                       ) -> np.ndarray:
+        """Pack items and return the remaining capacity of each bin."""
         # Add items to bins.
         for item in items:
             # Extract bins that have sufficient space to fit item.
@@ -226,10 +133,7 @@ class OBPEvaluation(Evaluation):
             # Add item to bin with highest priority.
             best_bin = valid_bin_indices[np.argmax(priorities)]
             bins[best_bin] -= item
-            packing[best_bin].append(item)
-        # Remove unused bins from packing.
-        packing = [bin_items for bin_items in packing if bin_items]
-        return packing, bins
+        return bins
 
     def evaluate(self, priority: callable, fresh: callable | None = None) -> float:
         """Evaluate heuristic function on a set of online binpacking instances.
@@ -245,36 +149,13 @@ class OBPEvaluation(Evaluation):
             items = instance['items']
             # Create num_items bins so there will always be space for all items,
             # regardless of packing order. Array has shape (num_items,).
-            bins = np.array([capacity for _ in range(instance['num_items'])])
+            bins = np.full(instance['num_items'], capacity)
             # Pack items into bins and return remaining capacity in bins_packed, which
             # has shape (num_items,).
-            _, bins_packed = self.online_binpack(items, bins, fresh() if fresh else priority)
+            bins_packed = self.online_binpack(items, bins, fresh() if fresh else priority)
 
             # If remaining capacity in a bin is equal to initial capacity, then it is
             # unused. Count number of used bins.
             num_bins.append((bins_packed != capacity).sum())
-        # Score of heuristic function is negative of average number of bins used
-        # across instances (lower is better).
+        # Average number of bins used across instances (lower is better).
         return float(np.mean(num_bins))
-
-
-if __name__ == '__main__':
-    def priority(item: float, valid_bins: np.ndarray) -> np.ndarray:
-        """
-        Priority function for the First-Fit Decreasing (FFD) heuristic.
-
-        Args:
-            item: The size of the item to be packed.
-            valid_bins: A numpy array of remaining capacities in valid bins.
-
-        Returns:
-            A numpy array of priorities for the valid bins.
-        """
-        # Prioritize bins with the least remaining capacity (but still able to fit the item)
-        priorities = -valid_bins  # Negative because we want to maximize the priority for the smallest remaining capacity
-        return priorities
-
-
-    obp = OBPEvaluation()
-    ave_bins = obp.evaluate_program('_', priority)
-    print(ave_bins)

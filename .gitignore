@@ -57,7 +57,7 @@ experiments/.traceaad_v8_scheduler/
 # Raw experiment results remain local; the root README stays trackable.
 /experiments_result/*/
 
-# Historical experiment artifacts are local-only.
+# Historical experiments and sealed document snapshots are local-only.
 /archive/
 
 # Local task datasets and downloaded model/data caches

@@ -1,33 +1,81 @@
 # 实验入口
 
-这里的实验用于检验搜索轨迹中的反馈经验怎样改善后续决策，以及对应的算法收益与成本。研究问题与认识见[研究主线](../docs/04-研究认识与构想/研究主线与问题.md)。这里集中查找运行命令、状态查询和结果位置。旧本地模型结果已封存到[归档入口](../archive/local_models_20261011/README.md)，现用结果目录保留DeepSeek实验。
+这里说明怎样执行和复查实验。研究问题与认识见[研究文档](../docs/README.md)。
 
-## 当前实现入口
+| 需要做什么 | 入口 |
+| --- | --- |
+| 设计实验、核对比较条件 | [实验条件](PROTOCOL.md) |
+| 查询状态、恢复、远端操作 | [操作说明](infra/AGENT_OPERATIONS.md) |
+| 找到源码、反馈与最终结果 | [结果格式](infra/SEARCH_FORMAT.md) |
+| 理解当前 TraceAAD 的运行规则 | [搜索实现](../traceaad/README.md) |
 
-当前只保留 [V12.1 设计实现检查](traceaad_v12_1/README.md)，提供完整组、随机补全组与重采样组。搜索、配置、提示、评价和存储都位于 `traceaad/v12_1/`。程序个体模型见[实现说明](../traceaad/v12_1/README.md)。
+## 训练可视化
 
-V10.15–V10.25 与旧决策模型实验代码已移除。历史研究文档和实验结果保留。复现历史批次应使用其启动时的源码快照或 Git 历史。
-
-## 搜索与独立测试
-
-模型、参数、任务、数据、评价与报告统一见[实验规范与共识](../docs/08-实验规范与共识/README.md)。本目录维护运行入口与状态查询。[六任务入口](co6/README.md)给出模板、评价器和命令链接。
-
-2026-10-11起，新实验采用四项固定框架（TSP、CVRP、FSSP、OP）与两项完整求解器（图着色、JSSP）。后两项的 `solve` 可整体改写。旧评分函数批次仍按启动时的协议解释，不能用新评价器续跑或补测。
-
-V12.1 的运行命令见[当前入口](traceaad_v12_1/README.md)，结果读取见[实验与结果实现](infra/SEARCH_FORMAT.md)。历史实验的复现使用对应源码快照。
-
-任务注册与统一预算在 `benchmarks/tasks.py`。任务专属的数据、配置、模板和评价器位于各自任务目录，共用数据与评价逻辑位于 `benchmarks/shared/`。通用测试命令为 `uv run python -m experiments.infra.evaluate <运行目录> --primary`。
-
-当前仅保留上述六任务和旧版在线装箱（OBP）、VRPTW，共八个任务。CO-Bench适配器与专用任务预检入口已移除，历史结果保留。OBP、VRPTW沿用原设置。
-
-## 状态与结果
-
-2026-10-12起，新六任务批次使用平均函数CPU预算：四项固定框架任务平均2秒／实例，两项完整求解器平均10秒／实例。全部实例合法完成后检查平均CPU时间，单个实例超过均额不会直接淘汰。单实例墙钟安全上限统一120秒。训练、最终选择和测试共用该规则。配置记录`function_budget_scope=mean_instance`与新revision。旧批次不改写，独立测试保留其保存的评价规则。详见[评价规范](../docs/08-实验规范与共识/README.md#3-评价)。
-
-查询状态、等待完成和远端同步见[执行入口](infra/AGENT_OPERATIONS.md)。指定批次即可查询：
+看板集中在 [visualization/](visualization/)，展示训练曲线、运行进度、程序详情与结果对比。在仓库根目录启动：
 
 ```bash
-uv run python -m experiments.infra.batch_status --manifest <批次清单>
+uv run python -m experiments.visualization --host 127.0.0.1 --port 8765
 ```
 
-[结果概览](../docs/02-实验结果/01-搜索结果概览.md)用于查看成绩，[原始数据](../experiments_result/README.md)说明文件位置。结果存储与硬链接恢复见[存储说明](infra/RESULT_STORAGE.md)。
+浏览器打开 `http://127.0.0.1:8765/`。用 `--experiment` 选择方法目录，或用 `--batch` 筛选运行批次。看板读取当前结果格式，在进程内保留增量状态，不写入实验目录。不同测试条件按 `variant` 分开展示。
+
+## 1. 检查配置与启动计划
+
+在仓库根目录执行。默认模型凭据使用 `DEEPSEEK_API_KEY`。端点与采样设置见 [base.py](infra/base.py)。下面的 `BATCH_NAME` 表示待替换的新批次名。
+
+检查单任务配置，不调用模型：
+
+```bash
+uv run python -m experiments.traceaad.run \
+  --task tsp_construct --dry-run
+```
+
+查看六任务、每任务三路独立搜索的计划。加 `--launch` 才启动：
+
+```bash
+uv run python -m experiments.traceaad.launch_host \
+  --batch BATCH_NAME --suite co6 --repeats 3 --budget 1000
+```
+
+查看基线排队计划。去掉 `--dry-run` 才执行：
+
+```bash
+uv run python -m experiments.infra.local_queue \
+  --method eoh --suite co6 --batch BATCH_NAME --slots 3 --dry-run
+```
+
+TraceAAD 入口为 [run.py](traceaad/run.py) 与 [launch_host.py](traceaad/launch_host.py)。基线批量启动统一使用 [local_queue.py](infra/local_queue.py)，支持的方法见其 `--help`。各方法的 `run.py` 执行一路搜索。改变条件时使用新批次名。
+
+## 2. 查询结果
+
+将 `MANIFEST_PATH` 替换为批次清单路径，将 `RUN_DIR` 替换为运行目录。
+
+```bash
+uv run python -m experiments.infra.batch_status \
+  --manifest MANIFEST_PATH --details
+
+uv run python -m experiments.infra.diagnose_search \
+  --run-dir RUN_DIR
+```
+
+`batch_status` 查询状态；`diagnose_search` 为当前 TraceAAD 写入派生诊断结果。后者不启动模型生成。
+
+## 3. 独立测试
+
+最终程序确定后，再执行同规模测试：
+
+```bash
+uv run python -m experiments.infra.evaluate RUN_DIR --primary
+```
+
+测试会运行程序并保存结果。已有结果先读取；不要因文档或实现变化自动重测。历史运行使用当时配置与源码快照，当前评价器不能替代历史运行的实际评价规则。
+
+## 结果存在哪里
+
+```text
+experiments_result/<方法>/
+├── batch_<批次>.json       批次清单
+└── <任务>/<运行>/          单路搜索的配置、事件与结果
+```
+
+目录名不能证明状态或比较条件。核对时读取清单、配置和实际事件，字段说明见[结果格式](infra/SEARCH_FORMAT.md)。

@@ -5,8 +5,9 @@ import copy
 import re
 
 from .graph import PathWiseAction, PathWiseNode
-from core import Function, LLM, Program, TextFunctionProgramConverter
+from core import Function, LLM, Program
 from baselines.shared.sampling import SampleTrimmer
+from core.code import parse_program
 
 
 GLOBAL_IMPORTS = [
@@ -29,7 +30,7 @@ class PathWiseSampler:
     @staticmethod
     def with_global_imports(program: str | Program) -> Program:
         if isinstance(program, str):
-            program = TextFunctionProgramConverter.text_to_program(program)
+            program = parse_program(program)
         else:
             program = copy.deepcopy(program)
         existing = set(line.strip() for line in program.preface.splitlines())

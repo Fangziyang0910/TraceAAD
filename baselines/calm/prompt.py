@@ -6,7 +6,7 @@ match the current prompt text (upstream detectors still match obsolete wording).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, List, Optional, Sequence
+from typing import TYPE_CHECKING, Callable, List, Sequence
 
 import numpy as np
 

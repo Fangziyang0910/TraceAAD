@@ -5,7 +5,7 @@ import random
 import re
 from typing import Any, Callable, Optional, Sequence
 
-from core import Evaluation, Function, LLM, Program, SecureEvaluator, TextFunctionProgramConverter
+from core import Evaluation, Function, LLM, Program, SecureEvaluator
 from baselines.shared.profiler import ProfilerBase
 from baselines.shared.checkpoint import save_checkpoint
 from baselines.shared.observability import (
@@ -30,6 +30,7 @@ from .prompts.prompts_meta import (
     META_STEP1_SYSTEM_MSG, META_STEP1_USER_MSG, META_STEP2_SYSTEM_MSG, META_STEP2_USER_MSG,
     META_STEP3_SYSTEM_MSG, META_STEP3_USER_MSG)
 from .prompts.prompts_novelty import NOVELTY_SYSTEM_MSG, NOVELTY_USER_MSG
+from core.code import parse_program
 
 
 class ShinkaEvo:
@@ -104,7 +105,7 @@ class ShinkaEvo:
         for agent_llm in self._all_llms():
             agent_llm.debug_mode = debug_mode
 
-        raw_template_program = TextFunctionProgramConverter.text_to_program(self._template_program_str)
+        raw_template_program = parse_program(self._template_program_str)
         if raw_template_program is None or len(raw_template_program.functions) != 1:
             raise ValueError("ShinkaEvo requires an evaluation template with exactly one evolvable function.")
         self._template_program: Program = copy.deepcopy(raw_template_program)

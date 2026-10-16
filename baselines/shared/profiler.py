@@ -29,7 +29,8 @@ from threading import RLock
 from datetime import datetime
 
 from pathlib import Path
-from traceaad.v12_1.storage import Programs, append_jsonl, read_json, seal_calls, write_json
+from traceaad.storage import append_jsonl, read_json, seal_calls, write_json
+from experiments.infra.result_storage import Programs
 from core.evaluate import EVALUATION_SEED
 from core.scheduling import SchedulerError
 
@@ -158,8 +159,8 @@ class ProfilerBase:
         order, valid = self._num_samples, fitness is not None
         meta = None
         if program:
-            config = read_json(self.run_dir/'run_config.json', {})
-            meta = {'id': order, 'key': self._sources.add(program), 'fitness': fitness,
+            self._sources.add(order, program)
+            meta = {'id': order, 'fitness': fitness,
                     'score': fitness,
                     'valid': valid, 'action': function.operator or 'unknown',
                     'idea': getattr(function, 'algorithm', '') or '', 'parent_id': None, 'depth': 0}
@@ -167,7 +168,7 @@ class ProfilerBase:
                 self._canonical_best = meta
         attempt = {'id': order, 'action': function.operator or 'unknown',
                    'idea': getattr(function, 'algorithm', '') or '', 'program_id': order if meta else None,
-                   'parent_id': None, 'repair_of': None, 'function_key': self._sources.add(str(function)),
+                   'parent_id': None, 'repair_of': None, 'function': str(function),
                    'sample_time': function.sample_time, 'evaluate_time': function.evaluate_time,
                    'status': 'valid' if valid else 'invalid_output', 'call_ids': []}
         self._append_jsonl(str(self.run_dir/'events.jsonl'), {
@@ -182,7 +183,7 @@ class ProfilerBase:
         if not self.run_dir or not self._num_samples or pop.generation == self._cur_gen:
             return
         with self._artifact_lock:
-            members = [{'algorithm': f.algorithm, 'function_key': self._sources.add(str(f)), 'score': f.score}
+            members = [{'algorithm': f.algorithm, 'function': str(f), 'score': f.score}
                        for f in pop.population]
             self._append_jsonl(str(self.run_dir/'events.jsonl'),
                 {'kind': 'population', 'generation': pop.generation, 'members': members})
@@ -269,39 +270,37 @@ class ProfilerBase:
         return (datetime.now(ZoneInfo('Asia/Shanghai'))-self._process_start_time).total_seconds() + getattr(self, '_resume_elapsed', 0)
 
     def _freeze_training(self, config):
-        from traceaad.v12_1.instance_evaluation import InstanceProgramEvaluator
-        from traceaad.v12_1.storage import committed_rows, Programs
+        from traceaad.instance_evaluation import InstanceProgramEvaluator
+        from traceaad.storage import committed_rows
+        from experiments.infra.result_storage import Programs
         sources = Programs(self.run_dir)
         programs = {row["program"]["id"]: row["program"] for row in committed_rows(self.run_dir) if row.get("program")}
-        nodes = [{**p, "code": sources.get(p["key"])} for p in programs.values() if p["valid"]]
+        nodes = [{**p, "code": sources.get(p["id"])} for p in programs.values() if p["valid"]]
         if profiles := getattr(self, '_recovery_profiles', None):
             refreshed = []
             for node in nodes:
-                if node['id'] <= self._recovery_candidate_cutoff and node['key'] in profiles:
-                    score = profiles[node['key']]['score']
+                if node['id'] <= self._recovery_candidate_cutoff and node['id'] in profiles:
+                    score = profiles[node['id']]['score']
                     if score is None:
                         continue
                     node = {**node, 'fitness': score, 'score': score}
                 refreshed.append(node)
             nodes = refreshed
         nodes.sort(key=lambda n: (n['fitness'], n['id']))
-        candidates = {}
-        for node in nodes:
-            candidates.setdefault(node['key'], node)
-            if len(candidates) == 5:
-                break
+        candidates = nodes[:5]
         evaluator = InstanceProgramEvaluator(self._evaluation,
             seeds=config.get('method_params', {}).get('evaluation_seeds', [EVALUATION_SEED]),
-            **{k: v for k, v in self._evaluation._instance_execution.items() if k != 'record_path'})
+            **{k: v for k, v in self._evaluation._instance_execution.items()
+               if k not in {'record_path', 'function_budget_scope'}})
         results = []
-        payload = {'final_selection': 'training', 'finalists': [n['id'] for n in candidates.values()]}
+        payload = {'final_selection': 'training', 'finalists': [n['id'] for n in candidates]}
         self._append_jsonl(self._method_events_path, {'kind': 'progress',
             'ts': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(),
             'progress': {'phase': 'freeze', 'elapsed': self._elapsed(), 'attempts': self._budget_used,
                          'started_at': self._process_start_time.isoformat()}})
-        for node in candidates.values():
+        for node in candidates:
             try:
-                outcome = evaluator.evaluate(node['code'], node['key'])
+                outcome = evaluator.evaluate(node['code'], node['id'])
             except SchedulerError as exc:
                 payload.update(status='aborted', error_type=type(exc).__name__, error=str(exc))
                 break
@@ -314,13 +313,13 @@ class ProfilerBase:
         self._canonical_best = None
         if scored and payload.get('status') != 'aborted':
             chosen = min(scored, key=lambda r: (r['fitness'], payload['finalists'].index(r['node_id'])))
-            node = next(n for n in candidates.values() if n['id'] == chosen['node_id'])
+            node = next(n for n in candidates if n['id'] == chosen['node_id'])
             self._canonical_best = {**{k: v for k, v in node.items() if k != 'code'},
                                     'fitness': chosen['fitness'], 'score': chosen['fitness']}
             (self.run_dir/'best_program.py').write_text(node['code'], encoding='utf-8')
-            write_json(self.run_dir/'selection.json', {'criterion': 'training', 'selection_protocol': None,
+            write_json(self.run_dir/'selection.json', {'criterion': 'training',
                 'finalists': payload['finalists'], 'results': results,
-                'selected_node': node['id'], 'selected_key': node['key']})
+                'selected_node': node['id']})
         elif 'status' not in payload:
             payload['status'] = 'selection_failed' if candidates else 'no_valid_root'
         return {**payload, 'selection_results': results, 'selection_evaluations': len(results)}

@@ -51,11 +51,12 @@ from baselines.shared.observability import (
 )
 from baselines.shared.profiler import ProfilerBase
 from baselines.shared.sampling import SampleTrimmer
-from core import Evaluation, Function, LLM, Program, SecureEvaluator, TextFunctionProgramConverter
+from core import Evaluation, Function, LLM, Program, SecureEvaluator
 
 from . import code_manipulation
 from .config import ProgramsDatabaseConfig
 from .programs_database import ProgramsDatabase
+from core.code import parse_function, parse_program
 
 OPERATOR = 'funsearch'
 _FENCE = re.compile(r'```[ \t]*(?:python|py)?[ \t]*\n(.*?)```', re.S)
@@ -96,7 +97,7 @@ class FunSearch:
         llm.debug_mode = debug_mode
         self._config = database_config or ProgramsDatabaseConfig()
 
-        self._template_program: Program = TextFunctionProgramConverter.text_to_program(evaluation.template_program)
+        self._template_program: Program = parse_program(evaluation.template_program)
         self._function_to_evolve: Function = self._template_program.functions[0]
         self._function_name: str = self._function_to_evolve.name
         description = evaluation.task_description.strip().replace('"""', "'''")
@@ -196,7 +197,7 @@ class FunSearch:
                       sample_order=sample_order, island_id=prompt.island_id, counts_budget=True)
             return
 
-        function = TextFunctionProgramConverter.program_to_function(program)
+        function = parse_function(program)
         if self.calls_ancestor(program):
             score, eval_time, status = None, 0.0, 'calls_ancestor'
         else:
@@ -224,7 +225,7 @@ class FunSearch:
                 self._tot_sample_nums += 1
                 if score is None:
                     raise RuntimeError('The score of the template program must not be None.')
-                seed = TextFunctionProgramConverter.program_to_function(self._template_program)
+                seed = parse_function(self._template_program)
                 seed.instance_scores = tuple(-v for v in outcome.instance_scores)
                 self._register(seed, self._template_program, score, eval_time, 0.0, None, 'seed')
 

@@ -52,14 +52,6 @@ class TSPEvaluation(Evaluation):
                  seed=2024,
                  **kwargs):
 
-        """
-            Args:
-                None
-            Raises:
-                AttributeError: If the data key does not exist.
-                FileNotFoundError: If the specified data file is not found.
-        """
-
         super().__init__(
             template_program=template_program,
             task_description=task_description,
@@ -96,110 +88,34 @@ class TSPEvaluation(Evaluation):
         return cost
 
     def generate_neighborhood_matrix(self, instance):
-        instance = np.array(instance)
-        n = len(instance)
-        neighborhood_matrix = np.zeros((n, n), dtype=int)
-
-        for i in range(n):
-            distances = np.linalg.norm(instance[i] - instance, axis=1)
-            sorted_indices = np.argsort(distances)  # sort indices based on distances
-            neighborhood_matrix[i] = sorted_indices
-
-        return neighborhood_matrix
+        coordinates = np.asarray(instance)
+        distances = np.linalg.norm(coordinates[:, None] - coordinates, axis=2)
+        return np.argsort(distances, axis=1)
 
     def evaluate(self, eva: callable) -> float:
-
-        n_max = self.n_instance
-        dis = np.ones(self.n_instance)
-        n_ins = 0
-
-        for instance, distance_matrix in self._datasets:
-
-            # The instances are fixed for the evaluator lifetime. Reuse the
-            # ordering across candidate evaluations; custom test datasets fall
-            # back to the same computation on first use.
-            cache_key = id(instance)
-            neighbor_matrix = self._neighborhood_cache.get(cache_key)
-            if neighbor_matrix is None:
-                neighbor_matrix = self.generate_neighborhood_matrix(instance)
-                self._neighborhood_cache[cache_key] = neighbor_matrix
-
-            destination_node = 0
-
-            current_node = 0
-
-            route = np.zeros(self.problem_size)
-            # print(">>> Step 0 : select node "+str(instance[0][0])+", "+str(instance[0][1]))
-            for i in range(1, self.problem_size - 1):
-
-                near_nodes = neighbor_matrix[current_node][1:]
-
-                mask = ~np.isin(near_nodes, route[:i])
-
-                unvisited_near_nodes = near_nodes[mask]
-
-                next_node = eva(current_node, destination_node, unvisited_near_nodes, distance_matrix)
-
-                # Only an offered unvisited ID is valid; a negative ID would
-                # otherwise index from the end and yield an invalid tour.
-                if next_node not in unvisited_near_nodes:
+        costs = []
+        for instance, distance_matrix in self._datasets[:self.n_instance]:
+            neighbors = self._neighborhood_cache.get(id(instance))
+            if neighbors is None:
+                neighbors = self.generate_neighborhood_matrix(instance)
+                self._neighborhood_cache[id(instance)] = neighbors
+            route = np.zeros(self.problem_size, dtype=int)
+            visited = np.zeros(self.problem_size, dtype=bool)
+            visited[0] = True
+            current = 0
+            for index in range(1, self.problem_size - 1):
+                order = neighbors[current]
+                unvisited = order[~visited[order]]
+                next_node = eva(current, 0, unvisited, distance_matrix)
+                if (
+                    not isinstance(next_node, (int, np.integer))
+                    or isinstance(next_node, (bool, np.bool_))
+                    or not 0 <= next_node < self.problem_size
+                    or visited[next_node]
+                ):
                     return None
-
-                current_node = next_node
-
-                route[i] = current_node
-
-            mask = ~np.isin(np.arange(self.problem_size), route[:self.problem_size - 1])
-
-            last_node = np.arange(self.problem_size)[mask]
-
-            current_node = last_node[0]
-
-            route[self.problem_size - 1] = current_node
-
-            LLM_dis = self.tour_cost(instance, route, self.problem_size)
-
-            dis[n_ins] = LLM_dis
-
-            n_ins += 1
-            if n_ins == self.n_instance:
-                break
-            # self.route_plot(instance,route,self.oracle[n_ins])
-
-        ave_dis = np.average(dis)
-        # print("average dis: ",ave_dis)
-        return ave_dis
-
-
-if __name__ == '__main__':
-    import sys
-
-    print(sys.path)
-
-
-    def select_next_node(current_node: int, destination_node: int, unvisited_nodes: np.ndarray, distance_matrix: np.ndarray) -> int:
-        """
-        Design a novel algorithm to select the next node in each step.
-
-        Args:
-        current_node: ID of the current node.
-        destination_node: ID of the destination node.
-        unvisited_nodes: Array of IDs of unvisited nodes.
-        distance_matrix: Distance matrix of nodes.
-
-        Return:
-        ID of the next node to visit.
-        """
-        distances_to_destination = distance_matrix[current_node][unvisited_nodes]
-
-        # Find the index of the unvisited node with the smallest distance to the destination
-        next_node_index = np.argmin(distances_to_destination)
-
-        # Get the ID of the next node to visit
-        next_node = unvisited_nodes[next_node_index]
-
-        return next_node
-
-
-    tsp = TSPEvaluation()
-    tsp.evaluate_program('_', select_next_node)
+                route[index] = current = next_node
+                visited[next_node] = True
+            route[-1] = np.flatnonzero(~visited)[0]
+            costs.append(self.tour_cost(instance, route, self.problem_size))
+        return float(np.mean(costs))

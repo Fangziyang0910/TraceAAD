@@ -48,10 +48,9 @@ from baselines.shared.observability import (
     reset_sample_failures,
     shutdown_executor,
 )
-from core import (
-    Evaluation, LLM, Function, Program, TextFunctionProgramConverter, SecureEvaluator
-)
+from core import Evaluation, LLM, Function, Program, SecureEvaluator
 from baselines.shared.profiler import ProfilerBase
+from core.code import parse_function, parse_program, replace_function
 
 
 class EoH:
@@ -124,9 +123,9 @@ class EoH:
         self._multi_thread_or_process_eval = multi_thread_or_process_eval
 
         # function to be evolved
-        self._function_to_evolve: Function = TextFunctionProgramConverter.text_to_function(self._template_program_str)
+        self._function_to_evolve: Function = parse_function(self._template_program_str)
         self._function_to_evolve_name: str = self._function_to_evolve.name
-        self._template_program: Program = TextFunctionProgramConverter.text_to_program(self._template_program_str)
+        self._template_program: Program = parse_program(self._template_program_str)
 
         # adjust population size
         self._adjust_pop_size()
@@ -262,7 +261,7 @@ class EoH:
             )
             return
         # convert to Program instance
-        program = TextFunctionProgramConverter.function_to_program(func, self._template_program)
+        program = replace_function(func, self._template_program)
         if program is None:
             log_event(
                 self,
@@ -395,7 +394,7 @@ class EoH:
                 self._run_one_evolution_sample()
             except KeyboardInterrupt:
                 break
-            except Exception as e:
+            except Exception:
                 if self._debug_mode:
                     traceback.print_exc()
                     exit()

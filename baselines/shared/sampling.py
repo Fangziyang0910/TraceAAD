@@ -22,9 +22,10 @@ from __future__ import annotations
 import ast
 import copy
 import re
-from typing import Any, List
+from typing import Any
 
-from core import Function, LLM, Program, TextFunctionProgramConverter
+from core import LLM, Function, Program
+from core.code import parse_function, parse_program
 
 
 class SampleTrimmer:
@@ -37,13 +38,6 @@ class SampleTrimmer:
         """
         generated_code = self.llm.draw_sample(prompt, *args, **kwargs)
         return generated_code
-
-    def draw_samples(self, prompts: List[str | Any], *args, **kwargs) -> List[str]:
-        """Get samples based on the provided 'Sampler' instance.
-        Preserve the full response for the task-aware program parser.
-        """
-        ret = self.llm.draw_samples(prompts, *args, **kwargs)
-        return ret
 
     @classmethod
     def _check_indent_if_code_completion(cls, generated_code: str) -> bool:
@@ -115,7 +109,7 @@ class SampleTrimmer:
         program = cls.sample_to_program(generated_code, template_program)
         if program is None:
             return None
-        return TextFunctionProgramConverter.program_to_function(program)
+        return parse_function(program)
 
     @classmethod
     def sample_to_program(cls, generated_code: str, template_program: str | Program) -> Program | None:
@@ -123,7 +117,7 @@ class SampleTrimmer:
         to a Function instance. If the convert fails, return None.
         """
         if isinstance(template_program, str):
-            template_program = TextFunctionProgramConverter.text_to_program(template_program)
+            template_program = parse_program(template_program)
         if template_program is None:
             return None
         target = template_program.functions[0]
@@ -163,7 +157,7 @@ class SampleTrimmer:
             code = ast.unparse(tree)
             tree = ast.parse(code)
             node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == target.name)
-            function = TextFunctionProgramConverter.text_to_function(ast.get_source_segment(code, node))
+            function = parse_function(ast.get_source_segment(code, node))
             if function is None:
                 continue
             # The experiment supplies the callable contract, as in the previous adapter.
@@ -223,12 +217,12 @@ class SampleTrimmer:
     @classmethod
     def remove_docstrings(cls, func: Function | str):
         func_ = copy.deepcopy(func)
-        func_ = TextFunctionProgramConverter.text_to_function(str(func_))  # convert to Function instance
+        func_ = parse_function(str(func_))  # convert to Function instance
         docstring = func_.docstring
         while not (docstring == "" or docstring is None):
             func_.docstring = ""
             func_str = str(func_)
-            func_ = TextFunctionProgramConverter.text_to_function(func_str)
+            func_ = parse_function(func_str)
             docstring = func_.docstring
 
         if isinstance(func, Function):

@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 import random
 
-from .graph import PathWiseAction, PathWiseNode
 from core import Function
 
 _PROMPTS = Path(__file__).with_name('prompts')

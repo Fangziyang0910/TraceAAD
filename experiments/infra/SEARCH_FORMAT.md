@@ -1,77 +1,62 @@
-# 搜索实验与结果格式
+# 从结果找到证据
 
-当前结果统一为 `traceaad-results-v2`。运行目录是 `experiments_result/<实验>/<任务>/<运行>/`，例如 `traceaad_v12_1/tsp_construct/<运行>/`。实验条件保存在 `run_config.json`，实现改动用 revision 区分，当前科研实现为 `research-protocol-v6-20261012-raw-objective`。
+**先确定运行条件，再沿程序编号找到代码、调用与评价。** 运行目录通常为 `experiments_result/<方法>/<任务>/<运行>/`，数据目录不进入 Git。
 
-## 文件各存一类事实
+读取入口为 [artifacts.py](artifacts.py) 和 [result_storage.py](result_storage.py)。当前 TraceAAD 的写入逻辑在 [state.py](../../traceaad/state.py)，底层读写在 [storage.py](../../traceaad/storage.py)。
 
-| 文件 | 内容 |
-| --- | --- |
-| `run_config.json` | 任务、模型、种子、方法参数、评价协议、revision、预算及预算单位 |
-| `events.jsonl` | 生成尝试、程序标识、逐种子评价、探索结束与阶段进度；按时间追加 |
-| `programs.jsonl` | `key` 与源码正文。当前 V12.1 每个个体保存一条源码，基线保留原存储规则 |
-| `calls.jsonl` | 实际模型请求、原始回复及调用元数据；结束后压缩为 `calls.jsonl.gz` |
-| `resume.json` | 一个最新恢复点，含进度、RNG、固定协议和已提交文件位置；每次提交替换 |
-| `summary.json` | 终局状态、计数、耗时及选中程序的编号与成绩；不重复源码 |
-| `selection.json` | 独立选择的程序、评价和选中程序的编号；没有独立选择的基线可省略 |
-| `heldout.json` | 本路测试记录的平面列表；按 `(variant, scale)` 更新 |
-| `best_program.py` | 最终程序的便捷导出；内容必须与选中 `key` 一致 |
-| `.cache/history.json` | 可删除并重建的可视化投影；不保存源码、提示或回复 |
+## 文件与用途
 
-`diagnostics.json` 是离线分析产物，按需生成。当前诊断入口针对 V12.1 个体格式，旧版本使用已保存的诊断产物或当时源码。基线的额外研究轨迹可以保留。普通可视化和成绩读取只依赖上表中的文件。`finalists.json`、分片样本文件和逐规模 held-out 文件不再重复保存同一结果。
+| 要回答的问题 | 文件 | 重点看什么 |
+| --- | --- | --- |
+| 这次实验用了什么条件？ | `run_config.json` | 模型、任务、参数、预算、种子与评价条件；结合源码快照核对版本。 |
+| 发生过哪些尝试？ | `events.jsonl` | 来源关系、评价、失败与阶段变化。 |
+| 实际程序是什么？ | `programs.jsonl` | 程序标识及其源码。 |
+| 模型实际看到和返回了什么？ | `calls.jsonl` 或 `.gz` | 输入、原始回复、错误与用量。 |
+| 哪些状态已经提交？ | `resume.json` | 恢复状态与日志提交位置。 |
+| 搜索怎样结束？ | `summary.json` | 状态、计数与最终程序标识。 |
+| 最终程序怎样选出？ | `selection.json` | 该方法保存的候选、评价与选中编号。 |
+| 独立测试表现怎样？ | `heldout.json` | 程序身份、测试条件与结果。 |
+| 基线评价发生了什么？ | `evaluations.jsonl` | 评价明细、失败类型与耗时。 |
+| 怎样直接查看最终源码？ | `best_program.py` | 便捷导出；与选中的程序记录核对。 |
+| 哪些是派生结果？ | `.cache/`、`diagnostics.json` | 展示与诊断，可以重新生成。 |
 
-## 事件与程序标识
+程序源码统一按个体编号保存，不定义格式版本，也不按源码内容建立索引。
 
-当前 V12.1 的 `candidate` 事件记录 `candidate_id`、`budget_used`、`operator`、`status`、`fitness`、`valid`、`node_id` 和 `program`。`program` 直接保存个体的分析、设计、来源、评价和核验结果，通过 `call_ids` 查看原始请求和回复，通过 `key` 读取源码。不再保存独立 `attempt`。每次成功解析创建新个体，相同代码也独立评价。解析失败写 `delivery_failed` 日志，不创建个体，仍计入生成预算。旧档案与基线保持其原事件格式，读取器可以展示历史 `attempt`。
+## 当前 TraceAAD 的编号
 
-源码标识是实际保存文本的 SHA-256。当前 V12.1 保存模型解析出的源码文本并计算哈希，不用哈希识别重复个体。`fitness` 和 `score` 都是统一后的最小化目标值，越小越好。TSP、CVRP、VRPTW 用正路径长度，装箱用正箱数，OP 用负奖励。已移除的 CO-Bench 任务历史档案用负归一化质量。`run_config.json` 的 `objective` 为 `min`，`native_objective` 另记原任务方向。改进量统一为原值减去新值，正数表示改善。选中程序的训练成绩与独立选择成绩分别保存。
+| 字段 | 含义 | 不应混同的对象 |
+| --- | --- | --- |
+| `candidate_id`、`budget_used` | 已计入预算的生成尝试编号与数量。 | 不等于有效程序数。 |
+| `program.id`、`node_id` | 成功解析后创建的程序个体编号。 | 相同源码也可以有不同编号。 |
+| `call_ids` | 关联模型请求的 `request_id`。 | 一次生成可能经历多个接口请求。 |
 
-预算和生成尝试编号分别记录。初始化、失败、重复和 Repair 都消耗一次生成次数预算。有效率使用有效生成尝试记录数 / 全部生成尝试记录数。
+当前 `programs.jsonl` 按 `{id, code}` 保存源码。`candidate` 事件中的 `program` 保存设计说明、来源与评价元数据。后续 `progress` 事件也可能更新程序状态。
+
+解析失败写为 `delivery_failed`，计入生成次数，不创建程序个体。已经创建但评价失败的个体、解析失败、接口故障需要分开统计。
+
+TraceAAD、基线和已转换的历史结果均使用个体编号。源码记录为 `{id, code}`，种群快照直接保存函数文本。
+
+## 怎样核对一条解释
+
+1. 用运行配置与源码快照确定条件。
+2. 用事件中的程序编号找到代码与评价。
+3. 用 `call_ids` 找到模型实际输入和原始回复。
+4. 比较实际改动、反馈和后续行动，再判断解释是否成立。
+
+模型的分析与设计说明是生成时的描述。代码说明实现，评价记录说明运行结果。保存了某条历史，不代表后续提示或选择器使用了它。
 
 ## 提交与恢复
 
-一次完整尝试先追加调用、程序与事件，再原子替换 `resume.json`。恢复点的 `files` 保存已提交的字节位置。读取事实和训练曲线时只读到这个位置。恢复写入时丢弃未提交尾部。未提交的模型调用或评价可以重做。
+当前 TraceAAD 先追加调用、源码与事件，再原子替换恢复点。恢复点保存状态和各文件的提交位置。恢复读取通过提交位置限定有效内容；新提交会处理未提交的尾部。
 
-当前 V12.1 恢复 `Program` 对象、搜索进度与随机状态，要求配置、任务、协议和嵌入设置一致。已解析但待评价的个体直接继续评价。旧双结构档案不由新实现续跑。活跃运行的 `run_config.json` 同步当前参数。模型遗漏依赖时，评价失败后进入一次 Repair。解析器不补模板中的导入、常量或辅助函数。基线的 `resume.json` 是方法最新快照。
+复查运行中的搜索时，使用现有的提交边界读取函数。不要手工拼接正在增长的日志，也不要用最好程序代替完整恢复状态。
 
-## 测试记录
+## 最终选择与测试
 
-`heldout.json` 中每条记录至少有 `task`、`variant`、`scale`、`fitness` 和 `verification`。带程序标识的结果还保存 `key`、`node_id` 与评价配置。两个测试入口默认共用同一最终选定的程序、同一规模的已有成绩。新记录默认空名称。明确传入 `--variant` 时才使用另外的测试记录。
+当前 TraceAAD 的 `selection.json` 中，`results` 和 `finalists` 为空；`selected_node` 指向训练最好个体。`summary.json` 中的 `selection_evaluations` 为零。基线仍进行最终重评，规则见[实验条件](../PROTOCOL.md#搜索预算与最终选择)。
 
-`verified` 表示成绩对应最终选定的程序。
+测试结果按最终个体编号关联，核对任务与评价条件。`verification` 是读取器的核验结果，具体核验范围以 [result_storage.py](result_storage.py) 为准。
 
-## 评价条件与执行
+当前目标统一最小化，正的“原值减新值”表示改善。历史目标方向与评分转换按原记录解释。训练、最终选择与测试的结果分别报告。
 
-评价条件见[实验准则](../../docs/08-实验规范与共识/README.md)，任务设置集中在 `benchmarks/tasks.py`。六任务的基线与当前 TraceAAD 共用逐实例执行器，统一程序种子、实例隔离与时限。已有测试成绩直接读取，不因评价器变化而重测或改写。
-
-通用评价命令：
-
-```bash
-uv run python -m experiments.infra.evaluate <运行目录> --units 50,100,200
-uv run python -m experiments.infra.evaluate <运行目录> --condition traceaad --output-dir <汇总目录>
-```
-
-OBP 的规模写为 `1k_100,5k_500,10k_500`。未完成搜索必须显式使用 `--allow-incomplete`。任意中途程序的结果不会作为最终选定的程序的成绩参与比较。
-
-## 共用读取与基线记录
-
-恢复、曲线和成绩读取共用 `committed_size` / `committed_rows`。监控、批次状态和 held-out 共用 `selected_program` / `heldout_identity`。提交边界与源码标识只解释一次。搜索计时以最后一个完整程序的提交时间为准，进入选择后只更新阶段，避免把选择耗时算进搜索吞吐。
-
-基线记录器只接受 `run_dir` 和可选起始样本数，使用当前单个标量 fitness。删除随机目录、日志风格切换、多目标模式和未使用的恢复接口。种群记录共用一个实现，各方法自己的研究轨迹仍按实际需要保存。
-
-六任务的七种基线结束时，重评训练前五个不同源码的程序，从中确定最好的有效结果。全部失败时明确记录失败。重评不消耗生成次数预算，评价次数单独记录。固定框架自己逐实例执行源码，安全入口不再预执行一次。调度器故障中止搜索并保留错误与模型调用记录。
-
-模型模块负责请求重试与错误分类，SDK 自动重试关闭。搜索只累计生成次数预算及实际请求。每次物理请求的原始回复、耗时和错误都可以单独回查。基线调用记录也使用同一份请求事实。批次计划共用端点查询和 tmux 启动，容量、名称和端点来自一个后端配置。
-
-已结束的初始化与格式研究脚本已清理，原始结果见[归档入口](../../archive/local_models_20261011/README.md)。
-
-## 实验和分析入口
-
-V12.1 的运行与主机启动入口调用共用的 `experiments/infra/search_*.py`。独立测试使用 `experiments.infra.evaluate`。批次计划按清单生成，held-out 按实际路次生成。跨主机复制后用清单所在目录定位运行目录。
-
-```bash
-uv run python -m experiments.infra.diagnose_search --run-dir <运行目录>
-uv run python -m experiments.infra.batch_status --manifest <批次清单>
-uv run python -m experiments.monitor --host 0.0.0.0 --port 8765 --experiment traceaad_v12_1
-```
-
-可视化按追加字节刷新曲线，打开程序详情时才读取源码。列表、最近程序、有效率和预算共用一个投影。页面、样式和交互分别位于 `monitor.html`、`monitor.css`、`monitor.js`。
+复查一个判断时，至少保存运行相对路径、源码版本、程序或调用编号、比较条件和统计范围。状态查询见[操作说明](AGENT_OPERATIONS.md)。

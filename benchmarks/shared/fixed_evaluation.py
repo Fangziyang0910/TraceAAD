@@ -3,7 +3,7 @@
 import numpy as np
 
 from core import Evaluation
-from .seeded_data import PROTOCOL, SEED, generate_dataset
+from .seeded_data import SEED, generate_dataset
 
 
 class FixedEvaluation(Evaluation):
@@ -15,7 +15,7 @@ class FixedEvaluation(Evaluation):
     def __init__(self, split='train', timeout_seconds=60, limit=None, settings=None, **kwargs):
         super().__init__(template_program=self.TEMPLATE, task_description=self.DESCRIPTION,
                          timeout_seconds=timeout_seconds, **kwargs)
-        self.task, self.suite_protocol = self.DATASET.TASK, PROTOCOL
+        self.task = self.DATASET.TASK
         if self.INTERFACE:
             self.interface = self.INTERFACE
         self.seed = SEED
