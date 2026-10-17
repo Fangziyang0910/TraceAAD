@@ -7,7 +7,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
-from baselines.shared.sampling import SampleTrimmer
+from .edit.apply_full import apply_full_patch
+from .edit.apply_diff import apply_diff_patch
+from core.code import function_from_source
+
 from core import Function, LLM, Program
 from .population import ShinkaProgram
 from .prompts import messages, prompt_record
@@ -41,7 +44,7 @@ class PatchResult:
 
 
 class ShinkaSampler:
-    BASE_SYSTEM_MSG = BASE_SYSTEM_MSG
+    BASE_SYSTEM_MSG = 'You are an expert optimization and algorithm design assistant. Improve the program while preserving correctness and immutable regions.'
 
     def __init__(
             self,
@@ -201,49 +204,31 @@ class ShinkaSampler:
         # A complete-solver task permits edits to helpers and imports too.
         if self.template_function.name == 'solve':
             return '# EVOLVE-BLOCK-START\n' + program_str + '\n# EVOLVE-BLOCK-END'
-        program = SampleTrimmer.sample_to_program(program_str, self.template_program)
-        if program is None:
+        function = function_from_source(program_str, self.template_function.name)
+        if function is None:
             return program_str
-        marked = copy.deepcopy(program.functions[0])
-        marked.body = '\n'.join(['    # EVOLVE-BLOCK-START', marked.body, '    # EVOLVE-BLOCK-END'])
-        return str(marked)
+        function.body = '\n'.join(['    # EVOLVE-BLOCK-START', function.body, '    # EVOLVE-BLOCK-END'])
+        return str(function)
 
-    def _apply_full_response(self, response: str, parent: ShinkaProgram, *, patch_type: str) -> PatchResult:
-        extracted = self.extract_python_code(response)
-        if not extracted:
-            return PatchResult(None, None, error="Could not extract Python code from response.")
-        program = SampleTrimmer.sample_to_program(extracted, self.template_program)
-        func = program.functions[0] if program else None
-        if program is None:
-            return PatchResult(None, None, error="Could not rebuild program from generated function.")
-        return PatchResult(func, program, code_diff=self._simple_diff(parent.program, str(program)), metadata={"patch_type": patch_type})
+    def _apply_patch(self, response, parent, patch_type, apply):
+        updated, count, _, error, _, _ = apply(
+            response, original_str=self.to_marked_program(parent.function),
+            language='python', verbose=False)
+        if error or count == 0:
+            return PatchResult(None, None, error=error or 'No patch applied.')
+        function = function_from_source(self.strip_markers(updated), self.template_function.name)
+        if function is None:
+            return PatchResult(None, None, error='Patch does not contain a valid task entrypoint.')
+        program = replace_function(function, self.template_program)
+        return PatchResult(function, program,
+                           code_diff=self._simple_diff(parent.program, str(program)),
+                           metadata={'patch_type': patch_type})
 
-    def _apply_diff_response(self, response: str, parent: ShinkaProgram) -> PatchResult:
-        matches = PATCH_PATTERN.findall(response or "")
-        if not matches:
-            return PatchResult(None, None, error="No SEARCH/REPLACE block found.")
-        marked = self.to_marked_program(parent.function)
-        mutable_ranges = self.mutable_ranges(marked)
-        if not mutable_ranges:
-            return PatchResult(None, None, error="No EVOLVE-BLOCK region found.")
-        updated = marked
-        for search_text, replace_text in matches:
-            search_text = search_text.rstrip("\n")
-            replace_text = replace_text.rstrip("\n")
-            position = updated.find(search_text)
-            if position < 0:
-                return PatchResult(None, None, error="SEARCH text was not found in the current program.")
-            span = (position, position + len(search_text))
-            if not self._inside_mutable(span, mutable_ranges):
-                return PatchResult(None, None, error="SEARCH text touches immutable code outside EVOLVE-BLOCK.")
-            updated = updated[:position] + replace_text + updated[position + len(search_text):]
-            mutable_ranges = self.mutable_ranges(updated)
-        cleaned = self.strip_markers(updated)
-        rebuilt = SampleTrimmer.sample_to_program(cleaned, self.template_program)
-        func = rebuilt.functions[0] if rebuilt else None
-        if rebuilt is None:
-            return PatchResult(None, None, error="Could not rebuild program from diff result.")
-        return PatchResult(func, rebuilt, code_diff=self._simple_diff(parent.program, str(rebuilt)), metadata={"patch_type": "diff"})
+    def _apply_full_response(self, response, parent, *, patch_type):
+        return self._apply_patch(response, parent, patch_type, apply_full_patch)
+
+    def _apply_diff_response(self, response, parent):
+        return self._apply_patch(response, parent, 'diff', apply_diff_patch)
 
     def _canonicalize_function(self, parsed: Function) -> Function:
         func = copy.deepcopy(self.template_function)

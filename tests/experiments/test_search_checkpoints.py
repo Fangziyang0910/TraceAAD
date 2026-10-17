@@ -57,7 +57,7 @@ class ScriptedLLM(LLM):
         value = self.values.pop(0)
         return (
             "{{The idea of the algorithm is to return a smaller deterministic value.}}\n"
-            "Description: return a smaller value\nRationale: minimize the objective\n"
+            "Description: return a smaller value\nDerivation Rationale: minimize the objective\n"
             f"```python\ndef solve(x):\n    return {value}\n```"
         )
 

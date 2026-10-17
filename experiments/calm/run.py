@@ -65,14 +65,11 @@ class RunSpec:
 def build_method(spec: RunSpec, log_dir: Path) -> CALM:
     set_random_seed(spec.seed)
     evaluation, _ = build_task(spec.task, spec.eval_workers)
-    hp = get_task_hyperparams(spec.task)
     llm = build_llm_client(
         base_url=spec.base_url,
         model=spec.model,
         no_proxy=spec.no_proxy,
         max_tokens=spec.output_tokens,
-        temperature=float(hp.generation_temperature),
-        top_p=float(hp.generation_top_p),
     )
     return CALM(
         llm=llm,
@@ -104,8 +101,6 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                     "GRPO disabled (search framework only)."
                 ),
             }, task_config=task_config,
-            llm_options={"temperature": float(hp.generation_temperature),
-                         "top_p": float(hp.generation_top_p)},
             extra={"method_label": METHOD_LABEL, "enable_grpo": False}),
     )
 

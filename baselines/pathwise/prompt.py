@@ -6,6 +6,7 @@ from pathlib import Path
 import random
 
 from core import Function
+from .parsing import ResponseRules
 
 _PROMPTS = Path(__file__).with_name('prompts')
 _PHRASES = json.loads((_PROMPTS / 'perturbations.json').read_text())
@@ -45,7 +46,7 @@ class PathWisePrompt:
         function.docstring = ''
         if version is not None:
             function.name = f'{function.name}_v{version}'
-        return str(function).strip()
+        return ResponseRules().clean_code_for_prompt(str(function)).strip()
 
     @classmethod
     def format_state(cls, nodes, *, shuffle=True):

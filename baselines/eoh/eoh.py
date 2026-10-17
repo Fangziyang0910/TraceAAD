@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import random
+import numpy as np
 import time
 import traceback
 from threading import Lock, Thread
@@ -244,6 +245,15 @@ class EoH:
                 counts_budget=False,
             )
             return None
+        if operator in self._operators and func is not None:
+            for _ in range(2):
+                if not any(str(parent) == str(func) for parent in self._population.population):
+                    break
+                prompt = self._build_operator_prompt(operator)
+                thought, func = call_sampler_get_thought_and_function(
+                    self._sampler, prompt, operator=operator, sample_order=sample_order)
+                if func is None:
+                    return None
         if count_sample:
             sample_order = self._try_increment_sample_count()
             if sample_order is None:
@@ -280,7 +290,7 @@ class EoH:
         if not Population._is_valid_score(score):
             return None
         # register to profiler
-        func.score = score
+        func.score = float(np.round(score, 5))
         func.evaluate_time = eval_time
         func.algorithm = thought
         func.sample_time = sample_time

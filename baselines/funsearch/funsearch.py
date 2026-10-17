@@ -21,11 +21,9 @@ The search loop follows ``google-deepmind/funsearch`` (``sampler.py``,
 4. Valid programs go back into the island that produced the prompt. Every
    ``reset_period`` seconds the weaker half of the islands is reset.
 
-Two adaptations for an instruction-tuned chat model, both outside the
-evolutionary algorithm: the prompt ends with one sentence asking for the
-code of the last function only, and the task description is the module
-docstring of the prompted program (the original specifications describe the
-problem there). The response is parsed for the ``f_v{k}`` definition.
+The task description is supplied as the module docstring of the specification.
+The original code-prefix prompt is sent to the shared model client. A chat
+reply containing a full function is reduced to its body before upstream trimming.
 
 Scores: tasks here return a minimized fitness. The database keeps the
 original higher-is-better convention and receives the negated fitness.
@@ -33,6 +31,7 @@ original higher-is-better convention and receives the negated fitness.
 
 from __future__ import annotations
 
+import copy
 import re
 import textwrap
 import time
@@ -50,7 +49,7 @@ from baselines.shared.observability import (
     reset_sample_failures,
 )
 from baselines.shared.profiler import ProfilerBase
-from baselines.shared.sampling import SampleTrimmer
+from .parsing import _trim_function_body
 from core import Evaluation, Function, LLM, Program, SecureEvaluator
 
 from . import code_manipulation
@@ -60,11 +59,6 @@ from core.code import parse_function, parse_program
 
 OPERATOR = 'funsearch'
 _FENCE = re.compile(r'```[ \t]*(?:python|py)?[ \t]*\n(.*?)```', re.S)
-
-
-def chat_instruction(function_name: str, version: int) -> str:
-    return (f'Complete the function `{function_name}_v{version}` above. '
-            f'Only output the Python code of `{function_name}_v{version}`, no descriptions.')
 
 
 class FunSearch:
@@ -128,7 +122,7 @@ class FunSearch:
         lines = code.splitlines()
         patterns = (rf'^(\s*)def\s+{re.escape(self._function_name)}_v{version}\s*\(',
                     rf'^(\s*)def\s+{re.escape(self._function_name)}\s*\(',
-                    r'^()def\s+\w+\s*\(')
+                    rf'^(\s*)def\s+{re.escape(self._function_name)}_v{version - 1}\s*\(')
         for pattern in patterns:
             for index, line in enumerate(lines):
                 match = re.match(pattern, line)
@@ -146,7 +140,14 @@ class FunSearch:
 
     def sample_to_program(self, response: str, version: int) -> Program | None:
         """Returns the runnable program for one model response, or None if no function body is found."""
-        return SampleTrimmer.sample_to_program(self._extract_code(response, version), self._template_program)
+        try:
+            body = _trim_function_body(self._body_after_header(self._extract_code(response, version), version))
+            body = code_manipulation.rename_function_calls(body, f'{self._function_name}_v{version}', self._function_name)
+            program = copy.deepcopy(self._template_program)
+            program.functions[0].body = body
+            return program if body else None
+        except (SyntaxError, ValueError, AssertionError):
+            return None
 
     def calls_ancestor(self, program: Program) -> bool:
         """Whether the generated function calls an earlier version `f_v*` (rejected, as in the original)."""
@@ -176,7 +177,7 @@ class FunSearch:
 
     def _sample_once(self, prompt) -> None:
         sample_order = self._tot_sample_nums + 1
-        text = f'{prompt.code}\n{chat_instruction(self._function_name, prompt.version_generated)}'
+        text = prompt.code
         start = time.time()
         try:
             response = self._llm.draw_sample(text)

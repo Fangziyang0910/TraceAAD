@@ -2,8 +2,7 @@
 
 Faithful port of reference_code/CALM verbal operators, pool/collapse,
 numeric refine, and accept/reject logic. LLM backend uses ``LLM.draw_sample``;
-evaluation uses ``SecureEvaluator``. Injection/simplification detectors match
-current prompt text (upstream GitHub still matched obsolete wording).
+evaluation uses ``SecureEvaluator``. Injection/simplification detectors retain the pinned upstream wording.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from baselines.shared.observability import (
     reset_sample_failures,
 )
 from core import Evaluation, LLM, SecureEvaluator
-from baselines.shared.sampling import SampleTrimmer
+from core.code import function_from_source, parse_program
 from baselines.shared.checkpoint import save_checkpoint
 from .numeric_refine import code_signature, run_numeric_refinement
 from .parse import (
@@ -236,9 +235,12 @@ class CALM:
     # ------------------------------------------------------------------ #
 
     def _code_to_program(self, code: str):
-        func = SampleTrimmer.sample_to_function(code, self._template_program_str)
-        program = (replace_function(func, self._template_program_str)
-                   if func is not None else None)
+        extracted = get_code(code) if '```' in code else code
+        if not isinstance(extracted, str) or extract_function_from_string(extracted) is None:
+            return None, None
+        template = parse_program(self._template_program_str)
+        func = function_from_source(extracted, template.functions[0].name)
+        program = replace_function(func, template) if func else None
         return func, program
 
     def _evaluate_code(self, code: str) -> tuple:
@@ -435,7 +437,7 @@ class CALM:
             if isinstance(code, list):
                 code = code[0]
 
-            step_func = extract_function_from_string(code, self._function_name)
+            step_func = extract_function_from_string(code)
             if step_func is None:
                 res.append(self._hp.reward_function_not_exist)
                 prompt.record_trial({

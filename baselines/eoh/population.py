@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import math
+import random
 from threading import Lock
 from typing import List
-import numpy as np
 
 from core import Function
 
@@ -55,14 +55,11 @@ class Population:
 
         valid_pop = [func for func in pop if self._is_valid_score(func.score)]
         unique = []
-        seen_code = set()
         seen_score = set()
         for func in sorted(valid_pop, key=lambda f: f.score):
-            code_key = str(func)
             score_key = float(func.score)
-            if code_key in seen_code or score_key in seen_score:
+            if score_key in seen_score:
                 continue
-            seen_code.add(code_key)
             seen_score.add(score_key)
             unique.append(func)
 
@@ -94,10 +91,10 @@ class Population:
 
     def has_duplicate_function(self, func: str | Function) -> bool:
         for f in self._population:
-            if str(f) == str(func) or func.score == f.score:
+            if func.score == f.score:
                 return True
         for f in self._next_gen_pop:
-            if str(f) == str(func) or func.score == f.score:
+            if func.score == f.score:
                 return True
         return False
 
@@ -107,6 +104,4 @@ class Population:
             raise ValueError("Cannot select from an empty EoH population.")
         func = sorted(funcs, key=lambda f: f.score)
         p = [1 / (r + 1 + len(func)) for r in range(len(func))]
-        p = np.array(p)
-        p = p / np.sum(p)
-        return np.random.choice(func, p=p)
+        return random.choices(func, weights=p, k=1)[0]

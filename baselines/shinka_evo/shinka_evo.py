@@ -287,7 +287,7 @@ class ShinkaEvo:
                     "archive_inspirations": [program.id for program in archive_inspirations],
                     "top_k_inspirations": [program.id for program in top_k_inspirations],
                 })
-                previous_error = last_error
+                previous_error = None
                 prompt = self._sampler.build_prompt(
                     parent,
                     archive_inspirations,
@@ -521,7 +521,7 @@ class ShinkaEvo:
                 counts_budget=False,
             )
             metadata["novelty_explanation"] = f"Novelty request failed: {exc}"
-            return False, embedding, metadata
+            return True, embedding, metadata
         log_llm_call(
             self, llm=self._novelty_llm,
             method="shinka_evo",
@@ -540,13 +540,17 @@ class ShinkaEvo:
     def _compute_embedding(self, program: str) -> list[float]:
         if self._embedding_fn is None:
             return []
-        embedding = self._embedding_fn(program)
-        return [float(value) for value in embedding] if embedding is not None else []
+        try:
+            embedding = self._embedding_fn(program[:10000])
+            return [float(value) for value in embedding] if embedding is not None else []
+        except Exception as exc:
+            self._register_event('embedding_failed', {'error': str(exc)})
+            return []
 
     @staticmethod
     def _is_novelty_response_accept(response: str) -> bool:
         content = (response or "").strip().upper()
-        return content.startswith("NOVEL") or content.startswith("**NOVEL**")
+        return not content or content.startswith("NOVEL") or content.startswith("**NOVEL**")
 
     @staticmethod
     def _novelty_prompt(proposed_code: str, most_similar: ShinkaProgram | None) -> str:

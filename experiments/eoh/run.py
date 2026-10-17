@@ -1,4 +1,4 @@
-"""Run one paper-aligned EoH experiment at the unified 1000-eval budget."""
+"""Run one official-source EoH experiment at the unified 1000-eval budget."""
 
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ PAPER_GENERATIONS = 20
 OPERATORS = ("e1", "e2", "m1", "m2")
 
 
-def paper_population_size(task: str) -> int:
-    return 20 if task == "online_bin_packing" else 10
+def official_population_size(task: str) -> int:
+    return 5
 
 
 @dataclass(slots=True)
@@ -40,7 +40,7 @@ class RunSpec:
     generations: int = PAPER_GENERATIONS
     budget: int | None = None
     pop_size: int | None = None
-    parents: int = 5
+    parents: int = 2
     eval_workers: int | None = None
     output_tokens: int = 16384
     seed: int = 0
@@ -50,7 +50,7 @@ class RunSpec:
 
     @property
     def effective_pop_size(self) -> int:
-        return self.pop_size or paper_population_size(self.task)
+        return self.pop_size or official_population_size(self.task)
 
     @property
     def effective_budget(self) -> int:
@@ -138,7 +138,7 @@ def run_experiment(spec: RunSpec) -> Path:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run one paper-aligned EoH experiment.")
+    parser = argparse.ArgumentParser(description="Run one official-source EoH experiment.")
     parser.add_argument("--task", choices=ALL_TASKS, required=True)
     parser.add_argument("--backend", choices=tuple(BACKENDS), default=DEFAULT_BACKEND)
     parser.add_argument("--base-url")
@@ -147,7 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--generations", type=int, default=PAPER_GENERATIONS)
     parser.add_argument("--budget", type=int)
     parser.add_argument("--pop-size", type=int)
-    parser.add_argument("--parents", type=int, default=5)
+    parser.add_argument("--parents", type=int, default=2)
     parser.add_argument("--eval-workers", type=int)
     parser.add_argument("--output-tokens", type=int, default=16384)
     parser.add_argument("--seed", type=int, default=0)

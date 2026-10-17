@@ -46,6 +46,8 @@ uv run python -m experiments.infra.local_queue \
 
 TraceAAD 入口为 [run.py](traceaad/run.py) 与 [launch_host.py](traceaad/launch_host.py)。基线批量启动统一使用 [local_queue.py](infra/local_queue.py)，支持的方法见其 `--help`。各方法的 `run.py` 执行一路搜索。改变条件时使用新批次名。
 
+DeltaEvolve 使用 `--method deltaevolve`；单路入口为 `experiments.deltaevolve.run`，支持 `--dry-run`。论文机制、缺失细节的补充规则与 embedding 配置见[实现说明](../baselines/deltaevolve/README.md)。
+
 ## 2. 查询结果
 
 将 `MANIFEST_PATH` 替换为批次清单路径，将 `RUN_DIR` 替换为运行目录。

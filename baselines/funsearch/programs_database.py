@@ -189,7 +189,7 @@ class Island:
 
         indices = np.argsort(scores)
         sorted_implementations = [implementations[i] for i in indices]
-        return self._generate_prompt(sorted_implementations), len(sorted_implementations)
+        return self._generate_prompt(sorted_implementations), len(sorted_implementations) + 1
 
     def _generate_prompt(self, implementations: Sequence[Function]) -> str:
         """Creates a prompt containing a sequence of function `implementations`."""

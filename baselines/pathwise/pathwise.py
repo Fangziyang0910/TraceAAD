@@ -328,12 +328,6 @@ class PathWise:
             log_event(self, event='sample_rejected', status='parse_failed',
                       sample_order=self._tot_sample_nums, counts_budget=True)
 
-    def _init_sampling_kwargs(self) -> dict:
-        temperature = getattr(self._policy_llm, "temperature", None)
-        if isinstance(temperature, (int, float)):
-            return {"temperature": temperature + 0.3}
-        return {}
-
     def _initialize_population(self):
         candidates = self._initial_candidates
         for i in range(self._initialization_index, self._init_pop_size):
@@ -345,7 +339,7 @@ class PathWise:
             self._debug_print("PathWise Initialization Prompt", prompt)
             sample_start = time.time()
             try:
-                response = self._policy_llm.draw_sample(prompt, **self._init_sampling_kwargs())
+                response = self._policy_llm.draw_sample(prompt)
             except Exception as exc:
                 record_sample_failure(
                     self,
@@ -516,22 +510,29 @@ class PathWise:
             graph: PathWiseGraph,
             action_idx: int,
             rollout_idx: int,
+            prompt=None,
+            initial_sample=None,
     ) -> _Rollout:
         parent_nodes = [node for node in state if node.node_id in action.parents]
-        prompt = self._prompt.world_model_prompt(
-            action,
-            parent_nodes,
-            self._world_model_reflection,
-            perturbation=self._world_model_perturbation(),
-        )
+        if prompt is None:
+            prompt = self._prompt.world_model_prompt(
+                action, parent_nodes, self._world_model_reflection,
+                perturbation=self._world_model_perturbation())
         self._debug_print("PathWise World Model Prompt", prompt)
         total_sample_time = 0.0
         for attempt in range(self._max_world_model_retries + 1):
             if not self._has_budget():
                 break
             sample_start = time.time()
+            transport_calls = None
             try:
-                response = self._world_model_llm.draw_sample(prompt)
+                if attempt == 0 and initial_sample is not None:
+                    response, sample_time, transport_calls, initial_prompt = initial_sample
+                    if isinstance(response, Exception):
+                        raise response
+                else:
+                    response = self._world_model_llm.draw_sample(prompt)
+                    sample_time = time.time() - sample_start
             except Exception as exc:
                 total_sample_time += time.time() - sample_start
                 record_sample_failure(
@@ -553,17 +554,16 @@ class PathWise:
                         "World-model request failed.",
                     )
                 continue
-            sample_time = time.time() - sample_start
             total_sample_time += sample_time
             parsed = PathWiseSampler.parse_world_model_response(response, self._template_program)
             log_llm_call(
-                self, llm=self._world_model_llm,
+                self, llm=self._world_model_llm, transport_calls=transport_calls,
                 method="pathwise",
                 stage="world_model",
                 role="world_model",
                 operator="world_model",
                 sample_order=self._tot_sample_nums + 1,
-                prompt=prompt,
+                prompt=initial_prompt if attempt == 0 and initial_sample is not None else prompt,
                 response=response,
                 parse_success=parsed is not None,
                 sample_time=sample_time,
@@ -606,15 +606,38 @@ class PathWise:
             state: list[PathWiseNode],
             graph: PathWiseGraph,
     ) -> list[list[_Rollout]]:
-        all_rollouts: list[list[_Rollout]] = []
+        # Upstream generates the rollout batch before evaluating any candidate.
+        batches = []
+        remaining = self._max_sample_nums - self._tot_sample_nums if self._max_sample_nums is not None else None
         for action_idx, action in enumerate(actions):
-            action_rollouts = []
+            parents = [node for node in state if node.node_id in action.parents]
+            samples = []
+            prompts = []
             for rollout_idx in range(self._num_rollouts):
+                if remaining is not None and remaining <= 0:
+                    break
+                prompt = self._prompt.world_model_prompt(action, parents, self._world_model_reflection,
+                    perturbation=self._world_model_perturbation())
+                start = time.time()
+                try:
+                    response = self._world_model_llm.draw_sample(prompt)
+                except Exception as exc:
+                    response = exc
+                samples.append((response, time.time() - start,
+                                copy.deepcopy(getattr(self._world_model_llm, 'last_calls', None)), prompt))
+                prompts.append(prompt)
+                if remaining is not None:
+                    remaining -= 1
+            batches.append((prompts, samples))
+        all_rollouts = []
+        for action_idx, (action, (prompts, samples)) in enumerate(zip(actions, batches)):
+            action_rollouts = []
+            for rollout_idx, sample in enumerate(samples):
                 if not self._has_budget():
                     break
-                action_rollouts.append(
-                    self._world_model_rollout(action, state, graph, action_idx, rollout_idx)
-                )
+                # Upstream retries with the last messages built for this action.
+                action_rollouts.append(self._world_model_rollout(action, state, graph, action_idx,
+                    rollout_idx, prompt=prompts[-1], initial_sample=sample))
             all_rollouts.append(action_rollouts)
         return all_rollouts
 
@@ -740,14 +763,32 @@ class PathWise:
         graph.add_edge(edge)
 
         remove_ids = list(selected.action.parents)
-        if self._preserve_best_nodes_innersteps and self._best_node is not None:
-            remove_ids = [node_id for node_id in remove_ids if node_id != self._best_node.node_id]
+        if self._preserve_best_nodes_innersteps and graph.nodes:
+            best_score = min(node.score for node in graph.nodes.values())
+            winners = [node.node_id for node in graph.nodes.values() if node.score == best_score]
+            if len(winners) == 1:
+                remove_ids = [node_id for node_id in remove_ids if node_id != winners[0]]
         graph.remove_nodes(remove_ids)
         selected.node = selected_node
         return edge
 
+    def _policy_state(self, graph):
+        nodes = list(graph.nodes.values())
+        used = graph.parent_ids()
+        roots = [n for n in nodes if n.node_id in self._root_node_ids and n.node_id not in used]
+        entailed = [n for n in nodes if n.node_id not in self._root_node_ids]
+        if not self._preserve_best_nodes_innersteps:
+            return roots + entailed
+        state = entailed + roots
+        if nodes:
+            score = min(n.score for n in nodes)
+            winners = [n for n in nodes if n.score == score]
+            if len(winners) == 1 and all(n.node_id != winners[0].node_id for n in state):
+                state.append(winners[0])
+        return state
+
     def _inner_entailment_step(self, graph: PathWiseGraph) -> PathWiseNode | None:
-        state = graph.get_state()
+        state = self._policy_state(graph)
         if not state:
             return None
         actions = self._policy_actions(state, graph)
@@ -798,11 +839,11 @@ class PathWise:
 
         final_node = None
         for step in range(self._max_inner_steps):
-            if not self._has_budget() or len(graph.get_state()) <= 1:
+            if not self._has_budget() or not graph.get_state():
                 break
             self._inner_step = step
             final_node = self._inner_entailment_step(graph)
-            if final_node is None:
+            if len(graph.get_state()) <= 1:
                 break
         if final_node is None:
             final_node = self._fallback_final_node(graph)
@@ -811,22 +852,19 @@ class PathWise:
     def _fallback_final_node(self, graph: PathWiseGraph) -> PathWiseNode | None:
         if not self._population.nodes or not self._has_budget():
             return None
-        best = min(self._population.nodes, key=lambda node: node.score)
-        node = self._evaluate_function(
-            best.function,
-            "fallback",
-            "Best from current population.",
-            "Fallback from population.",
-            node_id=f"fallback_{self._outer_iteration}",
-            parent_ids=[],
-            graph=graph,
-        )
-        if node is None:
+        evaluated = []
+        for candidate in self._population.nodes:
+            if not self._has_budget():
+                break
+            node = self._evaluate_function(candidate.function, "fallback", "Best from current population.",
+                "Fallback from population.", node_id=f"fallback_{self._outer_iteration}_{len(evaluated)}",
+                parent_ids=[], graph=graph)
+            if node is not None:
+                evaluated.append(node)
+        if not evaluated:
             return None
+        node = min(evaluated, key=lambda n: n.score)
         graph.add_node(node)
-        log_event(self, event="entailment_fallback", method="pathwise", status="fallback",
-                  sample_order=self._tot_sample_nums, node_id=node.node_id,
-                  source_node_id=best.node_id, counts_budget=True)
         return node
 
     def _leaf_nodes(self, graph: PathWiseGraph) -> list[PathWiseNode]:

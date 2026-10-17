@@ -21,9 +21,12 @@ class Function:
     operator: str | None = "Unknown"
     source_prefix: str = ""
     source_suffix: str = ""
+    raw_source: str | None = None
     algorithm = ""
 
     def __str__(self):
+        if self.raw_source is not None:
+            return self.raw_source
         returns = f" -> {self.return_type}" if self.return_type else ""
         code = f"def {self.name}({self.args}){returns}:\n"
         if self.docstring:
@@ -35,6 +38,9 @@ class Function:
             value = value.strip("\n")
         if name == "docstring" and value is not None and '"""' in value:
             value = value.strip().replace('"""', "")
+        if name in {"name", "args", "body", "return_type", "docstring", "source_prefix", "source_suffix"}:
+            if name in self.__dict__ and self.__dict__[name] != value:
+                super().__setattr__("raw_source", None)
         super().__setattr__(name, value)
 
     def __eq__(self, other):
@@ -110,3 +116,18 @@ def replace_function(function: str | Function, template: str | Program) -> Progr
         return Program(preface="", functions=[function])
     template.functions[0].body = function.body
     return template
+
+
+def function_from_source(source: str, entrypoint: str) -> Function | None:
+    """Represent a method's accepted module without changing its callable contract."""
+    try:
+        tree = ast.parse(source)
+        node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == entrypoint)
+        function = parse_function(ast.get_source_segment(source, node))
+        lines = source.splitlines(keepends=True)
+        function.source_prefix = ''.join(lines[:node.lineno - 1]) or '\n'
+        function.source_suffix = ''.join(lines[node.end_lineno:])
+        function.raw_source = source
+        return function
+    except (SyntaxError, ValueError, StopIteration):
+        return None

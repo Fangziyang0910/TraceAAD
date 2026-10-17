@@ -47,7 +47,8 @@ from baselines.shared.observability import (
     shutdown_executor,
 )
 from core import Evaluation, LLM, Function, Program, SecureEvaluator
-from baselines.shared.sampling import SampleTrimmer
+from types import SimpleNamespace
+from .sampler import response_to_function
 from baselines.shared.profiler import ProfilerBase
 from core.code import parse_function, parse_program, replace_function
 
@@ -67,7 +68,6 @@ class ReEvo:
                  resume_mode: bool = False,
                  debug_mode: bool = False,
                  max_consecutive_sample_failures: int = 20,
-                 init_temperature_offset: float = 0.3,
                  multi_thread_or_process_eval: Literal['thread', 'process'] = 'thread',
                  **kwargs):
         """Reflective Evolution following the original ReEvo mechanics.
@@ -81,10 +81,6 @@ class ReEvo:
         self._pop_size = pop_size
         self._init_pop_size = init_pop_size
         self._mutation_rate = mutation_rate
-        if not np.isfinite(init_temperature_offset) or init_temperature_offset < 0:
-            raise ValueError('init_temperature_offset must be finite and nonnegative')
-        self._init_temperature_offset = init_temperature_offset
-
         self._num_samplers = num_samplers
         self._num_evaluators = num_evaluators
         self._resume_mode = resume_mode
@@ -97,7 +93,7 @@ class ReEvo:
         self._template_program: Program = parse_program(self._template_program_str)
 
         self._population = Population(pop_size=self._pop_size)
-        self._sampler = SampleTrimmer(llm)
+        self._sampler = SimpleNamespace(llm=llm)
         self._evaluator = SecureEvaluator(evaluation, debug_mode=debug_mode, **kwargs)
         self._profiler = profiler
 
@@ -197,7 +193,7 @@ class ReEvo:
         sample_start = time.time()
         sample_order = self._tot_sample_nums + 1
         try:
-            generated_code = self._sampler.draw_sample(prompt, **llm_kwargs)
+            generated_code = self._sampler.llm.draw_sample(prompt, **llm_kwargs)
         except Exception as exc:
             record_sample_failure(
                 self,
@@ -212,7 +208,7 @@ class ReEvo:
         sample_time = time.time() - sample_start
         reset_sample_failures(self)
 
-        func = SampleTrimmer.sample_to_function(generated_code, self._template_program)
+        func = response_to_function(generated_code, self._template_program)
         log_llm_call(
             self,
             stage='generate',
@@ -259,12 +255,6 @@ class ReEvo:
         )
         return result
 
-    def _init_sampling_kwargs(self) -> dict:
-        temperature = getattr(self._sampler.llm, 'temperature', None)
-        if isinstance(temperature, (int, float)):
-            return {'temperature': temperature + self._init_temperature_offset}
-        return {}
-
     def _evaluate_seed(self) -> Function:
         seed_func = copy.deepcopy(self._function_to_evolve)
         seed = self._evaluate_function(
@@ -287,7 +277,7 @@ class ReEvo:
         for _ in range(self._init_pop_size):
             if not self._has_budget():
                 break
-            func = self._sample_evaluate_register(prompt, 'init', **self._init_sampling_kwargs())
+            func = self._sample_evaluate_register(prompt, 'init')
             if func is not None:
                 accepted.append(func)
 
@@ -296,8 +286,10 @@ class ReEvo:
 
     def _selection_pool(self) -> list[Function]:
         pool = list(self._population.valid_functions())
+        if not pool:
+            raise RuntimeError("All individuals are invalid, as in upstream ReEvo.")
         if self._elite_function is not None and Population.is_valid_score(self._elite_function.score):
-            if not any(str(func) == str(self._elite_function) for func in pool):
+            if not any(func.__dict__ == self._elite_function.__dict__ for func in pool):
                 pool = [copy.deepcopy(self._elite_function)] + pool
         return pool
 
@@ -401,7 +393,7 @@ class ReEvo:
 
         prompt = ReEvoPrompt.get_elist_mutation_prompt(
             self._task_description_str,
-            self._long_term_reflection_str,
+            self._long_term_reflection_str + self._external_knowledge,
             self._elite_function,
         )
         self._debug_print('Elitist Mutation Prompt', prompt)
@@ -433,9 +425,6 @@ class ReEvo:
             func = self._crossover(parents, reflection)
             if func is not None:
                 crossed_population.append(func)
-
-        if not crossed_population:
-            return
 
         self._population.set_population(crossed_population, increment_generation=True)
         self._register_population()

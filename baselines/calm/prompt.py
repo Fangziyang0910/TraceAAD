@@ -53,12 +53,8 @@ class Prompt:
         return 'Be very creative and inventive. Generate an efficient algorithm following the template below' in self.prompt
 
     @property
-    def is_injection(self) -> bool:
-        # Fixed to match current prompt_injection text (upstream matched obsolete wording).
-        return (
-            'Inject one novel, meaningful component into the following algorithm '
-            'while preserving its main data flow'
-        ) in self.prompt
+    def is_injection(self):
+        return "Inject a novel, meaningful component into the following algorithm. The component may be self-devised or inspired by ideas from other domains or problems." in self.prompt
 
     @property
     def is_crossover(self) -> bool:
@@ -68,9 +64,8 @@ class Prompt:
         ) in self.prompt
 
     @property
-    def is_simplification(self) -> bool:
-        # Fixed to match current prompt_simplification text (upstream matched obsolete wording).
-        return 'Please create a locally refined version of the following algorithm' in self.prompt
+    def is_simplification(self):
+        return "Please create a simplified and more elegant version of an algorithm by distilling and refining the core ideas" in self.prompt
 
     @property
     def status_str(self) -> str:
@@ -284,7 +279,4 @@ class PromptBuilder:
             Except for the idea and code, do not give additional explanations or comments.\
         """)
 
-        if 'def solve(' in self.algorithm_template:
-            requirements = requirements.replace('Be a single Python function formatted within Python code blocks.',
-                'Be a complete Python program formatted within Python code blocks; helper functions are allowed.')
         return requirements

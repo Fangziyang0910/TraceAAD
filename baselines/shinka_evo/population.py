@@ -428,16 +428,22 @@ class ShinkaArchive:
                 inspirations.append(best)
                 seen.add(best.id)
         num_elites = max(0, int(n * self.elite_selection_ratio))
-        if num_elites > 0 and len(inspirations) < n:
-            elites = sorted(self._eligible_archive_for_parent(parent), key=lambda p: p.combined_score)
-            for elite in elites:
+        on_island = [p for p in self.archived_programs(parent.island_idx) if p.correct]
+        if num_elites > 0 and len(inspirations) < n and parent.island_idx is not None:
+            elites = sorted(on_island, key=lambda p: p.combined_score)
+            for elite in elites[:num_elites + len(seen)]:
                 if len(inspirations) >= n:
                     break
                 if elite.id not in seen:
                     inspirations.append(elite)
                     seen.add(elite.id)
-        if len(inspirations) < n:
-            candidates = [program for program in self._eligible_archive_for_parent(parent) if program.id not in seen]
+        if len(inspirations) < n and parent.island_idx is not None:
+            candidates = [p for p in on_island if p.id not in seen]
+            self.rng.shuffle(candidates)
+            inspirations.extend(candidates[:n - len(inspirations)])
+        if len(inspirations) < n and not self.enforce_island_separation:
+            # Upstream excludes the parent and elites in the global fallback query.
+            candidates = [p for p in self.archived_programs() if p.correct and p.id not in seen]
             self.rng.shuffle(candidates)
             inspirations.extend(candidates[:n - len(inspirations)])
         return inspirations[:n]
@@ -473,6 +479,7 @@ class ShinkaArchive:
         if self.migration_interval <= 0 or current_generation % self.migration_interval != 0:
             return []
         events = []
+        moved = set()
         for source_idx in range(self.num_islands):
             source = self._programs_for_island(source_idx)
             if len(source) <= 1:
@@ -480,6 +487,9 @@ class ShinkaArchive:
             num_migrants = max(1, int(len(source) * self.migration_rate))
             migrants = self._select_migrants(source_idx, num_migrants)
             for migrant in migrants:
+                if migrant.id in moved:
+                    continue
+                moved.add(migrant.id)
                 destinations = [idx for idx in range(self.num_islands) if idx != source_idx]
                 destination = self.rng.choice(destinations)
                 self.islands[source_idx].remove(migrant.id)
@@ -494,7 +504,7 @@ class ShinkaArchive:
         return events
 
     def _select_migrants(self, source_idx: int, count: int) -> list[ShinkaProgram]:
-        programs = self._programs_for_island(source_idx)
+        programs = [p for p in self._programs_for_island(source_idx) if p.correct and p.generation > 0]
         if self.island_elitism:
             best = self._best_in([program for program in programs if program.correct])
             programs = [program for program in programs if best is None or program.id != best.id]

@@ -1,110 +1,60 @@
-from __future__ import annotations
+from pathlib import Path
+from .sampler import filter_code
 
-import copy
-from typing import List
+_COMMON = Path(__file__).with_name('prompts') / 'common'
 
-from core import Function
+def text(name, **values):
+    return (_COMMON / (name + '.txt')).read_text().format(**values)
+
+
+def messages(system, content):
+    return [{'role': 'system', 'content': text(system)}, {'role': 'user', 'content': content}]
 
 
 class ReEvoPrompt:
-    _GENERATOR_SYSTEM = (
-        'You are an expert in the domain of optimization heuristics. '
-        'Your task is to design heuristics that can effectively solve optimization problems. '
-        'Your response outputs Python code and nothing else. Format your code as a Python code string: "```python ...```"'
-    )
-    _REFLECTOR_SYSTEM = (
-        'You are an expert in the domain of optimization heuristics. '
-        'Your task is to give hints to design better heuristics.'
-    )
+    @staticmethod
+    def generator(task, function):
+        return text('user_generator', func_name=function.name, problem_desc=task,
+                    func_desc=function.docstring or '')
 
-    @classmethod
-    def get_pop_init_prompt(cls, task_prompt: str, seed_function: Function) -> str:
-        seed_function = copy.deepcopy(seed_function)
-        func_name = seed_function.name
-        prompt = f'''{task_prompt}
-{seed_function}
-Refer to the format of a trivial design above. Be very creative and give `{func_name}_v2`. Output code only and enclose your code with Python code block: ```python ...```.
-'''
-        return [{'role': 'system', 'content': cls._GENERATOR_SYSTEM}, {'role': 'user', 'content': prompt}]
+    @staticmethod
+    def signature(function, version):
+        returns = f' -> {function.return_type}' if function.return_type else ''
+        return f'def {function.name}_v{version}({function.args}){returns}:'
 
-    @classmethod
-    def _worse_better(cls, indivs: List[Function]) -> tuple[Function, Function]:
-        assert len(indivs) == 2
-        if indivs[0].score == indivs[1].score:
+    @staticmethod
+    def _worse_better(indivs):
+        if len(indivs) != 2 or indivs[0].score == indivs[1].score:
             raise ValueError('ReEvo reflection requires parents with different scores.')
-        indivs = copy.deepcopy(indivs)
-        indivs.sort(key=lambda function: function.score, reverse=True)
-        return indivs[0], indivs[1]
+        return sorted(indivs, key=lambda f: f.score, reverse=True)
 
     @classmethod
-    def get_short_term_reflection_prompt(cls, task_prompt: str, indivs: List[Function]) -> str:
+    def get_pop_init_prompt(cls, task, function):
+        return messages('system_generator', cls.generator(task, function) + '\n' +
+                        text('seed', seed_func=str(function), func_name=function.name))
+
+    @classmethod
+    def get_short_term_reflection_prompt(cls, task, indivs):
         worse, better = cls._worse_better(indivs)
-        prompt = f'''Below are two {better.name} functions for {task_prompt}
-
-You are provided with two code versions below, where the second version performs better than the first one.
-
-[Worse code]
-{worse}
-
-[Better code]
-{better}
-
-You respond with some hints for designing better heuristics, based on the two code versions and using less than 20 words.'''
-        return [{'role': 'system', 'content': cls._REFLECTOR_SYSTEM}, {'role': 'user', 'content': prompt}]
+        return messages('system_reflector', text('user_reflector_st', func_name=better.name,
+            problem_desc=task, func_desc=better.docstring or '',
+            worse_code=filter_code(str(worse)), better_code=filter_code(str(better))))
 
     @classmethod
-    def get_crossover_prompt(cls, task_prompt: str, short_term_reflection_prompt: str, indivs: List[Function]) -> str:
+    def get_crossover_prompt(cls, task, reflection, indivs):
         worse, better = cls._worse_better(indivs)
-        func_name = worse.name
-        worse.name = f'{worse.name}_v0'
-        better.name = f'{better.name}_v1'
-        prompt = f'''{task_prompt}
+        return messages('system_generator', text('crossover', user_generator=cls.generator(task, better),
+            func_signature0=cls.signature(worse, 0), func_signature1=cls.signature(better, 1),
+            worse_code=filter_code(str(worse)), better_code=filter_code(str(better)),
+            reflection=reflection, func_name=better.name))
 
-[Worse code]
-{worse}
-
-[Better code]
-{better}
-
-[Reflection]
-{short_term_reflection_prompt}
-
-[Improved code]
-Please write an improved function `{func_name}_v2`, according to the reflection. Output code only and enclose your code with Python code block: ```python ...```.
-'''
-        return [{'role': 'system', 'content': cls._GENERATOR_SYSTEM}, {'role': 'user', 'content': prompt}]
+    @staticmethod
+    def get_long_term_reflection_prompt(task, prior, reflections):
+        return messages('system_reflector', text('user_reflector_lt', problem_desc=task,
+            prior_reflection=prior, new_reflection='\n'.join(reflections)))
 
     @classmethod
-    def get_long_term_reflection_prompt(
-            cls,
-            task_prompt: str,
-            prior_long_term_reflection: str,
-            new_short_term_reflections: List[str],
-    ) -> str:
-        new_short_term_reflections = '\n'.join(new_short_term_reflections)
-        prompt = f'''Below is your prior long-term reflection on designing heuristics for {task_prompt}
-{prior_long_term_reflection}
-
-Below are some newly gained insights.
-{new_short_term_reflections}
-
-Write constructive hints for designing better heuristics, based on prior reflections and new insights and using less than 50 words.'''
-        return [{'role': 'system', 'content': cls._REFLECTOR_SYSTEM}, {'role': 'user', 'content': prompt}]
-
-    @classmethod
-    def get_elist_mutation_prompt(cls, task_prompt: str, long_term_reflection_prompt: str, elite_function: Function) -> str:
-        elite_function = copy.deepcopy(elite_function)
-        func_name = elite_function.name
-        elite_function.name = f'{elite_function.name}_v1'
-        prompt = f'''{task_prompt}
-
-[Prior reflection]
-{long_term_reflection_prompt}
-
-[Code]
-{elite_function}
-
-[Improved code]
-Please write a mutated function `{func_name}_v2`, according to the reflection. Output code only and enclose your code with Python code block: ```python ...```.
-'''
-        return [{'role': 'system', 'content': cls._GENERATOR_SYSTEM}, {'role': 'user', 'content': prompt}]
+    def get_elist_mutation_prompt(cls, task, reflection, elite):
+        return messages('system_generator', text('mutation', user_generator=cls.generator(task, elite),
+            reflection=reflection, func_signature1=cls.signature(elite, 1),
+            elitist_code=filter_code(str(elite)), func_name=elite.name))

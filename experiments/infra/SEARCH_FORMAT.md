@@ -53,7 +53,7 @@ TraceAAD、基线和已转换的历史结果均使用个体编号。源码记录
 
 ## 最终选择与测试
 
-当前 TraceAAD 的 `selection.json` 中，`results` 和 `finalists` 为空；`selected_node` 指向训练最好个体。`summary.json` 中的 `selection_evaluations` 为零。基线仍进行最终重评，规则见[实验条件](../PROTOCOL.md#搜索预算与最终选择)。
+当前 TraceAAD 和基线的 `selection.json` 中，`results` 和 `finalists` 为空；`selected_node` 直接指向训练最好个体。`summary.json` 中的 `selection_evaluations` 为零，不进行候选重评与重新选择。规则见[实验条件](../PROTOCOL.md#搜索预算与最终选择)。
 
 测试结果按最终个体编号关联，核对任务与评价条件。`verification` 是读取器的核验结果，具体核验范围以 [result_storage.py](result_storage.py) 为准。
 

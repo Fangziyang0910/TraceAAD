@@ -81,9 +81,7 @@ class MCTS:
 
     def uct(self, node: MCTSNode, eval_remain):
         self.exploration_constant = (self.exploration_constant_0) * eval_remain
-        q_range = self.q_max - self.q_min
-        exploitation = 0.0 if abs(q_range) < self.epsilon else (node.Q - self.q_min) / q_range
-        return exploitation + self.exploration_constant * math.sqrt(
+        return (node.Q - self.q_min) / (self.q_max - self.q_min) + self.exploration_constant * math.sqrt(
             math.log(node.parent.visits + 1) / node.visits
         )
 

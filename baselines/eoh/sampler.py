@@ -1,89 +1,83 @@
 from __future__ import annotations
 
+import ast
 import re
-from typing import Any, Callable, Tuple
 
-from core import LLM, Function, Program
-
-from baselines.shared.sampling import SampleTrimmer
-
-
-def log_sampler_llm_call(profiler: Any, **payload) -> None:
-    logger = getattr(profiler, "log_llm_call", None)
-    if callable(logger):
-        logger(**payload)
-
-
-def trim_braced_thought(response: str) -> str | None:
-    try:
-        bracketed_texts = re.findall(r"\{.*?\}", response)
-        return bracketed_texts[0]
-    except Exception:
-        pass
-    # Fallback: 当 LLM 不输出花括号格式的思想时（如关闭思考的模型直接输出
-    # 纯代码），用函数 docstring 作为思想的替代，避免样本被误拒。
-    try:
-        doc_match = re.search(r'"""(.*?)"""', response, re.S)
-        if doc_match:
-            return doc_match.group(1).strip()
-    except Exception:
-        pass
-    return None
-
-
-def sample_thought_and_function(
-        llm: Any,
-        prompt: str,
-        template_program: Any,
-        *,
-        profiler: Any = None,
-        operator: str | None = None,
-        sample_order: int | None = None,
-        stage: str = "generate",
-        attach_entire_code: bool = False,
-        postprocess: Callable[[Any], Any] | None = None,
-):
-    response = llm.draw_sample(prompt)
-    thought = trim_braced_thought(response)
-    code = response
-    function = SampleTrimmer.sample_to_function(code, template_program)
-
-    if function is not None and attach_entire_code:
-        function.entire_code = str(SampleTrimmer.sample_to_program(code, template_program))
-    if function is not None and postprocess is not None:
-        function = postprocess(function)
-
-    log_sampler_llm_call(
-        profiler,
-        llm=llm,
-        stage=stage,
-        operator=operator,
-        sample_order=sample_order,
-        prompt=prompt,
-        response=response,
-        parsed_thought=thought,
-        thought_parse_success=thought is not None,
-        function_parse_success=function is not None,
-    )
-    return thought, function
+from core.code import function_from_source, parse_program
 
 
 class EoHSampler:
-    def __init__(self, llm: LLM, template_program: str | Program, profiler=None):
+    # EoH 47254578, eoh/evolution.py::_extract and _call_llm.
+    def __init__(self, llm, template_program, profiler=None):
         self.llm = llm
-        self._template_program = template_program
+        self._template_program = parse_program(template_program) if isinstance(template_program, str) else template_program
         self._profiler = profiler
 
-    def get_thought_and_function(self, prompt: str, *, operator=None, sample_order=None) -> Tuple[str, Function]:
-        return sample_thought_and_function(
-            self.llm,
-            prompt,
-            self._template_program,
-            profiler=self._profiler,
-            operator=operator,
-            sample_order=sample_order,
-        )
+    def _extract(self, response: str):
+        if not response:
+            return [], []
 
-    @classmethod
-    def trim_thought_from_response(cls, response: str) -> str | None:
-        return trim_braced_thought(response)
+        # ── code ──────────────────────────────────────────────────────────────
+        # 1. Fenced code blocks (most reliable)
+        code = re.findall(r'```(?:python)?\n(.*?)```', response, re.DOTALL)
+
+        if not code:
+            # 2. Locate the first top-level Python statement at the start of a line
+            #    (import / from / def / class / decorator), then trim trailing prose
+            #    by iteratively removing the last line until the snippet parses.
+            start = re.search(r'^(?:import |from |def |class |@)', response, re.MULTILINE)
+            if start:
+                candidate = response[start.start():].strip()
+                lines = candidate.splitlines()
+                for trim in range(len(lines)):
+                    snippet = '\n'.join(lines[:len(lines) - trim]).strip()
+                    if not snippet:
+                        break
+                    try:
+                        ast.parse(snippet)
+                        code = [snippet]
+                        break
+                    except SyntaxError:
+                        continue
+
+        # Strip any leading {description} line the LLM sometimes puts inside the code block
+        code = [re.sub(r'^\s*\{[^}]*\}\s*\n+', '', c, flags=re.DOTALL).strip() for c in code]
+        code = [c for c in code if c]
+
+        # ── algorithm description ──────────────────────────────────────────────
+        # Search only in text BEFORE the code to avoid matching Python dict literals.
+        if '```' in response:
+            pre_code = response[:response.find('```')].strip()
+        elif code:
+            # Find where the extracted code begins in the original response
+            idx = response.find(code[0][:60]) if code[0] else -1
+            pre_code = response[:idx].strip() if idx > 0 else response.strip()
+        else:
+            pre_code = response.strip()
+
+        # Require at least 8 chars to skip empty {}, single-letter vars, dict snippets
+        algorithm = re.findall(r'\{([^{}]{8,})\}', pre_code)
+
+        if not algorithm and pre_code:
+            # Fall back: everything before the code is treated as the description
+            algorithm = [pre_code]
+
+        return algorithm, code
+
+    def get_thought_and_function(self, prompt, *, operator=None, sample_order=None):
+        for attempt in range(4):
+            response = self.llm.draw_sample(prompt)
+            algorithms, codes = self._extract(response)
+            logger = getattr(self._profiler, 'log_llm_call', None)
+            if callable(logger):
+                logger(llm=self.llm, stage='generate', operator=operator,
+                       sample_order=sample_order, attempt=attempt, prompt=prompt,
+                       response=response, thought_parse_success=bool(algorithms),
+                       function_parse_success=bool(codes))
+            if algorithms and codes:
+                code = codes[0]
+                missing = [line for line in self._template_program.preface.splitlines()
+                           if line.startswith(('import ', 'from ')) and line not in code]
+                code = '\n'.join(missing + [code])
+                return algorithms[0], function_from_source(code, self._template_program.functions[0].name)
+        return None, None

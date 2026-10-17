@@ -31,7 +31,6 @@ from datetime import datetime
 from pathlib import Path
 from traceaad.storage import append_jsonl, read_json, seal_calls, write_json
 from experiments.infra.result_storage import Programs
-from core.evaluate import EVALUATION_SEED
 from core.scheduling import SchedulerError
 
 # Fields that are safe to log from an LLM object (no secrets).
@@ -163,12 +162,14 @@ class ProfilerBase:
             meta = {'id': order, 'fitness': fitness,
                     'score': fitness,
                     'valid': valid, 'action': function.operator or 'unknown',
-                    'idea': getattr(function, 'algorithm', '') or '', 'parent_id': None, 'depth': 0}
+                    'idea': getattr(function, 'algorithm', '') or '',
+                    'parent_id': getattr(function, 'parent_id', None),
+                    'depth': getattr(function, 'depth', 0)}
             if valid and (self._canonical_best is None or fitness < self._canonical_best['fitness']):
                 self._canonical_best = meta
         attempt = {'id': order, 'action': function.operator or 'unknown',
                    'idea': getattr(function, 'algorithm', '') or '', 'program_id': order if meta else None,
-                   'parent_id': None, 'repair_of': None, 'function': str(function),
+                   'parent_id': getattr(function, 'parent_id', None), 'repair_of': None, 'function': str(function),
                    'sample_time': function.sample_time, 'evaluate_time': function.evaluate_time,
                    'status': 'valid' if valid else 'invalid_output', 'call_ids': []}
         self._append_jsonl(str(self.run_dir/'events.jsonl'), {
@@ -269,50 +270,22 @@ class ProfilerBase:
     def _elapsed(self):
         return (datetime.now(ZoneInfo('Asia/Shanghai'))-self._process_start_time).total_seconds() + getattr(self, '_resume_elapsed', 0)
 
-    def _freeze_training(self, config):
-        from traceaad.instance_evaluation import InstanceProgramEvaluator
+    def _freeze_training(self):
         from traceaad.storage import committed_rows
         from experiments.infra.result_storage import Programs
-        sources = Programs(self.run_dir)
-        programs = {row["program"]["id"]: row["program"] for row in committed_rows(self.run_dir) if row.get("program")}
-        nodes = [{**p, "code": sources.get(p["id"])} for p in programs.values() if p["valid"]]
-        nodes.sort(key=lambda n: (n['fitness'], n['id']))
-        candidates = nodes[:5]
-        evaluator = InstanceProgramEvaluator(self._evaluation,
-            seeds=config.get('method_params', {}).get('evaluation_seeds', [EVALUATION_SEED]),
-            **{k: v for k, v in self._evaluation._instance_execution.items()
-               if k != 'record_path'})
-        results = []
-        payload = {'final_selection': 'training', 'finalists': [n['id'] for n in candidates]}
-        self._append_jsonl(self._method_events_path, {'kind': 'progress',
-            'ts': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(),
-            'progress': {'phase': 'freeze', 'elapsed': self._elapsed(), 'attempts': self._budget_used,
-                         'started_at': self._process_start_time.isoformat()}})
-        for node in candidates:
-            try:
-                outcome = evaluator.evaluate(node['code'], node['id'])
-            except SchedulerError as exc:
-                payload.update(status='aborted', error_type=type(exc).__name__, error=str(exc))
-                break
-            results.append({'node_id': node['id'], **{k: v for k, v in outcome.items() if k != 'evaluations'}})
-            self._append_jsonl(self._method_events_path, {'kind': 'progress', 'evaluations': outcome['evaluations'],
-                'ts': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(),
-                'progress': {'phase': 'freeze', 'elapsed': self._elapsed(), 'attempts': self._budget_used,
-                             'started_at': self._process_start_time.isoformat()}})
-        scored = [r for r in results if r['fitness'] is not None]
-        self._canonical_best = None
-        if scored and payload.get('status') != 'aborted':
-            chosen = min(scored, key=lambda r: (r['fitness'], payload['finalists'].index(r['node_id'])))
-            node = next(n for n in candidates if n['id'] == chosen['node_id'])
-            self._canonical_best = {**{k: v for k, v in node.items() if k != 'code'},
-                                    'fitness': chosen['fitness'], 'score': chosen['fitness']}
-            (self.run_dir/'best_program.py').write_text(node['code'], encoding='utf-8')
-            write_json(self.run_dir/'selection.json', {'criterion': 'training',
-                'finalists': payload['finalists'], 'results': results,
-                'selected_node': node['id']})
-        elif 'status' not in payload:
-            payload['status'] = 'selection_failed' if candidates else 'no_valid_root'
-        return {**payload, 'selection_results': results, 'selection_evaluations': len(results)}
+        programs = {row['program']['id']: row['program'] for row in committed_rows(self.run_dir)
+                    if row.get('program') and row['program']['valid']}
+        best = min(programs.values(), key=lambda p: (p['fitness'], p['id']), default=None)
+        self._canonical_best = best
+        if best is None:
+            return {'status': 'no_valid_root', 'final_selection': 'training',
+                    'selection_results': [], 'selection_evaluations': 0}
+        code = Programs(self.run_dir).get(best['id'])
+        (self.run_dir / 'best_program.py').write_text(code, encoding='utf-8')
+        write_json(self.run_dir / 'selection.json', {'criterion': 'training',
+            'finalists': [], 'results': [], 'selected_node': best['id']})
+        return {'final_selection': 'training', 'finalists': [],
+                'selection_results': [], 'selection_evaluations': 0}
 
     def write_run_summary(self, **payload):
         if not self.run_dir or self._finished:
@@ -322,8 +295,8 @@ class ProfilerBase:
             error = getattr(getattr(self._method, '_evaluator', None), 'scheduler_error', None)
             if isinstance(error, SchedulerError):
                 payload.update(status='aborted', error_type=type(error).__name__, error=str(error))
-            if payload.get('status', 'finished') == 'finished' and getattr(self._evaluation, '_instance_execution', None):
-                payload.update(self._freeze_training(config))
+            if payload.get('status', 'finished') == 'finished':
+                payload.update(self._freeze_training())
             status = payload.pop('status', 'finished')
             write_json(self._run_summary_path, {'status': status,
                 'phase': 'finished' if status == 'finished' else 'stopped',
@@ -334,7 +307,8 @@ class ProfilerBase:
                 'num_nodes': self._evaluate_success_program_num, 'candidate_count': self._num_samples,
                 'valid_candidate_count': self._evaluate_success_program_num, 'best': self._canonical_best,
                 'model_calls': self._llm_call_count, 'token_usage': dict(self._token_usage),
-                'evaluation_calls': self._evaluate_success_program_num+self._evaluate_failed_program_num
+                'evaluation_calls': payload.get('search_evaluations',
+                                    self._evaluate_success_program_num+self._evaluate_failed_program_num)
                                     +payload.get('selection_evaluations', 0),
                 'error_count': self._error_count, **payload})
             self._finished = True

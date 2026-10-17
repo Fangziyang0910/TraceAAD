@@ -21,8 +21,6 @@ class CALMTaskHyperparams:
     speed_collapse: float = 0.0
     max_stuck_threshold: int = 1000
     max_steps: int = 500
-    generation_temperature: float = 0.8
-    generation_top_p: float = 0.95
     numeric_refine_variants: int = 4
     numeric_refine_top_k: int = 5
     numeric_refine_parent_limit: int = 2
@@ -69,8 +67,6 @@ TASK_HYPERPARAMS: Dict[str, CALMTaskHyperparams] = {
         profile_reward_gate_non_worse_fraction=0.8294723203513769,
         profile_reward_gate_worst_tolerance=0.06449459786077394,
         max_stuck_threshold=1000,
-        generation_temperature=0.6182571366832558,
-        generation_top_p=0.879554458037353,
         problem_name='online bin packing',
         problem_unit='percent of the gap to the lower bound',
     ),
@@ -96,8 +92,6 @@ TASK_HYPERPARAMS: Dict[str, CALMTaskHyperparams] = {
         profile_reward_gate_non_worse_fraction=0.6083970808062072,
         profile_reward_gate_worst_tolerance=0.044754383774483764,
         max_stuck_threshold=500,
-        generation_temperature=0.9612113151100183,
-        generation_top_p=0.8822595888215602,
         problem_name='traveling salesman',
         problem_unit='length units of the tour',
     ),
@@ -123,8 +117,6 @@ TASK_HYPERPARAMS: Dict[str, CALMTaskHyperparams] = {
         profile_reward_gate_non_worse_fraction=0.6618604523557647,
         profile_reward_gate_worst_tolerance=0.07223349436725184,
         max_stuck_threshold=500,
-        generation_temperature=0.7592716186561026,
-        generation_top_p=0.9340793100759698,
         problem_name='orienteering',
         problem_unit='units of collected reward',
     ),
@@ -150,8 +142,6 @@ TASK_HYPERPARAMS: Dict[str, CALMTaskHyperparams] = {
         profile_reward_gate_non_worse_fraction=0.6993058297429222,
         profile_reward_gate_worst_tolerance=0.03045822541000411,
         max_stuck_threshold=1500,
-        generation_temperature=0.5746373293518763,
-        generation_top_p=0.9037059170405967,
         problem_name='capacitated vehicle routing',
         problem_unit='units of travel distance',
     ),

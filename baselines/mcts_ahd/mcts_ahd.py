@@ -29,6 +29,7 @@ import copy
 import random
 import time
 import traceback
+import numpy as np
 from threading import Thread
 from typing import Optional, Literal
 
@@ -131,15 +132,6 @@ class MCTS_AHD:
         self._max_consecutive_sample_failures = max(1, max_consecutive_sample_failures)
         self._search_aborted = False
 
-        # reset _initial_sample_nums_max
-        if self._max_sample_nums is None:
-            self._initial_sample_nums_max = 10 * self._init_pop_size
-        else:
-            self._initial_sample_nums_max = min(
-                self._max_sample_nums,
-                10 * self._init_pop_size
-            )
-
         # multi-thread executor for evaluation
         assert multi_thread_or_process_eval in ['thread', 'process']
         if multi_thread_or_process_eval == 'thread':
@@ -226,7 +218,7 @@ class MCTS_AHD:
                 print(f'Warning: population size {self._pop_size} '
                       f'is not suitable, please reset it to 5.')
 
-    def _sample_evaluate_register(self, prompt, func_only=False, operator=None):
+    def _sample_evaluate_register(self, prompt, func_only=False, operator=None, population=None, father=None):
         """Perform following steps:
         1. Sample an algorithm using the given prompt.
         2. Evaluate it by submitting to the process/thread pool, and get the results.
@@ -234,22 +226,33 @@ class MCTS_AHD:
         """
         sample_start = time.time()
         sample_order = self._tot_sample_nums + 1
-        try:
-            thought, func = self._sampler.get_thought_and_function(
-                self._task_description_str,
-                prompt,
-                operator=operator,
-                sample_order=sample_order,
-            )
-        except Exception as exc:
-            if getattr(self, '_debug_mode', False):
-                raise
-            self._record_sample_failure(
-                exc,
-                prompt=prompt,
-                operator=operator,
-                sample_order=sample_order,
-            )
+        self._last_evaluation_timed_out = False
+        if not self._continue_loop():
+            return False
+        population = self._population.population if population is None else population
+        duplicate_retries = 0
+        while self._continue_loop():
+            try:
+                thought, func = self._sampler.get_thought_and_function(
+                    self._task_description_str, prompt, operator=operator, sample_order=sample_order)
+                if thought is None or func is None:
+                    raise ValueError('MCTS-AHD could not extract an algorithm and code')
+                if duplicate_retries == 0 and self.check_duplicate(population, str(func)):
+                    duplicate_retries += 1
+                    if operator == 'e1':
+                        references = self._sample_e1_references_from_population(population, allow_single=True)
+                        prompt = MAPrompt.get_prompt_e1(self._task_description_str, references, self._function_to_evolve)
+                    elif operator == 'e2' and father is not None:
+                        other = self._select_e2_reference(population, father)
+                        if other is not None:
+                            prompt = MAPrompt.get_prompt_e2(self._task_description_str, [other, father], self._function_to_evolve)
+                    continue
+                break
+            except Exception as exc:
+                if self._debug_mode:
+                    raise
+                self._record_sample_failure(exc, prompt=prompt, operator=operator, sample_order=sample_order)
+        else:
             return False
         self._tot_sample_nums += 1
         sample_time = time.time() - sample_start
@@ -261,12 +264,13 @@ class MCTS_AHD:
         if program is None:
             return False
         # evaluate
-        score, eval_time = self._evaluation_executor.submit(
-            self._evaluator.evaluate_program_record_time,
-            program
+        outcome, eval_time = self._evaluation_executor.submit(
+            self._evaluator.evaluate_program_record_time_with_details, program
         ).result()
+        score = outcome.result
+        self._last_evaluation_timed_out = outcome.failure_kind == 'timeout'
         # register to profiler
-        func.score = score
+        func.score = float(np.round(score, 5)) if score is not None else None
         func.evaluate_time = eval_time
         func.algorithm = thought
         func.sample_time = sample_time
@@ -368,7 +372,7 @@ class MCTS_AHD:
         candidates = list(population)
         if len(candidates) < self._e1_min_refs:
             return copy.deepcopy(candidates) if allow_single else []
-        ref_count = random.randint(self._e1_min_refs, min(self._e1_max_refs, len(candidates)))
+        ref_count = min(random.randint(self._e1_min_refs, self._e1_max_refs), len(candidates))
         return copy.deepcopy(random.choices(candidates, k=ref_count))
 
     def _sample_e1_references_from_root(self, mcts: MCTS, allow_single=False):
@@ -381,7 +385,7 @@ class MCTS_AHD:
             if not allow_single:
                 return []
             return copy.deepcopy(candidates)
-        ref_count = random.randint(self._e1_min_refs, min(self._e1_max_refs, len(candidates)))
+        ref_count = min(random.randint(self._e1_min_refs, self._e1_max_refs), len(candidates))
         return copy.deepcopy(random.choices(candidates, k=ref_count))
 
     @staticmethod
@@ -491,8 +495,10 @@ class MCTS_AHD:
             i = 0
             while i < 3:
                 prompt = MAPrompt.get_prompt_s1(self._task_description_str, path_set, self._function_to_evolve)
-                func = self._sample_evaluate_register(prompt, func_only=True, operator=option)
+                func = self._sample_evaluate_register(prompt, func_only=True, operator=option, population=path_set, father=cur_node.individual)
                 if func is False:
+                    if getattr(self, '_last_evaluation_timed_out', False):
+                        return node_set
                     is_valid_func = False
                     i += 1
                     continue
@@ -510,8 +516,10 @@ class MCTS_AHD:
             i = 0
             while i < 3:
                 prompt = MAPrompt.get_prompt_e1(self._task_description_str, indivs, self._function_to_evolve)
-                func = self._sample_evaluate_register(prompt, func_only=True, operator=option)
+                func = self._sample_evaluate_register(prompt, func_only=True, operator=option, population=[child.individual for child in mcts.root.children], father=cur_node.individual)
                 if func is False:
+                    if getattr(self, '_last_evaluation_timed_out', False):
+                        return node_set
                     is_valid_func = False
                     i += 1
                     continue
@@ -530,8 +538,10 @@ class MCTS_AHD:
                     return node_set
                 prompt = MAPrompt.get_prompt_e2(self._task_description_str, [now_indiv, cur_node.individual],
                                                 self._function_to_evolve)
-                func = self._sample_evaluate_register(prompt, func_only=True, operator=option)
+                func = self._sample_evaluate_register(prompt, func_only=True, operator=option, population=node_set, father=cur_node.individual)
                 if func is False:
+                    if getattr(self, '_last_evaluation_timed_out', False):
+                        return node_set
                     is_valid_func = False
                     i += 1
                     continue
@@ -547,8 +557,10 @@ class MCTS_AHD:
             while i < 3:
                 prompt = MAPrompt.get_prompt_m1(self._task_description_str, cur_node.individual,
                                                 self._function_to_evolve)
-                func = self._sample_evaluate_register(prompt, func_only=True, operator=option)
+                func = self._sample_evaluate_register(prompt, func_only=True, operator=option, population=node_set, father=cur_node.individual)
                 if func is False:
+                    if getattr(self, '_last_evaluation_timed_out', False):
+                        return node_set
                     is_valid_func = False
                     i += 1
                     continue
@@ -564,8 +576,10 @@ class MCTS_AHD:
             while i < 3:
                 prompt = MAPrompt.get_prompt_m2(self._task_description_str, cur_node.individual,
                                                 self._function_to_evolve)
-                func = self._sample_evaluate_register(prompt, func_only=True, operator=option)
+                func = self._sample_evaluate_register(prompt, func_only=True, operator=option, population=node_set, father=cur_node.individual)
                 if func is False:
+                    if getattr(self, '_last_evaluation_timed_out', False):
+                        return node_set
                     is_valid_func = False
                     i += 1
                     continue
@@ -663,7 +677,7 @@ class MCTS_AHD:
                 if len(indivs) == 0:
                     continue
                 prompt = MAPrompt.get_prompt_e1(self._task_description_str, indivs, self._function_to_evolve)
-                func = self._sample_evaluate_register(prompt, func_only=True, operator='e1')
+                func = self._sample_evaluate_register(prompt, func_only=True, operator='e1', population=brothers)
                 if func is False or func.score is None or func.score == float('inf'):
                     continue
                 if self.check_duplicate_obj(brothers, func.score) or self.check_duplicate(brothers, str(func)):
@@ -672,11 +686,6 @@ class MCTS_AHD:
                 self._population.register_function(func)
                 self._add_root_child(mcts, func)
 
-                if self._tot_sample_nums >= self._initial_sample_nums_max:
-                    self._log_message(
-                        f'Note: During initialization, MCTS_AHD gets {len(brothers)} algorithms '
-                        f'after {self._initial_sample_nums_max} trails.')
-                    break
             except Exception:
                 if self._debug_mode:
                     traceback.print_exc()
@@ -716,7 +725,7 @@ class MCTS_AHD:
             if len(brothers) < self._selection_num:
                 self._log_message(
                     f'The search is terminated since MCTS_AHD unable to obtain {self._selection_num} feasible algorithms during initialization. '
-                    f'Please increase the `initial_sample_nums_max` argument (currently {self._initial_sample_nums_max}). '
+                    'No valid initial programs were found within the available budget. '
                     f'Please also check your evaluation implementation and LLM implementation.')
                 return
 

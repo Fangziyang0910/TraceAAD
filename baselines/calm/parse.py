@@ -32,21 +32,32 @@ def get_code(response: str):
     return matches[0] if len(matches) == 1 else matches
 
 
-def extract_function_from_string(file_content: str, function_name: str | None = None):
-    namespace: dict = {}
+def extract_function_from_string(file_content):
+    """
+    Extract the only function defined in the provided Python file content string.
+
+    Args:
+        file_content (str): The Python file content as a string.
+
+    Returns:
+        callable: The extracted function object, if exactly one function is defined.
+
+    Raises:
+        ValueError: If no function or more than one function is found in the string.
+    """
+    namespace = {}
     try:
         exec(file_content, namespace)
-    except Exception:
+    except:
         return None
-    if function_name is not None:
-        value = namespace.get(function_name)
-        return value if callable(value) and hasattr(value, '__code__') else None
-    functions = [
-        value for value in namespace.values()
-        if callable(value) and hasattr(value, '__code__')
-    ]
+
+    # Filter out function objects from the namespace
+    functions = [value for value in namespace.values() if callable(value) and hasattr(value, "__code__")]
+
     if len(functions) != 1:
+        # raise ValueError(f"Expected exactly one function in the string, found {len(functions)}.")
         return None
+
     return functions[0]
 
 

@@ -16,6 +16,7 @@ from experiments.infra.base import (
     build_llm_client,
     build_task,
     resolve_backend,
+    set_random_seed,
 )
 from traceaad.storage import write_json
 from experiments.infra.runner import baseline_run_config, run_baseline_experiment
@@ -84,6 +85,7 @@ class RunSpec:
 
 
 def build_method(spec: RunSpec, log_dir: Path) -> MCTS_AHD:
+    set_random_seed(spec.seed)
     evaluation, _ = build_task(spec.task, spec.eval_workers)
     llm = build_llm_client(
         base_url=spec.base_url,

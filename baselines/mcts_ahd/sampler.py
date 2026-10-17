@@ -4,7 +4,8 @@ import re
 from typing import Tuple
 
 from core import LLM, Function, Program
-from baselines.shared.sampling import SampleTrimmer
+from .prompt import MAPrompt
+from core.code import function_from_source, parse_program
 
 
 class MASampler:
@@ -21,23 +22,40 @@ class MASampler:
             operator: str | None = None,
             sample_order: int | None = None,
     ) -> Tuple[str, Function]:
-        response = self.llm.draw_sample(prompt)
-        thought = self.__class__.trim_thought_from_response(response)
-        code = response
-        function = SampleTrimmer.sample_to_function(code, self._template_program)
-        self._log_llm_call(
-            stage='generate',
-            operator=operator,
-            sample_order=sample_order,
-            prompt=prompt,
-            response=response,
-            parsed_thought=thought,
-            function_parse_success=function is not None,
-        )
-        if thought is None or function is None:
-            return thought, function
-        prompt2 = self.get_prompt_refine(task_description, thought, str(function))
-        describe = self.llm.draw_sample(prompt2, temperature=0)
+        # MCTS-AHD ee9c4f42, Evolution._get_alg: greedy extraction through last return.
+        template = parse_program(self._template_program) if isinstance(self._template_program, str) else self._template_program
+        name = template.functions[0].name
+        output = ('next_node' if name.startswith('select_next_node') else
+                  'priority' if name.startswith('priority') else
+                  'heuristics_matrix' if name.startswith('heuristics') else
+                  'offsprings' if name.startswith('crossover') else
+                  'utility_value' if name.startswith('utility') else 'result')
+        for attempt in range(5):
+            response = self.llm.draw_sample(prompt)
+            match = re.search(r'\{(.*?)\}', response, re.DOTALL)
+            if match is None:
+                return None, None
+            thought = match.group(1)
+            if not thought:
+                token = 'python' if 'python' in response else 'import' if 'import' in response else 'def'
+                descriptions = re.findall(r'^.*?(?=' + token + ')', response, re.DOTALL)
+                thought = descriptions[0] if descriptions else ''
+            codes = re.findall(r'import.*return', response, re.DOTALL)
+            if not codes:
+                codes = re.findall(r'def.*return', response, re.DOTALL)
+            self._log_llm_call(stage='generate', operator=operator, sample_order=sample_order,
+                               prompt=prompt, response=response, attempt=attempt,
+                               function_parse_success=bool(codes))
+            if thought and codes:
+                break
+        else:
+            return None, None
+        code = codes[0] + ' ' + output
+        function = function_from_source(code, name)
+        if function is None:
+            return thought, None
+        prompt2 = MAPrompt.adapter(task_description, template.functions[0]).get_prompt_refine(code, thought)
+        describe = self.llm.draw_sample(prompt2)
         self._log_llm_call(
             stage='thought_alignment',
             operator=operator,
@@ -53,20 +71,3 @@ class MASampler:
         logger = getattr(self._profiler, 'log_llm_call', None)
         if callable(logger):
             logger(llm=self.llm, **payload)
-
-    def get_prompt_refine(self, task_prompt: str, idea: str, code: str):
-        prompt_content = task_prompt + "\n" + "Following is the Design Idea of a heuristic algorithm for the problem and the code for implementing the heuristic algorithm.\n"
-        prompt_content += "\nDesign Idea:\n" + idea
-        prompt_content += "\n\nCode:\n" + code
-        prompt_content += "\n\nThe content of the Design Idea idea cannot fully represent what the algorithm has done informative. So, now you should re-describe the algorithm using less than 3 sentences.\n"
-        prompt_content += "Hint: You should reference the given Design Idea and highlight the most critical design ideas of the code. You can analyse the code to describe which variables are given higher priorities and which variables are given lower priorities, the parameters and the structure of the code."
-        return prompt_content
-
-    @classmethod
-    def trim_thought_from_response(cls, response: str) -> str | None:
-        try:
-            pattern = r'\{(.*?)\}'  # Compared with r'\{(.*)\}'
-            bracketed_texts = re.findall(pattern, response, flags=re.DOTALL)
-            return bracketed_texts[0]
-        except:
-            return None

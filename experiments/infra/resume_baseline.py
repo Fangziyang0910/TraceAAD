@@ -14,13 +14,13 @@ import time
 from datetime import datetime, timezone
 
 from baselines.shared.observability import close_llm, shutdown_executor
-from baselines.shared.sampling import SampleTrimmer
+from core.code import function_from_source
 from baselines.shared.checkpoint import FIELDS, read_checkpoint, restore_checkpoint
 from experiments.infra.runner import baseline_run_lock
 from traceaad.storage import append_jsonl, read_json, rows, write_json
 from experiments.infra.result_storage import Programs
 
-METHODS = ("eoh", "reevo", "funsearch", "mcts_ahd", "calm", "pathwise", "shinka_evo")
+METHODS = ("eoh", "reevo", "funsearch", "mcts_ahd", "calm", "pathwise", "shinka_evo", "deltaevolve")
 
 
 def history(directory):
@@ -53,7 +53,7 @@ def history(directory):
             continue
         stage = call.get("stage")
         consumed = stage == "generate" and config["method"] in ("eoh", "reevo", "funsearch")
-        if config["method"] == "shinka_evo":
+        if config["method"] in ("shinka_evo", "deltaevolve"):
             consumed = stage == "patch"
         if config["method"] == "mcts_ahd":
             consumed = (
@@ -121,7 +121,7 @@ def recover(method, directory):
         if not row.get("valid"):
             continue
         code = sources.get(row["program"]["id"])
-        function = SampleTrimmer.sample_to_function(code, template)
+        function = function_from_source(code, template.functions[0].name)
         if function is None:
             raise ValueError(f"Cannot restore candidate {row['candidate_id']}")
         function.score = row["fitness"]
@@ -150,6 +150,8 @@ def recover(method, directory):
     profiler._resume_budget_from_method = True
     profiler._evaluate_success_program_num = sum(r.get("valid", False) for r in candidates)
     profiler._evaluate_failed_program_num = len(candidates) - profiler._evaluate_success_program_num
+    if name == "deltaevolve":
+        method._evaluation_count = sum(r['attempt'].get('evaluate_time') is not None for r in candidates)
     profiler._canonical_best = copy.deepcopy(
         min((r["program"] for r in candidates if r.get("valid")), key=lambda r: r["fitness"], default=None)
     )
@@ -159,7 +161,7 @@ def recover(method, directory):
     profiler._method_event_count = sum(r.get("kind") == "method" for r in events)
     profiler._error_count = sum(1 for _ in rows(directory / "logs/errors.jsonl"))
     profiler._resume_elapsed = max((r.get("progress", {}).get("elapsed", 0) for r in candidates), default=0)
-    if used >= config["budget"]:
+    if used >= config["budget"] and name != "deltaevolve":
         report["boundary"] = "final_selection_only"
         return report
 
@@ -169,6 +171,8 @@ def recover(method, directory):
             raise ValueError("Checkpoint budget or candidate count exceeds the retained history")
         method._resume_boundary = checkpoint["boundary"]
         pending = used - checkpoint["budget_used"]
+        if name == "deltaevolve":
+            method._iteration = max(method._iteration, used - 1)
         if name == "pathwise" and pending:
             if method._initialization_complete:
                 method._outer_iteration += 1  # Pending node IDs remain in the journal; do not reuse them.
@@ -193,7 +197,7 @@ def recover(method, directory):
         members = []
         for member in snapshot["members"]:
             member_source = member["function"]
-            function = SampleTrimmer.sample_to_function(member_source, template)
+            function = function_from_source(member_source, template.functions[0].name)
             if function is None:
                 raise ValueError("Cannot parse saved population source")
             function.score, function.algorithm = member["score"], member["algorithm"]
@@ -451,8 +455,11 @@ def main():
                 os.environ["TRACEAAD_EVALUATION_LOG"] = str(directory / "evaluations.jsonl")
                 if execution := getattr(method._profiler._evaluation, "_instance_execution", None):
                     execution["record_path"] = os.environ["TRACEAAD_EVALUATION_LOG"]
-                if report["remaining"] == 0:
-                    method._profiler.write_run_summary(status="finished", recovery=report)
+                if (report["remaining"] == 0 and getattr(method, "_pending_node", None) is None
+                        and getattr(method, "_pending_evaluation", None) is None):
+                    counts = ({'search_evaluations': method._evaluation_count}
+                              if config['method'] == 'deltaevolve' else {})
+                    method._profiler.write_run_summary(status="finished", recovery=report, **counts)
                 else:
                     method.run()
             finally:

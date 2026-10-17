@@ -190,7 +190,7 @@ def run_numeric_refinement(
             variant_key = code_signature(variant_code)
             if variant_key in seen_code_signatures or variant_key in batch_signatures:
                 continue
-            step_func = extract_function_from_string(variant_code, function_name)
+            step_func = extract_function_from_string(variant_code)
             if step_func is None or not matches_expected_signature(step_func):
                 continue
             algo = HeuristicRecord(

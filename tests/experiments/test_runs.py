@@ -37,7 +37,7 @@ def test_training_and_test_share_the_task_budget(task, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "name", ["eoh", "reevo", "mcts_ahd", "pathwise", "calm", "funsearch", "shinka_evo"]
+    "name", ["eoh", "reevo", "mcts_ahd", "pathwise", "calm", "funsearch", "shinka_evo", "deltaevolve"]
 )
 def test_baseline_entry_accepts_and_evaluates_a_complete_solver(name, tmp_path, monkeypatch):
     monkeypatch.delenv("TRACEAAD_SCHEDULER_SOCKET", raising=False)
@@ -48,10 +48,18 @@ def test_baseline_entry_accepts_and_evaluates_a_complete_solver(name, tmp_path, 
     monkeypatch.setattr(
         base, "training_task", lambda *a, **k: (task, {"interface": task.interface})
     )
-    monkeypatch.setattr(module, "build_llm_client", lambda **k: TokenLLM())
-    spec = module.RunSpec(task="jssp_construct", eval_workers=1, experiments_root=tmp_path)
+    sampling = []
+    def client(**kwargs):
+        sampling.append(base.model_options(kwargs['model'], kwargs['max_tokens'],
+            **{key: value for key, value in kwargs.items()
+               if key in {'temperature', 'top_p', 'top_k', 'enable_thinking'}}))
+        return TokenLLM()
+    monkeypatch.setattr(module, "build_llm_client", client)
+    spec = module.RunSpec(task="jssp_construct", backend="local", eval_workers=1, experiments_root=tmp_path)
     method = module.build_method(spec, tmp_path / name / "logs")
     try:
+        expected = base.model_options(spec.model, spec.output_tokens)
+        assert sampling and all(options == expected for options in sampling)
         outcome = method._evaluator.evaluate_program_with_details(task.TEMPLATE)
         assert outcome.failure_kind is None, outcome.error
         assert outcome.result == task._rows[0]["reference"]

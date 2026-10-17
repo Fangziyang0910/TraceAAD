@@ -24,11 +24,11 @@ def test_eoh_parent_sampling_uses_rank_weights():
     population = Population(pop_size=3)
     for value in (3, 2, 1):
         population.register_function(function(value, value), increment_generation=False)
-    with patch("baselines.eoh.population.np.random.choice") as choose:
-        choose.return_value = population.population[0]
+    with patch("baselines.eoh.population.random.choices") as choose:
+        choose.return_value = [population.population[0]]
         population.selection()
     expected = np.array([1 / 4, 1 / 5, 1 / 6])
-    np.testing.assert_allclose(choose.call_args.kwargs["p"], expected / expected.sum())
+    np.testing.assert_allclose(choose.call_args.kwargs["weights"], expected)
 
 
 def test_reevo_reflection_orders_actual_worse_and_better_programs():
@@ -84,17 +84,12 @@ def test_shinka_parent_weight_combines_quality_with_children_count():
     assert after["3"] < after["2"]
 
 
-def test_baseline_finishes_with_instance_reevaluation_and_a_readable_winner(tmp_path):
+def test_baseline_freezes_the_training_winner_without_extra_selection(tmp_path):
     from baselines.shared.profiler import ProfilerBase
     from experiments.infra.result_storage import selected_program
     from traceaad.storage import read_json, write_json
 
     task = TinyEvaluation()
-    task._instance_execution = {
-        "timeout_seconds": 3,
-        "n_workers": 1,
-        "record_path": str(tmp_path / "evaluations.jsonl"),
-    }
     write_json(tmp_path / "run_config.json", {"task": "toy", "method": "eoh", "budget": 2})
     profiler = ProfilerBase(tmp_path)
     profiler.record_parameters(TokenLLM(), task, None)
@@ -103,6 +98,8 @@ def test_baseline_finishes_with_instance_reevaluation_and_a_readable_winner(tmp_
         profiler.register_function(candidate, str(candidate))
     profiler.finish()
     summary = read_json(tmp_path / "summary.json")
-    assert summary["status"] == "finished" and summary["selection_evaluations"] == 2
+    assert summary["status"] == "finished" and summary["selection_evaluations"] == 0
     winner = selected_program(tmp_path)
     assert winner["verified"] and winner["id"] == 2 and winner["fitness"] == -2
+    assert read_json(tmp_path / "selection.json")["finalists"] == []
+    assert not (tmp_path / "evaluations.jsonl").exists()

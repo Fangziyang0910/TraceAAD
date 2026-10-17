@@ -15,6 +15,7 @@ import numpy as np
 NAME = 'search_checkpoint.json.gz'
 # shortcut: unfinished phases restart at a saved boundary; persist pending work for exact mid-phase replay.
 FIELDS = {
+    'deltaevolve': ('_iteration', '_seeded', '_pending_evaluation', '_pending_node'),
     'calm': ('_algos', '_seed_algos', '_used_prompts', '_last_revisited_prompts',
              '_injected_components', '_seen_code_signatures', '_seen_performance_profiles',
              '_numeric_refine_attempted', '_age_stuck', '_train_epoch', '_log_step', '_messages', '_best_perf'),
@@ -26,6 +27,7 @@ FIELDS = {
                    '_meta_recommendations', '_meta_recommendations_history', '_best_function_found'),
 }
 GROUPS = {
+    'deltaevolve': {'_population': ('nodes', 'islands', 'archive_ids', 'projection')},
     'calm': {},
     'pathwise': {'_population': ('_nodes', '_generation')},
     'shinka_evo': {
@@ -127,6 +129,8 @@ def save_checkpoint(method, name, boundary):
             rng['local'] = method._rs.get_state()
         if name == 'shinka_evo':
             rng.update(local=method._rng.getstate(), bandit=method._bandit.rng.getstate())
+        if name == 'deltaevolve':
+            rng['local'] = method._rng.getstate()
         payload = {'method': name, 'boundary': boundary,
                    'budget_used': method._tot_sample_nums, 'candidate_count': profiler._num_samples,
                    'files': {f: (directory / f).stat().st_size if (directory / f).exists() else 0
@@ -171,4 +175,6 @@ def restore_checkpoint(method, directory, name):
     if name == 'shinka_evo':
         method._rng.setstate(state['rng']['local'])
         method._bandit.rng.setstate(state['rng']['bandit'])
+    if name == 'deltaevolve':
+        method._rng.setstate(state['rng']['local'])
     return payload

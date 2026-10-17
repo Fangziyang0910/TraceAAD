@@ -78,7 +78,6 @@ def build_method(spec: RunSpec, log_dir: Path) -> ReEvo:
         model=spec.model,
         no_proxy=spec.no_proxy,
         max_tokens=spec.output_tokens,
-        temperature=1.0,  # ReEvo's paper setting; other controls follow the shared profile
     )
     return ReEvo(
         llm=llm,
@@ -90,8 +89,6 @@ def build_method(spec: RunSpec, log_dir: Path) -> ReEvo:
         pop_size=spec.pop_size,
         init_pop_size=spec.init_pop_size,
         mutation_rate=spec.mutation_rate,
-        # DeepSeek's 1.3 initialization produced malformed replies in the paired diagnostic.
-        init_temperature_offset=0.0 if spec.model == 'deepseek-v4.1-flash' else 0.3,
         num_samplers=1,
         num_evaluators=1,
         max_consecutive_sample_failures=20,
@@ -110,20 +107,9 @@ def write_run_config(spec: RunSpec, run_dir: Path, run_name: str) -> None:
                 "mutation_rate": spec.mutation_rate,
                 "num_samplers": 1,
                 "num_evaluators": 1,
-                "init_temperature_offset": 0.0 if spec.model == 'deepseek-v4.1-flash' else 0.3,
-                "sampling_adaptation": (
-                    "DeepSeek uses temperature=1.0 for initialization and later calls; "
-                    "official +0.3 initialization offset disabled after malformed replies at 1.3"
-                    if spec.model == 'deepseek-v4.1-flash' else "official initialization temperature+0.3"
-                ),
-                "budget_basis": (
-                    "Fair comparison budget max_sample_nums=1000 (paper default "
-                    "max_fe=100 preserved as PAPER_MAX_SAMPLE_NUMS); other "
-                    "hyperparams follow paper/original cfg: pop_size=10, "
-                    "init_pop_size=30, mutation_rate=0.5, temperature=1; "
-                    "initialization offset is recorded separately under model sampling adaptation"
-                ),
-            }, llm_options={"temperature": 1.0}),
+                "sampling_adaptation": "shared model sampling profile for every call",
+                "budget_basis": "shared fixed budget; original ReEvo search hyperparameters",
+            }),
     )
 
 
