@@ -16,7 +16,6 @@ const tip = $("tip");
 
 const S = {
   batch: "",
-  runBatch: new URLSearchParams(location.hash.slice(1)).get('rb') || 'latest',
   view: "monitor", data: null, fetchedAt: 0, structure: "", charts: new Map(), run: null, detail: null,
   timer: null, inflight: false, request: null,
 };
@@ -79,7 +78,6 @@ async function getJSON(url, {signal} = {}) {
 function hashParams() { return new URLSearchParams(location.hash.slice(1)); }
 function writeHash() {
   const params = new URLSearchParams({b: S.batch});
-  params.set('rb', S.runBatch);
   if (S.run) params.set("r", `${S.run.task}/${S.run.name}`);
   if (S.view === "compare") {
     params.set("v", "compare");
@@ -88,7 +86,7 @@ function writeHash() {
   }
   history.replaceState(null, "", `#${params}`);
 }
-const stateURL = b => `/api/state?batch=${encodeURIComponent(b)}` + (S.runBatch === 'all' ? '' : `&run_batch=${encodeURIComponent(S.runBatch)}`);
+const stateURL = b => `/api/state?batch=${encodeURIComponent(b)}`;
 const runURL = r => `/api/run?batch=${encodeURIComponent(r.batch)}&task=${encodeURIComponent(r.task)}&name=${encodeURIComponent(r.name)}`;
 
 function setLive(mode, text) {
@@ -147,10 +145,6 @@ async function refresh({force = false} = {}) {
 
 /* ---------- overview rendering (incremental) ---------- */
 function render(data) {
-  const select = $('run-batch');
-  select.replaceChildren(new Option('最新批次', 'latest'), new Option('全部批次', 'all'),
-    ...(data.run_batches || []).map(b => new Option(b, b)));
-  select.value = S.runBatch;
   renderKPIs(data);
   const tasks = data.tasks || [];
   const structure = tasks.map(t => `${t.key}:${t.runs.map(r => r.name).join(",")}`).join("|");
@@ -872,19 +866,11 @@ $("refresh").addEventListener("click", () => {
 $("batch").addEventListener("change", event => {
   closeRun();
   S.batch = event.target.value;
-  S.runBatch = 'latest';
   writeHash();
   S.data = null; S.structure = "";
   $("tasks").innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
   setLive("", "读取中");
   refresh();
-});
-$('run-batch').addEventListener('change', event => {
-  closeRun();
-  S.runBatch = event.target.value;
-  S.data = null; S.structure = '';
-  writeHash();
-  refresh({force: true});
 });
 const THEMES = ["auto", "light", "dark"];
 function applyTheme(theme) {

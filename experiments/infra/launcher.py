@@ -2,7 +2,6 @@
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
 import shlex
 import subprocess
 from pathlib import Path
@@ -80,6 +79,7 @@ def launch_plan(path, manifest, *, min_context=None):
         current = scheduler_status(scheduler["socket"])
         if current["instance_id"] != scheduler["instance_id"]:
             raise ValueError("scheduler changed after preparing this plan")
+    # Check that every endpoint serves its model and context before starting anything.
     if scheduler and any(item["backend"] == "scheduled" for item in plan):
         from .base import BackendProfile
 
@@ -87,17 +87,13 @@ def launch_plan(path, manifest, *, min_context=None):
             str(i): BackendProfile(e["base_url"], e["model"], e.get("no_proxy", ""))
             for i, e in enumerate(current["endpoints"])
         }
-        models = served_models(profiles, profiles=profiles, min_context=min_context)
-        for name, record in models.items():
-            record["scheduled_slots"] = current["endpoints"][int(name)]["slots"]
+        served_models(profiles, profiles=profiles, min_context=min_context)
         # Runs on a hosted model use the scheduler for CPU only.
         hosted = {item["backend"] for item in plan} - {"scheduled"}
-        models.update(served_models(hosted, min_context=min_context))
+        served_models(hosted, min_context=min_context)
     else:
-        models = served_models((item["backend"] for item in plan), min_context=min_context)
-        for name, record in models.items():
-            record["assigned_runs"] = sum(item["backend"] == name for item in plan)
-    manifest.update(served_models=models, status="launching")
+        served_models((item["backend"] for item in plan), min_context=min_context)
+    manifest["status"] = "running"
     write_json(path, manifest)
     for item in plan:
         command = item["command"]
@@ -106,11 +102,7 @@ def launch_plan(path, manifest, *, min_context=None):
             shell = "exec " + shlex.join(command) + " >> " + shlex.quote(item["startup_log"]) + " 2>&1"
             command = ["bash", "-c", shell]
         launch_command(item["session"], command)
-        item.update(status="started_unverified", started_at=datetime.now().astimezone().isoformat())
-        write_json(path, manifest)
         print(item["session"], item["backend"], flush=True)
-    manifest["status"] = "started_pending_verification"
-    write_json(path, manifest)
     print(path)
 
 

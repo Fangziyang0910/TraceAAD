@@ -26,6 +26,10 @@ uv run python -m experiments.visualization --host 127.0.0.1 --port 8765
 | `--wait-seconds 45` | 最多等待 45 秒，检查状态变化。 |
 | `recorded` | 找到记录，不等于已确认进程仍在运行。 |
 | `stale` | 需要进一步检查进程。 |
+| `unknown` | 运行目录存在，但没有可用的摘要或事件。 |
+| `absent` | 本机没有该运行目录。可能未在本机启动，也可能远端已清理。远端清理后，应读取本地同步的清单与结果。 |
+
+`heldout` 列只统计主比较测试（`PRIMARY_SPLITS`）。`missing` 表示主测试缺失，会影响 `ready_for_heldout` 与需要关注的判断。
 
 看板地址为 `http://127.0.0.1:8765/`。本地数据只反映已同步的状态。生成预算读取事件与恢复点，不用有效程序数代替。文件说明见[结果格式](SEARCH_FORMAT.md)。
 

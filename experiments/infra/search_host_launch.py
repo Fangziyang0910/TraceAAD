@@ -4,8 +4,6 @@ import argparse
 from dataclasses import asdict
 from datetime import datetime
 import json
-import os
-import platform
 import subprocess
 
 from benchmarks.tasks import (
@@ -73,7 +71,7 @@ def plan_for(args, tasks):
 def git(*args):
     try:
         return subprocess.check_output(["git", *args], cwd=REPO_ROOT, stderr=subprocess.DEVNULL).decode().strip()
-    except OSError, subprocess.CalledProcessError:
+    except (OSError, subprocess.CalledProcessError):
         return None
 
 
@@ -140,15 +138,12 @@ def main(argv=None):
         "method": "traceaad",
         "experiment": args.experiment,
         "created_at": datetime.now().astimezone().isoformat(),
-        "host": {"node": platform.node(), "cpus": os.cpu_count()},
-        "execution_host": platform.node(),
         "suite": args.suite,
         "repeats": args.repeats,
         "repeat_ids": list(args.repeat_ids) if args.repeat_ids else None,
         "eval_workers": policy.eval_workers,
         "final_selection": "training",
         "budget_per_run": args.budget,
-        "total_budget": len(plan) * args.budget,
         "search_policy": asdict(policy),
         "evaluation_limits": limits,
         "llm": {
@@ -160,6 +155,7 @@ def main(argv=None):
         "plan": plan,
     }
     if scheduler:
+        # launch_plan checks this snapshot against the live scheduler before starting runs.
         manifest["resource_scheduler"] = scheduler
     if args.launch:
         launch_plan(path, manifest, min_context=32768)

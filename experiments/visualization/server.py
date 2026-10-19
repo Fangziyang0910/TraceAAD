@@ -61,11 +61,9 @@ def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler
                 return self._send_json({"batches": monitor.batches(), "default_batch": monitor.default_batch()})
             if parsed.path == "/api/state":
                 batch = params.get("batch", [None])[0]
-                run_batch = params.get("run_batch", [None])[0]
-                signature = (monitor.state_signature(batch), run_batch)
                 body, _ = cache.get_or_build(
-                    ("state", batch, run_batch), signature,
-                    lambda: _json_bytes(monitor.overview(batch, run_batch)))
+                    ("state", batch), monitor.state_signature(batch),
+                    lambda: _json_bytes(monitor.overview(batch)))
                 return self._send_body(body)
             if parsed.path == "/api/cohorts":
                 return self._send_json({"cohorts": monitor.cohorts()})

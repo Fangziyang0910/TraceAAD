@@ -57,7 +57,11 @@ def response_to_function(response, template):
         return None
     name = template.functions[0].name
     # The task adapter maps the upstream versioned entrypoint to our task callable.
-    code = tokenize.untokenize(token._replace(string=name)
-            if token.type == tokenize.NAME and token.string == name + '_v2' else token
-            for token in tokenize.generate_tokens(io.StringIO(code).readline))
+    try:
+        code = tokenize.untokenize(token._replace(string=name)
+                if token.type == tokenize.NAME and token.string == name + '_v2' else token
+                for token in tokenize.generate_tokens(io.StringIO(code).readline))
+    except (tokenize.TokenError, SyntaxError):
+        # Broken tokens (e.g. an unterminated string) are a rejected sample, not a crashed run.
+        return None
     return function_from_source(code, name)

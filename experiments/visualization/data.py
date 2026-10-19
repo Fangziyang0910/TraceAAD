@@ -3,13 +3,12 @@
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
-import json
 import time
 
 from benchmarks.tasks import FIXED_TASKS, SCALES, TEST_SCALES
 from experiments.infra.result_storage import heldout_identity, selected_program
 from experiments.infra.timing import batch_timing, search_timing
-from traceaad.storage import JOURNAL_NAME, read_json
+from traceaad.storage import JOURNAL_NAME, read_json, read_object
 from .history import TrainingHistory, finite
 
 DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parents[2] / "experiments_result"
@@ -51,14 +50,6 @@ def _run_config_paths(directory: Path):
     """List canonical runs, excluding temporary aliases used by live writers."""
     return sorted(path for path in directory.glob("*/*/run_config.json")
                   if not path.parent.is_symlink() and not path.parent.parent.is_symlink())
-
-
-def _read_json(path: Path) -> dict:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return value if isinstance(value, dict) else {}
 
 
 def _stamp(path: Path):
@@ -209,29 +200,28 @@ class ResultsMonitor:
         for path in _run_config_paths(directory) if experiment else []:
             run_dir = path.parent
             stamps.append((str(run_dir.relative_to(directory)), _run_stamp(run_dir)))
-            unfinished |= _read_json(run_dir / "summary.json").get("status") != "finished"
+            unfinished |= read_object(run_dir / "summary.json").get("status") != "finished"
         manifests = tuple((p.name, _stamp(p)) for p in sorted(directory.glob("batch_*.json")))
         return experiment, tuple(stamps), manifests, int(time.time() // 15) if unfinished else None
 
     def run_signature(self, experiment: str, task: str, name: str):
         run_dir = self.results_root / experiment / task / name
-        unfinished = _read_json(run_dir / "summary.json").get("status") != "finished"
+        unfinished = read_object(run_dir / "summary.json").get("status") != "finished"
         manifests = tuple((p.name, _stamp(p)) for p in sorted((self.results_root / experiment).glob("batch_*.json")))
         return experiment, task, name, _run_stamp(run_dir), manifests, int(time.time() // 15) if unfinished else None
 
     def _manifest_runs(self, experiment):
         rows = {}
         for path in sorted((self.results_root / experiment).glob("batch_*.json")):
-            manifest = _read_json(path)
+            manifest = read_object(path)
             if self.batch_filter and manifest.get("batch") != self.batch_filter:
                 continue
             for row in manifest.get("plan", []):
                 name = row.get("run_name") or Path(row.get("run_dir", "")).name
-                rows[(row.get("task"), name)] = {**row, 'run_batch': manifest.get('batch'),
-                    'batch_status': manifest.get('status')}
+                rows[(row.get("task"), name)] = {**row, 'batch_status': manifest.get('status')}
         return rows
 
-    def _runs(self, experiment: str, task_filter=None, name_filter=None, run_batch=None):
+    def _runs(self, experiment: str, task_filter=None, name_filter=None):
         if experiment not in {item["id"] for item in self.batches()}:
             return []
         rows = []
@@ -243,23 +233,21 @@ class ResultsMonitor:
                     or (name_filter and run_dir.name != name_filter)):
                 continue
             metadata = manifest_runs.get((run_dir.parent.name, run_dir.name), {})
-            if run_batch and metadata.get('run_batch') != run_batch:
-                continue
             if self.batch_filter and not metadata:
                 continue
-            config = _read_json(config_path)
-            summary = _read_json(run_dir / "summary.json")
+            config = read_object(config_path)
+            summary = read_object(run_dir / "summary.json")
             raw_status = summary.get("status")
             journal_hot = self._journal_is_hot(run_dir)
             if raw_status == 'archived' or metadata.get('batch_status') == 'archived':
                 status = 'archived'
             elif raw_status == "finished":
                 status = "finished"
-            elif metadata.get('batch_status') == 'stopped_by_user' or metadata.get('status') == 'stopped_by_user':
+            elif metadata.get('batch_status') == 'stopped_by_user':
                 status = 'stopped'
             elif raw_status == "stopped" and not self._journal_newer_than_summary(run_dir):
                 status = "stopped"
-            elif metadata.get("status") in {"running", "launching"} or raw_status == "running":
+            elif raw_status == "running":
                 status = "running"
             elif raw_status == "unknown":
                 status = "unknown"
@@ -300,7 +288,6 @@ class ResultsMonitor:
                 status = 'search_complete'
             row = {
                 "task": task, "name": run_dir.name, "repeat": config.get("repeat", metadata.get("repeat")),
-                "run_batch": metadata.get('run_batch'),
                 "seed": config.get("seed", metadata.get("seed")), "backend": config.get("backend", metadata.get("backend")),
                 "status": status, "raw_status": raw_status, "budget": int(budget or 0),
                 "budget_used": int(used or 0), "valid_nodes": int(nodes or 0),
@@ -320,13 +307,9 @@ class ResultsMonitor:
             rows.append(row)
         return rows
 
-    def overview(self, experiment: str | None = None, run_batch=None):
+    def overview(self, experiment: str | None = None):
         experiment = experiment or self.default_batch()
-        run_batches = sorted({r['run_batch'] for r in self._manifest_runs(experiment).values()
-                              if r.get('run_batch')}, reverse=True) if experiment else []
-        if run_batch == 'latest':
-            run_batch = run_batches[0] if run_batches else None
-        runs = self._runs(experiment, run_batch=run_batch) if experiment else []
+        runs = self._runs(experiment) if experiment else []
         counts = Counter(row["status"] for row in runs)
         groups = []
         for task, meta in TASKS.items():
@@ -340,7 +323,6 @@ class ResultsMonitor:
                 ]})
         return {
             "batch": experiment, "updated_at": max((row["updated_at"] or "" for row in runs), default=""),
-            "run_batch": run_batch, "run_batches": run_batches,
             "summary": {
                 "runs": len(runs), "finished": counts["finished"],
                 "running": counts["running"], "queued": counts["queued"],

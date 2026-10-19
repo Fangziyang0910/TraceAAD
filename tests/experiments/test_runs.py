@@ -176,7 +176,7 @@ def test_batch_plan_uses_actual_model_settings_and_preserves_repeat_seeds(capsys
         ]
     )
     batch = json.loads(capsys.readouterr().out)
-    assert batch["total_budget"] == 2000
+    assert "total_budget" not in batch
     for item in batch["plan"]:
         assert item["seed"] == 1 and item["repeat"] == 2
         assert item["command"][1:3] == ["-m", "experiments.traceaad.run"]

@@ -78,6 +78,12 @@ def test_method_parsers_keep_their_own_acceptance_rules():
     assert 'def helper' not in str(program) and 'OFFSET = 3' not in str(program)
 
 
+def test_reevo_rejects_untokenizable_code_instead_of_crashing_the_run():
+    template = parse_program(TEMPLATE)
+    broken = '```python\ndef solve(x):\n    return "abc\n```'
+    assert reevo_function(broken, template) is None
+
+
 def test_response_is_not_repaired_by_rewriting_its_arguments():
     template = parse_program(TEMPLATE)
     response = '{A complete idea}\n```python\ndef solve(y):\n    return y + 1\n```'

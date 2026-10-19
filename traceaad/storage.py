@@ -17,6 +17,15 @@ def read_json(path, default=None):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def read_object(path):
+    """Read a JSON object for status views; partial or non-object files count as empty."""
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def rows(path, limit=None):
     path = Path(path)
     if not path.exists():

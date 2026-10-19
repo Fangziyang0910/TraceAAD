@@ -11,23 +11,15 @@ import shlex
 import subprocess
 import time
 
-from benchmarks.tasks import SCALES, SPLITS, scale_of_split
+from benchmarks.tasks import PRIMARY_SPLITS, SCALES, SPLITS, scale_of_split
 from experiments.infra.result_storage import heldout_identity
-from traceaad.storage import committed_size, read_json as result_json
+from traceaad.storage import committed_size, read_json as result_json, read_object
 from experiments.infra.result_storage import selected_program
 from experiments.infra.timing import batch_timing, search_timing
 
 
 TAIL_BYTES = 1_048_576
 PROGRESS_RECORD = re.compile(rb'^\s*\{\s*"kind"\s*:\s*"(?:progress|candidate)"')
-
-
-def read_json(path):
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
-    except (OSError, ValueError):
-        return {}
 
 
 def journal_tail(path):
@@ -75,7 +67,7 @@ def run_path(root, row):
 def run_status(root, row, budget, now):
     directory = run_path(root, row)
     summary_path = directory / "summary.json"
-    summary = read_json(summary_path)
+    summary = read_object(summary_path)
     checkpoint, candidate, modified = journal_tail(directory / "events.jsonl") if summary.get("status") != "finished" else ({}, {}, None)
     phase = checkpoint.get("phase") or summary.get("phase")
     raw = summary.get("status")
@@ -90,6 +82,8 @@ def run_status(root, row, budget, now):
         status = "blocked"
     elif checkpoint or candidate:
         status = "recorded"  # Journal activity alone does not prove a process is alive.
+    elif not directory.exists():
+        status = "absent"  # Not on this host: never started here, or pruned after a local pull.
     else:
         status = "unknown"
     counts = [value for value in (checkpoint.get("attempts"), candidate.get("budget_used"), summary.get("budget_used"))
@@ -109,7 +103,7 @@ def run_status(root, row, budget, now):
     frozen = bool(best and best["verified"])
     heldout = {"valid": [], "failed": [], "missing": [], "mismatched": [], "unverified": []}
     results = {r["scale"]: r for r in result_json(directory / "heldout.json", []) if not r["variant"]}
-    for split in SPLITS[row["task"]]:
+    for split in PRIMARY_SPLITS.get(row["task"], SPLITS[row["task"]]):
         result = results.get(str(scale_of_split(row["task"], split)))
         if result is None:
             heldout["missing"].append(split)
@@ -130,7 +124,7 @@ def run_status(root, row, budget, now):
 
 
 def collect(manifest_path):
-    manifest = read_json(manifest_path)
+    manifest = read_object(manifest_path)
     if not isinstance(manifest.get("plan"), list) or not manifest["plan"]:
         raise ValueError(f"missing or invalid batch plan: {manifest_path}")
     if any(row.get("task") not in SCALES for row in manifest["plan"]):
@@ -208,11 +202,12 @@ def main(argv=None):
             print("Wait:", payload["wait_result"])
         for row in payload["runs"]:
             h = row["heldout"]
-            attention = row["status"] in {"blocked", "stale", "unknown"} or h["failed"] or h["mismatched"] or h["unverified"] or (row["frozen"] and h["missing"]) or (row["status"] == "finished" and not row["frozen"])
+            attention = row["status"] in {"blocked", "stale", "unknown", "absent"} or h["failed"] or h["mismatched"] or h["unverified"] or (row["frozen"] and h["missing"]) or (row["status"] == "finished" and not row["frozen"])
             if args.details or attention:
                 used = row['budget_used'] if row['budget_used'] is not None else '?'
                 print(f"{row['name']}: {row['status']}/{row['phase']} {used}/{row['budget']} frozen={row['frozen']} "
-                      f"heldout={len(h['valid'])} missing={len(h['missing'])} failed={len(h['failed'])} mismatched={len(h['mismatched'])} unverified={len(h['unverified'])}")
+                      f"heldout={len(h['valid'])} missing={len(h['missing'])} "
+                      f"failed={len(h['failed'])} mismatched={len(h['mismatched'])} unverified={len(h['unverified'])}")
     return 0
 
 

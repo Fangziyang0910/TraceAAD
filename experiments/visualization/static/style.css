@@ -199,7 +199,6 @@ table.recent { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .st { font-weight: 600; font-size: 12px; }
 .st.valid { color: var(--ok); } .st.bad { color: var(--bad); } .st.warn { color: var(--warn); } .st.neutral { color: var(--muted); }
 .idea { margin: 0; padding: 12px 14px; background: var(--accent-soft); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; white-space: pre-wrap; color: var(--ink-2); }
-#run-batch { max-width: min(280px, 35vw); }
 details.code summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 12.5px; list-style: none; }
 details.code summary::-webkit-details-marker { display: none; }
 details.code summary::before { content: "▸ "; }

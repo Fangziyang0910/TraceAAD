@@ -20,7 +20,7 @@ TASKS = ('tsp_construct', 'cvrp_aco', 'op_aco', 'online_bin_packing', 'vrptw_con
 ALL_TASKS = TASKS + FIXED_TASKS
 CO_TASKS = ('tsp_construct', 'cvrp_aco', 'fssp_gls', 'graph_colouring', 'jssp_construct', 'op_aco')
 SUITES = {'legacy': TASKS, 'co6': CO_TASKS}
-TASK_SHORT = dict(zip(TASKS, ('tsp', 'cvrp', 'op', 'obp', 'vrptw')))
+TASK_SHORT: dict[str, str] = dict(zip(TASKS, ('tsp', 'cvrp', 'op', 'obp', 'vrptw')))
 TASK_SHORT.update(dict(zip(FIXED_TASKS, ('fssp', 'gcol', 'jssp'))))
 NATIVE_MINIMIZE = set(ALL_TASKS) - {'op_aco'}
 MINIMIZE = set(ALL_TASKS)  # Every evaluator returns a minimized scalar objective.

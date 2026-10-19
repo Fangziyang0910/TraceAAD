@@ -87,8 +87,6 @@ def main(argv=None):
             "n_workers": config.eval_workers,
         }
     }
-    if scheduler:
-        metadata["resource_scheduler"] = scheduler
     if args.dry_run:
         evaluation, task_config = training_task(args.task, args.eval_workers, condition="traceaad")
         print(
