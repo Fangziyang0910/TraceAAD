@@ -38,9 +38,13 @@ class MASampler:
                 token = 'python' if 'python' in response else 'import' if 'import' in response else 'def'
                 descriptions = re.findall(r'^.*?(?=' + token + ')', response, re.DOTALL)
                 thought = descriptions[0] if descriptions else ''
-            codes = re.findall(r'import.*return[^\n]*', response, re.DOTALL)
+            # Upstream starts at the first "import" or "def" anywhere, so prose such as
+            # "importance" or "defines" before the code block yields unparsable text.
+            # The match starts at a code line instead; the greedy end is unchanged.
+            codes = re.findall(r'^(?:import\s|from\s+[\w.]+\s+import\s).*return[^\n]*', response,
+                               re.DOTALL | re.MULTILINE)
             if not codes:
-                codes = re.findall(r'def.*return[^\n]*', response, re.DOTALL)
+                codes = re.findall(r'^def\s.*return[^\n]*', response, re.DOTALL | re.MULTILINE)
             self._log_llm_call(stage='generate', operator=operator, sample_order=sample_order,
                                prompt=prompt, response=response, attempt=attempt,
                                function_parse_success=bool(codes))

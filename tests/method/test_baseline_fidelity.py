@@ -115,6 +115,14 @@ def test_mcts_keeps_the_models_return_expression():
     assert run_function(function) == (4, 2)
 
 
+def test_mcts_extraction_starts_at_a_code_line_not_at_words_in_the_description():
+    llm = Replies('{Rank jobs by machine importance; this defines the order}\n'
+                  '```python\nfrom math import floor\nimport numpy as np\ndef solve(x):\n    return floor(x) + 1\n```',
+                  'aligned')
+    _, function = MASampler(llm, TEMPLATE).get_thought_and_function('task', 'generate')
+    assert run_function(function) == 3
+
+
 def test_pathwise_requires_metadata_and_rejects_placeholder_rollouts():
     code = '```python\ndef solve_v2(x):\n    return x + 1\n```'
     assert PathWiseSampler.parse_initialization_response(code, TEMPLATE) is None
