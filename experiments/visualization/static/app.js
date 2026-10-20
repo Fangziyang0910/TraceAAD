@@ -61,6 +61,19 @@ const toneVar = {ok: "--ok", bad: "--bad", warn: "--warn", neutral: "--faint"};
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const seriesColor = i => `var(--s${i % 8 + 1})`;
 
+/* "Rep n", plus the backend when another run of the task has the same label. */
+function runLabel(task, run) {
+  const base = r => r.repeat == null ? r.name : `Rep ${r.repeat}`;
+  const shared = task.runs.filter(r => base(r) === base(run)).length > 1;
+  return shared && run.backend ? `${base(run)} · ${run.backend}` : base(run);
+}
+/* The model with the most runs in a task; its runs make the task mean. */
+function mainModel(runs) {
+  const count = new Map();
+  for (const r of runs) count.set(r.model, (count.get(r.model) || 0) + 1);
+  return [...count].sort((a, b) => b[1] - a[1])[0]?.[0];
+}
+
 /* Every displayed score is a minimized objective. */
 function bestFitness(run) {
   const last = run.curve?.at(-1);
@@ -71,9 +84,9 @@ function bestFitness(run) {
 async function getJSON(url, {signal} = {}) {
   const response = await fetch(url, {cache: "no-store", signal});
   if (!response.ok) throw new Error(`${response.status} ${response.statusText || "请求失败"}`);
-  const data = await response.json();
+  const text = await response.text();
   signal?.throwIfAborted();
-  return {data, changed: true};
+  return {data: JSON.parse(text), text};
 }
 function hashParams() { return new URLSearchParams(location.hash.slice(1)); }
 function writeHash() {
@@ -124,12 +137,12 @@ async function refresh({force = false} = {}) {
   const batch = request.batch;
   $("refresh").classList.add("spin");
   try {
-    if (force) etags.delete(stateURL(batch));
-    const {data, changed} = await getJSON(stateURL(batch), {signal: request.controller.signal});
+    if (force) S.stateText = null;
+    const {data, text} = await getJSON(stateURL(batch), {signal: request.controller.signal});
     if (S.request !== request || batch !== S.batch) return;
     S.fetchedAt = Date.now();
     setLive("on", "实时 · 刚刚"); showError("");
-    if (changed || !S.data) { S.data = data; render(data); }
+    if (text !== S.stateText || !S.data) { S.stateText = text; S.data = data; render(data); }
     if (S.run) await loadDetail();
   } catch (error) {
     if (error.name !== "AbortError" && S.request === request && batch === S.batch) {
@@ -231,20 +244,23 @@ function updateTask(task) {
     row.querySelector("[data-best]").textContent = fmt(bestFitness(run));
     row.title = `${run.name}\nseed ${run.seed ?? "–"} · 有效候选 ${run.valid_nodes} · ${speed(t)}`;
   });
-  const bests = task.runs.map(bestFitness).filter(v => v != null);
+  const model = mainModel(task.runs);
+  const mixed = task.runs.some(r => r.model !== model);
+  const bests = task.runs.filter(r => r.model === model).map(bestFitness).filter(v => v != null);
   const agg = card.querySelector("[data-agg]");
   if (bests.length) {
     const mean = bests.reduce((a, b) => a + b, 0) / bests.length;
     const sd = bests.length > 1 ? Math.sqrt(bests.reduce((a, b) => a + (b - mean) ** 2, 0) / (bests.length - 1)) : 0;
     const better = Math.min(...bests);
-    agg.innerHTML = `<b>${fmt(mean)} <span style="font-weight:500;color:var(--muted);font-size:12px">± ${fmt(sd, 3)}</span></b>最好 ${fmt(better)}`;
+    agg.innerHTML = `<b>${fmt(mean)} <span style="font-weight:500;color:var(--muted);font-size:12px">± ${fmt(sd, 3)}</span></b>${mixed ? `${esc(model || "未记录模型")} · ` : ""}最好 ${fmt(better)}`;
+    agg.title = mixed ? `均值只含 ${model || "未记录模型"} 的 ${bests.length} 路` : "";
   } else agg.textContent = "暂无有效候选";
   const chart = S.charts.get(task.key);
   const sig = JSON.stringify(task.runs.map(r => [r.name, r.status, r.budget, r.budget_used, r.x_label, r.curve]));
   if (chart && chart.sig !== sig) {
     chart.sig = sig;
     chart.series = task.runs.map((run, i) => ({
-      name: run.repeat == null ? run.name : `Rep ${run.repeat}`, color: i,
+      name: runLabel(task, run), color: i,
       live: run.status === "running",
       points: (run.curve || []).filter(p => Number.isFinite(p.fitness)).map(p => ({x: p.evaluation, f: p.fitness, p})),
     }));
@@ -273,7 +289,7 @@ function stepAt(points, x) {
 }
 
 /* Robust y-range: ignore the early warm-up (first 8% of budget) so late-stage
-   differences between reps stay visible; clipped early values are noted. */
+   differences between reps stay visible; early values above the range are clipped. */
 function yDomain(series, maxX) {
   const all = series.flatMap(s => s.points);
   if (!all.length) return null;
@@ -286,7 +302,7 @@ function yDomain(series, maxX) {
   let lo = Math.min(...vals), hi = Math.max(...vals);
   const pad = (hi - lo) * 0.1 || Math.max(Math.abs(hi) * 0.01, 1e-6);
   lo -= pad; hi += pad;
-  return {lo, hi, clipped: all.some(p => p.f < lo)};
+  return {lo, hi};
 }
 
 function drawChart(chart) {
@@ -442,12 +458,13 @@ function bindDetailHover(chart) {
 
 /* ---------- detail drawer ---------- */
 function openRun(taskKey, name) {
+  S.opener = document.activeElement;
   S.run = {batch: S.batch, task: taskKey, name};
-  S.detail = null;
+  S.detail = null; S.detailText = null;
   const task = S.data?.tasks.find(t => t.key === taskKey);
   const index = task ? task.runs.findIndex(r => r.name === name) : 0;
   S.run.color = Math.max(0, index);
-  $("d-title").innerHTML = `<span class="sw" style="--c:${seriesColor(S.run.color)}"></span>${esc(task?.label || taskKey)} · ${esc(task?.runs[index]?.repeat != null ? `Rep ${task.runs[index].repeat}` : name)}`;
+  $("d-title").innerHTML = `<span class="sw" style="--c:${seriesColor(S.run.color)}"></span>${esc(task?.label || taskKey)} · ${esc(task && index >= 0 ? runLabel(task, task.runs[index]) : name)}`;
   $("d-sub").textContent = "正在读取…";
   $("d-body").innerHTML = '<div class="skeleton" style="height:420px"></div>';
   $("drawer").classList.add("open"); $("scrim").classList.add("open");
@@ -460,14 +477,15 @@ function openRun(taskKey, name) {
 function closeRun() {
   if (!S.run) return;
   S.detailRequest?.abort(); S.detailRequest = null;
-  bodies.delete(runURL(S.run)); etags.delete(runURL(S.run));
-  S.run = null; S.detail = null;
+  S.run = null; S.detail = null; S.detailText = null;
   if (S.detailChart) { resizer.unobserve(S.detailChart.canvas.parentElement); S.detailChart = null; }
   hideTip();
   $("drawer").classList.remove("open"); $("scrim").classList.remove("open");
   $("drawer").setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
   writeHash();
+  if (S.opener?.isConnected) S.opener.focus({preventScroll: true});
+  S.opener = null;
 }
 async function loadDetail() {
   const selected = S.run;
@@ -476,9 +494,9 @@ async function loadDetail() {
   const request = new AbortController();
   S.detailRequest = request;
   try {
-    const {data, changed} = await getJSON(runURL(selected), {signal: request.signal});
+    const {data, text} = await getJSON(runURL(selected), {signal: request.signal});
     if (S.run !== selected || S.detailRequest !== request) return;
-    if (changed || !S.detail) { S.detail = data; renderDetail(data); }
+    if (text !== S.detailText || !S.detail) { S.detailText = text; S.detail = data; renderDetail(data); }
   } catch (error) {
     if (error.name === "AbortError" || S.run !== selected || S.detailRequest !== request) return;
     if (!S.detail) $("d-body").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
@@ -581,11 +599,19 @@ async function loadCohorts() {
   const {data} = await getJSON("/api/cohorts");
   CMP.cohorts = data.cohorts || [];
   const known = new Set(CMP.cohorts.map(c => c.id));
-  CMP.ids = CMP.ids.filter(id => known.has(id));
+  // Means never mix models. The default model is the one the baselines ran most.
+  const weight = new Map();
+  for (const c of CMP.cohorts) if (!isTrace(c)) weight.set(c.model_name, (weight.get(c.model_name) || 0) + c.runs);
+  const main = [...weight].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const preferred = items => items.find(c => c.model_name === main) || items[0];
+  // A link written before a batch was split by model names the batch: keep its main-model cohort.
+  CMP.ids = CMP.ids.map(id => known.has(id) ? id : preferred(CMP.cohorts.filter(c => c.id.split("@")[0] === id))?.id)
+    .filter((id, i, a) => id && a.indexOf(id) === i);
   if (!CMP.ids.length) {
     // Default: the batch on view (the newest TraceAAD batch unless chosen otherwise) and every baseline method.
-    const current = CMP.cohorts.find(c => c.batch === S.batch && isTrace(c)) || CMP.cohorts.find(isTrace);
-    const baselines = CMP.cohorts.filter(c => !isTrace(c)).map(c => c.id);
+    const viewed = CMP.cohorts.filter(c => c.batch === S.batch && isTrace(c));
+    const current = preferred(viewed.length ? viewed : CMP.cohorts.filter(c => isTrace(c) && c.batch === CMP.cohorts.find(isTrace)?.batch));
+    const baselines = CMP.cohorts.filter(c => !isTrace(c) && (!main || c.model_name === main)).map(c => c.id);
     CMP.ids = [current?.id, ...baselines].filter((id, i, a) => id && known.has(id) && a.indexOf(id) === i);
   }
   if (!CMP.ids.includes(CMP.ref)) CMP.ref = CMP.ids[0] || null;
@@ -600,24 +626,24 @@ function renderChips() {
   const rest = CMP.cohorts.filter(c => !CMP.ids.includes(c.id));
   const group = (label, items) => items.length ? `<optgroup label="${label}">${items.map(c =>
     `<option value="${esc(c.id)}">${esc(c.label)}${c.heldout_tasks.length ? ` · 测试 ${c.heldout_tasks.length} 个任务` : " · 无测试"}</option>`).join("")}</optgroup>` : "";
-  $("cmp-chips").innerHTML = chips + (CMP.ids.length < 12 ? `<select class="ctl chip-add" id="cmp-add" aria-label="添加对比对象">
+  const html = chips + (CMP.ids.length < 12 ? `<select class="ctl chip-add" id="cmp-add" aria-label="添加对比对象">
     <option value="">＋ 添加对比对象…</option>${group("TraceAAD", rest.filter(isTrace))}${group("基线方法", rest.filter(c => !isTrace(c)))}</select>` : "");
+  if (html !== CMP.chipsHTML) { CMP.chipsHTML = html; $("cmp-chips").innerHTML = html; }
 }
 
-async function loadCompare({force = false} = {}) {
+async function loadCompare() {
   CMP.request?.abort();
   const request = new AbortController();
   CMP.request = request;
   renderChips();
   writeHash();
-  if (!CMP.ids.length) { CMP.data = null; renderCompare(); return; }
+  if (!CMP.ids.length) { CMP.data = null; CMP.text = null; renderCompare(); return; }
   const url = `/api/compare?cohorts=${encodeURIComponent(CMP.ids.join(","))}`;
-  if (force) etags.delete(url);
   try {
-    const {data, changed} = await getJSON(url, {signal: request.signal});
+    const {data, text} = await getJSON(url, {signal: request.signal});
     if (CMP.request !== request || url !== `/api/compare?cohorts=${encodeURIComponent(CMP.ids.join(","))}`) return;
     $("cmp-error").hidden = true;
-    if (changed || CMP.data !== data) { CMP.data = data; renderCompare(); }
+    if (text !== CMP.text || !CMP.data) { CMP.text = text; CMP.data = data; renderCompare(); }
   } catch (error) {
     if (error.name === "AbortError" || CMP.request !== request) return;
     $("cmp-error").hidden = false;
@@ -860,7 +886,7 @@ $("close").addEventListener("click", closeRun);
 $("scrim").addEventListener("click", closeRun);
 document.addEventListener("keydown", event => { if (event.key === "Escape") closeRun(); });
 $("refresh").addEventListener("click", () => {
-  if (S.view === "compare") loadCohorts().then(() => loadCompare({force: true}));
+  if (S.view === "compare") { CMP.text = null; loadCohorts().then(() => loadCompare()); }
   else refresh({force: true});
 });
 $("batch").addEventListener("change", event => {

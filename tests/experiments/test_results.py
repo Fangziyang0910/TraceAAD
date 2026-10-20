@@ -83,3 +83,15 @@ def test_result_reader_and_monitor_follow_individual_ids_and_generation_budget(t
         server.server_close()
         thread.join()
     assert {p: p.read_bytes() for p in directory.rglob("*") if p.is_file()} == before
+
+
+def test_comparison_never_averages_across_models(tmp_path):
+    models = {"rep1": "qwen3.8-27b-awq", "rep2": "Qwen3.8-27B", "pilot": "deepseek-v4.1-flash"}
+    for name, model in models.items():
+        write_json(tmp_path / "eoh" / "tsp_construct" / name / "run_config.json",
+                   {"task": "tsp_construct", "budget": 3, "llm": {"model": model}})
+    monitor = ResultsMonitor(tmp_path)
+    cohorts = {c["id"]: c["runs"] for c in monitor.cohorts()}
+    assert cohorts == {"eoh@qwen3.8-27b": 2, "eoh@deepseek-v4.1-flash": 1}
+    compared = monitor.compare(["eoh@qwen3.8-27b"])["tasks"][0]["cohorts"][0]["runs"]
+    assert sorted(run["name"] for run in compared) == ["rep1", "rep2"]

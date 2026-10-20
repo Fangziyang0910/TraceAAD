@@ -3,6 +3,7 @@
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
+import re
 import time
 
 from benchmarks.tasks import FIXED_TASKS, SCALES, TEST_SCALES
@@ -44,6 +45,23 @@ TASKS = {
     "graph_colouring": {"label": "图着色", "unit": "颜色数"},
     "jssp_construct": {"label": "作业车间调度", "unit": "makespan"},
 }
+
+
+QUANTIZATION = re.compile(r"[-_](awq|gptq|gguf|fp8|int4|int8|q\d\w*)$")
+
+
+def model_name(config) -> str:
+    """One name per model: local and remote deployments of the same weights match."""
+    llm = config.get("llm") if isinstance(config.get("llm"), dict) else {}
+    name = str(llm.get("model") or config.get("model") or "").strip().lower()
+    return QUANTIZATION.sub("", name)
+
+
+def split_cohort(cohort_id: str):
+    """``batch[::variant][@model]`` -> (batch, variant, model)."""
+    rest, _, model = cohort_id.partition("@")
+    batch, _, variant = rest.partition("::")
+    return batch, variant, model
 
 
 def _run_config_paths(directory: Path):
@@ -101,7 +119,7 @@ def _list_curve(points):
             for point in (_compact_curve(points) or []) if isinstance(point, dict)]
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=512)
 def _history(run_dir: Path):
     return TrainingHistory(run_dir)
 
@@ -288,6 +306,7 @@ class ResultsMonitor:
                 status = 'search_complete'
             row = {
                 "task": task, "name": run_dir.name, "repeat": config.get("repeat", metadata.get("repeat")),
+                "model": model_name(config),
                 "seed": config.get("seed", metadata.get("seed")), "backend": config.get("backend", metadata.get("backend")),
                 "status": status, "raw_status": raw_status, "budget": int(budget or 0),
                 "budget_used": int(used or 0), "valid_nodes": int(nodes or 0),
@@ -341,24 +360,43 @@ class ResultsMonitor:
 
     # ---------- cross-batch comparison ----------
 
+    def _run_models(self, directory: Path):
+        """Model of each run in a batch, keyed by (task directory, run name)."""
+        return {(path.parent.parent.name, path.parent.name): model_name(read_object(path))
+                for path in _run_config_paths(directory)}
+
     def cohorts(self):
-        """Comparable result sets: one per batch, or one per held-out variant."""
+        """Comparable result sets: one per batch, held-out variant and model.
+
+        Runs of different models never share a mean; a batch that mixes models
+        yields one cohort per model.
+        """
         items = []
         for batch in self.batches():
-            variants = load_batch_heldout(self.results_root / batch["id"])
+            directory = self.results_root / batch["id"]
+            variants = load_batch_heldout(directory)
             names = sorted(variants) or [""]
+            run_models = self._run_models(directory)
+            models = Counter(run_models.values())
+            split = len(models) > 1
             for variant in names:
-                tasks = sorted(variants.get(variant, {}))
-                items.append({
-                    "id": f"{batch['id']}::{variant}" if variant else batch["id"],
-                    "batch": batch["id"], "variant": variant,
-                    "label": f"{batch['id']} · {variant}" if variant and len(names) > 1 else batch["id"],
-                    "heldout_tasks": tasks,
-                })
+                groups = variants.get(variant, {})
+                base = f"{batch['id']}::{variant}" if variant else batch["id"]
+                label = f"{batch['id']} · {variant}" if variant and len(names) > 1 else batch["id"]
+                for model, runs in sorted(models.items(), key=lambda item: (-item[1], item[0])):
+                    tasks = sorted(task for task, group in groups.items()
+                                   if any(run_models.get((task, name)) == model for name in group["runs"]))
+                    items.append({
+                        "id": f"{base}@{model}" if split else base,
+                        "batch": batch["id"], "variant": variant, "model": model if split else "",
+                        "model_name": model, "runs": runs,
+                        "label": f"{label} · {model or '未记录模型'}" if split else label,
+                        "heldout_tasks": tasks,
+                    })
         return items
 
     def compare_signature(self, cohort_ids):
-        batches = sorted({cohort.split("::")[0] for cohort in cohort_ids})
+        batches = sorted({split_cohort(cohort)[0] for cohort in cohort_ids})
         return tuple((batch, self.state_signature(batch),
                       tuple((str(path), _stamp(path)) for path in batch_result_files(self.results_root / batch)))
                      for batch in batches)
@@ -374,7 +412,8 @@ class ResultsMonitor:
             for item in chosen:
                 heldout = heldout_by_batch[item["batch"]].get(item["variant"], {}).get(task, {})
                 named = heldout.get("runs", {})
-                rows = [row for row in rows_by_batch[item["batch"]] if row["task"] == task]
+                rows = [row for row in rows_by_batch[item["batch"]] if row["task"] == task
+                        and (not item["model"] or row["model"] == item["model"])]
                 if named or item["variant"]:
                     rows = [row for row in rows if row["name"] in named]
                 runs = []
@@ -394,7 +433,7 @@ class ResultsMonitor:
                 tasks.append({"key": task, **meta, "cohorts": entries, "scales": [
                     {"key": str(scale), "label": str(scale), "test": scale in TEST_SCALES[task]}
                     for scale in SCALES[task]]})
-        return {"cohorts": [{k: item[k] for k in ("id", "label", "batch", "variant")} for item in chosen],
+        return {"cohorts": [{k: item[k] for k in ("id", "label", "batch", "variant", "model")} for item in chosen],
                 "tasks": tasks}
 
     def run_detail(self, experiment: str, task: str, name: str):

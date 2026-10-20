@@ -123,7 +123,6 @@ main { max-width: 1480px; margin: 0 auto; padding: 18px 20px 64px; }
 .agg b { display: block; font-size: 16px; color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .chart-box { position: relative; height: 200px; margin: 0 8px 6px; }
 .chart-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
-.chart-note { color: var(--faint); font-size: 11px; padding: 0 16px; min-height: 16px; }
 .runs { padding: 6px 8px 10px; }
 .run-head, .run {
   display: grid; align-items: center; gap: 10px;
