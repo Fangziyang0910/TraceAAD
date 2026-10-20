@@ -108,6 +108,13 @@ def test_mcts_keeps_official_return_extraction_and_shared_sampling_controls():
     assert llm.calls[1][1] == {}
 
 
+def test_mcts_keeps_the_models_return_expression():
+    llm = Replies('{Pair}\n```python\ndef solve(x):\n    if x < 0:\n        return 0, 0\n'
+                  '    doubled = 2 * x\n    return doubled, x\n```', 'aligned')
+    _, function = MASampler(llm, TEMPLATE).get_thought_and_function('task', 'generate')
+    assert run_function(function) == (4, 2)
+
+
 def test_pathwise_requires_metadata_and_rejects_placeholder_rollouts():
     code = '```python\ndef solve_v2(x):\n    return x + 1\n```'
     assert PathWiseSampler.parse_initialization_response(code, TEMPLATE) is None

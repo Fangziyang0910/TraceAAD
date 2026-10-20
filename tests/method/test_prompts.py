@@ -2,9 +2,10 @@
 
 import pytest
 
+from benchmarks.tasks import CO_TASKS, training_task
 from tests.support import TinyEvaluation, TokenLLM, response
 from traceaad import Config, Program, TraceAAD
-from traceaad.prompts import PromptBuilder
+from traceaad.prompts import OP_OBJECTIVE, PromptBuilder
 
 
 @pytest.mark.parametrize("action", ["Refine", "Explore", "Crossover"])
@@ -65,3 +66,10 @@ def test_operator_context_contains_the_selected_history_and_real_feedback(action
         assert request["history_edge_ids"] == [2]
     repair = prompts.repair(programs[3])["prompt"]
     assert programs[3].code in repair and "bad output" in repair
+
+
+@pytest.mark.parametrize("task", CO_TASKS)
+def test_task_text_is_the_one_every_method_sees(task):
+    evaluation = training_task(task)[0]
+    task_section = PromptBuilder(TokenLLM(), task, evaluation, {}, Config()).common[0]
+    assert task_section == "[Task]\n" + evaluation.task_description.replace(OP_OBJECTIVE, "").strip()

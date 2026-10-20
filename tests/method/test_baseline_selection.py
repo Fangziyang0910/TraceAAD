@@ -9,6 +9,7 @@ from baselines.eoh.population import Population
 from baselines.mcts_ahd.mcts import MCTS, MCTSNode
 from baselines.mcts_ahd.mcts_ahd import MCTS_AHD
 from baselines.reevo.prompt import ReEvoPrompt
+from baselines.reevo.reevo import ReEvo
 from baselines.shinka_evo import ShinkaArchive, ShinkaProgram
 from core import Function
 from tests.support import TinyEvaluation, TokenLLM
@@ -38,6 +39,27 @@ def test_reevo_reflection_orders_actual_worse_and_better_programs():
     assert text.index("return 1") < text.index("return 2")
     with pytest.raises(ValueError):
         ReEvoPrompt.get_short_term_reflection_prompt("minimize", [better, better])
+
+
+def test_reevo_pairs_tied_parents_only_when_every_score_is_tied():
+    method = ReEvo(TokenLLM(), TinyEvaluation(), pop_size=4, init_pop_size=2, max_sample_nums=10)
+    try:
+        method._population._population = [function(1, 2), function(2, 2), function(3, 2)]
+        pairs = method._select_parent_pairs()
+        assert method._selection_tied and len(pairs) == 4
+        assert all(a is not b and a.score == b.score for a, b in pairs)
+        for prompt in (ReEvoPrompt.get_short_term_reflection_prompt("minimize", pairs[0], True),
+                       ReEvoPrompt.get_crossover_prompt("minimize", "", pairs[0], True)):
+            text = prompt[-1]["content"]
+            assert "[Code 1]" in text and "[Code 2]" in text
+            assert "orse" not in text and "better than" not in text
+
+        method._population._population = [function(1, 1), function(2, 2), function(3, 2)]
+        pairs = method._select_parent_pairs()
+        assert not method._selection_tied
+        assert all(a.score != b.score for a, b in pairs)
+    finally:
+        method._evaluation_executor.shutdown()
 
 
 def test_mcts_keeps_a_weak_child_in_the_tree_even_if_the_population_rejects_it():

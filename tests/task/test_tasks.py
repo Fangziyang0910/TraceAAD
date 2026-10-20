@@ -1,5 +1,7 @@
 """Benchmark data, solution validity and true objective values."""
 
+import re
+
 import numpy as np
 import pytest
 
@@ -9,7 +11,7 @@ from benchmarks.graph_colouring.evaluation import solve as color
 from benchmarks.jssp_construct.evaluation import solve as schedule
 from benchmarks.jssp_construct.evaluation import validate_schedule
 from benchmarks.shared.seeded_data import generate_dataset
-from benchmarks.tasks import CLASSES, FIXED_TASKS
+from benchmarks.tasks import CLASSES, CO_TASKS, FIXED_TASKS, training_task
 from benchmarks.tsp_construct.evaluation import TSPEvaluation
 from core.evaluate import InvalidEvaluationResult
 
@@ -122,3 +124,18 @@ def test_aco_parallel_execution_preserves_instance_seeds_and_score(task):
     evaluation.n_workers = 2
     assert np.isfinite(serial)
     assert evaluation.evaluate_program(str(evaluation.template_program), heuristic) == serial
+
+
+@pytest.mark.parametrize("task", CO_TASKS)
+def test_generation_text_gives_no_instance_count_or_size(task):
+    # PROTOCOL.md: instance counts, sizes, splits, seeds and evaluation accounting stay out of generation prompts.
+    evaluation = training_task(task)[0]
+    text = evaluation.task_description + evaluation.template_program
+    values = {evaluation.n_instance, evaluation.problem_size}
+    dataset = getattr(evaluation, "DATASET", None)
+    if dataset is not None:
+        values |= set(dataset.COUNTS.values()) | set(dataset.DIMENSIONS.values())
+    assert not [v for v in values if re.search(rf"\b{v}\b", text)]
+    assert not re.search(r"\d+ (fixed |generated )*(train|test|evaluation )?instances", text, re.I)
+    # Nor the evaluator, time limits or the fixed framework's settings.
+    assert not re.search(r"time limit|\bCPU\b|\bseconds?\b|evaluator|settings|reference|local_passes", text, re.I)

@@ -40,6 +40,5 @@ edges. The function is called once per instance, before the ant colony starts.
 ACO samples a move in proportion to pheromone times the returned prior,
 after masking visited customers and customers exceeding remaining capacity.
 The distance matrix diagonal is 1.0. The solver adds 1e-9 to each prior value
-and clips it below at 1e-9. Within the evaluation time limit, the function
-may perform any computation on the complete instance before returning its prior.
+and clips it below at 1e-9.
 """.strip()

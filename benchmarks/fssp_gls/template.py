@@ -23,7 +23,7 @@ task_description = '''Design a guided-local-search perturbation for the permutat
 Every job visits all machines in the SAME machine order; all machines use the SAME job permutation.
 Each machine handles one job at a time and operations cannot be interrupted. Minimize the final
 makespan (completion time of the last job on the last machine), measured with the ORIGINAL times.
-The fixed solver starts with NEH. Each round performs up to local_passes improving swap/insertion
+The fixed solver starts with NEH. Each round performs improving swap/insertion
 moves on original times, then calls get_matrix_and_jobs once. It takes the best improving swap or
 insertion involving the returned job IDs under perturbed_times, retaining the original sequence
 when there is no improving perturbed move. It retains the best TRUE solution throughout all rounds.

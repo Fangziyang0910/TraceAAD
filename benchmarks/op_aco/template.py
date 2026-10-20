@@ -35,9 +35,3 @@ the distance matrix. Larger entries indicate more promising directed edges.
 The function is called once per instance, before the ant colony starts.
 Its returned matrix is reused across all ants and iterations.
 """.strip()
-
-design_notes = """
-Node 0 is masked as a candidate during sampling, so changing only column 0
-cannot affect sampled moves. Return-to-depot distance still affects
-feasibility, and the returned heuristic is a static prior computed before ACO.
-""".strip()

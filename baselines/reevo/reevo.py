@@ -84,6 +84,7 @@ class ReEvo:
         self._num_samplers = num_samplers
         self._num_evaluators = num_evaluators
         self._resume_mode = resume_mode
+        self._selection_tied = False
         self._debug_mode = debug_mode
         llm.debug_mode = debug_mode
         self._multi_thread_or_process_eval = multi_thread_or_process_eval
@@ -298,8 +299,19 @@ class ReEvo:
         if len(pool) < 2:
             raise RuntimeError('ReEvo selection failed: fewer than two valid functions are available.')
 
-        if len({float(func.score) for func in pool}) < 2:
-            raise RuntimeError('ReEvo selection failed: no distinct parent scores, as in upstream.')
+        # Upstream raises when every parent score is tied. We fall back to tied pairs
+        # instead, so runs that upstream would complete are unchanged.
+        self._selection_tied = len({float(func.score) for func in pool}) < 2
+        if self._selection_tied:
+            log_event(
+                self,
+                event='selection_fallback',
+                status='all_scores_tied',
+                sample_order=self._tot_sample_nums,
+                generation=self._population.generation,
+                pool_size=len(pool),
+                score=pool[0].score,
+            )
 
         selected_pairs = []
         trial = 0
@@ -308,7 +320,7 @@ class ReEvo:
             parent_1, parent_2 = np.random.choice(pool, size=2, replace=False)
             if parent_1 is parent_2:
                 continue
-            if parent_1.score == parent_2.score:
+            if parent_1.score == parent_2.score and not self._selection_tied:
                 continue
             selected_pairs.append([parent_1, parent_2])
             if trial > 1000:
@@ -316,7 +328,8 @@ class ReEvo:
         return selected_pairs
 
     def _short_term_reflection(self, parents: list[Function]) -> str:
-        prompt = ReEvoPrompt.get_short_term_reflection_prompt(self._task_description_str, parents)
+        prompt = ReEvoPrompt.get_short_term_reflection_prompt(
+            self._task_description_str, parents, self._selection_tied)
         self._debug_print('Short-term Reflection Prompt', prompt)
         try:
             reflection = self._sampler.llm.draw_sample(prompt)
@@ -344,7 +357,8 @@ class ReEvo:
         return reflection
 
     def _crossover(self, parents: list[Function], short_term_reflection: str) -> Function | None:
-        prompt = ReEvoPrompt.get_crossover_prompt(self._task_description_str, short_term_reflection, parents)
+        prompt = ReEvoPrompt.get_crossover_prompt(
+            self._task_description_str, short_term_reflection, parents, self._selection_tied)
         self._debug_print('Crossover Prompt', prompt)
         return self._sample_evaluate_register(prompt, 'crossover')
 

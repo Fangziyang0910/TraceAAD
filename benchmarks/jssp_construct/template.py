@@ -43,7 +43,5 @@ preceding operation finishes. Operations on the same machine must not overlap.
 Minimize makespan, max(starts + processing_times). Return start times, not a score.
 The supplied Giffler-Thompson/MWKR construction is editable starting code.
 You may change or replace the entire algorithm and add helper functions.
-The evaluator imposes no dispatch rule, construction order, local search or
-restart strategy. It calls solve once per instance with the complete problem.
-The reference schedule is not an input. This is deterministic static makespan
-scheduling, not dynamic arrivals or a flexible-machine assignment problem.'''
+solve is called once per instance with the complete problem.
+This is deterministic static makespan scheduling, not dynamic arrivals or a flexible-machine assignment problem.'''

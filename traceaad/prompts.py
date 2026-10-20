@@ -2,8 +2,6 @@
 
 import re
 
-from benchmarks.tasks import FIXED_TASKS
-
 from .config import DEFAULT_OPERATOR_WEIGHTS
 from .history import code_diff, path, score_text, verdict
 
@@ -67,7 +65,6 @@ MANY_TIMES = re.compile(
     "Use efficient NumPy operations because the function is evaluated many\\s+times\\."
 )
 SERVICE = "At a customer, the vehicle waits until the time window opens if it arrives early, then spends the customer's service duration before moving on. The current time passed to the function already includes the waiting and service durations of the customers served so far; the service durations themselves are not passed to the function."
-CVRP_COMPUTATION = "Within the evaluation time limit, the function\nmay perform any computation on the complete instance before returning its prior."
 OP_OBJECTIVE = "\nThe evaluation objective is the negative mean collected prize; lower is better."
 
 
@@ -86,29 +83,14 @@ def corrected_description(task, description):
 
 class PromptBuilder:
     def __init__(self, llm, task, evaluation, programs, config):
-        if task in FIXED_TASKS:
-            settings = ", ".join(
-                (f"{name}={value}" for name, value in evaluation.outer_settings.items())
-            )
-            description = evaluation.DESCRIPTION + (
-                f"\nThe fixed solver settings are {settings}." if settings else ""
-            )
-            notes = ""
-        else:
-            description = (
-                evaluation.task_description.replace(CVRP_COMPUTATION, "")
-                .replace(OP_OBJECTIVE, "")
-                .rstrip()
-            )
-            notes = getattr(evaluation, "design_notes", "")
+        # The task text every method sees; TraceAAD states the score in its own line.
+        description = evaluation.task_description.replace(OP_OBJECTIVE, "")
         self.llm = llm
         self.programs, self.config = (programs, config)
         self.score_meaning = SCORE_MEANINGS.get(
             task, getattr(evaluation, "score_meaning", "the task objective")
         )
         description = corrected_description(task, description.strip())
-        if notes and notes.strip() not in description:
-            description += "\n\n" + notes.strip()
         self.common = [
             "[Task]\n" + description,
             f"Score: {self.score_meaning}. Lower is better.",

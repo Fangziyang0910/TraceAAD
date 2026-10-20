@@ -11,14 +11,6 @@ DIMENSIONS = {'vertices': 300}
 DISTRIBUTION = 'G(300,0.5): each undirected edge independently present with probability 0.5; reference is deterministic DSATUR construction'
 
 
-def describe(split, count=None):
-    phase = canonical_split(split, SCALE)
-    count = COUNTS[phase] if count is None else count
-    dim = DIMENSIONS
-    size = f"{dim['vertices']} vertices (edge density about 0.5)"
-    return f"{count} fixed generated {phase} instances with {size}"
-
-
 def generate_instances(split):
     from .evaluation import solve
     from .template import function_name, template_program

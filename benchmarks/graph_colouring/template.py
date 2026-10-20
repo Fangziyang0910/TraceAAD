@@ -29,8 +29,7 @@ nonnegative color to every vertex. Adjacent vertices must have different colors.
 Minimize the number of DISTINCT colors in the returned valid coloring; color
 labels need not be consecutive. Return the coloring itself, not a score.
 The supplied DSATUR construction is editable starting code. You may change or
-replace the entire algorithm and add helper functions. No construction, repair,
-neighborhood, acceptance rule or restart strategy is imposed by the evaluator.
+replace the entire algorithm and add helper functions.
 The solver is called once per instance and receives the complete graph.'''
 
 function_name = 'solve'

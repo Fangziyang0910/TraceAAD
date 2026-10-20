@@ -41,7 +41,19 @@
 
 训练、同规模测试和方法执行的最终重评使用上述预算规则。实例隔离执行，BLAS／OpenMP 使用单线程。程序与固定框架的随机种子按实例固定。计量和执行见 [probe.py](../traceaad/probe.py)、[instance_evaluation.py](../traceaad/instance_evaluation.py)，测试条件见 [evaluation_execution.py](infra/evaluation_execution.py)。
 
-生成提示提供任务、接口、返回值用途、成绩含义和该方法实际展示的反馈。实例数、数据划分、种子和评价记账不进入生成提示。超时修复可以提供实际耗时与时限。
+生成提示提供任务、接口、返回值用途、成绩含义和该方法实际展示的反馈。超时修复可以提供实际耗时与时限。
+
+以下内容一律不进入生成提示，现有任务与以后新增的任务都适用，不得加回：
+
+- 实例数量与实例规模，例如节点数、作业数、机器数、顶点数；
+- 数据划分与种子；
+- 评价记账，例如哪些步骤计时、哪些不计时；
+- 时间限制与计算预算；
+- 评价器的执行机制，例如每个实例重新执行、输入为副本、成绩不按参照归一化；
+- 固定框架的计算量设置，例如迭代轮数、局部搜索次数、蚂蚁数；
+- 以“不限制”为名列举的算法方向。
+
+程序在运行时从输入读取规模。所有方法使用同一份任务说明；方法只增加自己的提示结构。[任务检查](../tests/task/test_tasks.py)中的 `test_generation_text_gives_no_instance_count_or_size` 核对六任务的说明与模板，[提示检查](../tests/method/test_prompts.py)中的 `test_task_text_is_the_one_every_method_sees` 核对 TraceAAD 与基线的任务说明一致。
 
 ## 搜索预算与最终选择
 

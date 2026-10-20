@@ -12,7 +12,7 @@ from benchmarks.op_aco.dataset import (
     gen_prizes,
     load_split_instances,
 )
-from benchmarks.op_aco.template import design_notes, task_description, template_program
+from benchmarks.op_aco.template import task_description, template_program
 
 __all__ = ["OPACOEvaluation"]
 
@@ -185,7 +185,6 @@ class OPACOEvaluation(Evaluation):
             task_description=task_description + "\nThe evaluation objective is the negative mean collected prize; lower is better.",
             timeout_seconds=timeout_seconds,
         )
-        self.design_notes = design_notes
         validate_parameters(n_ants, n_iterations, n_workers)
         self._datasets, self.dataset_metadata = load_split_instances(split)
         self.split = split

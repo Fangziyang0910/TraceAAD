@@ -20,6 +20,7 @@ def heldout_evaluator(
     timeout_seconds,
     task_factory=heldout_task,
     scheduler_socket=None,
+    function_seconds=None,
 ):
     validate_task_interface(config["task"], config)
     params = config.get("method_params", {})
@@ -41,7 +42,9 @@ def heldout_evaluator(
         task,
         seeds,
         "heldout",
-        function_seconds=params.get("function_seconds", FUNCTION_LIMITS[config["task"]]),
+        function_seconds=params.get("function_seconds", FUNCTION_LIMITS[config["task"]])
+        if function_seconds is None
+        else function_seconds,
         timeout_seconds=timeout,
         n_workers=count,
         scheduler_socket=params.get("scheduler_socket")

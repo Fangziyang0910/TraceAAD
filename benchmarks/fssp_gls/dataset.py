@@ -9,14 +9,6 @@ DIMENSIONS = {'jobs': 50, 'machines': 20}
 DISTRIBUTION = '50 jobs x 20 machines; independent integer processing times uniform in 1..99; reference is NEH makespan'
 
 
-def describe(split, count=None):
-    phase = canonical_split(split, SCALE)
-    count = COUNTS[phase] if count is None else count
-    dim = DIMENSIONS
-    size = f"{dim['jobs']} jobs and {dim['machines']} machines"
-    return f"{count} fixed generated {phase} instances with {size}"
-
-
 def generate_instances(split):
     from .evaluation import makespan, neh
     split = canonical_split(split, SCALE)

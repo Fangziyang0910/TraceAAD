@@ -51,6 +51,7 @@ def evaluate_run(
     allow_incomplete=False,
     variant=None,
     scheduler_socket=None,
+    function_seconds=None,
 ):
     run_dir = Path(run_dir)
     config = read_json(run_dir / "run_config.json")
@@ -89,6 +90,7 @@ def evaluate_run(
             timeout_seconds=timeout_seconds,
             task_factory=heldout_task,
             scheduler_socket=scheduler_socket,
+            function_seconds=function_seconds,
         )
         outcome = evaluator.evaluate(code, chosen["node_id"])
         records = outcome["evaluations"]
@@ -126,6 +128,10 @@ def main(argv=None):
     )
     parser.add_argument("--timeout", type=float)
     parser.add_argument(
+        "--function-seconds", type=float,
+        help="relaxed mean function CPU limit; the result records it",
+    )
+    parser.add_argument(
         "--workers", type=int, help="instance workers; defaults to the saved execution settings"
     )
     parser.add_argument(
@@ -160,6 +166,7 @@ def main(argv=None):
             allow_incomplete=args.allow_incomplete,
             variant=args.variant,
             scheduler_socket=args.scheduler_socket,
+            function_seconds=args.function_seconds,
         )
         payload.extend({"run_dir": str(run), **result} for result in results)
     if args.output_dir:

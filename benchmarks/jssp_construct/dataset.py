@@ -13,12 +13,6 @@ DISTRIBUTION = ('Static 20 jobs x 20 machines. Each job independently visits a u
                 'published Taillard instances or random generator.')
 
 
-def describe(split, count=None):
-    phase = canonical_split(split, SCALE)
-    count = COUNTS[phase] if count is None else count
-    return f'{count} fixed generated {phase} instances with 20 jobs, 20 machines and 400 operations'
-
-
 def generate_instances(split):
     from .evaluation import solve
     from .template import template_program, function_name

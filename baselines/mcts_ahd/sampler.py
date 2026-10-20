@@ -22,14 +22,12 @@ class MASampler:
             operator: str | None = None,
             sample_order: int | None = None,
     ) -> Tuple[str, Function]:
-        # MCTS-AHD ee9c4f42, Evolution._get_alg: greedy extraction through last return.
+        # MCTS-AHD ee9c4f42, Evolution._get_alg: greedy extraction through the last return.
+        # Upstream drops that return's expression and appends a fixed output name; the
+        # model's own expression is kept instead, since our task docstrings name their
+        # own return values (e.g. a tuple) and the fixed name is then undefined.
         template = parse_program(self._template_program) if isinstance(self._template_program, str) else self._template_program
         name = template.functions[0].name
-        output = ('next_node' if name.startswith('select_next_node') else
-                  'priority' if name.startswith('priority') else
-                  'heuristics_matrix' if name.startswith('heuristics') else
-                  'offsprings' if name.startswith('crossover') else
-                  'utility_value' if name.startswith('utility') else 'result')
         for attempt in range(5):
             response = self.llm.draw_sample(prompt)
             match = re.search(r'\{(.*?)\}', response, re.DOTALL)
@@ -40,9 +38,9 @@ class MASampler:
                 token = 'python' if 'python' in response else 'import' if 'import' in response else 'def'
                 descriptions = re.findall(r'^.*?(?=' + token + ')', response, re.DOTALL)
                 thought = descriptions[0] if descriptions else ''
-            codes = re.findall(r'import.*return', response, re.DOTALL)
+            codes = re.findall(r'import.*return[^\n]*', response, re.DOTALL)
             if not codes:
-                codes = re.findall(r'def.*return', response, re.DOTALL)
+                codes = re.findall(r'def.*return[^\n]*', response, re.DOTALL)
             self._log_llm_call(stage='generate', operator=operator, sample_order=sample_order,
                                prompt=prompt, response=response, attempt=attempt,
                                function_parse_success=bool(codes))
@@ -50,7 +48,7 @@ class MASampler:
                 break
         else:
             return None, None
-        code = codes[0] + ' ' + output
+        code = codes[0]
         function = function_from_source(code, name)
         if function is None:
             return thought, None
