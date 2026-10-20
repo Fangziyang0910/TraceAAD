@@ -48,6 +48,8 @@ TraceAAD 入口为 [run.py](traceaad/run.py) 与 [launch_host.py](traceaad/launc
 
 DeltaEvolve 使用 `--method deltaevolve`；单路入口为 `experiments.deltaevolve.run`，支持 `--dry-run`。论文机制、缺失细节的补充规则与 embedding 配置见[实现说明](../baselines/deltaevolve/README.md)。
 
+OpenEvolve 使用 `--method openevolve`；单路入口为 `experiments.openevolve.run`，支持 `--dry-run`。官方源码版本、成绩换算与串行执行等适配见[实现说明](../baselines/openevolve/README.md)。
+
 ## 2. 查询结果
 
 将 `MANIFEST_PATH` 替换为批次清单路径，将 `RUN_DIR` 替换为运行目录。

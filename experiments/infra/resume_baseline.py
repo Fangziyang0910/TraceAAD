@@ -20,7 +20,10 @@ from experiments.infra.runner import baseline_run_lock
 from traceaad.storage import append_jsonl, read_json, rows, write_json
 from experiments.infra.result_storage import Programs
 
-METHODS = ("eoh", "reevo", "funsearch", "mcts_ahd", "calm", "pathwise", "shinka_evo", "deltaevolve")
+METHODS = ("eoh", "reevo", "funsearch", "mcts_ahd", "calm", "pathwise", "shinka_evo", "deltaevolve",
+           "openevolve")
+# Search evaluations differ from candidates; a pending evaluation may remain at the budget limit.
+PENDING_EVALUATION = ("deltaevolve", "openevolve")
 
 
 def history(directory):
@@ -53,7 +56,7 @@ def history(directory):
             continue
         stage = call.get("stage")
         consumed = stage == "generate" and config["method"] in ("eoh", "reevo", "funsearch")
-        if config["method"] in ("shinka_evo", "deltaevolve"):
+        if config["method"] in ("shinka_evo", "deltaevolve", "openevolve"):
             consumed = stage == "patch"
         if config["method"] == "mcts_ahd":
             consumed = (
@@ -150,7 +153,7 @@ def recover(method, directory):
     profiler._resume_budget_from_method = True
     profiler._evaluate_success_program_num = sum(r.get("valid", False) for r in candidates)
     profiler._evaluate_failed_program_num = len(candidates) - profiler._evaluate_success_program_num
-    if name == "deltaevolve":
+    if name in PENDING_EVALUATION:
         method._evaluation_count = sum(r['attempt'].get('evaluate_time') is not None for r in candidates)
     profiler._canonical_best = copy.deepcopy(
         min((r["program"] for r in candidates if r.get("valid")), key=lambda r: r["fitness"], default=None)
@@ -161,7 +164,7 @@ def recover(method, directory):
     profiler._method_event_count = sum(r.get("kind") == "method" for r in events)
     profiler._error_count = sum(1 for _ in rows(directory / "logs/errors.jsonl"))
     profiler._resume_elapsed = max((r.get("progress", {}).get("elapsed", 0) for r in candidates), default=0)
-    if used >= config["budget"] and name != "deltaevolve":
+    if used >= config["budget"] and name not in PENDING_EVALUATION:
         report["boundary"] = "final_selection_only"
         return report
 
@@ -458,7 +461,7 @@ def main():
                 if (report["remaining"] == 0 and getattr(method, "_pending_node", None) is None
                         and getattr(method, "_pending_evaluation", None) is None):
                     counts = ({'search_evaluations': method._evaluation_count}
-                              if config['method'] == 'deltaevolve' else {})
+                              if config['method'] in PENDING_EVALUATION else {})
                     method._profiler.write_run_summary(status="finished", recovery=report, **counts)
                 else:
                     method.run()

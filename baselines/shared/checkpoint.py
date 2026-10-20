@@ -16,6 +16,7 @@ NAME = 'search_checkpoint.json.gz'
 # shortcut: unfinished phases restart at a saved boundary; persist pending work for exact mid-phase replay.
 FIELDS = {
     'deltaevolve': ('_iteration', '_seeded', '_pending_evaluation', '_pending_node'),
+    'openevolve': ('_seeded', '_pending_evaluation'),
     'calm': ('_algos', '_seed_algos', '_used_prompts', '_last_revisited_prompts',
              '_injected_components', '_seen_code_signatures', '_seen_performance_profiles',
              '_numeric_refine_attempted', '_age_stuck', '_train_epoch', '_log_step', '_messages', '_best_perf'),
@@ -28,6 +29,10 @@ FIELDS = {
 }
 GROUPS = {
     'deltaevolve': {'_population': ('nodes', 'islands', 'archive_ids', 'projection')},
+    'openevolve': {'_database': ('programs', 'island_feature_maps', 'islands', 'current_island',
+                                 'island_generations', 'last_migration_generation', 'archive',
+                                 'best_program_id', 'island_best_programs', 'last_iteration',
+                                 'feature_stats', 'diversity_by_code', 'diversity_reference_set')},
     'calm': {},
     'pathwise': {'_population': ('_nodes', '_generation')},
     'shinka_evo': {
@@ -45,8 +50,9 @@ def _classes():
     from baselines.pathwise.graph import PathWiseNode, ParentInfo
     from baselines.shinka_evo.population import ShinkaProgram
     from baselines.shinka_evo.bandit import BanditUpdate
+    from baselines.openevolve.upstream.database import Program
     return {cls.__name__: cls for cls in (Function, HeuristicRecord, Prompt, PathWiseNode,
-                                         ParentInfo, ShinkaProgram, BanditUpdate)}
+                                         ParentInfo, ShinkaProgram, BanditUpdate, Program)}
 
 
 def encode(value, memo=None):
@@ -129,7 +135,7 @@ def save_checkpoint(method, name, boundary):
             rng['local'] = method._rs.get_state()
         if name == 'shinka_evo':
             rng.update(local=method._rng.getstate(), bandit=method._bandit.rng.getstate())
-        if name == 'deltaevolve':
+        if name in ('deltaevolve', 'openevolve'):
             rng['local'] = method._rng.getstate()
         payload = {'method': name, 'boundary': boundary,
                    'budget_used': method._tot_sample_nums, 'candidate_count': profiler._num_samples,
@@ -175,6 +181,6 @@ def restore_checkpoint(method, directory, name):
     if name == 'shinka_evo':
         method._rng.setstate(state['rng']['local'])
         method._bandit.rng.setstate(state['rng']['bandit'])
-    if name == 'deltaevolve':
+    if name in ('deltaevolve', 'openevolve'):
         method._rng.setstate(state['rng']['local'])
     return payload

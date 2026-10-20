@@ -9,6 +9,7 @@
 | `pathwise/prompts/` | [PathWise · 9d014a36](https://github.com/oguzhangungordu/PathWise/tree/9d014a368d920d46ef4538da4c484503549214cb) | 按该版本复制提示。本地适配器提供任务描述、函数签名与计分方向。 |
 | `reevo/prompts/` 中的任务知识 | [ReEvo · 6dce1825](https://github.com/ai4co/reevo/tree/6dce18257da5e11db2d138e417a2fffc5c72d05f/prompts) | 任务名称映射到本地基准，没有新增任务知识。 |
 | `shinka_evo/prompts/` | [ShinkaEvolve · 8adc053a](https://github.com/SakanaAI/ShinkaEvolve/tree/8adc053a2ce4511ad2ac310e004c530a73fb974a) | 按该版本复制提示。本地适配器提供任务信息，类型导入指向本地程序记录。 |
+| `openevolve/upstream/` | [OpenEvolve · 34427bae](https://github.com/algorithmicsuperintelligence/openevolve/tree/34427bae6239063d46be0d38e0fabe11279d05aa) | 数据库、提示采样器、默认模板与 diff 工具按该版本复制，只改包导入；`config.py` 只保留两个数据类。迭代循环与本地适配见[实现说明](openevolve/README.md)。 |
 | `deltaevolve/prompt.py` | [DeltaEvolve · ICML 2026 正式版](https://proceedings.mlr.press/v306/jiang26g.html)，附录 C Figures 5–6 | 根据 PDF 转录提示的实质内容，统一空白与标点，代入任务和目标方向。依据论文独立实现，未使用作者代码；补充决定见[实现说明](deltaevolve/README.md)。 |
 
 链接保留完整提交标识。表中适配说明来自封存前的来源记录；本次未逐文件重新比对上游内容。
@@ -17,7 +18,7 @@
 
 先定位运行配置和源码快照，再对照该方法的上游版本。任务接口、提示适配和搜索流程分别核对，不能仅凭来源版本判断三者一致。
 
-共同实验条件见[实验条件](../experiments/PROTOCOL.md)。DeltaEvolve 的新增来源与转录核对于 2026-10-16。
+共同实验条件见[实验条件](../experiments/PROTOCOL.md)。DeltaEvolve 的新增来源与转录核对于 2026-10-16。OpenEvolve 的复制文件于 2026-10-20 逐文件比对，去掉导入改写后与上游相同。
 
 ## 2026-10-17 机制移植
 
