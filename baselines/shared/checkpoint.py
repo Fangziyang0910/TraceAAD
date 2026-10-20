@@ -17,6 +17,10 @@ NAME = 'search_checkpoint.json.gz'
 FIELDS = {
     'deltaevolve': ('_iteration', '_seeded', '_pending_evaluation', '_pending_node'),
     'openevolve': ('_seeded', '_pending_evaluation'),
+    'hsevo': ('_phase', '_iteration', '_init_index', '_init_population', '_population', '_elitist',
+              '_str_flash_memory', '_str_comprehensive_memory', '_lst_good_reflection', '_lst_bad_reflection'),
+    'refineevo': ('_phase', '_generation', '_init_index', '_init_population', '_population', '_id_counter',
+                  '_op_desc', '_strategy_history', '_improvement_history'),
     'calm': ('_algos', '_seed_algos', '_used_prompts', '_last_revisited_prompts',
              '_injected_components', '_seen_code_signatures', '_seen_performance_profiles',
              '_numeric_refine_attempted', '_age_stuck', '_train_epoch', '_log_step', '_messages', '_best_perf'),
@@ -33,6 +37,8 @@ GROUPS = {
                                  'island_generations', 'last_migration_generation', 'archive',
                                  'best_program_id', 'island_best_programs', 'last_iteration',
                                  'feature_stats', 'diversity_by_code', 'diversity_reference_set')},
+    'hsevo': {},
+    'refineevo': {'_planner': ('operator_descriptions', 'history'), '_pool': ('data',)},
     'calm': {},
     'pathwise': {'_population': ('_nodes', '_generation')},
     'shinka_evo': {
@@ -51,8 +57,9 @@ def _classes():
     from baselines.shinka_evo.population import ShinkaProgram
     from baselines.shinka_evo.bandit import BanditUpdate
     from baselines.openevolve.upstream.database import Program
+    from baselines.hsevo.hsevo import Individual
     return {cls.__name__: cls for cls in (Function, HeuristicRecord, Prompt, PathWiseNode,
-                                         ParentInfo, ShinkaProgram, BanditUpdate, Program)}
+                                         ParentInfo, ShinkaProgram, BanditUpdate, Program, Individual)}
 
 
 def encode(value, memo=None):

@@ -1,0 +1,44 @@
+## TASK: Evaluate Whether Operator Needs Improvement
+
+Analyze the operator's historical performance and current population context to determine if this operator should be improved.
+
+---
+
+## OPERATOR INFORMATION
+
+**Operator ID**: {operator_id}
+
+**Current Description**:
+{current_description}
+
+---
+
+## PERFORMANCE HISTORY
+
+{performance_history}
+
+**Performance Status**: {performance_status}
+**History Length**: {history_length} generations
+
+---
+
+## POPULATION CONTEXT
+
+{population_context}
+
+---
+
+## OUTPUT FORMAT
+
+**CRITICAL**: Provide your response as a JSON object in a ```json code block:
+
+```json
+{{
+  "needs_improvement": true or false,
+  "reasoning": "Clear explanation citing specific patterns and metrics from the performance history.",
+  "confidence": 0.0-1.0,
+  "improvement_urgency": "low" or "medium" or "high"
+}}
+```
+
+**Important**: Base your decision on concrete evidence from the performance history, not speculation.

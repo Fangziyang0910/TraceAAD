@@ -38,7 +38,7 @@ def test_training_and_test_share_the_task_budget(task, tmp_path):
 
 @pytest.mark.parametrize(
     "name", ["eoh", "reevo", "mcts_ahd", "pathwise", "calm", "funsearch", "shinka_evo", "deltaevolve",
-             "openevolve"]
+             "openevolve", "hsevo", "refineevo"]
 )
 def test_baseline_entry_accepts_and_evaluates_a_complete_solver(name, tmp_path, monkeypatch):
     monkeypatch.delenv("TRACEAAD_SCHEDULER_SOCKET", raising=False)

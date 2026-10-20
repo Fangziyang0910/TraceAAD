@@ -21,7 +21,7 @@ from traceaad.storage import append_jsonl, read_json, rows, write_json
 from experiments.infra.result_storage import Programs
 
 METHODS = ("eoh", "reevo", "funsearch", "mcts_ahd", "calm", "pathwise", "shinka_evo", "deltaevolve",
-           "openevolve")
+           "openevolve", "hsevo", "refineevo")
 # Search evaluations differ from candidates; a pending evaluation may remain at the budget limit.
 PENDING_EVALUATION = ("deltaevolve", "openevolve")
 

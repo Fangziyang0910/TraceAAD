@@ -50,6 +50,10 @@ DeltaEvolve 使用 `--method deltaevolve`；单路入口为 `experiments.deltaev
 
 OpenEvolve 使用 `--method openevolve`；单路入口为 `experiments.openevolve.run`，支持 `--dry-run`。官方源码版本、成绩换算与串行执行等适配见[实现说明](../baselines/openevolve/README.md)。
 
+HSEvo 使用 `--method hsevo`；单路入口为 `experiments.hsevo.run`，支持 `--dry-run`。预算按函数评价次数计，含和声搜索的每组参数；同分兜底与其他适配见[实现说明](../baselines/hsevo/README.md)。
+
+RefineEvo 使用 `--method refineevo`；单路入口为 `experiments.refineevo.run`，支持 `--dry-run`。预算按生成回复计，含上游重试的解析失败与重复回复；经验检索需要 embedding 凭据，同批经验时序与其他适配见[实现说明](../baselines/refineevo/README.md)。
+
 ## 2. 查询结果
 
 将 `MANIFEST_PATH` 替换为批次清单路径，将 `RUN_DIR` 替换为运行目录。
