@@ -69,6 +69,33 @@ def test_failure_cancels_other_instances_and_releases_workers(body, kind):
     assert {p.pid for p in multiprocessing.active_children()} == before
 
 
+def test_runaway_memory_stops_the_candidate_but_numpy_programs_pass(monkeypatch):
+    import numpy as np
+    import traceaad.instance_evaluation as module
+
+    (np.ones((300, 300)) @ np.ones((300, 300))).sum()  # the parent's BLAS buffers exist before fork
+    monkeypatch.setattr(module, "INSTANCE_MEMORY_BYTES", 1 << 30)
+    before = {p.pid for p in multiprocessing.active_children()}
+    runaway = (
+        "def forever():\n    i = 0\n    while True:\n        yield i\n        i += 1\n"
+        "def score(x):\n    return len(list(forever()))"
+    )
+    for workers in (1, 2):
+        result = InstanceProgramEvaluator(IndexedEvaluation()).evaluate(
+            runaway, "runaway", timeout_seconds=60, n_workers=workers
+        )
+        assert result["failure"]["kind"] == "runtime_error"
+        assert result["failure"]["error_type"] == "MemoryError"
+        assert result["seconds"] < 30
+    assert {p.pid for p in multiprocessing.active_children()} == before
+    # BLAS buffers inherited from the parent and a 100 MiB array stay under the limit.
+    numpy = (
+        "import numpy as np\ndef score(x):\n    a = np.random.rand(600, 600)\n"
+        "    b = np.ones(100 << 17)\n    return float((a @ a).sum() > 0) + b[0] + x"
+    )
+    assert InstanceProgramEvaluator(IndexedEvaluation()).evaluate(numpy, "numpy")["fitness"] == 3.5
+
+
 class SlowSolver(IndexedEvaluation):
     def evaluate_program(self, source, function):
         import time

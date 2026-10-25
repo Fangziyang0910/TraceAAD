@@ -22,7 +22,7 @@ from experiments.infra.base import (
 from experiments.infra.launcher import LaunchItem, pending_items, validate_new_items, is_session_alive, launch_command
 
 METHODS = ("eoh", "funsearch", "reevo", "mcts_ahd", "pathwise", "calm", "shinka_evo", "deltaevolve",
-           "openevolve", "hsevo", "refineevo")
+           "openevolve", "hsevo", "refineevo", "clade_ahd")
 
 
 def build_parser() -> argparse.ArgumentParser:

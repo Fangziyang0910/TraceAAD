@@ -236,7 +236,7 @@ class MCTS_AHD:
                 thought, func = self._sampler.get_thought_and_function(
                     self._task_description_str, prompt, operator=operator, sample_order=sample_order)
                 if thought is None or func is None:
-                    raise ValueError('MCTS-AHD could not extract an algorithm and code')
+                    break
                 if duplicate_retries == 0 and self.check_duplicate(population, str(func)):
                     duplicate_retries += 1
                     if operator == 'e1':
@@ -258,6 +258,9 @@ class MCTS_AHD:
         sample_time = time.time() - sample_start
         self._consecutive_sample_failures = 0
         if thought is None or func is None:
+            self._record_sample_failure(
+                ValueError('MCTS-AHD could not extract an algorithm and code'),
+                prompt=prompt, operator=operator, sample_order=sample_order, counts_budget=True)
             return False
         # convert to Program instance
         program = replace_function(func, self._template_program)
@@ -276,7 +279,7 @@ class MCTS_AHD:
         func.sample_time = sample_time
         func.operator = operator or 'Unknown'
         if self._profiler is not None:
-            self._profiler.register_function(func, program=str(program))
+            self._profiler.register_function(func, program=str(program), budget_used=self._tot_sample_nums)
             if isinstance(self._profiler, MAProfiler):
                 self._profiler.register_population(self._population)
         if func_only:
@@ -296,10 +299,12 @@ class MCTS_AHD:
         else:
             return self._tot_sample_nums < self._max_sample_nums
 
-    def _record_sample_failure(self, exc: Exception, *, prompt, operator=None, sample_order=None):
+    def _record_sample_failure(self, exc: Exception, *, prompt, operator=None, sample_order=None,
+                               counts_budget=False):
         if sample_order is None:
             sample_order = self._tot_sample_nums + 1
-        self._consecutive_sample_failures = getattr(self, '_consecutive_sample_failures', 0) + 1
+        self._consecutive_sample_failures = (
+            0 if counts_budget else getattr(self, '_consecutive_sample_failures', 0) + 1)
         max_failures = getattr(self, '_max_consecutive_sample_failures', 20)
         error_message = str(exc)
         if len(error_message) > 500:
@@ -317,10 +322,11 @@ class MCTS_AHD:
         )
         self._log_mcts_event(
             event='sample_error',
-            status='error',
-            reason='llm_sample_exception',
+            status='invalid' if counts_budget else 'error',
+            reason='invalid_reply' if counts_budget else 'llm_sample_exception',
             operator=operator,
             sample_order=self._tot_sample_nums,
+            counts_budget=counts_budget,
             error_type=type(exc).__name__,
             error=error_message,
             consecutive_failures=self._consecutive_sample_failures,
@@ -334,7 +340,7 @@ class MCTS_AHD:
                 operator=operator,
                 sample_order=sample_order,
                 prompt=prompt,
-                counts_budget=False,
+                counts_budget=counts_budget,
                 consecutive_failures=self._consecutive_sample_failures,
                 max_consecutive_failures=max_failures,
             )

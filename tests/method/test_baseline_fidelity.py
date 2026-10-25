@@ -123,6 +123,60 @@ def test_mcts_extraction_starts_at_a_code_line_not_at_words_in_the_description()
     assert run_function(function) == 3
 
 
+@pytest.mark.parametrize('bad', [
+    '```python\ndef score(x):\n    return x\n```',
+    '{An idea without code}',
+    '{Broken code}\n```python\ndef score(x):\n    return (\n```',
+])
+def test_mcts_invalid_replies_advance_budget_without_aborting(tmp_path, bad):
+    from baselines.mcts_ahd import MCTS_AHD, MAProfiler
+    from experiments.infra.resume_baseline import history
+    from tests.support import TinyEvaluation
+    from traceaad.storage import read_json, rows, write_json
+
+    write_json(tmp_path / 'run_config.json', {'method': 'mcts_ahd', 'task': 'toy', 'budget': 23})
+    good = '{Return one}\n```python\ndef score(x):\n    return 1\n```'
+    llm = Replies(good, 'aligned', *([bad] * 21), good, 'aligned')
+    profiler = MAProfiler(tmp_path)
+    method = MCTS_AHD(llm, TinyEvaluation(), profiler, max_sample_nums=23)
+    try:
+        assert method._sample_evaluate_register('task', func_only=True)
+        for expected in range(2, 23):
+            assert method._sample_evaluate_register('task', func_only=True) is False
+            assert method._tot_sample_nums == expected and not method._search_aborted
+        assert method._sample_evaluate_register('task', func_only=True)
+        assert len(llm.calls) == 25 and method._tot_sample_nums == 23
+        candidates = [r for r in rows(tmp_path / 'events.jsonl') if r.get('kind') == 'candidate']
+        assert [r['budget_used'] for r in candidates] == [1, 23]
+        invalid = [r['data'] for r in rows(tmp_path / 'events.jsonl')
+                   if r.get('data', {}).get('counts_budget')]
+        assert [r['sample_order'] for r in invalid] == list(range(2, 23))
+        assert history(tmp_path)[-1] == 23
+        from baselines.shared.observability import finish_profiler
+        finish_profiler(method)
+        assert read_json(tmp_path / 'summary.json')['budget_used'] == 23
+    finally:
+        method._evaluation_executor.shutdown()
+
+
+def test_mcts_transport_failures_keep_their_abort_limit_without_spending_budget():
+    from baselines.mcts_ahd import MCTS_AHD
+    from tests.support import TinyEvaluation
+
+    class Offline:
+        def draw_sample(self, prompt):
+            raise ConnectionError('offline')
+
+    method = MCTS_AHD(Offline(), TinyEvaluation(), max_sample_nums=5,
+                     max_consecutive_sample_failures=2)
+    try:
+        assert method._sample_evaluate_register('task', func_only=True) is False
+        assert method._tot_sample_nums == 0 and method._search_aborted
+        assert method._consecutive_sample_failures == 2
+    finally:
+        method._evaluation_executor.shutdown()
+
+
 def test_pathwise_requires_metadata_and_rejects_placeholder_rollouts():
     code = '```python\ndef solve_v2(x):\n    return x + 1\n```'
     assert PathWiseSampler.parse_initialization_response(code, TEMPLATE) is None

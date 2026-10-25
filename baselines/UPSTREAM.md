@@ -6,6 +6,7 @@
 
 | 本地内容 | 来源版本 | 原来源记录说明的适配 |
 | --- | --- | --- |
+| `clade_ahd/upstream/` | [Clade-AHD · ffd566b7](https://github.com/Mriya0306/Clade-AHD/tree/ffd566b70070331dbd2759a2cb828543e43da2ac) | 节点、归一化、精英管理、父代采样原样复制；树修复冻结后代时缺失的 `nonlocal`。提示与解析方法体原样提取，传输和主循环接公共接口。保留实际 min–max 与新节点双重证据更新。详见[实现说明](clade_ahd/README.md)。 |
 | `pathwise/prompts/` | [PathWise · 9d014a36](https://github.com/oguzhangungordu/PathWise/tree/9d014a368d920d46ef4538da4c484503549214cb) | 按该版本复制提示。本地适配器提供任务描述、函数签名与计分方向。 |
 | `reevo/prompts/` 中的任务知识 | [ReEvo · 6dce1825](https://github.com/ai4co/reevo/tree/6dce18257da5e11db2d138e417a2fffc5c72d05f/prompts) | 任务名称映射到本地基准，没有新增任务知识。 |
 | `shinka_evo/prompts/` | [ShinkaEvolve · 8adc053a](https://github.com/SakanaAI/ShinkaEvolve/tree/8adc053a2ce4511ad2ac310e004c530a73fb974a) | 按该版本复制提示。本地适配器提供任务信息，类型导入指向本地程序记录。 |
@@ -30,8 +31,13 @@
 - EoH 提示和 `_extract` 来自 `FeiLiu36/EoH@472545785c936dcfc863d2bc0d6109cf23c7ce62` 当前主线；采用其逐个更新、四算子、种群 5、父代 2 的默认设置。
 - ReEvo 的 common 提示和提取函数来自 `ai4co/reevo@6dce18257da5e11db2d138e417a2fffc5c72d05f`，提示保持原文。
 - MCTS-AHD 提示来自 `zz1358m/MCTS-AHD-master@ee9c4f424503c65a5fd2b899e6620ce86079fedb`，任务适配器提供函数契约。
+  2026-10-25 起，缺描述、缺代码或代码无法解析的返回回复按一次失败生成计入预算，交回节点最多三次失败的流程；不在采样器内部重采，也不触发接口故障的连续二十次退出。接口异常仍不计生成预算，并保留原退出上限。旧批次已用预算不追溯改写，恢复切换位置单独记录。
 - CALM 保留 `whxru/CALM@3c40dbd78f2f6439bcc7cc2cbac334ab28a6f8f3` 的唯一函数提取和操作识别，关闭 GRPO。
 - PathWise 解析和父代码清理来自 `oguzhangungordu/PathWise@9d014a368d920d46ef4538da4c484503549214cb`；Action 的 `kappa` 接到本地字段 `rationale`。
 - `shinka_evo/edit/` 的补丁引擎来自 `SakanaAI/ShinkaEvolve@8adc053a2ce4511ad2ac310e004c530a73fb974a`，只调整包导入，许可证随代码保留。当前运行入口使用单模型。
 
 验证范围及尚未公开的 DeltaEvolve 细节见[机制移植记录](../docs/记录/2026-10-17-基线实现差异核对.md)。
+
+## 2026-10-22 ReEvo 全无效代恢复
+
+固定上游在当前种群全无效时直接退出，即使历史精英仍有效。本地新增兜底：一代的交叉与变异均未产生有效程序时，恢复上一代有效父代；失败仍消耗预算，精英和已更新的反思保留。有有效子代的种群更新规则不变。空的交叉中间态不写成可恢复种群，旧日志恢复时跳过空种群，保留已经消耗的预算与代号。回归检查见 [test_reevo.py](../tests/method/test_reevo.py)。

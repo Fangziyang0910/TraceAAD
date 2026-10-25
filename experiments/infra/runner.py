@@ -21,6 +21,7 @@ from benchmarks.tasks import ALL_TASKS
 from experiments.infra.base import (
     scheduler_socket,
     BACKENDS,
+    HOSTED_BACKENDS,
     DEFAULT_BACKEND,
     RESULTS_ROOT,
     BackendProfile,
@@ -235,7 +236,7 @@ def baseline_run_config(
             "eval_workers": 1 if spec.eval_workers is None else spec.eval_workers,
             "scheduler_socket": scheduler_socket(),
         }
-    return {
+    payload = {
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "budget": method_params["max_sample_nums"],
         "objective": "min",
@@ -261,3 +262,10 @@ def baseline_run_config(
         "evaluation_condition": "shared",
         **(extra or {}),
     }
+    socket = os.environ.get('TRACEAAD_MODEL_SCHEDULER_SOCKET')
+    if socket and spec.base_url.rstrip('/') not in {BACKENDS[k].base_url.rstrip('/') for k in HOSTED_BACKENDS}:
+        from core.scheduling import scheduler_status
+
+        payload['model_routing'] = {'policy': 'shared', 'scheduler_socket': socket,
+                                    'endpoints': scheduler_status(socket)['endpoints']}
+    return payload

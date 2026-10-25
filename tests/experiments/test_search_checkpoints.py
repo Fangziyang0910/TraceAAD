@@ -200,3 +200,32 @@ def test_funsearch_resumes_from_recorded_profiles_without_reprofiling(tmp_path):
     resumed.run()
     assert resumed._tot_sample_nums == 4
     assert read_json(tmp_path / "summary.json")["best"]["fitness"] == -3
+
+
+def test_funsearch_checkpoint_preserves_reset_islands_and_next_prompts(tmp_path):
+    from baselines.funsearch import FunSearch, FunSearchProfiler
+    from baselines.funsearch.config import ProgramsDatabaseConfig
+
+    setup_config(tmp_path, "funsearch", budget=4)
+    def create(values):
+        return FunSearch(ScriptedLLM(values), TinyEvaluation(), FunSearchProfiler(tmp_path),
+                         max_sample_nums=4, samples_per_prompt=1,
+                         database_config=ProgramsDatabaseConfig(num_islands=4))
+    first = create([-1])
+    first.run()
+    assert read_checkpoint(tmp_path) is not None
+    first._database.reset_islands()
+    first._database._last_reset_time = first._database._clock()
+    first._checkpoint_provenance = {'rng_reseeded': True, 'reconstruction': 'migration'}
+    save_checkpoint(first, "funsearch", "new_prompt_batch")
+    expected = [first._database.get_prompt().code for _ in range(4)]
+    resumed = create([-2, -3])
+    report = recover(resumed, tmp_path)
+    assert report["recovery"] == "search_checkpoint" and report["budget_used"] == 2
+    assert report['rng'] == 'reseeded_at_migration'
+    assert resumed._database.num_resets == 1
+    assert [i.num_programs for i in resumed._database.islands] == [i.num_programs for i in first._database.islands]
+    assert [resumed._database.get_prompt().code for _ in range(4)] == expected
+    resumed.run()
+    assert resumed._tot_sample_nums == 4
+    assert read_checkpoint(tmp_path)['provenance'] == first._checkpoint_provenance

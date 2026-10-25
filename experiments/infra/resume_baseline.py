@@ -21,7 +21,7 @@ from traceaad.storage import append_jsonl, read_json, rows, write_json
 from experiments.infra.result_storage import Programs
 
 METHODS = ("eoh", "reevo", "funsearch", "mcts_ahd", "calm", "pathwise", "shinka_evo", "deltaevolve",
-           "openevolve", "hsevo", "refineevo")
+           "openevolve", "hsevo", "refineevo", "clade_ahd")
 # Search evaluations differ from candidates; a pending evaluation may remain at the budget limit.
 PENDING_EVALUATION = ("deltaevolve", "openevolve")
 
@@ -55,7 +55,7 @@ def history(directory):
         if call.get("error"):
             continue
         stage = call.get("stage")
-        consumed = stage == "generate" and config["method"] in ("eoh", "reevo", "funsearch")
+        consumed = stage == "generate" and config["method"] in ("eoh", "reevo", "funsearch", "clade_ahd")
         if config["method"] in ("shinka_evo", "deltaevolve", "openevolve"):
             consumed = stage == "patch"
         if config["method"] == "mcts_ahd":
@@ -116,10 +116,11 @@ def recover(method, directory):
     directory = Path(directory)
     sources = Programs(directory)
     name = config["method"]
+    checkpointed = name in FIELDS and (name != "funsearch" or read_checkpoint(directory) is not None)
     template = getattr(method, "_template_program", None)
     functions = {}
     for row in candidates:
-        if name in FIELDS:
+        if checkpointed:
             continue
         if not row.get("valid"):
             continue
@@ -133,7 +134,7 @@ def recover(method, directory):
         function.sample_time = row["attempt"]["sample_time"]
         function.evaluate_time = row["attempt"]["evaluate_time"]
         functions[row["candidate_id"]] = function
-    if not functions and name not in FIELDS:
+    if not functions and not checkpointed:
         raise ValueError("No valid historical programs")
     report = dict(
         method=config["method"],
@@ -168,8 +169,10 @@ def recover(method, directory):
         report["boundary"] = "final_selection_only"
         return report
 
-    if name in FIELDS:
+    if checkpointed:
         checkpoint = restore_checkpoint(method, directory, name)
+        if name == "clade_ahd":
+            method._evaluation_count = sum(r['attempt'].get('evaluate_time') is not None for r in candidates)
         if not 0 <= checkpoint["budget_used"] <= used or checkpoint["candidate_count"] > profiler._num_samples:
             raise ValueError("Checkpoint budget or candidate count exceeds the retained history")
         method._resume_boundary = checkpoint["boundary"]
@@ -190,10 +193,15 @@ def recover(method, directory):
             pending_budget=pending,
             rng="restored_at_checkpoint",
         )
+        if provenance := checkpoint.get("provenance"):
+            report["checkpoint_provenance"] = provenance
+            if provenance.get("rng_reseeded"):
+                report["rng"] = "reseeded_at_migration"
         return report
 
     def population():
-        snapshots = [(i, r) for i, r in enumerate(events) if r.get("kind") == "population"]
+        snapshots = [(i, r) for i, r in enumerate(events)
+                     if r.get("kind") == "population" and (name != "reevo" or r["members"])]
         if not snapshots:
             raise ValueError("No recorded population")
         index, snapshot = snapshots[-1]
@@ -219,6 +227,13 @@ def recover(method, directory):
         report["boundary"] = "next_operator"
     elif name == "reevo":
         population()
+        report["population_generation"] = method._population.generation
+        report["population_size"] = len(method._population)
+        method._population._generation = max(
+            state.get("generation", 0),
+            max(r["generation"] for r in events if r.get("kind") == "population"),
+        )
+        profiler._cur_gen = method._population.generation
         method._elite_function = copy.deepcopy(min(functions.values(), key=lambda f: f.score))
         seeds = [
             functions[r["candidate_id"]]

@@ -100,13 +100,17 @@ def sync(experiment, batch, interval):
 
 
 def main(argv=None):
+    global HOST, REMOTE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("push", "pull", "prune", "watch", "sync"))
     parser.add_argument("--experiment", default="traceaad")
     parser.add_argument("--batch")
     parser.add_argument("--interval", type=int, default=60)
     parser.add_argument("--no-heldout", action="store_true", help="prune finished runs without a held-out result")
+    parser.add_argument("--host", default=HOST, help="execution host SSH alias")
+    parser.add_argument("--repo", default=REMOTE, help="absolute repository path on the execution host")
     args = parser.parse_args(argv)
+    HOST, REMOTE = args.host, args.repo
     if args.action == "push":
         return push()
     if not args.batch:

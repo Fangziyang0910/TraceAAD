@@ -430,6 +430,7 @@ class ReEvo:
             generation=self._population.generation,
         )
         parent_pairs = self._select_parent_pairs()
+        previous_population = self._population.valid_functions()
         short_term_reflections = [self._short_term_reflection(pair) for pair in parent_pairs]
 
         crossed_population = []
@@ -441,17 +442,28 @@ class ReEvo:
                 crossed_population.append(func)
 
         self._population.set_population(crossed_population, increment_generation=True)
-        self._register_population()
-
-        if not self._has_budget():
-            return
-
-        self._long_term_reflection(short_term_reflections)
-        mutated_population = self._mutate_elite()
-        if mutated_population:
-            self._population.extend(mutated_population)
-            self._population.advance_generation()
+        if crossed_population:
             self._register_population()
+
+        if self._has_budget():
+            self._long_term_reflection(short_term_reflections)
+            mutated_population = self._mutate_elite()
+            if mutated_population:
+                self._population.extend(mutated_population)
+                self._population.advance_generation()
+
+        # A failed generation must not destroy the parents needed for the next one.
+        if not self._population.valid_functions():
+            self._population.set_population(previous_population, increment_generation=False)
+            log_event(
+                self,
+                event='population_fallback',
+                status='all_offspring_invalid',
+                sample_order=self._tot_sample_nums,
+                generation=self._population.generation,
+                population_size=len(self._population),
+            )
+        self._register_population()
         log_state(
             self,
             phase='population',

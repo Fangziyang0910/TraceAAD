@@ -51,17 +51,12 @@ def main(argv=None):
     if getattr(args, "scheduler_socket", None):
         from pathlib import Path
         from core.scheduling import scheduler_status
-        from .base import BackendProfile
         from .scheduled_llm import ScheduledLLM
 
         args.scheduler_socket = str(Path(args.scheduler_socket).expanduser().resolve())
         scheduler = scheduler_status(args.scheduler_socket)
         execution["scheduler_socket"] = args.scheduler_socket
         if args.backend not in HOSTED_BACKENDS:
-            endpoint = scheduler["endpoints"][0]
-            profile = BackendProfile(
-                endpoint["base_url"], endpoint["model"], endpoint.get("no_proxy", "")
-            )
             llm_factory = lambda **kw: ScheduledLLM(
                 args.scheduler_socket,
                 max_tokens=kw["max_tokens"],
@@ -87,6 +82,8 @@ def main(argv=None):
             "n_workers": config.eval_workers,
         }
     }
+    if scheduler and llm_factory:
+        metadata['model_routing'] = {'policy': 'shared', 'endpoints': scheduler['endpoints']}
     if args.dry_run:
         evaluation, task_config = training_task(args.task, args.eval_workers, condition="traceaad")
         print(

@@ -34,6 +34,10 @@ INSTANCE_SECONDS = 120
 FULL_SOLVER_TASKS = ('graph_colouring', 'jssp_construct')
 FUNCTION_LIMITS = {task: 10 if task in FULL_SOLVER_TASKS else FUNCTION_SECONDS for task in CO_TASKS}
 INSTANCE_LIMITS = {task: INSTANCE_SECONDS for task in CO_TASKS}
+# Memory one instance may allocate beyond what it inherits by fork (RLIMIT_DATA).
+# Best programs of six methods peak at 0.12 GiB; a runaway program (e.g. list() of
+# an infinite generator) would otherwise exhaust the host while instances run in parallel.
+INSTANCE_MEMORY_BYTES = 2 << 30
 TRAIN_INSTANCES, TEST_INSTANCES = 16, 50
 TRAIN_TIMEOUT = {'online_bin_packing': 30, 'vrptw_construct': 30}
 TRAIN_TIMEOUT.update({task: TRAIN_INSTANCES * INSTANCE_LIMITS[task] for task in CO_TASKS})

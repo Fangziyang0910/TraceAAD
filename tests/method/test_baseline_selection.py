@@ -89,6 +89,33 @@ def test_mcts_keeps_a_weak_child_in_the_tree_even_if_the_population_rejects_it()
         method._evaluation_executor.shutdown()
 
 
+def test_mcts_s1_returns_after_three_invalid_replies():
+    class MissingDescription:
+        def __init__(self):
+            self.calls = []
+
+        def draw_sample(self, prompt):
+            self.calls.append(prompt)
+            return '```python\ndef score(x):\n    return x\n```'
+
+    llm = MissingDescription()
+    method = MCTS_AHD(llm, TinyEvaluation(), max_sample_nums=10)
+    try:
+        tree = MCTS('Root', alpha=0.5, lambad0=0.1)
+        parent = tree.root
+        for value in (1, 2):
+            item = function(value, -value)
+            node = MCTSNode(item.algorithm, str(item), item.score, individual=item,
+                            parent=parent, depth=value, visit=1, Q=value, raw_info=item)
+            parent.add_child(node)
+            parent = node
+        method.expand(tree, [], parent, 's1')
+        assert len(llm.calls) == method._tot_sample_nums == 3
+        assert not method._search_aborted and not parent.children
+    finally:
+        method._evaluation_executor.shutdown()
+
+
 def test_shinka_parent_weight_combines_quality_with_children_count():
     archive = ShinkaArchive(parent_selection_lambda=1)
     programs = []

@@ -163,6 +163,16 @@ def model_options(model, max_tokens, *, temperature=None, top_p=None, top_k=None
 
 
 def build_llm_client(*, base_url, model, no_proxy, max_tokens, **overrides):
+    socket = os.environ.get("TRACEAAD_MODEL_SCHEDULER_SOCKET")
+    if socket and base_url.rstrip('/') not in {BACKENDS[k].base_url.rstrip('/') for k in HOSTED_BACKENDS}:
+        from .scheduled_llm import ScheduledLLM
+
+        return ScheduledLLM(socket, max_tokens=max_tokens, label=f"{os.getpid()}:generation", **overrides)
+    return _direct_llm_client(base_url=base_url, model=model, no_proxy=no_proxy,
+                              max_tokens=max_tokens, **overrides)
+
+
+def _direct_llm_client(*, base_url, model, no_proxy, max_tokens, **overrides):
     os.environ["NO_PROXY"] = os.environ["no_proxy"] = no_proxy
     return OpenAIAPI(
         base_url=base_url,

@@ -36,16 +36,19 @@ class _Pool:
         free = set(self.resources) - occupied
         now = time.monotonic()
         while free and self.queue:
-            available = (
-                [r for r in free if self.cooldowns.get(r.split(":")[0], 0) <= now]
-                if self.endpoints
-                else list(free)
-            )
-            if not available:
+            available = {
+                key: [r for r in free if not self.endpoints or (
+                    self.cooldowns.get(r.split(":")[0], 0) <= now
+                    and (self.jobs[key]["endpoint"] is None
+                         or r.startswith(str(self.jobs[key]["endpoint"]) + ":")))]
+                for key in self.queue
+            }
+            eligible = [key for key in self.queue if available[key]]
+            if not eligible:
                 break
             # Give newly waiting evaluations a turn before extending an already
             # parallel one. Running instances are never preempted.
-            key = min(self.queue, key=lambda k: len(self.jobs[k]["held"]))
+            key = min(eligible, key=lambda k: len(self.jobs[k]["held"]))
             self.queue.remove(key)
             job = self.jobs[key]
             if self.endpoints:
@@ -55,9 +58,9 @@ class _Pool:
                     used = sum(r.startswith(f"{endpoint}:") for r in occupied)
                     return used / self.endpoints[endpoint]["slots"], endpoint, resource
 
-                resource = min(available, key=load)
+                resource = min(available[key], key=load)
             else:
-                resource = min(available)
+                resource = min(available[key])
             job["held"].add(resource)
             job["offered"].add(resource)
             free.remove(resource)
@@ -66,15 +69,21 @@ class _Pool:
             if len(job["held"]) < job["target"]:
                 self.queue.append(key)
 
-    def poll(self, key, label, target, release, failed=False):
+    def poll(self, key, label, target, release, failed=False, endpoint=None):
         if type(target) is not int or not 0 <= target <= len(self.resources):
             raise ValueError("target must be between zero and scheduler capacity")
         if self.endpoints and target > 1:
             raise ValueError("one generation may hold only one model slot")
+        if endpoint is not None and (not self.endpoints or type(endpoint) is not int
+                                     or not 0 <= endpoint < len(self.endpoints)):
+            raise ValueError("invalid model endpoint")
         with self.lock:
             job = self.jobs.setdefault(
-                key, {"label": label, "held": set(), "offered": set(), "target": 0}
+                key, {"label": label, "held": set(), "offered": set(), "target": 0,
+                      "endpoint": endpoint}
             )
+            if job["endpoint"] != endpoint:
+                raise ValueError("a connection cannot change its model endpoint")
             if not set(release) <= job["held"]:
                 raise ValueError("cannot release another request’s resources")
             for resource in release:
@@ -114,6 +123,7 @@ class _Pool:
                     "label": j["label"],
                     "active": len(j["held"]),
                     "waiting": max(0, j["target"] - len(j["held"])),
+                    **({"endpoint": j["endpoint"]} if self.endpoints else {}),
                 }
                 for j in self.jobs.values()
             ]
@@ -165,6 +175,7 @@ class _Handler(socketserver.StreamRequestHandler):
                                 message["target"],
                                 message.get("release", []),
                                 message.get("failed", False),
+                                endpoint=message.get("endpoint"),
                             )
                         }
                     self.wfile.write((json.dumps({"result": result}) + "\n").encode())
@@ -200,8 +211,6 @@ class SchedulerServer(socketserver.ThreadingUnixStreamServer):
             for e in endpoints
         ):
             raise ValueError("each endpoint requires base_url, model and positive slots")
-        if len({e["model"] for e in endpoints}) != 1:
-            raise ValueError("all routed endpoints must serve the same model and tokenizer")
         if len({e["base_url"].rstrip("/") for e in endpoints}) != len(endpoints):
             raise ValueError("combine the slots of duplicate model endpoints")
         self.pools = {
@@ -260,8 +269,9 @@ class SchedulerSession:
     after stopping/reaping its instance, and a GPU slot after the HTTP request.
     """
 
-    def __init__(self, path, kind="cpu", label=""):
+    def __init__(self, path, kind="cpu", label="", *, endpoint=None):
         self.path, self.kind, self.label = str(path), kind, label
+        self.endpoint = endpoint
         self.sock = None
         try:
             self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -298,6 +308,7 @@ class SchedulerSession:
                 "target": target,
                 "release": list(release),
                 "failed": failed,
+                "endpoint": self.endpoint,
             }
         )["resources"]
 

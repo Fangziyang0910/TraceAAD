@@ -1,4 +1,4 @@
-"""Route generation through a host's independent model-slot scheduler."""
+"""Route every generation to a free slot anywhere in the shared model pool."""
 
 import time
 
@@ -6,11 +6,13 @@ import openai
 
 from core.llm import LLM, generate, ModelCallError
 from core.scheduling import SchedulerError, SchedulerSession, scheduler_status
-from .base import build_llm_client
+from .base import _direct_llm_client
 
 
 class ScheduledLLM(LLM):
-    def __init__(self, socket_path, *, max_tokens=8192, label='', enable_thinking=None, client_factory=build_llm_client):
+    def __init__(self, socket_path, *, max_tokens=8192, label='', enable_thinking=None,
+                 client_factory=_direct_llm_client,
+                 **overrides):
         self.socket_path, self.label = str(socket_path), label
         self.scheduler = scheduler_status(socket_path)
         self.endpoints = self.scheduler['endpoints']
@@ -19,15 +21,15 @@ class ScheduledLLM(LLM):
         try:
             for endpoint in self.endpoints:
                 self.clients.append(client_factory(base_url=endpoint['base_url'], model=endpoint['model'],
-                    no_proxy=no_proxy, max_tokens=max_tokens, enable_thinking=enable_thinking))
+                    no_proxy=no_proxy, max_tokens=max_tokens, enable_thinking=enable_thinking,
+                    **overrides))
         except BaseException:
             self.close()
             raise
         self.last_dispatch = None
 
     def __getattr__(self, name):
-        # Keep token-accounting and sampling metadata identical to the existing
-        # model client. All endpoints must use the same tokenizer/template.
+        # Preflight counts use an available tokenizer; requests retain actual server usage.
         clients = self.__dict__.get('clients')
         if clients:
             return getattr(clients[0], name)
@@ -57,11 +59,12 @@ class ScheduledLLM(LLM):
             index = int(slot.split(':')[0])
             endpoint = self.endpoints[index]
             self.last_dispatch = {'socket': self.socket_path, 'endpoint': endpoint['base_url'],
+                'model': endpoint['model'], 'routing': 'shared',
                 'slot': slot, 'queue_seconds': time.monotonic() - started}
             request_started = time.monotonic()
             failed = False
             try:
-                details = self.clients[index].draw_sample_with_details(prompt, **kwargs)
+                details = self.clients[index].draw_sample_with_details(prompt, **{**kwargs, 'model': endpoint['model']})
             except Exception as exc:
                 status = getattr(exc, 'status_code', None)
                 failed = (status == 429 or isinstance(status, int) and status >= 500 or

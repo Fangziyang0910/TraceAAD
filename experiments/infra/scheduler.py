@@ -68,8 +68,6 @@ def main(argv=None):
     cpus = cpu_ids(args.cpus, args.cpu_count)
     if not endpoints or any(e['slots'] < 1 for e in endpoints):
         raise ValueError('configure at least one model endpoint with positive slots')
-    if len({e['model'] for e in endpoints}) != 1:
-        raise ValueError('routed endpoints must serve the same model and tokenizer')
     if args.print_config:
         print(json.dumps({'socket': str(Path(args.socket).expanduser().resolve()), 'cpus': cpus,
                           'endpoints': endpoints}, indent=2))

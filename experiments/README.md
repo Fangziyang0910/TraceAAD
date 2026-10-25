@@ -54,6 +54,8 @@ HSEvo 使用 `--method hsevo`；单路入口为 `experiments.hsevo.run`，支持
 
 RefineEvo 使用 `--method refineevo`；单路入口为 `experiments.refineevo.run`，支持 `--dry-run`。预算按生成回复计，含上游重试的解析失败与重复回复；经验检索需要 embedding 凭据，同批经验时序与其他适配见[实现说明](../baselines/refineevo/README.md)。
 
+Clade-AHD 使用 `--method clade_ahd`；单路入口为 `experiments.clade_ahd.run`，支持 `--dry-run`。预算按返回的生成回复计，叶批次统一提交树更新，恢复时读取完整树与随机状态。上游实际行为及调度差异见[实现说明](../baselines/clade_ahd/README.md)。
+
 ## 2. 查询结果
 
 将 `MANIFEST_PATH` 替换为批次清单路径，将 `RUN_DIR` 替换为运行目录。

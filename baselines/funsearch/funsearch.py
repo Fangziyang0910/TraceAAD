@@ -49,6 +49,7 @@ from baselines.shared.observability import (
     reset_sample_failures,
 )
 from baselines.shared.profiler import ProfilerBase
+from baselines.shared.checkpoint import save_checkpoint
 from .parsing import _trim_function_body
 from core import Evaluation, Function, LLM, Program, SecureEvaluator
 
@@ -229,6 +230,7 @@ class FunSearch:
                 seed = parse_function(self._template_program)
                 seed.instance_scores = tuple(-v for v in outcome.instance_scores)
                 self._register(seed, self._template_program, score, eval_time, 0.0, None, 'seed')
+                save_checkpoint(self, 'funsearch', 'new_prompt_batch')
 
             while self._has_budget():
                 prompt = self._database.get_prompt()
@@ -240,6 +242,7 @@ class FunSearch:
                         break
                     try:
                         self._sample_once(prompt)
+                        save_checkpoint(self, 'funsearch', 'new_prompt_batch')
                     except KeyboardInterrupt:
                         raise
                     except Exception as exc:

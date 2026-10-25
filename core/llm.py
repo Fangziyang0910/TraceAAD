@@ -77,6 +77,8 @@ def generate(llm, prompt, **kwargs):
         dispatch = details.get("scheduler") or getattr(llm, "last_dispatch", None)
         if dispatch is not None:
             call["scheduler"] = dict(dispatch)
+            if not details.get('model') and dispatch.get('model'):
+                call['model'] = dispatch['model']
         calls.append(call)
         if hasattr(llm, "_requests"):
             llm._requests.calls = calls

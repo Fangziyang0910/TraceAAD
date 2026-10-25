@@ -15,6 +15,9 @@ import numpy as np
 NAME = 'search_checkpoint.json.gz'
 # shortcut: unfinished phases restart at a saved boundary; persist pending work for exact mid-phase replay.
 FIELDS = {
+    'funsearch': (),
+    'clade_ahd': ('_phase', '_population', '_init_population', '_tree_state', '_iteration',
+                  '_evaluation_count', '_upstream_evals'),
     'deltaevolve': ('_iteration', '_seeded', '_pending_evaluation', '_pending_node'),
     'openevolve': ('_seeded', '_pending_evaluation'),
     'hsevo': ('_phase', '_iteration', '_init_index', '_init_population', '_population', '_elitist',
@@ -32,6 +35,9 @@ FIELDS = {
                    '_meta_recommendations', '_meta_recommendations_history', '_best_function_found'),
 }
 GROUPS = {
+    'funsearch': {'_database': ('_islands', '_best_score_per_island', '_best_program_per_island',
+                               'num_resets', '_last_reset_time')},
+    'clade_ahd': {},
     'deltaevolve': {'_population': ('nodes', 'islands', 'archive_ids', 'projection')},
     'openevolve': {'_database': ('programs', 'island_feature_maps', 'islands', 'current_island',
                                  'island_generations', 'last_migration_generation', 'archive',
@@ -50,7 +56,8 @@ GROUPS = {
 
 @lru_cache(maxsize=1)
 def _classes():
-    from core import Function
+    from core import Function, Program as CoreProgram
+    from baselines.funsearch.programs_database import Island, Cluster
     from baselines.calm.pool import HeuristicRecord
     from baselines.calm.prompt import Prompt
     from baselines.pathwise.graph import PathWiseNode, ParentInfo
@@ -58,8 +65,10 @@ def _classes():
     from baselines.shinka_evo.bandit import BanditUpdate
     from baselines.openevolve.upstream.database import Program
     from baselines.hsevo.hsevo import Individual
-    return {cls.__name__: cls for cls in (Function, HeuristicRecord, Prompt, PathWiseNode,
-                                         ParentInfo, ShinkaProgram, BanditUpdate, Program, Individual)}
+    classes = {cls.__name__: cls for cls in (Function, HeuristicRecord, Prompt, PathWiseNode,
+                                            ParentInfo, ShinkaProgram, BanditUpdate, Program, Individual)}
+    classes.update(CoreProgram=CoreProgram, Island=Island, Cluster=Cluster)
+    return classes
 
 
 def encode(value, memo=None):
@@ -77,13 +86,14 @@ def encode(value, memo=None):
         return {'type': type(value).__name__, 'value': [encode(v, memo) for v in value]}
     if isinstance(value, dict):
         return {'type': 'dict', 'value': [[encode(k, memo), encode(v, memo)] for k, v in value.items()]}
-    if type(value).__name__ not in _classes() or type(value) is not _classes()[type(value).__name__]:
+    kind = 'CoreProgram' if type(value) is _classes().get('CoreProgram') else type(value).__name__
+    if kind not in _classes() or type(value) is not _classes()[kind]:
         raise TypeError(f'Unsupported checkpoint value: {type(value).__name__}')
     if id(value) in memo:
         return {'ref': memo[id(value)]}
     identity = len(memo)
     memo[id(value)] = identity
-    return {'type': type(value).__name__, 'id': identity, 'value': encode(vars(value), memo)}
+    return {'type': kind, 'id': identity, 'value': encode(vars(value), memo)}
 
 
 def decode(value, memo=None):
@@ -110,6 +120,8 @@ def decode(value, memo=None):
     fields = decode(data, memo)
     if dataclasses.is_dataclass(cls):
         obj = cls(**{k: fields[k] for k, f in cls.__dataclass_fields__.items() if f.init and k in fields})
+    elif kind in ('Island', 'Cluster'):
+        obj = cls.__new__(cls)
     else:
         obj = cls(fields['prompt'])
     vars(obj).update(fields)
@@ -137,6 +149,9 @@ def save_checkpoint(method, name, boundary):
             state['_messages'] = []
         groups = {group: {k: getattr(getattr(method, group), k) for k in fields}
                   for group, fields in GROUPS[name].items()}
+        if name == 'funsearch':
+            db = method._database
+            groups['_database']['_last_reset_time'] = db._clock() - db._last_reset_time
         rng = {'python': random.getstate(), 'numpy': np.random.get_state()}
         if name == 'calm':
             rng['local'] = method._rs.get_state()
@@ -149,6 +164,8 @@ def save_checkpoint(method, name, boundary):
                    'files': {f: (directory / f).stat().st_size if (directory / f).exists() else 0
                              for f in ('events.jsonl', 'programs.jsonl')},
                    'state': encode({'fields': state, 'groups': groups, 'rng': rng})}
+        if provenance := getattr(method, '_checkpoint_provenance', None):
+            payload['provenance'] = provenance
         with tempfile.NamedTemporaryFile(dir=directory, suffix='.tmp', delete=False) as handle:
             temporary = Path(handle.name)
         try:
@@ -190,4 +207,11 @@ def restore_checkpoint(method, directory, name):
         method._bandit.rng.setstate(state['rng']['bandit'])
     if name in ('deltaevolve', 'openevolve'):
         method._rng.setstate(state['rng']['local'])
+    if name == 'clade_ahd':
+        method._restore_tree()
+    if name == 'funsearch':
+        db = method._database
+        db._last_reset_time = db._clock() - db._last_reset_time
+    if provenance := payload.get('provenance'):
+        method._checkpoint_provenance = provenance
     return payload

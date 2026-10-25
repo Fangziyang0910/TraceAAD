@@ -13,6 +13,8 @@ import math
 import multiprocessing
 import os
 from multiprocessing.connection import wait
+import re
+import resource
 import statistics
 import time
 
@@ -21,7 +23,7 @@ import numpy as np
 from core import SecureEvaluator
 from core.evaluate import EVALUATION_SEED, EvaluationOutcome, _stop_eval_process
 from core.scheduling import SchedulerSession
-from benchmarks.tasks import FUNCTION_SECONDS, FUNCTION_LIMITS, INSTANCE_LIMITS
+from benchmarks.tasks import FUNCTION_SECONDS, FUNCTION_LIMITS, INSTANCE_LIMITS, INSTANCE_MEMORY_BYTES
 
 from .evaluation import SeededEvaluation, clean_traceback, failing_line
 
@@ -82,6 +84,17 @@ def _run_instance(evaluator, code, function_name, sender, seed, cpu, scheduler_s
     try:
         if cpu is not None:
             os.sched_setaffinity(0, {cpu})
+        # The kernel refuses allocations beyond the limit, so the candidate gets a
+        # MemoryError. The data segment inherited by fork (mostly the parent's
+        # untouched BLAS buffers, 1-3 GiB by host size) is not counted; buffers of the
+        # BLAS threads a candidate starts take 0.2-0.5 GiB of the limit by core count.
+        with open("/proc/self/status") as status:
+            inherited = int(re.search(r"VmData:\s+(\d+) kB", status.read()).group(1)) << 10
+        limit = inherited + INSTANCE_MEMORY_BYTES
+        resource.setrlimit(resource.RLIMIT_DATA, (limit, limit))
+        # If the host still runs out of memory, the kernel kills a candidate first.
+        with open("/proc/self/oom_score_adj", "w") as handle:
+            handle.write("1000")
     except OSError as exc:
         output.put(EvaluationOutcome(None, "runtime_error", type(exc).__name__, str(exc)))
         return

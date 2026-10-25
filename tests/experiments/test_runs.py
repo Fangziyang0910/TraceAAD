@@ -38,7 +38,7 @@ def test_training_and_test_share_the_task_budget(task, tmp_path):
 
 @pytest.mark.parametrize(
     "name", ["eoh", "reevo", "mcts_ahd", "pathwise", "calm", "funsearch", "shinka_evo", "deltaevolve",
-             "openevolve", "hsevo", "refineevo"]
+             "openevolve", "hsevo", "refineevo", "clade_ahd"]
 )
 def test_baseline_entry_accepts_and_evaluates_a_complete_solver(name, tmp_path, monkeypatch):
     monkeypatch.delenv("TRACEAAD_SCHEDULER_SOCKET", raising=False)
@@ -191,6 +191,7 @@ def test_batch_plan_uses_actual_model_settings_and_preserves_repeat_seeds(capsys
 def test_model_client_and_saved_settings_use_the_same_sampling(monkeypatch):
     from types import SimpleNamespace
 
+    monkeypatch.delenv('TRACEAAD_MODEL_SCHEDULER_SOCKET', raising=False)
     monkeypatch.setattr(base, "OpenAIAPI", lambda **options: SimpleNamespace(**options))
     args = dict(
         base_url="http://localhost/v1",
