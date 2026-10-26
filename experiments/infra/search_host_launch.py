@@ -44,6 +44,12 @@ def plan_for(args, tasks):
                 extra.append(f"--eval-timeout-seconds={args.eval_timeout_seconds:g}")
             if args.scheduler_socket:
                 extra.extend(["--scheduler-socket", args.scheduler_socket])
+            if getattr(args, 'version', None) in ('v13', 'v13_1'):
+                if args.version == 'v13_1':
+                    from experiments.traceaad_v13_1.options import command_arguments
+                else:
+                    from experiments.traceaad_v13.options import command_arguments
+                extra.extend(command_arguments(args))
             item = LaunchItem(
                 task,
                 repeat,
@@ -52,7 +58,7 @@ def plan_for(args, tasks):
                 name,
                 RESULTS_ROOT / args.experiment / task / name,
                 repeat - 1,
-                "experiments.traceaad.run",
+                f"experiments.traceaad_{args.version}.run" if getattr(args, "version", None) in ("v13", "v13_1") else "experiments.traceaad.run",
                 tuple(extra),
             )
             plan.append(
@@ -75,10 +81,17 @@ def git(*args):
         return None
 
 
-def main(argv=None):
+def main(argv=None, *, version=None):
+    config_type = Config
+    if version == 'v13':
+        from traceaad.v13 import Config as config_type
+        from experiments.traceaad_v13 import options
+    elif version == 'v13_1':
+        from traceaad.v13_1 import Config as config_type
+        from experiments.traceaad_v13_1 import options
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch", required=True)
-    parser.add_argument("--experiment", default=EXPERIMENT)
+    parser.add_argument("--experiment", default=f"traceaad_{version}" if version in ("v13", "v13_1") else EXPERIMENT)
     parser.add_argument("--launch", action="store_true")
     parser.add_argument("--suite", choices=tuple(SUITES), default="co6")
     parser.add_argument("--tasks", choices=ALL_TASKS, nargs="+")
@@ -89,7 +102,11 @@ def main(argv=None):
     parser.add_argument("--eval-workers", type=int)
     parser.add_argument("--eval-timeout-seconds", type=float)
     parser.add_argument("--scheduler-socket")
+    if version in ('v13', 'v13_1'):
+        options.add_arguments(parser)
+        parser.add_argument('--output-tokens', type=int, default=config_type.output_tokens)
     args = parser.parse_args(argv)
+    args.version = version
     if not args.experiment.replace("_", "").isalnum() or not args.batch.replace("_", "").replace("-", "").isalnum():
         raise ValueError("experiment and batch must be safe directory names")
     tasks = tuple(args.tasks or SUITES[args.suite])
@@ -101,13 +118,14 @@ def main(argv=None):
         scheduler = scheduler_status(args.scheduler_socket)
     if args.eval_workers is None:
         args.eval_workers = scheduler["cpu"]["capacity"] if scheduler else 1
-    policy = Config(
+    policy = config_type(
         budget=args.budget,
         eval_workers=args.eval_workers,
         scheduler_socket=args.scheduler_socket,
         eval_timeout_seconds=args.eval_timeout_seconds
         if args.eval_timeout_seconds is not None
-        else Config.eval_timeout_seconds,
+        else config_type.eval_timeout_seconds,
+        **({**options.values(args), 'output_tokens': args.output_tokens} if version in ('v13', 'v13_1') else {}),
     )
     limits = {
         task: {
@@ -135,7 +153,7 @@ def main(argv=None):
         )
     manifest = {
         "batch": args.batch,
-        "method": "traceaad",
+        "method": f"traceaad_{version}" if version in ("v13", "v13_1") else "traceaad",
         "experiment": args.experiment,
         "created_at": datetime.now().astimezone().isoformat(),
         "suite": args.suite,

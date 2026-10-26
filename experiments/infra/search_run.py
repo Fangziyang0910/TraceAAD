@@ -17,9 +17,9 @@ from traceaad.config import Config, EXPERIMENT
 from traceaad import TraceAAD
 
 
-def build_parser(experiment=EXPERIMENT):
+def build_parser(experiment=EXPERIMENT, config_type=Config):
     parser = argparse.ArgumentParser(description=__doc__)
-    add_common_run_args(parser, default_output_tokens=Config.output_tokens)
+    add_common_run_args(parser, default_output_tokens=config_type.output_tokens)
     parser.add_argument("--scheduler-socket", help="shared CPU/GPU scheduler on this host")
     parser.add_argument(
         "--eval-timeout-seconds",
@@ -37,8 +37,23 @@ def build_parser(experiment=EXPERIMENT):
     return parser
 
 
-def main(argv=None):
-    args = build_parser().parse_args(argv)
+def main(argv=None, *, version=None):
+    method_type, config_type, experiment = TraceAAD, Config, EXPERIMENT
+    extra = {}
+    if version == 'v13':
+        from traceaad.v13 import Config as config_type, TraceAADV13 as method_type
+        from experiments.traceaad_v13 import options
+        experiment = 'traceaad_v13'
+    elif version == 'v13_1':
+        from traceaad.v13_1 import Config as config_type, TraceAADV131 as method_type
+        from experiments.traceaad_v13_1 import options
+        experiment = 'traceaad_v13_1'
+    parser = build_parser(experiment, config_type)
+    if version in ('v13', 'v13_1'):
+        options.add_arguments(parser)
+    args = parser.parse_args(argv)
+    if version in ('v13', 'v13_1'):
+        extra = options.values(args)
     if args.repeat is not None and args.seed != args.repeat - 1:
         raise ValueError("run seed must equal repeat - 1")
     if args.eval_timeout_seconds is None:
@@ -66,12 +81,13 @@ def main(argv=None):
     if execution["eval_workers"] is None:
         execution["eval_workers"] = scheduler["cpu"]["capacity"] if scheduler else 1
         args.eval_workers = execution["eval_workers"]
-    config = Config(
+    config = config_type(
         budget=args.budget,
         output_tokens=args.output_tokens,
         evaluation_seeds=tuple(args.evaluation_seeds),
         seed=args.seed,
         **execution,
+        **extra,
     )
     metadata = {
         "evaluation_execution": {
@@ -89,7 +105,7 @@ def main(argv=None):
         print(
             json.dumps(
                 {
-                    "method": TraceAAD.METHOD,
+                    "method": method_type.METHOD,
                     "task": args.task,
                     "config": asdict(config),
                     "task_eval": task_config,
@@ -113,9 +129,15 @@ def main(argv=None):
             and not (existing / "events.jsonl").exists()
         ):
             raise ValueError(f"refusing to overwrite a non-resumable run directory: {existing}")
+    if version in ('v13', 'v13_1') and args.run_name:
+        from traceaad.storage import read_json
+        previous = read_json(root / args.task / args.run_name / 'run_config.json')
+        if previous and (previous.get('method') != method_type.METHOD or any(
+                previous.get('method_params', {}).get(k) != v for k, v in json.loads(json.dumps(asdict(config))).items())):
+            raise ValueError('V13 resume configuration differs from the stored run')
     ctx = setup_experiment_run(
         args,
-        method=TraceAAD.METHOD,
+        method=method_type.METHOD,
         results_root=root,
         resume_file="events.jsonl",
         method_params=asdict(config),
@@ -123,16 +145,17 @@ def main(argv=None):
         extra_config={"budget_axis": "候选尝试", "final_selection": "training", **metadata},
         llm_factory=llm_factory,
         backend_profile=profile,
-        budget_basis="Program-generation replies including initialization, parse failures and repair; every parsed program is a distinct individual.",
+        budget_basis=("Candidate opportunities including initialization, nonmatches and failed edits; all auxiliary/failed/interrupted model requests consume max_model_calls."
+                      if version in ('v13', 'v13_1') else "Program-generation replies including initialization, parse failures and repair; every parsed program is a distinct individual."),
     )
     try:
-        method = TraceAAD(
+        method = method_type(
             evaluation=ctx.evaluation,
             llm=ctx.llm,
             run_dir=ctx.run_dir,
             config=config,
             task=args.task,
         )
-        ctx.run(method.run, ["TraceAAD: Refine, Explore and Crossover"])
+        ctx.run(method.run, [method_type.METHOD])
     finally:
         ctx.llm.close()

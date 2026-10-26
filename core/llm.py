@@ -40,7 +40,7 @@ class ModelCallError(RuntimeError):
 SERVICE_WAIT_SECONDS = 900
 
 
-def generate(llm, prompt, **kwargs):
+def generate(llm, prompt, *, retry_limit=None, **kwargs):
     """One generation request, including every physical request and retry."""
     calls, waited = [], 0.0
     for attempt in itertools.count():
@@ -103,7 +103,7 @@ def generate(llm, prompt, **kwargs):
                 ),
             )
         )
-        if not transient or waited >= SERVICE_WAIT_SECONDS:
+        if not transient or waited >= SERVICE_WAIT_SECONDS or (retry_limit is not None and attempt >= retry_limit):
             raise ModelCallError(error, calls, transient) from error
         pause = min(60, 2 ** (attempt + 1))
         time.sleep(pause)

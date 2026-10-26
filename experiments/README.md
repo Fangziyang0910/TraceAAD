@@ -8,6 +8,9 @@
 | 查询状态、恢复、远端操作 | [操作说明](infra/AGENT_OPERATIONS.md) |
 | 找到源码、反馈与最终结果 | [结果格式](infra/SEARCH_FORMAT.md) |
 | 理解当前 TraceAAD 的运行规则 | [搜索实现](../traceaad/README.md) |
+| V13 历史实现与恢复 | [V13 实现](../traceaad/v13/README.md) |
+| V13.1 冻结变换、配对诊断与条件信用 | [V13.1 实现](../traceaad/v13_1/README.md) |
+| 检验变换迁移、模型执行与在线闭环 | [变换迁移先导实验](transfer/README.md) |
 
 ## 训练可视化
 
@@ -17,7 +20,11 @@
 uv run python -m experiments.visualization --host 127.0.0.1 --port 8765
 ```
 
-浏览器打开 `http://127.0.0.1:8765/`。用 `--experiment` 选择方法目录，或用 `--batch` 筛选运行批次。看板读取当前结果格式，在进程内保留增量状态，不写入实验目录。不同测试条件按 `variant` 分开展示。
+浏览器打开 `http://127.0.0.1:8765/`。用 `--experiment` 选择方法目录，或用 `--batch` 筛选运行批次。看板读取当前结果格式，在进程内保留增量状态，不改写实验记录。
+
+当前主实验范围由[主实验名单](../experiments_result/primary_runs.json)固定：12 个基线和当前 TraceAAD，每个方法六任务 × 种子 0／1／2，共 18 路 Qwen3.8 实验。监控和对比均按此名单读取，当前 V13.1 统一显示为 `TraceAAD`，不附加模型、量化、补测或版本后缀。名单沿用既有基线盘点，不按成绩或完成情况挑选运行。ReEvo、FunSearch 的 GGUF 第三路属于主实验；旧 TraceAAD 版本、EoH 额外的 GGUF 种子 0 六路、DeepSeek 试跑和其他先导实验不进入当前主视图。
+
+主对比使用 `variant` 为空的原主测试。`relaxed_time_cpu120_wall600` 等放宽限制补测保留在原始 `heldout.json` 中，不再生成单独的默认对比对象，也不替代主测试失败或缺失。新增正式批次时需更新主实验名单；没有该名单的结果目录仍可按原方式查看全部记录。
 
 ## 1. 检查配置与启动计划
 

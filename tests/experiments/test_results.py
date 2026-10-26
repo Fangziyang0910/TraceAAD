@@ -95,3 +95,134 @@ def test_comparison_never_averages_across_models(tmp_path):
     assert cohorts == {"eoh@qwen3.8-27b": 2, "eoh@deepseek-v4.1-flash": 1}
     compared = monitor.compare(["eoh@qwen3.8-27b"])["tasks"][0]["cohorts"][0]["runs"]
     assert sorted(run["name"] for run in compared) == ["rep1", "rep2"]
+
+
+def dashboard_run(directory, *, seed=0, model='qwen3.8-27b-awq', status='finished'):
+    task=directory.parent.name
+    write_json(directory/'run_config.json',dict(task=task,budget=1000,seed=seed,repeat=seed+1,
+               score_metric='raw_objective',llm=dict(model=model)))
+    write_json(directory/'summary.json',dict(status=status,budget=1000,budget_used=1000,
+               best=dict(id=1,fitness=10+seed,action='Init')))
+    write_json(directory/'selection.json',dict(selected_node=1))
+    (directory/'best_program.py').write_text('def f(x):\n    return x\n')
+
+
+def test_primary_index_keeps_eighteen_runs_and_never_substitutes_relaxed_scores(tmp_path):
+    from benchmarks.tasks import CO_TASKS, PRIMARY_SPLITS, scale_of_split
+    allowed=[]
+    for task in CO_TASKS:
+        for seed in range(3):
+            name=f'rep{seed+1}'
+            run=tmp_path/'eoh'/task/name
+            dashboard_run(run,seed=seed,model='Qwen3.8-27B' if seed==2 else 'qwen3.8-27b-awq',
+                          status='running' if seed==1 else 'finished')
+            allowed.append(f'{task}/{name}')
+            if seed==1:
+                continue
+            scale=str(scale_of_split(task,PRIMARY_SPLITS[task][0]))
+            relaxed=dict(task=task,node_id=1,verification='verified',scale=scale,
+                         variant='relaxed_time_cpu120_wall600',fitness=1)
+            values=[relaxed]
+            if not (task=='tsp_construct' and seed==2):
+                values.insert(0,{**relaxed,'variant':'','fitness':None if task=='tsp_construct' else 20})
+            write_json(run/'heldout.json',values)
+    for name,model in [('deepseek_pilot','deepseek-v4.1-flash'),('extra_seed0','Qwen3.8-27B')]:
+        dashboard_run(tmp_path/'eoh'/'tsp_construct'/name,model=model)
+    dashboard_run(tmp_path/'diagnostic'/'tsp_construct'/'smoke')
+    write_json(tmp_path/'primary_runs.json',dict(schema=1,methods={'eoh':allowed}))
+    original={p:p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    monitor=ResultsMonitor(tmp_path)
+    assert monitor.batches()==[dict(id='eoh',label='eoh')]
+    assert monitor.overview('eoh')['summary']['runs']==18
+    cohorts=monitor.cohorts()
+    assert len(cohorts)==1 and cohorts[0]['id']=='eoh' and cohorts[0]['runs']==18
+    assert cohorts[0]['variant']=='' and cohorts[0]['model_name']=='qwen3.8-27b'
+    compared=monitor.compare(['eoh'])
+    assert all(len(t['cohorts'][0]['runs'])==3 for t in compared['tasks'])
+    tsp=next(t for t in compared['tasks'] if t['key']=='tsp_construct')['cohorts'][0]['runs']
+    assert tsp[0]['heldout'] and all(v is None for v in tsp[0]['heldout'].values())
+    assert tsp[1]['status']=='running' and not tsp[1]['heldout']
+    assert not tsp[2]['heldout']  # a relaxed-only result cannot stand in for the main test
+    assert {p:p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}==original
+
+
+def test_primary_index_changes_invalidate_cached_views(tmp_path):
+    for name in ('main','extra'):
+        dashboard_run(tmp_path/'eoh'/'tsp_construct'/name)
+    index=tmp_path/'primary_runs.json'
+    write_json(index,dict(schema=1,methods={'eoh':['tsp_construct/main']}))
+    monitor=ResultsMonitor(tmp_path)
+    before=monitor.state_signature('eoh')
+    assert monitor.overview('eoh')['tasks'][0]['runs'][0]['name']=='main'
+    write_json(index,dict(schema=1,methods={'eoh':['tsp_construct/extra']}))
+    assert monitor.state_signature('eoh')!=before
+    assert monitor.overview('eoh')['tasks'][0]['runs'][0]['name']=='extra'
+
+
+def test_compare_api_returns_all_thirteen_methods(tmp_path):
+    for i in range(13):
+        dashboard_run(tmp_path/f'method{i}'/'tsp_construct'/'rep1')
+    monitor=ResultsMonitor(tmp_path)
+    names=[c['id'] for c in monitor.cohorts()]
+    assert len(names)==13
+    server=ThreadingHTTPServer(('127.0.0.1',0),make_request_handler(monitor))
+    thread=Thread(target=server.serve_forever,daemon=True);thread.start()
+    try:
+        with urlopen(f'http://127.0.0.1:{server.server_port}/api/compare?cohorts='+','.join(names)) as response:
+            result=json.load(response)
+        assert len(result['cohorts'])==13
+        assert len(result['tasks'][0]['cohorts'])==13
+    finally:
+        server.shutdown();server.server_close();thread.join()
+
+
+def test_comparison_defaults_and_old_links_use_one_primary_object_per_method():
+    from pathlib import Path
+    import shutil
+    import subprocess
+    node=shutil.which('node')
+    if not node:
+        pytest.skip('Node is unavailable for the JavaScript view check')
+    source=Path(__file__).resolve().parents[2]/'experiments/visualization/static/app.js'
+    check=r'''
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const code=fs.readFileSync(process.argv[1],'utf8');
+const part=code.slice(code.indexOf('const CMP ='),code.indexOf('async function loadCompare()'));
+const data={cohorts:['traceaad_v13','traceaad_v12_1',...Array.from({length:12},(_,i)=>`baseline${i}`)].map(id=>
+ ({id,batch:id,label:id,model_name:'qwen3.8-27b',runs:18,variant:'',heldout_tasks:[]}))};
+function scope() {
+ const chips={innerHTML:''};
+ const context=vm.createContext({S:{batch:'traceaad_v13'},getJSON:async()=>({data}),
+   $:()=>chips,esc:String,seriesColor:i=>String(i)});
+ vm.runInContext(part,context);
+ return {context,chips};
+}
+(async()=>{
+ const fresh=scope();await vm.runInContext('loadCohorts()',fresh.context);
+ assert.equal(vm.runInContext('CMP.ids.length',fresh.context),13);
+ vm.runInContext('renderChips()',fresh.context);
+ assert.equal((fresh.chips.innerHTML.match(/class="chip /g)||[]).length,13);
+ assert.ok(fresh.chips.innerHTML.includes('chip-add'));
+ const old=scope();
+ vm.runInContext(`CMP.ids=['baseline0@qwen3.8-27b','baseline0::relaxed_time_cpu120_wall600@qwen3.8-27b','baseline1'];CMP.ref=CMP.ids[0]`,old.context);
+ await vm.runInContext('loadCohorts()',old.context);
+ assert.equal(vm.runInContext('JSON.stringify(CMP.ids)',old.context),'["baseline0","baseline1"]');
+ assert.equal(vm.runInContext('CMP.ref',old.context),'baseline0');
+})().catch(e=>{console.error(e);process.exitCode=1});
+'''
+    subprocess.run([node,'-e',check,str(source)],check=True,capture_output=True,text=True)
+
+
+def test_primary_display_has_one_traceaad_without_version_suffix(tmp_path):
+    for method in ('traceaad_v13','traceaad_v12_1','eoh'):
+        dashboard_run(tmp_path/method/'tsp_construct'/'rep1')
+    write_json(tmp_path/'primary_runs.json',dict(schema=1,
+        methods={m:['tsp_construct/rep1'] for m in ('traceaad_v13','eoh')},
+        labels={'traceaad_v13':'TraceAAD'}))
+    monitor=ResultsMonitor(tmp_path)
+    assert {b['id']:b['label'] for b in monitor.batches()}=={'traceaad_v13':'TraceAAD','eoh':'eoh'}
+    cohorts={c['id']:c for c in monitor.cohorts()}
+    assert set(cohorts)=={'traceaad_v13','eoh'}
+    assert cohorts['traceaad_v13']['label']=='TraceAAD'
+    assert monitor.compare(['traceaad_v13'])['cohorts'][0]['label']=='TraceAAD'
+    assert (tmp_path/'traceaad_v12_1/tsp_construct/rep1/run_config.json').exists()

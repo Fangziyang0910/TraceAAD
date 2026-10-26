@@ -110,7 +110,7 @@ class Facts:
         return {pid: p for pid, p in self.programs.items() if p.valid}
 
     def commit(
-        self, state, *, program=None, new=False, evaluations=(), calls=(), delivery_error=None
+        self, state, *, program=None, new=False, candidate=None, evaluations=(), calls=(), delivery_error=None
     ):
         for name, size in self.files.items():
             path = self.run_dir / name
@@ -118,7 +118,8 @@ class Facts:
                 detach_link(path)
                 with path.open("r+b") as handle:
                     handle.truncate(size)
-        row = {"kind": "candidate" if new else "delivery_failed" if delivery_error else "progress"}
+        candidate = new if candidate is None else candidate
+        row = {"kind": "candidate" if candidate else "delivery_failed" if delivery_error else "progress"}
         call_path = self.run_dir / "calls.jsonl"
         if call_path.with_suffix(".jsonl.gz").exists():
             call_path = call_path.with_suffix(".jsonl.gz")
@@ -131,7 +132,7 @@ class Facts:
                     self.source_path, {"id": program.id, "code": program.code}
                 )
             row["program"] = program.metadata()
-        if new or delivery_error:
+        if candidate or delivery_error:
             row.update(
                 candidate_id=state["generations"],
                 budget_used=state["generations"],

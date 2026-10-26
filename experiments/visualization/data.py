@@ -163,6 +163,16 @@ class ResultsMonitor:
         self.default_experiment = experiment
         self.batch_filter = batch
 
+    def _config_paths(self, directory):
+        paths = _run_config_paths(directory)
+        primary = read_json(self.results_root / 'primary_runs.json')
+        if primary is None:
+            return paths
+        if not isinstance(primary, dict) or primary.get('schema') != 1 or not isinstance(primary.get('methods'), dict):
+            raise ValueError('invalid primary experiment index')
+        allowed = set(primary['methods'].get(directory.name, []))
+        return [p for p in paths if p.parent.relative_to(directory).as_posix() in allowed]
+
     def _journal_is_hot(self, run_dir: Path, *, max_age_sec: float = 1200.0) -> bool:
         """A run whose journal was appended recently is live even without a summary.
 
@@ -188,15 +198,15 @@ class ResultsMonitor:
         if not self.results_root.is_dir():
             return entries
         for directory in self.results_root.iterdir():
-            if directory.is_dir() and not directory.is_symlink() and _run_config_paths(directory):
+            if directory.is_dir() and not directory.is_symlink() and self._config_paths(directory):
                 entries.append((self._latest_activity(directory), directory.name))
         entries.sort(reverse=True)
-        return [{"id": name, "label": name} for _, name in entries]
+        labels = read_object(self.results_root / 'primary_runs.json').get('labels', {})
+        return [{"id": name, "label": labels.get(name, name)} for _, name in entries]
 
-    @staticmethod
-    def _latest_activity(directory: Path) -> float:
+    def _latest_activity(self, directory: Path) -> float:
         latest = 0.0
-        for config in _run_config_paths(directory):
+        for config in self._config_paths(directory):
             journal = config.parent / "events.jsonl"
             try:
                 latest = max(latest, journal.stat().st_mtime)
@@ -206,8 +216,9 @@ class ResultsMonitor:
 
     def default_batch(self):
         batches = self.batches()
-        if self.default_experiment in {item["id"] for item in batches}:
-            return self.default_experiment
+        preferred = self.default_experiment or read_object(self.results_root / 'primary_runs.json').get('default_experiment')
+        if preferred in {item["id"] for item in batches}:
+            return preferred
         return batches[0]["id"] if batches else None
 
     def state_signature(self, experiment: str | None):
@@ -215,18 +226,18 @@ class ResultsMonitor:
         experiment = experiment or self.default_batch()
         directory = self.results_root / experiment if experiment else self.results_root
         stamps, unfinished = [], False
-        for path in _run_config_paths(directory) if experiment else []:
+        for path in self._config_paths(directory) if experiment else []:
             run_dir = path.parent
             stamps.append((str(run_dir.relative_to(directory)), _run_stamp(run_dir)))
             unfinished |= read_object(run_dir / "summary.json").get("status") != "finished"
         manifests = tuple((p.name, _stamp(p)) for p in sorted(directory.glob("batch_*.json")))
-        return experiment, tuple(stamps), manifests, int(time.time() // 15) if unfinished else None
+        return experiment, _stamp(self.results_root / 'primary_runs.json'), tuple(stamps), manifests, int(time.time() // 15) if unfinished else None
 
     def run_signature(self, experiment: str, task: str, name: str):
         run_dir = self.results_root / experiment / task / name
         unfinished = read_object(run_dir / "summary.json").get("status") != "finished"
         manifests = tuple((p.name, _stamp(p)) for p in sorted((self.results_root / experiment).glob("batch_*.json")))
-        return experiment, task, name, _run_stamp(run_dir), manifests, int(time.time() // 15) if unfinished else None
+        return experiment, task, name, _stamp(self.results_root / 'primary_runs.json'), _run_stamp(run_dir), manifests, int(time.time() // 15) if unfinished else None
 
     def _manifest_runs(self, experiment):
         rows = {}
@@ -245,7 +256,7 @@ class ResultsMonitor:
         rows = []
         manifest_runs = self._manifest_runs(experiment)
         now = time.time()
-        for config_path in _run_config_paths(self.results_root / experiment):
+        for config_path in self._config_paths(self.results_root / experiment):
             run_dir = config_path.parent
             if ((task_filter and run_dir.parent.name != task_filter)
                     or (name_filter and run_dir.name != name_filter)):
@@ -363,7 +374,7 @@ class ResultsMonitor:
     def _run_models(self, directory: Path):
         """Model of each run in a batch, keyed by (task directory, run name)."""
         return {(path.parent.parent.name, path.parent.name): model_name(read_object(path))
-                for path in _run_config_paths(directory)}
+                for path in self._config_paths(directory)}
 
     def cohorts(self):
         """Comparable result sets: one per batch, held-out variant and model.
@@ -375,14 +386,14 @@ class ResultsMonitor:
         for batch in self.batches():
             directory = self.results_root / batch["id"]
             variants = load_batch_heldout(directory)
-            names = sorted(variants) or [""]
+            names = [""] if (self.results_root / 'primary_runs.json').exists() else sorted(variants) or [""]
             run_models = self._run_models(directory)
             models = Counter(run_models.values())
             split = len(models) > 1
             for variant in names:
                 groups = variants.get(variant, {})
                 base = f"{batch['id']}::{variant}" if variant else batch["id"]
-                label = f"{batch['id']} · {variant}" if variant and len(names) > 1 else batch["id"]
+                label = f"{batch['label']} · {variant}" if variant and len(names) > 1 else batch["label"]
                 for model, runs in sorted(models.items(), key=lambda item: (-item[1], item[0])):
                     tasks = sorted(task for task, group in groups.items()
                                    if any(run_models.get((task, name)) == model for name in group["runs"]))
@@ -414,7 +425,7 @@ class ResultsMonitor:
                 named = heldout.get("runs", {})
                 rows = [row for row in rows_by_batch[item["batch"]] if row["task"] == task
                         and (not item["model"] or row["model"] == item["model"])]
-                if named or item["variant"]:
+                if item["variant"]:
                     rows = [row for row in rows if row["name"] in named]
                 runs = []
                 for row in rows:

@@ -605,8 +605,11 @@ async function loadCohorts() {
   const main = [...weight].sort((a, b) => b[1] - a[1])[0]?.[0];
   const preferred = items => items.find(c => c.model_name === main) || items[0];
   // A link written before a batch was split by model names the batch: keep its main-model cohort.
-  CMP.ids = CMP.ids.map(id => known.has(id) ? id : preferred(CMP.cohorts.filter(c => c.id.split("@")[0] === id))?.id)
+  const canonical = id => known.has(id) ? id : preferred(CMP.cohorts.filter(c =>
+    c.batch === String(id || "").split("::")[0].split("@")[0] && !c.variant))?.id;
+  CMP.ids = CMP.ids.map(canonical)
     .filter((id, i, a) => id && a.indexOf(id) === i);
+  CMP.ref = canonical(CMP.ref);
   if (!CMP.ids.length) {
     // Default: the batch on view (the newest TraceAAD batch unless chosen otherwise) and every baseline method.
     const viewed = CMP.cohorts.filter(c => c.batch === S.batch && isTrace(c));
@@ -620,13 +623,13 @@ async function loadCohorts() {
 function renderChips() {
   const byId = new Map(CMP.cohorts.map(c => [c.id, c]));
   const chips = CMP.ids.map((id, i) => `<span class="chip ${id === CMP.ref ? "ref" : ""}">
-      <span class="sw" style="--c:${seriesColor(i)}"></span><span class="name" title="${esc(id)}">${esc(byId.get(id)?.label || id)}</span>
+      <span class="sw" style="--c:${seriesColor(i)}"></span><span class="name" title="${esc(byId.get(id)?.label || id)}">${esc(byId.get(id)?.label || id)}</span>
       <button type="button" class="star" data-ref="${esc(id)}" aria-pressed="${id === CMP.ref}" title="设为参照">★</button>
-      <button type="button" data-remove="${esc(id)}" title="移除" aria-label="移除 ${esc(id)}">×</button></span>`).join("");
+      <button type="button" data-remove="${esc(id)}" title="移除" aria-label="移除 ${esc(byId.get(id)?.label || id)}">×</button></span>`).join("");
   const rest = CMP.cohorts.filter(c => !CMP.ids.includes(c.id));
   const group = (label, items) => items.length ? `<optgroup label="${label}">${items.map(c =>
     `<option value="${esc(c.id)}">${esc(c.label)}${c.heldout_tasks.length ? ` · 测试 ${c.heldout_tasks.length} 个任务` : " · 无测试"}</option>`).join("")}</optgroup>` : "";
-  const html = chips + (CMP.ids.length < 12 ? `<select class="ctl chip-add" id="cmp-add" aria-label="添加对比对象">
+  const html = chips + (rest.length ? `<select class="ctl chip-add" id="cmp-add" aria-label="添加对比对象">
     <option value="">＋ 添加对比对象…</option>${group("TraceAAD", rest.filter(isTrace))}${group("基线方法", rest.filter(c => !isTrace(c)))}</select>` : "");
   if (html !== CMP.chipsHTML) { CMP.chipsHTML = html; $("cmp-chips").innerHTML = html; }
 }

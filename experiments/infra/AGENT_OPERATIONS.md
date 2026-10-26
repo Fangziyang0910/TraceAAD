@@ -80,6 +80,45 @@ TraceAAD 12.1 重跑批次为 `20261025_server4_qwen_co6_restart`，结果目录
 
 服务器重启后，确认旧调度器已退出，再执行 `bash experiments_result/migrations/20261022_server4/scheduler_command.txt`。实验恢复前还需核对控制器与各运行锁。环境初始验证保存在 `experiments_result/environment_setup/20261022_server4/`；该目录的旧 17 槽命令已被迁移命令替代。
 
+
+## V13 正式批次（10月26日）
+
+`20261026_v13_co6` 已启动六任务各三路（种子 0、1、2），每路 1000 次候选尝试、最多 8000 次全部模型请求，输出上限 8192，评价 worker 上限 8。它是独立批次，**不包含在旧迁移控制器的 157 项计数中**；查询 server4 总进度时需同时读取此批。
+
+源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261025_traceaad_v13_frozen`。规范结果入口为公共仓库的 `experiments_result/traceaad_v13/`，该目录链接到冻结快照中的实际结果目录；原公共代码没有被替换。清单为 `experiments_result/traceaad_v13/batch_20261026_v13_co6.json`。
+
+每路采用“搜索 → 冻结结果检查 → 独立主测试”的流水线，按三秒间隔启动。达到模型请求上限时也会对已冻结程序执行主测试，不要求候选数必须达到 1000。启动命令、核验记录与源码依据位于方法目录下的 `launch_20261026/`。本机 tmux `traceaad_v13_results_sync` 每 60 秒同步，等待搜索和主测试记录落盘，保留远端数据。
+
+```bash
+.venv/bin/python -m experiments.infra.batch_status \
+  --ssh B3-server4 --repo /home/fzy/code/LLM4AD/TraceAAD \
+  --manifest /home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v13/batch_20261026_v13_co6.json --details
+```
+
+V13 使用原参数恢复。清单中 `training_command` 是搜索入口，`heldout_command` 是测试入口，`command` 包含完整流水线；恢复前先确认该会话和写锁均已释放。旧迁移控制器不支持在线追加此批，不向其内存中的计划直接写入新条目。
+
+## V13.1 正式批次（10月26日）
+
+用户要求停止 V13 并按新主稿实现 V13.1。旧 `20261026_v13_co6` 的十八个会话及子进程已停止，数据、冻结源码与恢复点保留；停止回执为 `experiments_result/traceaad_v13/stop_20261026.json`。不自动续跑旧批次。其他历史批次及公共调度器没有停止。
+
+新批次 `20261026_v13_1_co6` 为六任务 × 种子 0／1／2，共十八路，已全部启动。每路 1000 次候选机会、最多 8000 次模型请求、输出上限 8192、输入上限 24000、评价 worker 上限 8。默认先验暖启动十六次独立自由修改；每十轮至少两轮自由修改、至多一轮诊断。完整配置与实施边界见 [V13.1 README](../../traceaad/v13_1/README.md)。
+
+初始源码冻结在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261026_traceaad_v13_1_frozen`，启动前核对 374 个文件的 SHA-256。公共仓库的 `experiments_result/traceaad_v13_1/` 链接到冻结快照的结果目录。清单为 `batch_20261026_v13_1_co6.json`，各路三秒错峰启动，继续使用任意空闲端点的共享模型池及公共 CPU 调度器。
+
+每路仍执行“搜索 → 冻结结果检查 → 独立主测试”。清单保存训练、主测试与完整流水线命令；恢复需使用原冻结源码和原参数。V13 状态不能续接到 V13.1。阶段恢复状态在 `resume.json` 的 `state.v13_1`，配对结果为 `paired_replays.json`。
+
+本机 tmux `traceaad_v13_1_results_sync` 每 60 秒同步搜索与主测试，保留全部远端数据；旧 V13 专用同步会话已停，并完成最后一次拉取。主实验名单已将 TraceAAD 切换至 V13.1，十二个基线名单不变。
+
+启动依据与真实核验保存在 `experiments_result/traceaad_v13_1/launch_20261026/`，测试、配置、源码与模型正控制保存在 `preflight/`。首轮跟进确认十八路都已收到模型回复，接口错误为零；启动状态不能证明方法的完整搜索收益。
+
+### V13.1 匹配输入校验修复与续跑
+
+10月26日，OP 种子 1 因匹配列表中出现字符串而退出。用户授权修复并续跑。修复仅在读取匹配项前检查其是否为对象，错误回复进入已有的 `ValueError` 处理，不计入变换性能失败；提示、选择、收益模型与评价条件没有改变。
+
+当前续跑源码为 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261026_traceaad_v13_1_matchfix`。原冻结源码保留。十八路先释放写锁，再从原检查点受控迁移至修复快照；预算、随机状态、历史结果、待处理回复和信用均保留。实现签名更新后，1143 条评价缓存同步换键并逐条核对，不能因源码签名变化丢失去重。17 个已预留、未提交回复的模型请求按原规则记为不确定调用，名额不退回。
+
+十八路均已从原目录恢复，仍使用原清单与种子，结束后仍自动执行主测试。原始恢复点、停止回执、源码差异、逐路计数边界和恢复回执保存在 `experiments_result/traceaad_v13_1/recovery_match_20261026/`。正常恢复应使用清单中的当前修复快照和命令，不能把这次精确验证的签名迁移当成任意改源码的通行规则。
+
 ## 同步与清理
 
 将 `METHOD_NAME` 替换为实际结果目录名，将 `BATCH_NAME` 替换为批次名。当前 TraceAAD 默认结果目录名为 `traceaad`，历史批次按原目录填写。
