@@ -1,17 +1,27 @@
 # TraceAAD V17
 
-V17 在 [V16](../v16/README.md) 的上下文（修改说明、跨谱系参考程序）上改了两处：谱系是否继续，改为看它自己是否还在进步；Crossover 改为在谱系之间导入组件。两处各有一个开关，默认都打开。
+V17 = [V16](../v16/README.md) 的上下文（修改说明、跨谱系参考程序）+ [V15](../v15/README.md) 的同龄比较 + 组件导入。与 V16 相比改了两处：关掉乐观估计（`projection=False`），谱系是否继续只看同龄比较；Crossover 改为在谱系之间导入组件。
 
 | 部分 | 解决的问题 | 做法 | 开关 |
 | --- | --- | --- | --- |
-| 进步规则 | V16 的乐观估计把预算从冠军谱系分走；同龄比较又让仍在进步的新思想过早暂停 | 冠军以外的谱系只要自身还在进步就保持活跃；它们的总投入不超过冠军在停滞窗口之后的投入；停滞满一个窗口时先发散 | `progress_rule` |
-| 组件导入 | Crossover 的参考程序以整段设计出现，回复容易照搬或改不动；暂停的谱系得不到新信息 | 把另一谱系中带来改进的一步修改，以修改说明和代码差异的形式导入当前谱系；暂停的谱系在更好的谱系出现新组件时恢复一次 | `imports` |
+| 同龄比较 | V16 的乐观估计把预算从冠军谱系分走 | 冠军以外的谱系在检查点上不差于冠军谱系在相同投入时的成绩，才继续开发（V15 规则一） | `projection=False` |
+| 组件导入 | Crossover 的参考程序以整段设计出现，回复容易照搬或改不动 | 把另一谱系中带来改进的一步修改，以修改说明和代码差异的形式导入当前谱系 | `imports` |
 
-两个开关都为 `False`、`projection=True` 时，搜索与 V16 完全相同（测试 `test_without_the_progress_rule_and_imports_the_search_is_v16`）。V17 中 `projection` 默认为 `False`，只在 `progress_rule=False` 时起作用，所以只关 `progress_rule` 得到 V16 上下文加 V15 的同龄比较。
+另有一个默认关闭的开关 `progress_rule`：冠军以外的谱系只要自身还在进步就继续开发，见下文“进步规则”。V17 的前两批（`20261028_v17_co6`、`20261028_v17_rerun`）用的是它。
 
-设计依据见 [W44 记录](../../docs/记录/2026-W44.md) 10月28日的几条，数据在 [v16_allocation_20261028](../../experiments_result/analysis/v16_allocation_20261028/)。
+`imports=False` 时搜索与 `projection=False` 的 V16 完全相同（测试 `test_without_imports_the_search_is_v16_without_projection`）；再打开 `projection` 并关掉 `progress_rule`，即 V16。
 
-## 进步规则
+设计依据见 [W44 记录](../../docs/记录/2026-W44.md) 10月28日的几条，数据在 [v16_allocation_20261028](../../experiments_result/analysis/v16_allocation_20261028/) 与 [v17_progress_20261028](../../experiments_result/analysis/v17_progress_20261028/)。
+
+## 同龄比较
+
+与 V15 规则一相同。首个检查点 `first = 1 + mature_steps`（默认 5），之后逐次加倍。冠军以外、有有效程序的谱系：投入少于 `first` 时处于发育期，活跃；否则取它已到达的最高检查点 `r`，若它前 `r` 次尝试的最好成绩不差于冠军谱系前 `r` 次尝试的最好成绩，活跃，否则暂停。下一次尝试给投入最少的活跃谱系，没有活跃谱系时给冠军。发育期执行 `Mature`；自上次新最优或上次发散起连续 `stagnation_window` 次没有新最优时发散。
+
+## 为什么默认不用进步规则
+
+V17 原来的设想是：同龄比较会暂停仍在进步的新思想，所以谱系只要自身还在进步就继续开发。重跑批次做到 63–292 条记录时，进步规则按设计执行，发散次数也与 V14–V16 相当，但它分不出哪个谱系会赢。冠军以外的谱系开发得少，有 21%–27% 的尝试刷新本谱系最好，几乎总有谱系满足活跃条件。把同龄比较套到 V17 的每次分配上，372 次活跃尝试中 311 次给了同龄比较会暂停的谱系，换来 4 次冠军更替，每 100 次约 1.3 次；冠军谱系每 100 次尝试产生约 3.7 次新最好。V14–V16 的完整运行中，多数最终冠军在自身前 5 次尝试内就已领先，检查点落后 1% 以上、之后才成为最终冠军的只有 1–5 路（共 18 路）。数据见 [20261028_1356](../../experiments_result/analysis/v17_progress_20261028/20261028_1356/)。因此默认回到同龄比较，组件导入保留；进步规则保留为开关，供消融。
+
+## 进步规则（`progress_rule=True`）
 
 记号：首个检查点 `first = 1 + mature_steps`（默认 5）；`W = stagnation_window`（默认 40）；谱系的**停滞数**是它在首次达到自身最好成绩之后的尝试数。谱系、投入和冠军的定义与 V15 相同。
 
@@ -39,15 +49,15 @@ V17 在 [V16](../v16/README.md) 的上下文（修改说明、跨谱系参考程
 
 V16 主批次中每路约有 44 次刷新谱系最好的修改，69% 不超过 60 行，所以每路约有 15 个组件。
 
-**导入。** 冠军或活跃谱系抽到 Crossover 时，若其他谱系有本谱系尚未导入过的组件，这次尝试改为 `Import`：导入其中程序成绩最好的组件，同成绩取较新的。没有可导入的组件时，执行 V16 的 Crossover。按程序成绩而不按改进比例排序，是因为改进比例最大的修改多来自刚发散的粗糙设计，这类修改修补的是那个设计自己的缺陷。
+**导入。** 任一谱系抽到 Crossover 时，若其他谱系有本谱系尚未导入过的组件，这次尝试改为 `Import`：导入其中程序成绩最好的组件，同成绩取较新的。没有可导入的组件时，执行 V16 的 Crossover。按程序成绩而不按改进比例排序，是因为改进比例最大的修改多来自刚发散的粗糙设计，这类修改修补的是那个设计自己的缺陷。
 
 **提示。** Import 提示与 Refine 相同部分为：形成路径、此前尝试、当前算法的设计与代码。之后是 `[Component From Another Algorithm]`：那个算法修改前后的成绩、修改说明和代码差异 `diff(q, p)`。来源程序既不给代码，也不给设计描述。任务要求把组件中的计算按当前代码实现，保留当前算法的主决策规则，不要重建另一个算法。回复同样写 `change` 字段。回访拒绝的重问仍是 Import 提示。
 
 ## 记录
 
-`request.allocation` 记录 `lineage`、`champion`、`effort` 和 `reason`（`young`、`champion`、`active`、`resume`、`diverge`）；探索判断之后的分配另记 `account`（`c` 与 `o`），活跃谱系记 `stall`，恢复记 `component`。发散请求的 `lineage` 为空。Import 程序的 `reference_id` 是组件程序。
+`request.allocation` 默认与 V16 相同：`lineage`、`champion`、`effort`、`checkpoint`、`projected`（`projection=False` 时总为假）。打开 `progress_rule` 时改记 `lineage`、`champion`、`effort` 和 `reason`（`young`、`champion`、`active`、`resume`、`diverge`）；探索判断之后的分配另记 `account`（`c` 与 `o`），活跃谱系记 `stall`，恢复记 `component`，发散请求的 `lineage` 为空。Import 程序的 `reference_id` 是组件程序。
 
-`summary.json` 沿用 V15 的 `v15` 字段，另加 `v17`：各分配原因的首次尝试数、组件数、Import 次数及其中改进父代的次数、恢复次数及其中改进的次数、导入结果与组件程序的代码距离中位数，以及距离低于 `map_distance` 的次数（用来看导入是否变成照搬）。父代选择的经验计数仍只统计 Refine、Explore、Crossover，与 Mature 一样不含 Import。
+`summary.json` 沿用 V15 的 `v15` 字段，另加 `v17`：两个开关的取值、各分配原因的首次尝试数（只在 `progress_rule=True` 时有，否则为空）、组件数、Import 次数及其中改进父代的次数、恢复次数及其中改进的次数（只在 `progress_rule=True` 时可能非零）、导入结果与组件程序的代码距离中位数，以及距离低于 `map_distance` 的次数（用来看导入是否变成照搬）。父代选择的经验计数仍只统计 Refine、Explore、Crossover，与 Mature 一样不含 Import。
 
 ```bash
 .venv/bin/python -m experiments.traceaad_v17.run --task tsp_construct --dry-run

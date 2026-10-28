@@ -176,21 +176,23 @@ V16 是论文中的 TraceAAD。它在 V15 上加入比较点的乐观估计、�
 
 ## V17 正式批次（10月28日）
 
-V17 在 V16 的上下文上改了两处：冠军以外的谱系按自身是否进步继续开发，总投入不超过冠军在停滞窗口之后的投入，停滞满一个窗口时先发散（`progress_rule`）；Crossover 改为导入其他谱系中带来改进的修改，暂停的谱系可由更好谱系的新组件恢复（`imports`）。机制与开关见 [V17 README](../../traceaad/v17/README.md)。V14、V15、V16 继续运行，不停止、不替换。
+V17 = V16 的上下文 + V15 的同龄比较（`projection=False`）+ 组件导入（`imports`）：Crossover 改为导入其他谱系中带来改进的修改。另有默认关闭的 `progress_rule`（冠军以外的谱系按自身是否进步继续开发），前两批用的是它。机制与开关见 [V17 README](../../traceaad/v17/README.md)。V14、V15、V16 继续运行，不停止、不替换。
 
 | 实验目录 | 批次 | 设置 | 范围 | 状态 |
 | --- | --- | --- | --- | --- |
-| `traceaad_v17` | `20261028_v17_rerun` | 默认，`progress_rule`、`imports` 都开 | 六任务 × 种子 0／1／2 | 10月28日 12:23 启动 |
-| `traceaad_v17_noprogress` | `20261028_v17_noprogress` | `progress_rule=False`（V15 的同龄比较） | 六任务 × 种子 0／1／2 | 只定义在启动脚本中，未预览、未排队 |
-| `traceaad_v17_noimports` | `20261028_v17_noimports` | `imports=False`（V16 的 Crossover） | 六任务 × 种子 0／1／2 | 只定义在启动脚本中，未预览、未排队 |
+| `traceaad_v17` | `20261028_v17_sameage` | 默认：同龄比较、`imports` 开 | 六任务 × 种子 0／1／2 | 10月28日 14:08 启动 |
+| `traceaad_v17_progress` | `20261028_v17_progress` | `progress_rule=True` | 六任务 × 种子 0／1／2 | 只定义在启动脚本中，未预览、未排队 |
+| `traceaad_v17_noimports` | `20261028_v17_noimports` | `imports=False`（无乐观估计的 V16） | 六任务 × 种子 0／1／2 | 只定义在启动脚本中，未预览、未排队 |
 
-源码冻结在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261028_traceaad_v17_rerun_frozen`，436 个文件的 SHA-256 写入 `source_hashes.json`，启动前逐一核对。启动脚本为 `experiments_result/traceaad_v17/launch_20261028_rerun/launch_batch.py`：在快照根目录以 `PYTHONPATH=.` 运行，`--cell main|noprogress|noimports` 选择批次，不带 `--launch` 时只写预览。脚本核对 `projection=False`、`changes`、`foreign_reference` 为真，以及两个 V17 开关与所选格一致。冻结结果检查要求 `summary.json` 同时含 `v15` 与 `v17` 字段。每路 1000 次候选机会、输出上限 8192、评价 worker 上限 8，使用共享模型池与公共 CPU 调度器。18 路三秒错峰直接启动；启动时另有 V16 五路在运行，共 23 路。公共仓库的 `experiments_result/traceaad_v17` 链接到新快照的结果目录。
+源码冻结在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261028_traceaad_v17_sameage_frozen`，436 个文件的 SHA-256 写入 `source_hashes.json`，启动前逐一核对。启动脚本为 `experiments_result/traceaad_v17/launch_20261028_sameage/launch_batch.py`：在快照根目录以 `PYTHONPATH=.` 运行，`--cell main|progress|noimports` 选择批次，不带 `--launch` 时只写预览。脚本核对 `projection=False`、`changes`、`foreign_reference` 为真，以及两个 V17 开关与所选格一致。冻结结果检查要求 `summary.json` 同时含 `v15` 与 `v17` 字段。每路 1000 次候选机会、输出上限 8192、评价 worker 上限 8，使用共享模型池与公共 CPU 调度器。18 路三秒错峰直接启动；启动时另有 V16 四路在运行，共 22 路。公共仓库的 `experiments_result/traceaad_v17` 链接到新快照的结果目录。
+
+**停止的重跑 `20261028_v17_rerun`（进步规则）。** 它于 12:23 启动，14:07 由用户决定停止，当时各路做到 81–370 条记录。进步规则按设计执行，但冠军以外的谱系几乎总有一个在自身记录上改进：372 次活跃尝试中 311 次给了同龄比较会暂停的谱系，换来 4 次冠军更替。V17 在原处改为默认使用同龄比较。18 路的 44 个进程已停止，停止回执为旧快照内 `experiments_result/traceaad_v17/stop_20261028_rerun.json`，本地副本在 `launch_20261028_rerun/`。数据保留在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261028_traceaad_v17_rerun_frozen`，停止后的最终状态已同步到本地；它可作为 `progress_rule=True` 在相同记录数下的对照。启动脚本、同步日志与修改前名单保留在 `launch_20261028_rerun/`。
 
 **放弃的首批 `20261028_v17_co6`。** 它于 10月28日 10:29 启动，12:19 由用户决定放弃，当时各路做到 82–360 条记录。原因是发散几乎不发生：发散只排在没有活跃谱系之后，而冠军以外的谱系几乎总有一个在自身记录上改进，相同记录数下只发散了 6 次（V14–V16 为 40–47 次）。V17 在原处修正：探索打开且满足 V15 的发散条件时先发散。首批 18 路的 44 个进程已停止，停止回执为旧快照内 `experiments_result/traceaad_v17/stop_20261028.json`，本地副本在 `launch_20261028/`。数据保留在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261028_traceaad_v17_frozen`；首批的启动脚本、同步日志与修改前名单保留在 `launch_20261028/`。检查脚本与结果在 `experiments_result/analysis/v17_progress_20261028/`。
 
-真实模型冒烟位于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261028_traceaad_v17_preflight`（TSP 与 JSSP，各 40 次候选，3 个初始程序，发育 2 步，停滞窗口 4），使用修正前的源码。TSP 冒烟用完预算：40 条记录全部有效，没有解析失败；发育、冠军、活跃谱系三种分配都出现，一个在比较点落后的谱系靠自身进步继续开发并接管了冠军；4 次 Import 中 2 次改进父代，结果与组件程序的代码距离中位数为 0.88。修正只改变分配顺序，发散请求沿用 V14 的提示，所以没有再做冒烟；新顺序由单元测试覆盖。检查脚本为快照内 `inspect_smoke.py`。
+真实模型冒烟位于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261028_traceaad_v17_preflight`（TSP 与 JSSP，各 40 次候选，3 个初始程序，发育 2 步，停滞窗口 4），使用修正前的源码。TSP 冒烟用完预算：40 条记录全部有效，没有解析失败；发育、冠军、活跃谱系三种分配都出现，一个在比较点落后的谱系靠自身进步继续开发并接管了冠军；4 次 Import 中 2 次改进父代，结果与组件程序的代码距离中位数为 0.88。修正只改变分配顺序，发散请求沿用 V14 的提示，所以没有再做冒烟；新顺序由单元测试覆盖。检查脚本为快照内 `inspect_smoke.py`。第三批 `20261028_v17_sameage` 的默认路径由已运行过的部件组成（V15 的同龄比较、V16 的上下文、前两批的 Import），由单元测试覆盖组合，也没有另做冒烟。
 
-本机 `traceaad-results-sync@v17.service` 经 drop-in `rerun.conf` 运行 `experiments_result/traceaad_v17/launch_20261028_rerun/sync_batch.py`，每 60 秒同步重跑批次，日志为同目录 `sync.log`，全部完成主测试后退出。重跑运行在主实验名单中，所以 `watch_server4` 自动检查重跑批次。本地 `experiments_result/traceaad_v17/` 中仍有首批已同步的运行目录；主实验名单只列重跑批次（标签 “TraceAAD V17”），默认方法仍为 `traceaad_v16`。修改前名单保存在 `launch_20261028_rerun/primary_runs_before.json`。
+本机 `traceaad-results-sync@v17.service` 经 drop-in `rerun.conf` 运行 `experiments_result/traceaad_v17/launch_20261028_sameage/sync_batch.py`，每 60 秒同步新批次，日志为同目录 `sync.log`，全部完成主测试后退出。新批次运行在主实验名单中，所以 `watch_server4` 自动检查它。本地 `experiments_result/traceaad_v17/` 中仍有前两批已同步的运行目录；主实验名单只列新批次（标签 “TraceAAD V17”），默认方法仍为 `traceaad_v16`。修改前名单保存在 `launch_20261028_sameage/primary_runs_before.json`。
 
 ## 同步与清理
 

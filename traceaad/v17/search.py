@@ -1,24 +1,10 @@
-"""V17: V16 with continuation by a lineage's own progress and with component imports.
+"""V17: V16's context with V15's same-age comparison and with component imports.
 
-Allocation (progress_rule). A lineage below the first checkpoint, 1 +
-mature_steps attempts, is developed first, the one with the fewest attempts
-first; the champion lineage, the one holding the best program, is no exception.
-Otherwise the champion receives the attempt unless exploration is open: since
-the last new best, the attempts outside the champion lineage are fewer than the
-champion's attempts minus stagnation_window. So after each new best the
-champion first spends stagnation_window attempts, and later at most every
-other attempt goes elsewhere.
-
-An exploration attempt starts a new lineage by Diverge when V15 would: after
-stagnation_window attempts without a new best since the last new best or the
-last Diverge. Otherwise it goes to an active lineage: one whose attempts since
-its own last improvement are fewer than max(first checkpoint, half its attempts).
-The lineage that improved most recently goes first, then the one with fewer
-attempts, then the older one. A lineage is not compared with the champion and
-its potential is not estimated: it continues while its own record improves.
-Without an active lineage, a paused lineage is resumed by an import when a
-lineage scoring better has made a new component since its last attempt, the
-paused lineage scoring best first; otherwise a new lineage starts by Diverge.
+Allocation. By default (progress_rule False, projection False) a lineage other
+than the champion stays active while, at its last checkpoint, its best score is
+not worse than the champion lineage's best after the same number of attempts
+(V15). The lineage with the fewest attempts among the active ones receives the
+attempt, otherwise the champion; a stalled search diverges first (V15).
 
 Components and imports (imports). A component is a change that set a new best
 of its lineage, made by Refine, Explore, Crossover, Mature or Import from a
@@ -29,9 +15,23 @@ attempt imports the one whose program scores best. The prompt gives its Change
 and diff but not the program it came from (prompts.PromptBuilderV17).
 Otherwise the attempt is V16's Crossover with a reference from another lineage.
 
-Everything is derived from the program records. With progress_rule and imports
-both False, the search is V16 with the configured projection.
-"""
+Progress rule (progress_rule True, the first V17 batches). A lineage below the
+first checkpoint, 1 + mature_steps attempts, is developed first, the one with
+the fewest attempts first; the champion lineage is no exception. Otherwise the
+champion receives the attempt unless exploration is open: since the last new
+best, the attempts outside the champion lineage are fewer than the champion's
+attempts minus stagnation_window. An exploration attempt starts a new lineage
+by Diverge when V15 would: after stagnation_window attempts without a new best
+since the last new best or the last Diverge. Otherwise it goes to an active
+lineage: one whose attempts since its own last improvement are fewer than
+max(first checkpoint, half its attempts). The lineage that improved most
+recently goes first, then the one with fewer attempts, then the older one.
+Without an active lineage, a paused lineage is resumed by an import when a
+lineage scoring better has made a new component since its last attempt, the
+paused lineage scoring best first; otherwise a new lineage starts by Diverge.
+
+Everything is derived from the program records. With imports False, the search
+is V16 with the configured projection."""
 
 from collections import Counter
 import difflib
@@ -263,7 +263,9 @@ class TraceAADV17(TraceAADV16):
             summary["v17"] = {
                 "progress_rule": self.config.progress_rule,
                 "imports": self.config.imports,
-                "attempts_by_reason": dict(Counter((p.request.get("allocation") or {}).get("reason", "init") for p in first)),
+                "attempts_by_reason": dict(Counter((p.request.get("allocation") or {}).get("reason", "init") for p in first))
+                if self.config.progress_rule
+                else None,
                 "components": len(self._components()) if self.archive else 0,
                 "import_attempts": len(imports),
                 "imports_improved": len(improved),
