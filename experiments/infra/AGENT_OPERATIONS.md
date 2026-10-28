@@ -17,7 +17,7 @@ uv run python -m experiments.infra.batch_status \
   --manifest MANIFEST_PATH --details
 
 # 本地看板
-uv run python -m experiments.visualization --host 127.0.0.1 --port 8765
+uv run python -m experiments.visualization --host 0.0.0.0 --port 8765
 ```
 
 | 输出或选项 | 含义 |
@@ -31,7 +31,17 @@ uv run python -m experiments.visualization --host 127.0.0.1 --port 8765
 
 `heldout` 列只统计主比较测试（`PRIMARY_SPLITS`）。`missing` 表示主测试缺失，会影响 `ready_for_heldout` 与需要关注的判断。
 
-看板地址为 `http://127.0.0.1:8765/`。本地数据只反映已同步的状态。生成预算读取事件与恢复点，不用有效程序数代替。文件说明见[结果格式](SEARCH_FORMAT.md)。
+看板地址为 `http://10.150.68.218:8765/`，本机也可访问 `http://127.0.0.1:8765/`。本地数据只反映已同步的状态。生成预算读取事件与恢复点，不用有效程序数代替。文件说明见[结果格式](SEARCH_FORMAT.md)。
+
+本机看板由 systemd 用户服务 `traceaad-dashboard.service` 启动；V16、V17 的结果同步分别由 `traceaad-results-sync@v16.service` 和 `traceaad-results-sync@v17.service` 管理。三个服务已启用，开机后自动启动，失败时自动重启。同步日志写入各批次启动目录的 `sync.log`（V16 为 `launch_20261028/`；V17 首批放弃后，`traceaad-results-sync@v17.service.d/rerun.conf` 把服务改为同步重跑批次，日志在 `launch_20261028_rerun/`）；全部搜索与主测试结束后，同步脚本正常退出。
+
+`traceaad-watch.timer` 每三分钟运行 `python -m experiments.infra.watch_server4`。它不写批次名：server4 上有清单、且[主实验名单](../../experiments_result/primary_runs.json)中有运行在本机尚未完成（搜索未到终止状态，或已完成但缺 `heldout.json`）的批次，就是要检查的批次。新批次的运行加入主实验名单后自动纳入，被替换的批次随之移出；不在名单中的批次（如消融）不检查。每次检查：失败的用户服务、本机模型、server4 到本机模型的转发、tmux 会话、各批次的远端状态，以及本机副本是否落后远端 20 次候选以上。新异常通过本机桌面通知；最近一次检查保存在 `~/.cache/traceaad/server4-watch.json`。同一模块的 `sync` 动作（`python -m experiments.infra.watch_server4 sync`）按同样的规则每 60 秒同步这些批次，可以用一个服务替代按版本的同步服务。查询示例：
+
+```bash
+systemctl --user status traceaad-dashboard.service 'traceaad-results-sync@v16.service' 'traceaad-results-sync@v17.service'
+systemctl --user status traceaad-watch.timer
+journalctl --user -u traceaad-watch.service -n 5 --no-pager
+```
 
 ## server3 入口
 
@@ -118,6 +128,69 @@ V13 使用原参数恢复。清单中 `training_command` 是搜索入口，`held
 当前续跑源码为 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261026_traceaad_v13_1_matchfix`。原冻结源码保留。十八路先释放写锁，再从原检查点受控迁移至修复快照；预算、随机状态、历史结果、待处理回复和信用均保留。实现签名更新后，1143 条评价缓存同步换键并逐条核对，不能因源码签名变化丢失去重。17 个已预留、未提交回复的模型请求按原规则记为不确定调用，名额不退回。
 
 十八路均已从原目录恢复，仍使用原清单与种子，结束后仍自动执行主测试。原始恢复点、停止回执、源码差异、逐路计数边界和恢复回执保存在 `experiments_result/traceaad_v13_1/recovery_match_20261026/`。正常恢复应使用清单中的当前修复快照和命令，不能把这次精确验证的签名迁移当成任意改源码的通行规则。
+
+## V14 正式批次（10月27日）
+
+用户要求停止 V13.1，改跑针对适应度引导下保守化的 V14。旧 `20261026_v13_1_co6` 的 15 个仍在运行的会话及 33 个进程已停止（停时约 170–264／1000 次候选），数据、快照与恢复点保留；停止回执为 `experiments_result/traceaad_v13_1/stop_20261027.json`。不自动续跑旧批次。旧 V13.1 同步会话在最后一次拉取后停止。
+
+新批次 `20261027_v14_co6` 为六任务 × 种子 0／1／2，共十八路，已全部启动。每路 1000 次候选机会、输出上限 8192、评价 worker 上限 8；V14 不设单独的模型请求上限。机制与默认值见 [V14 README](../../traceaad/v14/README.md)。
+
+源码冻结在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261027_traceaad_v14_frozen`，启动前核对 406 个文件的 SHA-256。公共仓库的 `experiments_result/traceaad_v14/` 链接到冻结快照的结果目录。清单为 `batch_20261027_v14_co6.json`，三秒错峰，使用共享模型池与公共 CPU 调度器。每路执行“搜索 → 冻结结果检查 → 独立主测试”。启动脚本 `launch_batch.py` 需在快照根目录以 `PYTHONPATH=.` 运行，不带 `--launch` 时只写预览。
+
+真实模型冒烟测试位于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261027_traceaad_v14_preflight`（TSP，14 次候选，停滞窗口 3，发育 2 步），确认发散提示只含设计描述、发育期以发散期最好成员为父代、结束后回到普通搜索。本机 tmux `traceaad_v14_results_sync` 每 60 秒同步。主实验名单已将 TraceAAD 切换至 V14，切换前名单保存在 `launch_20261027/primary_runs_before.json`。
+
+## V15 正式批次与 2×2 消融（10月27日）
+
+V15 在 V14 上加入曝光策略的两条规则，机制与开关见 [V15 README](../../traceaad/v15/README.md)。V14 继续运行，它是 2×2 消融中两条规则都关闭的一格，不停止、不替换。
+
+| 实验目录 | 批次 | 规则 | 范围 |
+| --- | --- | --- | --- |
+| `traceaad_v15` | `20261027_v15_co6` | `allocation=effort`、`exposure=info` | 六任务 × 种子 0／1／2 |
+| `traceaad_v15_who` | `20261027_v15_who` | `allocation=effort`、`exposure=code`（只用规则一） | TSP、CVRP、OP × 种子 0／1／2 |
+| `traceaad_v15_form` | `20261027_v15_form` | `allocation=fitness`、`exposure=info`（只用规则二） | TSP、CVRP、OP × 种子 0／1／2 |
+
+源码冻结在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261027_traceaad_v15_frozen`，启动前核对 416 个文件的 SHA-256。三个批次共用这一快照与启动脚本 `experiments_result/traceaad_v15/launch_20261027/launch_batch.py`。在快照根目录以 `PYTHONPATH=.` 运行，`--cell main|who|form` 选择批次；不带 `--launch` 时只写预览。脚本核对路数、规则组合与目录不存在后，以三秒错峰启动；每路执行“搜索 → 冻结结果检查（含 `summary.json` 的 `v15` 字段）→ 独立主测试”，主测试输出写入 `logs/heldout_primary.json`。公共仓库的 `experiments_result/<实验目录>` 链接到快照中的结果目录。每路 1000 次候选机会、输出上限 8192、评价 worker 上限 8，使用共享模型池与公共 CPU 调度器。
+
+主批次 18 路于 10月27日 11:14 启动。两格消融原定由 server4 的 tmux `traceaad_v15_ablation_waiter` 在主批次只剩图着色与 JSSP 时启动。10月27日 22:40，用户取消了这一消融，等待会话在启动任何一格前停止，日志为快照内 `launch_20261027/ablation_waiter.log`。`traceaad_v15_who`、`traceaad_v15_form` 只有预览，没有运行。
+
+真实模型冒烟位于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261027_traceaad_v15_preflight`。TSP 冒烟（24 次候选，3 个初始程序，发育 2 步，停滞窗口 6）确认了按最少投入交替发育、在检查点按冠军曲线暂停、停滞后新建谱系、谱系内抽样父代、信息形式的 Crossover 与回访重问；后续初始化只见设计描述，回复字段顺序为 `analysis`、`code`、`design`。图着色冒烟在主批次覆盖该任务后停止。
+
+V15 主批次已完成，最后一次同步包括全部主测试记录。主实验名单加入 `traceaad_v15`；两格消融的条目已随消融删除。修改前名单保存在 `experiments_result/traceaad_v15/launch_20261027/primary_runs_before.json`。
+
+## V16 正式批次（10月27日–28日）
+
+V16 是论文中的 TraceAAD。它在 V15 上加入比较点的乐观估计、修改说明和跨谱系参考程序，机制与开关见 [V16 README](../../traceaad/v16/README.md)。V14 与 V15 主批次继续运行，不停止、不替换。
+
+| 实验目录 | 批次 | 设置 | 范围 | 状态 |
+| --- | --- | --- | --- | --- |
+| `traceaad_v16` | `20261028_v16_co6` | 默认，三个开关都开 | 六任务 × 种子 0／1／2 | 10月27日 23:06 启动 |
+| `traceaad_v16_noproj` | `20261028_v16_noproj` | `projection=False`（论文的“无乐观估计”） | 六任务 × 种子 0／1／2 | 只写了预览，未排队 |
+
+源码冻结在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261028_traceaad_v16_frozen`，424 个文件的 SHA-256 写入 `source_hashes.json`，启动前逐一核对。启动脚本为 `experiments_result/traceaad_v16/launch_20261028/launch_batch.py`：在快照根目录以 `PYTHONPATH=.` 运行，`--cell main|noproj` 选择批次，不带 `--launch` 时只写预览。脚本另外核对 `projection`、`changes`、`foreign_reference` 的取值。冻结结果检查仍要求 `summary.json` 含 `v15` 字段，因为 V16 沿用这一字段。每路 1000 次候选机会、输出上限 8192、评价 worker 上限 8，使用共享模型池与公共 CPU 调度器。18 路三秒错峰直接启动，启动时另有 15 路 V14、V15 在运行，共 33 路；模型请求超过 27 个槽位时在公共调度器中排队。批次名中的日期取本机日期，北京时间仍为 10月27日。
+
+**放弃的首批 `20261027_v16_co6`。** 它于 10月27日 22:40 启动，约 20 分钟后由用户决定放弃。原因是本机 GGUF 端点不执行 JSON 模式：它的回复有 34%–54% 把完整的 JSON 对象包在一层 ```json 围栏中，旧解析器把这些回复记为解析失败，约占全部记录的 5%。三个 AWQ 端点没有出现这种回复。V14、V15 也有同样的损失（分别为 585、681 条）。修复后，解析器先去掉包住整个回复的一层围栏，再解析 JSON；用历史回复回放，V14、V15、V16 的围栏回复分别有 577／585、678／682、28／28 条可以解析，余下的是真正格式错误的回复。首批 18 路的 43 个进程已停止，停止回执为旧快照内 `experiments_result/traceaad_v16/stop_20261028.json`。数据保留在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261027_traceaad_v16_frozen`，公共仓库的 `experiments_result/traceaad_v16` 链接已改指新快照。首批的启动脚本、等待脚本与日志保留在 `launch_20261027/`。
+
+真实模型冒烟位于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261027_traceaad_v16_preflight`（TSP，30 次候选，3 个初始程序，发育 2 步，停滞窗口 6），使用修复前的源码。修改操作的回复都按 `analysis`、`code`、`design`、`change` 四个字段解析成功；提示中除任务模板外只有修改对象的代码；形成路径与此前尝试以 `Change` 加成绩出现；Crossover 的参考程序来自其他谱系，指令要求保留当前主决策规则；乐观估计触发一次。冒烟中检查脚本命名为 `inspect_smoke.py`：放在源码根目录的 `inspect.py` 会遮蔽标准库，使搜索无法启动。
+
+本机 `traceaad-results-sync@v16.service` 运行 `experiments_result/traceaad_v16/launch_20261028/sync_batch.py`，每 60 秒同步主批次，全部完成主测试后退出。本地 `experiments_result/traceaad_v16/` 中仍有首批已同步的运行目录；主实验名单只列新批次，看板因此只显示新批次。主实验名单加入 `traceaad_v16` 并设为默认；修改前名单保存在 `experiments_result/traceaad_v16/launch_20261028/primary_runs_before.json`。
+
+## V17 正式批次（10月28日）
+
+V17 在 V16 的上下文上改了两处：冠军以外的谱系按自身是否进步继续开发，总投入不超过冠军在停滞窗口之后的投入，停滞满一个窗口时先发散（`progress_rule`）；Crossover 改为导入其他谱系中带来改进的修改，暂停的谱系可由更好谱系的新组件恢复（`imports`）。机制与开关见 [V17 README](../../traceaad/v17/README.md)。V14、V15、V16 继续运行，不停止、不替换。
+
+| 实验目录 | 批次 | 设置 | 范围 | 状态 |
+| --- | --- | --- | --- | --- |
+| `traceaad_v17` | `20261028_v17_rerun` | 默认，`progress_rule`、`imports` 都开 | 六任务 × 种子 0／1／2 | 10月28日 12:23 启动 |
+| `traceaad_v17_noprogress` | `20261028_v17_noprogress` | `progress_rule=False`（V15 的同龄比较） | 六任务 × 种子 0／1／2 | 只定义在启动脚本中，未预览、未排队 |
+| `traceaad_v17_noimports` | `20261028_v17_noimports` | `imports=False`（V16 的 Crossover） | 六任务 × 种子 0／1／2 | 只定义在启动脚本中，未预览、未排队 |
+
+源码冻结在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261028_traceaad_v17_rerun_frozen`，436 个文件的 SHA-256 写入 `source_hashes.json`，启动前逐一核对。启动脚本为 `experiments_result/traceaad_v17/launch_20261028_rerun/launch_batch.py`：在快照根目录以 `PYTHONPATH=.` 运行，`--cell main|noprogress|noimports` 选择批次，不带 `--launch` 时只写预览。脚本核对 `projection=False`、`changes`、`foreign_reference` 为真，以及两个 V17 开关与所选格一致。冻结结果检查要求 `summary.json` 同时含 `v15` 与 `v17` 字段。每路 1000 次候选机会、输出上限 8192、评价 worker 上限 8，使用共享模型池与公共 CPU 调度器。18 路三秒错峰直接启动；启动时另有 V16 五路在运行，共 23 路。公共仓库的 `experiments_result/traceaad_v17` 链接到新快照的结果目录。
+
+**放弃的首批 `20261028_v17_co6`。** 它于 10月28日 10:29 启动，12:19 由用户决定放弃，当时各路做到 82–360 条记录。原因是发散几乎不发生：发散只排在没有活跃谱系之后，而冠军以外的谱系几乎总有一个在自身记录上改进，相同记录数下只发散了 6 次（V14–V16 为 40–47 次）。V17 在原处修正：探索打开且满足 V15 的发散条件时先发散。首批 18 路的 44 个进程已停止，停止回执为旧快照内 `experiments_result/traceaad_v17/stop_20261028.json`，本地副本在 `launch_20261028/`。数据保留在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261028_traceaad_v17_frozen`；首批的启动脚本、同步日志与修改前名单保留在 `launch_20261028/`。检查脚本与结果在 `experiments_result/analysis/v17_progress_20261028/`。
+
+真实模型冒烟位于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261028_traceaad_v17_preflight`（TSP 与 JSSP，各 40 次候选，3 个初始程序，发育 2 步，停滞窗口 4），使用修正前的源码。TSP 冒烟用完预算：40 条记录全部有效，没有解析失败；发育、冠军、活跃谱系三种分配都出现，一个在比较点落后的谱系靠自身进步继续开发并接管了冠军；4 次 Import 中 2 次改进父代，结果与组件程序的代码距离中位数为 0.88。修正只改变分配顺序，发散请求沿用 V14 的提示，所以没有再做冒烟；新顺序由单元测试覆盖。检查脚本为快照内 `inspect_smoke.py`。
+
+本机 `traceaad-results-sync@v17.service` 经 drop-in `rerun.conf` 运行 `experiments_result/traceaad_v17/launch_20261028_rerun/sync_batch.py`，每 60 秒同步重跑批次，日志为同目录 `sync.log`，全部完成主测试后退出。重跑运行在主实验名单中，所以 `watch_server4` 自动检查重跑批次。本地 `experiments_result/traceaad_v17/` 中仍有首批已同步的运行目录；主实验名单只列重跑批次（标签 “TraceAAD V17”），默认方法仍为 `traceaad_v16`。修改前名单保存在 `launch_20261028_rerun/primary_runs_before.json`。
 
 ## 同步与清理
 

@@ -18,6 +18,8 @@ class Program:
     reference_id: int | None = None
     repair_of: int | None = None
     depth: int = 0
+    # What the program changed from its parent, as stated in the reply; empty when not asked.
+    change: str = ""
     status: str = "pending"
     fitness: float | None = None
     failure: dict | None = None

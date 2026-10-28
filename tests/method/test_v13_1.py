@@ -270,3 +270,76 @@ def test_cached_malformed_match_is_consumed_without_another_request(tmp_path,mon
     assert work['match_index']==index+batch and resumed.state['reply'] is None
     assert all(not t['records'] for t in resumed.state['library'].values())
     assert resumed.run()['status']=='finished'
+
+
+@pytest.mark.parametrize('status',[500,429])
+def test_service_retry_is_checkpointed_and_budgeted(tmp_path,monkeypatch,status):
+    import time
+    search=make(tmp_path,max_model_calls=3)
+    original=search.llm.draw_sample_with_details
+    requests=[]
+    class ServiceError(RuntimeError):
+        status_code=status
+    def fail_once(text,**kwargs):
+        requests.append(kwargs)
+        if len(requests)==1: raise ServiceError('Internal server error')
+        return original(text,**kwargs)
+    search.llm.draw_sample_with_details=fail_once
+    monkeypatch.setattr(time,'sleep',lambda _:None)
+    reply=search._ask('generate',dict(mode='Init'),[dict(existing_roots=[])])
+    assert reply['code']
+    assert search.state['requests']==search.progress.model_calls==2
+    assert search.progress.service_failures==1
+    assert requests[0]['response_format']=={'type':'json_object'}
+    assert requests[1]==requests[0]
+    calls=[json.loads(line) for line in (tmp_path/'calls.jsonl').read_text().splitlines()]
+    assert len(calls)==2 and calls[0]['error'] and not calls[1]['error']
+    resumed=make(tmp_path,max_model_calls=3)
+    assert resumed._ask('generate',dict(mode='Init'),[dict(existing_roots=[])])==reply
+    assert not resumed.llm.calls
+
+
+def test_repeated_service_failures_cannot_exceed_call_budget(tmp_path,monkeypatch):
+    import time
+    search=make(tmp_path,max_model_calls=3)
+    class ServiceError(RuntimeError):
+        status_code=500
+    def fail(*args,**kwargs): raise ServiceError('Internal server error')
+    search.llm.draw_sample_with_details=fail
+    monkeypatch.setattr(time,'sleep',lambda _:None)
+    result=search.run()
+    assert result['reserved_model_calls']==result['model_calls']==3
+    assert result['stop_reason']=='model_call_budget'
+    from traceaad.storage import rows
+    assert len(list(rows(tmp_path/'calls.jsonl.gz')))==3
+
+
+def test_permanent_service_error_is_not_retried(tmp_path):
+    from core.llm import ModelCallError
+    search=make(tmp_path)
+    class ServiceError(RuntimeError):
+        status_code=401
+    def fail(*args,**kwargs): raise ServiceError('unauthorized')
+    search.llm.draw_sample_with_details=fail
+    with pytest.raises(ModelCallError):
+        search._ask('generate',dict(mode='Init'),[dict(existing_roots=[])])
+    assert search.state['requests']==search.progress.model_calls==1
+
+
+def test_service_retry_stops_after_backoff_window_with_checkpoint(tmp_path,monkeypatch):
+    import time
+    from core.llm import ModelCallError, SERVICE_WAIT_SECONDS
+    search=make(tmp_path,max_model_calls=100)
+    class ServiceError(RuntimeError):
+        status_code=500
+    def fail(*args,**kwargs): raise ServiceError('Internal server error')
+    search.llm.draw_sample_with_details=fail
+    pauses=[]
+    monkeypatch.setattr(time,'sleep',pauses.append)
+    with pytest.raises(ModelCallError):
+        search._ask('generate',dict(mode='Init'),[dict(existing_roots=[])])
+    assert sum(pauses)>=SERVICE_WAIT_SECONDS and max(pauses)<=60
+    assert search.state['requests']==search.progress.model_calls==len(pauses)+1
+    resumed=make(tmp_path,max_model_calls=100)
+    assert resumed.state['requests']==search.state['requests']
+    assert resumed.state['inflight'] is None and resumed.state['reply'] is None

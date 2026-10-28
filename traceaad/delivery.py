@@ -7,6 +7,7 @@ program errors. The original reply remains in the generation record.
 
 import ast
 import json
+import re
 
 
 class DeliveryError(ValueError):
@@ -61,6 +62,14 @@ def validate_source(code, template):
 
 # Every model request asks for one JSON object.
 JSON_RESPONSE_FORMAT = {"type": "json_object"}
+# An endpoint that ignores JSON mode may wrap the whole object in one Markdown fence.
+FENCE = re.compile(r"\A\s*```(?:json)?[ \t]*\n(.*)\n[ \t]*```\s*\Z", re.S)
+
+
+def reply_object(text):
+    """Decode a reply as JSON after removing one fence that encloses all of it."""
+    match = FENCE.match(text)
+    return json.loads(match.group(1) if match else text)
 
 
 def parse_json_response(text, finish_reason, *, repair=False):
@@ -69,7 +78,7 @@ def parse_json_response(text, finish_reason, *, repair=False):
     if finish_reason != "stop" or not isinstance(text, str):
         raise DeliveryError(f"incomplete or non-text completion: {finish_reason}")
     try:
-        reply = json.loads(text)
+        reply = reply_object(text)
     except json.JSONDecodeError as exc:
         raise DeliveryError(f"reply is not JSON: {exc}") from exc
     if not isinstance(reply, dict) or not all(isinstance(reply.get(f), str) for f in fields):
@@ -81,3 +90,9 @@ def parse_json_response(text, finish_reason, *, repair=False):
     analysis = reply.get("analysis")
     analysis = analysis.strip() if isinstance(analysis, str) else None
     return code, idea, analysis
+
+
+def optional_field(text, name):
+    """A string field of a reply that parse_json_response accepted; empty when absent."""
+    value = reply_object(text).get(name)
+    return value.strip() if isinstance(value, str) else ""

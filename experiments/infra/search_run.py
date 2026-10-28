@@ -48,11 +48,27 @@ def main(argv=None, *, version=None):
         from traceaad.v13_1 import Config as config_type, TraceAADV131 as method_type
         from experiments.traceaad_v13_1 import options
         experiment = 'traceaad_v13_1'
+    elif version == 'v14':
+        from traceaad.v14 import Config as config_type, TraceAADV14 as method_type
+        from experiments.traceaad_v14 import options
+        experiment = 'traceaad_v14'
+    elif version == 'v15':
+        from traceaad.v15 import Config as config_type, TraceAADV15 as method_type
+        from experiments.traceaad_v15 import options
+        experiment = 'traceaad_v15'
+    elif version == 'v16':
+        from traceaad.v16 import Config as config_type, TraceAADV16 as method_type
+        from experiments.traceaad_v16 import options
+        experiment = 'traceaad_v16'
+    elif version == 'v17':
+        from traceaad.v17 import Config as config_type, TraceAADV17 as method_type
+        from experiments.traceaad_v17 import options
+        experiment = 'traceaad_v17'
     parser = build_parser(experiment, config_type)
-    if version in ('v13', 'v13_1'):
+    if version in ('v13', 'v13_1', 'v14', 'v15', 'v16', 'v17'):
         options.add_arguments(parser)
     args = parser.parse_args(argv)
-    if version in ('v13', 'v13_1'):
+    if version in ('v13', 'v13_1', 'v14', 'v15', 'v16', 'v17'):
         extra = options.values(args)
     if args.repeat is not None and args.seed != args.repeat - 1:
         raise ValueError("run seed must equal repeat - 1")
@@ -129,7 +145,7 @@ def main(argv=None, *, version=None):
             and not (existing / "events.jsonl").exists()
         ):
             raise ValueError(f"refusing to overwrite a non-resumable run directory: {existing}")
-    if version in ('v13', 'v13_1') and args.run_name:
+    if version in ('v13', 'v13_1', 'v14', 'v15', 'v16', 'v17') and args.run_name:
         from traceaad.storage import read_json
         previous = read_json(root / args.task / args.run_name / 'run_config.json')
         if previous and (previous.get('method') != method_type.METHOD or any(

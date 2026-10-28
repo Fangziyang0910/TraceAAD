@@ -611,11 +611,12 @@ async function loadCohorts() {
     .filter((id, i, a) => id && a.indexOf(id) === i);
   CMP.ref = canonical(CMP.ref);
   if (!CMP.ids.length) {
-    // Default: the batch on view (the newest TraceAAD batch unless chosen otherwise) and every baseline method.
+    // Default: each TraceAAD version and every baseline method.
     const viewed = CMP.cohorts.filter(c => c.batch === S.batch && isTrace(c));
     const current = preferred(viewed.length ? viewed : CMP.cohorts.filter(c => isTrace(c) && c.batch === CMP.cohorts.find(isTrace)?.batch));
+    const versions = CMP.cohorts.filter(c => isTrace(c) && !c.variant && (!main || c.model_name === main)).map(c => c.id);
     const baselines = CMP.cohorts.filter(c => !isTrace(c) && (!main || c.model_name === main)).map(c => c.id);
-    CMP.ids = [current?.id, ...baselines].filter((id, i, a) => id && known.has(id) && a.indexOf(id) === i);
+    CMP.ids = [current?.id, ...versions, ...baselines].filter((id, i, a) => id && known.has(id) && a.indexOf(id) === i);
   }
   if (!CMP.ids.includes(CMP.ref)) CMP.ref = CMP.ids[0] || null;
 }
@@ -756,6 +757,7 @@ function renderCompare() {
         const ref = M[CMP.ref]?.[col.key];
         let note = "";
         if (col.key === "train" && cohort.runs.some(r => r.status === "running")) note = '<span class="flag" title="含未完成的运行：训练分仍会变化">运行中</span>';
+        if (col.key === "train" && cohort.runs.some(r => r.budget > 0 && r.budget_used < r.budget)) note += '<span class="flag" title="部分运行尚未用完搜索预算">未满预算</span>';
         return `<td class="${st.mean === best[col.key] ? "best" : ""}"><b>${fmt(st.mean)}</b>${note}
           <small>${st.sd == null ? "" : `± ${fmt(st.sd, 3)} · `}n=${st.n}</small>${id !== CMP.ref && ref ? delta(relGap(st.mean, ref.mean)) : ""}</td>`;
       }).join("")}</tr>`;

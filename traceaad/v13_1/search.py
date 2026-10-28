@@ -5,9 +5,10 @@ import json
 import ast
 import math
 import tokenize
+import time
 from pathlib import Path
 
-from core.llm import generate, ModelCallError
+from core.llm import generate, ModelCallError, SERVICE_WAIT_SECONDS
 from core.scheduling import SchedulerError
 from traceaad.traceaad import TraceAAD
 from traceaad.program import Program
@@ -69,17 +70,22 @@ class TraceAADV131(TraceAADV13):
         if self.state['inflight']:
             self.state['interrupted'].append(self.state['inflight']); self.state['inflight']=None
             self._save()
-        if self.state['requests']>=self.config.max_model_calls: raise CallBudgetExhausted()
-        self.state['requests']+=1
-        self.state['inflight']=dict(id=self.state['requests'],stage=stage,key=key)
-        self._save()
         request=dict(action=stage,input_tokens=self.llm.count_prompt_tokens(text))
-        try:
-            result=generate(self.llm,text,max_tokens=self.config.output_tokens,
-                            response_format={'type':'json_object'},retry_limit=0)
-        except ModelCallError as exc:
-            self._record_calls(exc.calls,request); self.state['inflight']=None; self._save(calls=exc.calls)
-            raise
+        waited=0; pause=2
+        while True:
+            if self.state['requests']>=self.config.max_model_calls: raise CallBudgetExhausted()
+            self.state['requests']+=1
+            self.state['inflight']=dict(id=self.state['requests'],stage=stage,key=key)
+            self._save()
+            try:
+                result=generate(self.llm,text,max_tokens=self.config.output_tokens,
+                                response_format={'type':'json_object'},retry_limit=0)
+                break
+            except ModelCallError as exc:
+                self._record_calls(exc.calls,request); self.state['inflight']=None; self._save(calls=exc.calls)
+                if not exc.transient or waited>=SERVICE_WAIT_SECONDS: raise
+                if self.state['requests']>=self.config.max_model_calls: raise CallBudgetExhausted() from exc
+                time.sleep(pause); waited+=pause; pause=min(60,pause*2)
         self._record_calls(result['calls'],request)
         self.state['inflight']=None
         self.state['reply']=dict(key=key,stage=stage,content=result.get('content'),finish_reason=result.get('finish_reason'))

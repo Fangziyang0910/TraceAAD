@@ -82,6 +82,16 @@ def corrected_description(task, description):
 
 
 class PromptBuilder:
+    # Instructions that a subclass may replace together with the hooks
+    # _what, _change, _current, _reference, _root and _format, which decide how
+    # programs other than the edited one appear. tried_note ends the header of
+    # the programs already generated from the edited one.
+    records = RECORDS
+    formation_intro = FORMATION_INTRO
+    crossover = CROSSOVER
+    another_initial = ANOTHER_INITIAL
+    tried_note = ""
+
     def __init__(self, llm, task, evaluation, programs, config):
         # The task text every method sees; TraceAAD states the score in its own line.
         description = evaluation.task_description.replace(OP_OBJECTIVE, "")
@@ -151,9 +161,17 @@ class PromptBuilder:
         result = f"{heading} · {action} · score {score_text(parent.fitness)} → {end}"
         if failed is not None:
             result += f"\n  First version failed: {self.failure(failed)}"
-        result += f"\n  Design: {idea_view(child.idea)}"
-        result += f"\n  Code diff (previous → current):\n```diff\n{code_diff(parent.code, child.code)}\n```"
+        result += f"\n  {self._what(child)}"
+        result += self._change(parent, child)
         return result
+
+    def _what(self, program, missing=""):
+        """How a listed step, attempt or improvement describes the program it produced."""
+        return f"Design: {idea_view(program.idea) or missing}"
+
+    def _change(self, parent, child):
+        """The change a formation step made, as shown after its Design."""
+        return f"\n  Code diff (previous → current):\n```diff\n{code_diff(parent.code, child.code)}\n```"
 
     def _formation(
         self, sequence, count, *, title="How the Current Algorithm Was Formed", subject="current"
@@ -169,7 +187,7 @@ class PromptBuilder:
                 [],
             )
         start = max(1, len(steps) - count)
-        lines = [f"[{title}]", FORMATION_INTRO.replace("current algorithm", f"{subject} algorithm")]
+        lines = [f"[{title}]", self.formation_intro.replace("current algorithm", f"{subject} algorithm")]
         if start == 1:
             lines.append(
                 f"Start · initial algorithm · score {score_text(root.fitness)}{failed_note}\n  Design: {idea_view(root.idea)}"
@@ -224,6 +242,8 @@ class PromptBuilder:
             if len(listed) == len(attempts)
             else f"The most recent {len(listed)} are listed, oldest first, with their evaluated outcomes."
         )
+        if self.tried_note:
+            header += " " + self.tried_note
         lines = []
         for program in listed:
             action = program.action
@@ -232,8 +252,7 @@ class PromptBuilder:
             outcome = self._outcome(program, node)
             if repair := repairs.get(program.id):
                 outcome += "; repaired: " + self._outcome(repair, node)
-            design = idea_view(program.idea) or "(none)"
-            lines.append(f"Program {program.id} · {action} · Design: {design}\n  → {outcome}")
+            lines.append(f"Program {program.id} · {action} · {self._what(program, '(none)')}\n  → {outcome}")
         return header + "\n\n" + "\n\n".join(lines), [p.id for p in listed]
 
     def _improved(self, program, node):
@@ -276,7 +295,7 @@ class PromptBuilder:
                     else f"from an algorithm scoring {score_text(source.fitness)}"
                 )
                 entries.append(
-                    f"Program {program.id} · {action} {origin} → {score_text(program.fitness)} (previous best {score_text(previous.fitness)})\n  Design: {idea_view(program.idea)}"
+                    f"Program {program.id} · {action} {origin} → {score_text(program.fitness)} (previous best {score_text(previous.fitness)})\n  {self._what(program)}"
                 )
             text += "\n\n".join(entries) + "\n\n"
         text += f"Best score found so far in this search: {score_text(best.fitness)}."
@@ -285,20 +304,24 @@ class PromptBuilder:
     def initial(self, roots):
         sections = list(self.common)
         if roots:
-            sections.append(RECORDS)
+            sections.append(self.records)
             numbered = {node.id: index for index, node in enumerate(roots, 1)}
             entries = [
-                f"Algorithm {numbered[node.id]} · {self.measured(node)} · Design: {idea_view(node.idea)}\n```python\n{node.code.rstrip()}\n```"
+                self._root(node, numbered[node.id])
                 for node in sorted(roots, key=lambda n: (n.fitness, n.id))
             ]
             header = f"[Algorithms Designed So Far]\nEvaluated starting algorithms for this task, listed best first. Score is {self.score_meaning}; lower is better."
             sections.append(header + "\n\n" + "\n\n".join(entries))
         sections.extend(
-            [ANOTHER_INITIAL, json_format(BETTER_ANALYSIS)]
+            [self.another_initial, self._format(BETTER_ANALYSIS)]
             if roots
-            else [INITIAL, json_format(INIT_ANALYSIS)]
+            else [INITIAL, self._format(INIT_ANALYSIS)]
         )
         return self._result(sections, "Init")
+
+    def _root(self, node, number):
+        """An earlier initial algorithm as shown to the next initialization."""
+        return f"Algorithm {number} · {self.measured(node)} · Design: {idea_view(node.idea)}\n```python\n{node.code.rstrip()}\n```"
 
     def build(self, action, parent, *, reference=None):
         if action not in DEFAULT_OPERATOR_WEIGHTS:
@@ -310,30 +333,30 @@ class PromptBuilder:
         if action == "Refine":
             history, ids = self._formation(sequence, min(self.config.history_depth, depth))
             sections = self.common + [
-                RECORDS,
+                self.records,
                 history,
                 tried,
                 current,
                 REFINE,
-                json_format(ANALYSIS_INSTRUCTIONS["Refine"]),
+                self._format(ANALYSIS_INSTRUCTIONS["Refine"], edit=True),
             ]
             result = self._result(sections, "Refine", ids)
         elif action == "Explore":
             best, progress_ids = self._progress_section(self.config.progress_shown)
             sections = self.common + [
-                RECORDS,
+                self.records,
                 tried,
                 best,
                 current,
                 EXPLORE,
-                json_format(ANALYSIS_INSTRUCTIONS["Explore"]),
+                self._format(ANALYSIS_INSTRUCTIONS["Explore"], edit=True),
             ]
             result = self._result(sections, "Explore")
             result["progress_ids"] = progress_ids
         else:
             if reference is None:
                 raise ValueError("Crossover requires a reference")
-            ref_section = f"[Reference Algorithm]\nAnother evaluated algorithm from this search.\n{self.measured(reference)}\nDesign: {idea_view(reference.idea)}\n```python\n{reference.code.rstrip()}\n```"
+            ref_section = self._reference(reference)
             reference_sequence = path(reference, self.programs)
             recent, ids = self._formation(sequence, min(4, depth))
             ref_history, ref_ids = self._formation(
@@ -343,19 +366,27 @@ class PromptBuilder:
                 subject="reference",
             )
             sections = self.common + [
-                RECORDS,
+                self.records,
                 recent,
                 ref_history,
                 tried,
                 current,
                 ref_section,
-                CROSSOVER,
-                json_format(ANALYSIS_INSTRUCTIONS["Crossover"]),
+                self.crossover,
+                self._format(ANALYSIS_INSTRUCTIONS["Crossover"], edit=True),
             ]
             result = self._result(sections, "Crossover", ids)
             result["reference_history_edge_ids"] = ref_ids
         result["child_ids"] = tried_ids
         return result
+
+    def _reference(self, reference):
+        """The reference algorithm of a Crossover."""
+        return f"[Reference Algorithm]\nAnother evaluated algorithm from this search.\n{self.measured(reference)}\nDesign: {idea_view(reference.idea)}\n```python\n{reference.code.rstrip()}\n```"
+
+    def _format(self, analysis, *, design=True, edit=False):
+        """The reply format of a request; ``edit`` marks a request that modifies an existing algorithm."""
+        return json_format(analysis, design=design)
 
     def error_text(self, failed):
         failure = failed.failure
@@ -397,7 +428,7 @@ class PromptBuilder:
             failed_section,
             f"[Error]\n{self.error_text(failed)}",
             REPAIR_TIMEOUT if timeout else REPAIR,
-            json_format(ANALYSIS_INSTRUCTIONS["Timeout" if timeout else "Repair"], design=False),
+            self._format(ANALYSIS_INSTRUCTIONS["Timeout" if timeout else "Repair"], design=False),
         ]
         return self._result(sections, "Repair")
 

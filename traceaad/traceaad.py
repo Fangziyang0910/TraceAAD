@@ -149,6 +149,10 @@ class TraceAAD:
             self.progress.phase = "freeze"
             self._save()
             return
+        self._step(eligible, sampled)
+
+    def _step(self, eligible, sampled=None, **record):
+        """One ordinary attempt from a parent sampled among ``eligible``; ``record`` joins the request."""
         parent, selection = sample_parent(eligible, self.programs, self.progress.rng["parent"])
         if sampled is None:
             sampled = self.progress.rng["action"].choices(
@@ -159,7 +163,7 @@ class TraceAAD:
         flags = []
         if action == "Crossover":
             reference, reference_selection = choose_reference(
-                parent, self.archive, self.progress.rng["reference"]
+                parent, self._references(parent), self.progress.rng["reference"]
             )
             if reference is None:
                 action = "Refine"
@@ -172,8 +176,13 @@ class TraceAAD:
             reference_id=reference.id if reference else None,
             selection=selection,
             reference_selection=reference_selection,
+            **record,
         )
         self._create_program(request, parent=parent, reference=reference)
+
+    def _references(self, parent):
+        """The programs a Crossover reference for ``parent`` is chosen from."""
+        return self.archive
 
     def _freeze(self):
         """Freeze the best recorded training individual without another evaluation."""

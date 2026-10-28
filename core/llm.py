@@ -67,6 +67,7 @@ def generate(llm, prompt, *, retry_limit=None, **kwargs):
                     "top_p",
                     "enable_thinking",
                     "reasoning_effort",
+                    "response_format",
                 )
             },
         }

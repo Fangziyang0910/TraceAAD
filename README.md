@@ -8,7 +8,7 @@
 
 | 你想做什么 | 阅读入口 |
 | --- | --- |
-| 理解研究问题与当前认识 | [研究文档](docs/README.md) |
+| 理解本工作针对的问题 | [WWH](docs/WWH.md) |
 | 了解当前程序怎样搜索 | [搜索实现](traceaad/README.md) |
 | 设计、运行或复查实验 | [实验入口](experiments/README.md) |
 | 查阅第三方提示的来源版本 | [来源记录](baselines/UPSTREAM.md) |
@@ -29,4 +29,4 @@ uv sync --frozen
 uv run python -m pytest -q tests
 ```
 
-旧文档已在本机封存，位置见[旧文档说明](docs/README.md#旧文档)。归档不进入新提交；已有 Git 历史保留。
+旧文档已在本机封存于 `archive/documents_20261016_144049/`。归档不进入新提交；已有 Git 历史保留。

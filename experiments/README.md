@@ -1,6 +1,6 @@
 # 实验入口
 
-这里说明怎样执行和复查实验。研究问题与认识见[研究文档](../docs/README.md)。
+这里说明怎样执行和复查实验。研究问题见 [WWH](../docs/WWH.md)。
 
 | 需要做什么 | 入口 |
 | --- | --- |
@@ -10,6 +10,10 @@
 | 理解当前 TraceAAD 的运行规则 | [搜索实现](../traceaad/README.md) |
 | V13 历史实现与恢复 | [V13 实现](../traceaad/v13/README.md) |
 | V13.1 冻结变换、配对诊断与条件信用 | [V13.1 实现](../traceaad/v13_1/README.md) |
+| V14 回访拒绝、停滞后无代码发散与发育 | [V14 实现](../traceaad/v14/README.md) |
+| V15 曝光策略：等投入分配与信息形式曝光 | [V15 实现](../traceaad/v15/README.md) |
+| V16 论文方法：乐观估计、修改说明与跨谱系参考程序 | [V16 实现](../traceaad/v16/README.md) |
+| V17 按谱系自身进步继续开发，谱系间导入组件 | [V17 实现](../traceaad/v17/README.md) |
 | 检验变换迁移、模型执行与在线闭环 | [变换迁移先导实验](transfer/README.md) |
 
 ## 训练可视化
@@ -17,12 +21,12 @@
 看板集中在 [visualization/](visualization/)，展示训练曲线、运行进度、程序详情与结果对比。在仓库根目录启动：
 
 ```bash
-uv run python -m experiments.visualization --host 127.0.0.1 --port 8765
+uv run python -m experiments.visualization --host 0.0.0.0 --port 8765
 ```
 
-浏览器打开 `http://127.0.0.1:8765/`。用 `--experiment` 选择方法目录，或用 `--batch` 筛选运行批次。看板读取当前结果格式，在进程内保留增量状态，不改写实验记录。
+浏览器打开 `http://10.150.68.218:8765/`；本机也可使用 `http://127.0.0.1:8765/`。用 `--experiment` 选择方法目录，或用 `--batch` 筛选运行批次。看板读取当前结果格式，在进程内保留增量状态，不改写实验记录。
 
-当前主实验范围由[主实验名单](../experiments_result/primary_runs.json)固定：12 个基线和当前 TraceAAD，每个方法六任务 × 种子 0／1／2，共 18 路 Qwen3.8 实验。监控和对比均按此名单读取，当前 V13.1 统一显示为 `TraceAAD`，不附加模型、量化、补测或版本后缀。名单沿用既有基线盘点，不按成绩或完成情况挑选运行。ReEvo、FunSearch 的 GGUF 第三路属于主实验；旧 TraceAAD 版本、EoH 额外的 GGUF 种子 0 六路、DeepSeek 试跑和其他先导实验不进入当前主视图。
+当前主实验范围由[主实验名单](../experiments_result/primary_runs.json)固定：12 个基线和当前 TraceAAD，每个方法六任务 × 种子 0／1／2，共 18 路 Qwen3.8 实验。看板还按名单中的 `visualization_batches` 读取历史 TraceAAD 正式批次，并按版本分别展示。默认对比全部版本和基线；未用完预算的训练结果会标记。名单沿用既有基线盘点，不按成绩或完成情况挑选运行。ReEvo、FunSearch 的 GGUF 第三路属于主实验；EoH 额外的 GGUF 种子 0 六路、DeepSeek 试跑和其他先导实验不进入看板。
 
 主对比使用 `variant` 为空的原主测试。`relaxed_time_cpu120_wall600` 等放宽限制补测保留在原始 `heldout.json` 中，不再生成单独的默认对比对象，也不替代主测试失败或缺失。新增正式批次时需更新主实验名单；没有该名单的结果目录仍可按原方式查看全部记录。
 

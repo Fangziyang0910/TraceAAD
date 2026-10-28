@@ -1,5 +1,6 @@
 """Program identity, generation budget, repair, selection and recovery."""
 
+import json
 import random
 
 import pytest
@@ -8,6 +9,7 @@ from core import llm as core_llm
 from core.scheduling import SchedulerError
 from tests.support import TinyEvaluation, TokenLLM, response
 from traceaad import Config, TraceAAD
+from traceaad.delivery import DeliveryError, optional_field, parse_json_response
 from traceaad.selection import choose_reference, experience, temperature, weights
 from traceaad.storage import append_jsonl, rows
 
@@ -43,6 +45,18 @@ def test_parse_failure_does_not_create_an_individual(tmp_path):
     assert method.programs[1].generation == 2
     events = list(rows(tmp_path / "events.jsonl"))
     assert events[0]["kind"] == "delivery_failed" and "program" not in events[0]
+
+
+def test_a_reply_enclosed_in_one_json_fence_is_accepted(tmp_path):
+    reply = json.dumps({"analysis": "", "design": "return 1", "code": "def score(x):\n    return 1\n", "change": "c"})
+    fenced = "```json\n" + reply + "\n```"
+    assert parse_json_response(fenced, "stop") == parse_json_response(reply, "stop")
+    assert optional_field(fenced, "change") == "c"
+    with pytest.raises(DeliveryError):
+        parse_json_response("Here it is:\n" + fenced, "stop")
+    method = search(tmp_path, fenced)
+    method._roots()
+    assert list(method.programs) == [1] and method.programs[1].fitness == -1
 
 
 def test_same_code_keeps_separate_analysis_and_evaluations(tmp_path):

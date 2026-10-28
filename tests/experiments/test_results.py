@@ -176,7 +176,7 @@ def test_compare_api_returns_all_thirteen_methods(tmp_path):
         server.shutdown();server.server_close();thread.join()
 
 
-def test_comparison_defaults_and_old_links_use_one_primary_object_per_method():
+def test_comparison_defaults_include_traceaad_versions_and_preserve_old_links():
     from pathlib import Path
     import shutil
     import subprocess
@@ -199,10 +199,10 @@ function scope() {
 }
 (async()=>{
  const fresh=scope();await vm.runInContext('loadCohorts()',fresh.context);
- assert.equal(vm.runInContext('CMP.ids.length',fresh.context),13);
+ assert.equal(vm.runInContext('CMP.ids.length',fresh.context),14);
+ assert.ok(vm.runInContext('CMP.ids.includes("traceaad_v12_1")',fresh.context));
  vm.runInContext('renderChips()',fresh.context);
- assert.equal((fresh.chips.innerHTML.match(/class="chip /g)||[]).length,13);
- assert.ok(fresh.chips.innerHTML.includes('chip-add'));
+ assert.equal((fresh.chips.innerHTML.match(/class="chip /g)||[]).length,14);
  const old=scope();
  vm.runInContext(`CMP.ids=['baseline0@qwen3.8-27b','baseline0::relaxed_time_cpu120_wall600@qwen3.8-27b','baseline1'];CMP.ref=CMP.ids[0]`,old.context);
  await vm.runInContext('loadCohorts()',old.context);
@@ -213,16 +213,82 @@ function scope() {
     subprocess.run([node,'-e',check,str(source)],check=True,capture_output=True,text=True)
 
 
-def test_primary_display_has_one_traceaad_without_version_suffix(tmp_path):
-    for method in ('traceaad_v13','traceaad_v12_1','eoh'):
+def test_comparison_marks_partial_training_budget():
+    from pathlib import Path
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is unavailable for the JavaScript view check')
+    source = Path(__file__).resolve().parents[2]/'experiments/visualization/static/app.js'
+    check = r'''
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const code=fs.readFileSync(process.argv[1],'utf8');
+const part=code.slice(code.indexOf('const CMP ='),code.indexOf('function drawAllDots()'));
+const nodes={'cmp-summary':{},'cmp-tasks':{}};
+const data={cohorts:[{id:'v13',label:'TraceAAD V13'}],tasks:[{key:'tsp_construct',label:'TSP',unit:'距离',scales:[],cohorts:[
+ {id:'v13',runs:[{train:12,status:'stopped',budget_used:200,budget:1000}]}]}]};
+const context=vm.createContext({$:id=>nodes[id],esc:String,seriesColor:String,fmt:String,drawAllDots:()=>{},data});
+vm.runInContext(part,context);
+vm.runInContext("CMP.ids=['v13'];CMP.ref='v13';CMP.data=data;renderCompare()",context);
+assert.ok(nodes['cmp-tasks'].innerHTML.includes('未满预算'));
+assert.ok(!nodes['cmp-tasks'].innerHTML.includes('运行中'));
+'''
+    subprocess.run([node, '-e', check, str(source)], check=True, capture_output=True, text=True)
+
+
+def test_traceaad_versions_use_separate_formal_batches(tmp_path):
+    for method in ('traceaad_v12_1', 'traceaad_v13', 'traceaad_v14', 'eoh'):
         dashboard_run(tmp_path/method/'tsp_construct'/'rep1')
-    write_json(tmp_path/'primary_runs.json',dict(schema=1,
-        methods={m:['tsp_construct/rep1'] for m in ('traceaad_v13','eoh')},
-        labels={'traceaad_v13':'TraceAAD'}))
+    dashboard_run(tmp_path/'traceaad_v12_1'/'tsp_construct'/'deepseek_pilot', model='deepseek-v4.1-flash')
+    historical = tmp_path/'traceaad_v12_1'/'fssp_gls'/'rep1'
+    dashboard_run(historical)
+    config = json.loads((historical/'run_config.json').read_text())
+    del config['score_metric']
+    config['revision'] = 'research-protocol-v6-20261012-raw-objective'
+    write_json(historical/'run_config.json', config)
+    write_json(tmp_path/'traceaad_v12_1'/'batch_formal.json', dict(batch='formal', status='finished', plan=[
+        dict(task=task, run_name='rep1') for task in ('tsp_construct', 'fssp_gls')]))
+    write_json(tmp_path/'traceaad_v13'/'batch_formal.json', dict(batch='formal', status='stopped', plan=[
+        dict(task='tsp_construct', run_name='rep1')]))
+    write_json(tmp_path/'traceaad_v13'/'tsp_construct'/'rep1'/'summary.json',
+               dict(status='running', budget=1000, budget_used=200, best=dict(fitness=12)))
+    write_json(tmp_path/'primary_runs.json', dict(schema=1,
+        methods={m:['tsp_construct/rep1'] for m in ('traceaad_v14', 'eoh')},
+        visualization_batches={'traceaad_v12_1':'formal', 'traceaad_v13':'formal'},
+        labels={'traceaad_v12_1':'TraceAAD V12.1', 'traceaad_v13':'TraceAAD V13',
+                'traceaad_v14':'TraceAAD V14'}))
     monitor=ResultsMonitor(tmp_path)
-    assert {b['id']:b['label'] for b in monitor.batches()}=={'traceaad_v13':'TraceAAD','eoh':'eoh'}
+    assert {b['id']:b['label'] for b in monitor.batches()} == {
+        'traceaad_v12_1':'TraceAAD V12.1', 'traceaad_v13':'TraceAAD V13',
+        'traceaad_v14':'TraceAAD V14', 'eoh':'eoh'}
     cohorts={c['id']:c for c in monitor.cohorts()}
-    assert set(cohorts)=={'traceaad_v13','eoh'}
-    assert cohorts['traceaad_v13']['label']=='TraceAAD'
-    assert monitor.compare(['traceaad_v13'])['cohorts'][0]['label']=='TraceAAD'
-    assert (tmp_path/'traceaad_v12_1/tsp_construct/rep1/run_config.json').exists()
+    assert set(cohorts)=={'traceaad_v12_1', 'traceaad_v13', 'traceaad_v14', 'eoh'}
+    assert cohorts['traceaad_v12_1']['runs']==2
+    overview = monitor.overview('traceaad_v12_1')
+    assert next(t for t in overview['tasks'] if t['key']=='fssp_gls')['unit']=='makespan'
+    result = monitor.compare(['traceaad_v12_1', 'traceaad_v13', 'traceaad_v14'])
+    assert [c['label'] for c in result['cohorts']] == ['TraceAAD V12.1', 'TraceAAD V13', 'TraceAAD V14']
+    runs = next(t for t in result['tasks'] if t['key']=='tsp_construct')['cohorts']
+    assert [[r['name'] for r in c['runs']] for c in runs] == [['rep1'], ['rep1'], ['rep1']]
+    assert runs[1]['runs'][0]['status']=='stopped'
+    assert runs[1]['runs'][0]['budget_used']==200 and runs[1]['runs'][0]['budget']==1000
+
+
+def test_stop_receipt_does_not_override_a_resumed_journal(tmp_path):
+    run = tmp_path/'traceaad_v13_1'/'tsp_construct'/'rep1'
+    dashboard_run(run, status='running')
+    summary = json.loads((run/'summary.json').read_text())
+    summary['budget_used'] = 200
+    write_json(run/'summary.json', summary)
+    write_json(tmp_path/'traceaad_v13_1'/'batch_formal.json', dict(batch='formal', status='running', plan=[
+        dict(task='tsp_construct', run_name='rep1', session='session1')]))
+    receipt = tmp_path/'traceaad_v13_1'/'stop_formal.json'
+    write_json(receipt, dict(at='2999-01-01T00:00:00+00:00', sessions=['session1']))
+    monitor=ResultsMonitor(tmp_path)
+    before = monitor.state_signature('traceaad_v13_1')
+    assert monitor.overview('traceaad_v13_1')['summary']['stopped']==1
+    write_json(receipt, dict(at='2020-01-01T00:00:00+00:00', sessions=['session1']))
+    (run/'events.jsonl').write_text('')
+    assert monitor.state_signature('traceaad_v13_1') != before
+    assert monitor.overview('traceaad_v13_1')['summary']['running']==1

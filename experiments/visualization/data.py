@@ -1,6 +1,7 @@
 """Dashboard views over committed experiment records."""
 
 from collections import Counter
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 import re
@@ -171,6 +172,11 @@ class ResultsMonitor:
         if not isinstance(primary, dict) or primary.get('schema') != 1 or not isinstance(primary.get('methods'), dict):
             raise ValueError('invalid primary experiment index')
         allowed = set(primary['methods'].get(directory.name, []))
+        batch = primary.get('visualization_batches', {}).get(directory.name)
+        if batch:
+            manifest = read_object(directory / f'batch_{batch}.json')
+            allowed.update(f"{row['task']}/{row['run_name']}" for row in manifest.get('plan', [])
+                           if row.get('task') and row.get('run_name'))
         return [p for p in paths if p.parent.relative_to(directory).as_posix() in allowed]
 
     def _journal_is_hot(self, run_dir: Path, *, max_age_sec: float = 1200.0) -> bool:
@@ -231,23 +237,42 @@ class ResultsMonitor:
             stamps.append((str(run_dir.relative_to(directory)), _run_stamp(run_dir)))
             unfinished |= read_object(run_dir / "summary.json").get("status") != "finished"
         manifests = tuple((p.name, _stamp(p)) for p in sorted(directory.glob("batch_*.json")))
+        manifests += tuple((p.name, _stamp(p)) for p in sorted(directory.glob("stop_*.json")))
         return experiment, _stamp(self.results_root / 'primary_runs.json'), tuple(stamps), manifests, int(time.time() // 15) if unfinished else None
 
     def run_signature(self, experiment: str, task: str, name: str):
         run_dir = self.results_root / experiment / task / name
         unfinished = read_object(run_dir / "summary.json").get("status") != "finished"
-        manifests = tuple((p.name, _stamp(p)) for p in sorted((self.results_root / experiment).glob("batch_*.json")))
+        directory = self.results_root / experiment
+        manifests = tuple((p.name, _stamp(p)) for pattern in ("batch_*.json", "stop_*.json")
+                          for p in sorted(directory.glob(pattern)))
         return experiment, task, name, _stamp(self.results_root / 'primary_runs.json'), _run_stamp(run_dir), manifests, int(time.time() // 15) if unfinished else None
 
     def _manifest_runs(self, experiment):
         rows = {}
-        for path in sorted((self.results_root / experiment).glob("batch_*.json")):
+        directory = self.results_root / experiment
+        stopped = {}
+        for path in directory.glob("stop_*.json"):
+            receipt = read_object(path)
+            try:
+                at = datetime.fromisoformat(receipt['at']).timestamp()
+            except (KeyError, TypeError, ValueError):
+                continue
+            for session in receipt.get('sessions', []):
+                stopped[session] = max(stopped.get(session, 0), at)
+        for path in sorted(directory.glob("batch_*.json")):
             manifest = read_object(path)
             if self.batch_filter and manifest.get("batch") != self.batch_filter:
                 continue
             for row in manifest.get("plan", []):
                 name = row.get("run_name") or Path(row.get("run_dir", "")).name
-                rows[(row.get("task"), name)] = {**row, 'batch_status': manifest.get('status')}
+                task = row.get('task')
+                status = manifest.get('status')
+                journal = directory / str(task) / name / JOURNAL_NAME
+                stamp = _stamp(journal)
+                if row.get('session') in stopped and (stamp is None or stamp[1] <= stopped[row['session']] * 1e9):
+                    status = 'stopped_by_user'
+                rows[(task, name)] = {**row, 'batch_status': status}
         return rows
 
     def _runs(self, experiment: str, task_filter=None, name_filter=None):
@@ -272,7 +297,7 @@ class ResultsMonitor:
                 status = 'archived'
             elif raw_status == "finished":
                 status = "finished"
-            elif metadata.get('batch_status') == 'stopped_by_user':
+            elif metadata.get('batch_status') in {'stopped', 'stopped_by_user'}:
                 status = 'stopped'
             elif raw_status == "stopped" and not self._journal_newer_than_summary(run_dir):
                 status = "stopped"
@@ -302,6 +327,7 @@ class ResultsMonitor:
                 continue
             score_unit = TASKS[task]['unit']
             if (task in FIXED_TASKS and config.get('score_metric') != 'raw_objective'
+                    and config.get('revision') != 'research-protocol-v6-20261012-raw-objective'
                     and summary.get('raw_search', {}).get('status') not in ('complete', 'complete_with_missing')):
                 score_unit = '参考偏差 %'
             history = _history(run_dir)
@@ -432,6 +458,7 @@ class ResultsMonitor:
                     runs.append({
                         "name": row["name"], "rep": row["repeat"],
                         "status": row.get("status"),
+                        "budget_used": row["budget_used"], "budget": row["budget"],
                         # the frozen program's training score
                         "train": row.get("best_fitness") if row.get("status") == "finished"
                         else (row.get("curve") or [{}])[-1].get("fitness", row.get("best_fitness")),
