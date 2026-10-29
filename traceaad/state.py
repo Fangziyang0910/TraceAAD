@@ -136,7 +136,7 @@ class Facts:
             row.update(
                 candidate_id=state["generations"],
                 budget_used=state["generations"],
-                x_label="候选尝试",
+                x_label=state.get("budget_axis", "候选尝试"),
                 operator=program.action if program else delivery_error["action"],
                 status=program.status if program else "delivery_failed",
                 fitness=program.fitness if program and program.valid else None,

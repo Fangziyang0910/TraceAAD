@@ -64,11 +64,15 @@ def main(argv=None, *, version=None):
         from traceaad.v17 import Config as config_type, TraceAADV17 as method_type
         from experiments.traceaad_v17 import options
         experiment = 'traceaad_v17'
+    elif version == 'v18':
+        from traceaad.v18 import Config as config_type, TraceAADV18 as method_type
+        from experiments.traceaad_v18 import options
+        experiment = 'traceaad_v18'
     parser = build_parser(experiment, config_type)
-    if version in ('v13', 'v13_1', 'v14', 'v15', 'v16', 'v17'):
+    if version in ('v13', 'v13_1', 'v14', 'v15', 'v16', 'v17', 'v18'):
         options.add_arguments(parser)
     args = parser.parse_args(argv)
-    if version in ('v13', 'v13_1', 'v14', 'v15', 'v16', 'v17'):
+    if version in ('v13', 'v13_1', 'v14', 'v15', 'v16', 'v17', 'v18'):
         extra = options.values(args)
     if args.repeat is not None and args.seed != args.repeat - 1:
         raise ValueError("run seed must equal repeat - 1")
@@ -145,12 +149,12 @@ def main(argv=None, *, version=None):
             and not (existing / "events.jsonl").exists()
         ):
             raise ValueError(f"refusing to overwrite a non-resumable run directory: {existing}")
-    if version in ('v13', 'v13_1', 'v14', 'v15', 'v16', 'v17') and args.run_name:
+    if version in ('v13', 'v13_1', 'v14', 'v15', 'v16', 'v17', 'v18') and args.run_name:
         from traceaad.storage import read_json
         previous = read_json(root / args.task / args.run_name / 'run_config.json')
         if previous and (previous.get('method') != method_type.METHOD or any(
                 previous.get('method_params', {}).get(k) != v for k, v in json.loads(json.dumps(asdict(config))).items())):
-            raise ValueError('V13 resume configuration differs from the stored run')
+            raise ValueError('resume configuration differs from the stored run')
     ctx = setup_experiment_run(
         args,
         method=method_type.METHOD,
@@ -158,10 +162,10 @@ def main(argv=None, *, version=None):
         resume_file="events.jsonl",
         method_params=asdict(config),
         condition="traceaad",
-        extra_config={"budget_axis": "候选尝试", "final_selection": "training", **metadata},
+        extra_config={"budget_axis": "模型请求" if version == "v18" else "候选尝试", "final_selection": "training", **metadata},
         llm_factory=llm_factory,
         backend_profile=profile,
-        budget_basis=("Candidate opportunities including initialization, nonmatches and failed edits; all auxiliary/failed/interrupted model requests consume max_model_calls."
+        budget_basis=("Every model request including initialization, divergence, API failures, invalid code and duplicates; cached states cost no calls." if version == "v18" else "Candidate opportunities including initialization, nonmatches and failed edits; all auxiliary/failed/interrupted model requests consume max_model_calls."
                       if version in ('v13', 'v13_1') else "Program-generation replies including initialization, parse failures and repair; every parsed program is a distinct individual."),
     )
     try:

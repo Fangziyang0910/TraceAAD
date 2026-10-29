@@ -43,6 +43,18 @@ systemctl --user status traceaad-watch.timer
 journalctl --user -u traceaad-watch.service -n 5 --no-pager
 ```
 
+## V18 正式批次（10月29日）
+
+`20261029_v18_co6` 为六任务 × 种子0、1、2，共18路，每路1000次模型请求。V18 的预算包含初始化、发散、接口故障、无效程序及重复；同龄竞赛与有限偏差搜索的实现和恢复约束见 [V18 README](../../traceaad/v18/README.md)。输出上限8192，评价 worker 上限8，其余训练与主测试条件沿用公共协议。
+
+最终源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261029_traceaad_v18_final`，启动前校验454个文件；全量398项测试及六任务各8次请求的真实预检通过。较早的 `20261029_traceaad_v18_frozen` 仅用于首次预检；正式运行使用 `final` 快照，其中提示已包含评价器的实际运行限制。
+
+后续提示审计确认：该批额外展示实例数与时间预算，偏离公共提示协议。工作区已修订为 `v18-context-2`，去除这些信息并改进路径与尝试反馈，独立小样本对照保存于 `TraceAAD_runs/20261029_v18_context2_probe`。按用户重跑要求，原18路已停止，源码、结果与恢复点全部保留，本机副本在停止后通过 rsync 校验和核对。新旧提示不可混接同一恢复点，详见 [V18 README](../../traceaad/v18/README.md)。
+
+当前批次为 `20261029_v18_context2_co6`，从零启动六任务 × 种子0、1、2，每路1000次模型请求；机制、模型池及评价条件沿用原配置。源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261029_traceaad_v18_context2_frozen`，包含454个经过 SHA-256 核对的文件。精修版已通过408项测试、36次真实配对调用及六任务启动配置检查；每路仍自动执行“搜索 → 冻结结果检查 → 独立主测试”。
+
+规范结果入口为公共仓库的 `experiments_result/traceaad_v18/`，现链接到 `context2_frozen` 快照；旧结果仍在 `final` 快照及本机目录中。当前清单为 `batch_20261029_v18_context2_co6.json`，启动、停止旧批及核验记录在 `launch_20261029_context2/`；旧启动记录保留于 `launch_20261029/`。主实验名单与看板的 V18 已切换到新批次，其他方法名单不变。本机 `traceaad-results-sync.service` 每60秒同步主实验名单中尚未完成的 server4 批次，保留远端结果；该服务及原有 `traceaad-watch.timer` 均已启用。原看板仍使用 `0.0.0.0:8765`，默认显示 V18。
+
 ## server3 入口
 
 | 对象 | 位置 |

@@ -14,6 +14,7 @@
 | V15 曝光策略：等投入分配与信息形式曝光 | [V15 实现](../traceaad/v15/README.md) |
 | V16 论文方法：乐观估计、修改说明与跨谱系参考程序 | [V16 实现](../traceaad/v16/README.md) |
 | V17 同龄比较，谱系间导入组件 | [V17 实现](../traceaad/v17/README.md) |
+| V18 同龄竞赛与有限偏差开发搜索 | [V18 实现](../traceaad/v18/README.md) |
 | 检验变换迁移、模型执行与在线闭环 | [变换迁移先导实验](transfer/README.md) |
 
 ## 训练可视化
