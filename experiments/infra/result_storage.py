@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 from functools import lru_cache
-from traceaad.storage import read_json, write_json, append_jsonl
+from .storage import read_json, write_json, append_jsonl
 
 
 def selected_program(run_dir):

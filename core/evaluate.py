@@ -234,7 +234,7 @@ class SecureEvaluator:
         try:
             program_str = str(program)
             if execution := getattr(self._evaluator, "_instance_execution", None):
-                from traceaad.instance_evaluation import InstanceProgramEvaluator
+                from experiments.infra.instance_evaluation import InstanceProgramEvaluator
 
                 options = {
                     name: value

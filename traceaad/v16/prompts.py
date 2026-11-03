@@ -1,19 +1,7 @@
-"""V16 prompts: V15 with the edited lineage shown as changes and their outcomes.
+"""Develop lineages using matched-age quality and recent improvement. Generation prompts."""
 
-Each modifying reply also states its Change: what the returned code changed
-from the algorithm it was produced from, before and after. Formation steps,
-earlier attempts from the current algorithm and the improvements of the best
-score are shown by Change and outcome, so each reads as a change and its effect
-rather than a whole program again. A whole program is still shown by its
-Design: the current algorithm, the start of a formation path, a Crossover
-reference, a program written without a parent, and the programs of the
-initialization and new-design requests. The attempts already made from the
-current algorithm are marked as evaluated, and the Crossover task keeps the
-current main decision rule.
-"""
-
-from traceaad.prompts import idea_view
-from traceaad.v15.prompts import PromptBuilderV15
+from ._prompts import idea_view
+from ._information_prompts import InformationPrompts
 
 RECORDS_CHANGES = "Scores and failures are evaluation results. Code is shown only for the algorithm you are asked to change. Design describes a whole program; Change states what a program changed from the algorithm it was produced from. Both were written when the program was generated. A repaired program inherits the Design and Change of the failed program."
 FORMATION_INTRO_CHANGES = "The steps that produced the current algorithm, oldest first. Each step gives its evaluated outcome and the Change that produced it. If a step required repair, the first failure is stated separately."
@@ -23,7 +11,7 @@ DESIGN_CHANGES = "describe the code you returned: its main computations, naming 
 CHANGE = "state what the returned code changed from the current algorithm, naming each changed computation or value before and after; at most 60 words"
 
 
-class PromptBuilderV16(PromptBuilderV15):
+class PromptBuilderV16(InformationPrompts):
     def __init__(self, *args, info=True, changes=True):
         super().__init__(*args, info=info)
         self.changes = info and changes

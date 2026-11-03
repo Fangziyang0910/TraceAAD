@@ -1,7 +1,7 @@
-"""V14 prompts: the base prompts plus a design map, a development note and a revisit note."""
+"""Revisit rejection, code-free divergence and reserved development. Generation prompts."""
 
-from traceaad.history import score_text
-from traceaad.prompts import REFINE, PromptBuilder, idea_view
+from .history import score_text
+from ._prompts import REFINE, PromptBuilder, idea_view
 
 SEARCH_ACTIONS = ("Refine", "Explore", "Crossover", "Mature")
 MAP_IDEA_CHARS = 900

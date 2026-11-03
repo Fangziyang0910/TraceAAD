@@ -2,7 +2,7 @@
 
 **先确定运行条件，再沿程序编号找到代码、调用与评价。** 运行目录通常为 `experiments_result/<方法>/<任务>/<运行>/`，数据目录不进入 Git。
 
-读取入口为 [artifacts.py](artifacts.py) 和 [result_storage.py](result_storage.py)。当前 TraceAAD 的写入逻辑在 [state.py](../../traceaad/state.py)，底层读写在 [storage.py](../../traceaad/storage.py)。
+读取入口为 [artifacts.py](artifacts.py) 和 [result_storage.py](result_storage.py)，实验工具的底层读写在 [storage.py](storage.py)。各 TraceAAD 版本使用自己包内的 `state.py` 与 `storage.py` 写入同一结果格式；基础入口的写入逻辑见 [state.py](../../traceaad/base/state.py)。
 
 ## 文件与用途
 

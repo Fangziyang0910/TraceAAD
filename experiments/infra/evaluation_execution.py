@@ -7,7 +7,7 @@ from benchmarks.tasks import (
     heldout_task,
     validate_task_interface,
 )
-from traceaad.instance_evaluation import InstanceProgramEvaluator
+from .instance_evaluation import InstanceProgramEvaluator
 from .whole_task_evaluation import WholeTaskEvaluator
 
 

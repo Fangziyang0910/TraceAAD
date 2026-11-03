@@ -1,25 +1,17 @@
-"""V14: the TraceAAD search loop with three counters to fitness-guided conservatism.
-
-Revisit rejection: a reply whose code is identical to an evaluated program is not
-evaluated; the same request is asked once more with that fact stated.
-Divergence: after ``stagnation_window`` attempts without a new best, one attempt
-writes a new algorithm from a map of the designs developed so far, without code.
-Development period: the new design then receives ``mature_steps`` Refine-style
-attempts before it competes through ordinary parent selection.
-"""
+"""Revisit rejection, code-free divergence and reserved development."""
 
 from copy import deepcopy
 
-from traceaad.delivery import DeliveryError, optional_field, parse_json_response
-from traceaad.program import Program
-from traceaad.selection import better
-from traceaad.traceaad import TraceAAD
+from .delivery import DeliveryError, optional_field, parse_json_response
+from .program import Program
+from .selection import better
+from .loop import SearchLoop
 from . import novelty
 from .config import Config
 from .prompts import PromptBuilderV14
 
 
-class TraceAADV14(TraceAAD):
+class TraceAADV14(SearchLoop):
     METHOD = "traceaad_v14"
 
     def __init__(self, *, config=None, **kwargs):

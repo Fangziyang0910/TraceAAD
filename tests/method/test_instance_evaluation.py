@@ -6,7 +6,7 @@ import pytest
 from benchmarks.tasks import CLASSES, CO_TASKS, FIXED_TASKS
 from experiments.infra.whole_task_evaluation import WholeTaskEvaluator
 from tests.support import TinyEvaluation, small_task
-from traceaad.instance_evaluation import InstanceProgramEvaluator
+from traceaad.base.instance_evaluation import InstanceProgramEvaluator
 
 
 class IndexedEvaluation(TinyEvaluation):
@@ -71,7 +71,7 @@ def test_failure_cancels_other_instances_and_releases_workers(body, kind):
 
 def test_runaway_memory_stops_the_candidate_but_numpy_programs_pass(monkeypatch):
     import numpy as np
-    import traceaad.instance_evaluation as module
+    import traceaad.base.instance_evaluation as module
 
     (np.ones((300, 300)) @ np.ones((300, 300))).sum()  # the parent's BLAS buffers exist before fork
     monkeypatch.setattr(module, "INSTANCE_MEMORY_BYTES", 1 << 30)
@@ -172,7 +172,7 @@ def test_process_cpu_reader_keeps_finished_thread_time():
     import threading
     import time
 
-    from traceaad.evaluation import process_cpu_seconds
+    from traceaad.base.evaluation import process_cpu_seconds
 
     before = process_cpu_seconds(os.getpid())
     clock_before = time.process_time()

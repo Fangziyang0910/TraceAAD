@@ -136,7 +136,7 @@ def test_shinka_parent_weight_combines_quality_with_children_count():
 def test_baseline_freezes_the_training_winner_without_extra_selection(tmp_path):
     from baselines.shared.profiler import ProfilerBase
     from experiments.infra.result_storage import selected_program
-    from traceaad.storage import read_json, write_json
+    from traceaad.base.storage import read_json, write_json
 
     task = TinyEvaluation()
     write_json(tmp_path / "run_config.json", {"task": "toy", "method": "eoh", "budget": 2})

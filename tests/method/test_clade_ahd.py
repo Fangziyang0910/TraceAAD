@@ -12,7 +12,7 @@ from baselines.clade_ahd.upstream.score_normalizer import ScoreNormalizer
 from baselines.shared.profiler import ProfilerBase
 from experiments.infra.resume_baseline import recover
 from tests.support import TinyEvaluation, TokenLLM
-from traceaad.storage import read_json, rows, write_json
+from traceaad.base.storage import read_json, rows, write_json
 
 
 def program(n):

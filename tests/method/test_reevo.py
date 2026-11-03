@@ -8,7 +8,7 @@ import pytest
 from baselines.reevo import ReEvo, ReEvoProfiler
 from experiments.infra.resume_baseline import recover
 from tests.support import TinyEvaluation, TokenLLM
-from traceaad.storage import append_jsonl, rows, write_json
+from traceaad.base.storage import append_jsonl, rows, write_json
 
 
 @pytest.fixture

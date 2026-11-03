@@ -13,7 +13,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from traceaad.storage import read_json
+from .storage import read_json
 
 HOST = "B3-server3"
 REMOTE = "/home/fzy/code/LLM4AD/TraceAAD"

@@ -29,7 +29,7 @@ from threading import RLock
 from datetime import datetime
 
 from pathlib import Path
-from traceaad.storage import append_jsonl, read_json, seal_calls, write_json
+from experiments.infra.storage import append_jsonl, read_json, seal_calls, write_json
 from experiments.infra.result_storage import Programs
 from core.scheduling import SchedulerError
 
@@ -271,7 +271,7 @@ class ProfilerBase:
         return (datetime.now(ZoneInfo('Asia/Shanghai'))-self._process_start_time).total_seconds() + getattr(self, '_resume_elapsed', 0)
 
     def _freeze_training(self):
-        from traceaad.storage import committed_rows
+        from experiments.infra.storage import committed_rows
         from experiments.infra.result_storage import Programs
         programs = {row['program']['id']: row['program'] for row in committed_rows(self.run_dir)
                     if row.get('program') and row['program']['valid']}

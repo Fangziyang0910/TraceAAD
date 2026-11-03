@@ -43,6 +43,38 @@ systemctl --user status traceaad-watch.timer
 journalctl --user -u traceaad-watch.service -n 5 --no-pager
 ```
 
+## V19.3 轨迹反思批次（11月1日）
+
+`20261101_v19_3_co6` 在server4启动六任务×种子0、1、2，共18路，每路1000次实际评价。使用现有Qwen共享模型池和公共调度器，初始化5个有效不同算法，生成／反思输出上限16384／2048 tokens，`trajectory`反思。上下文窗口49152，tokenizer来自实际服务模型；训练160秒、主测试500秒、内存2 GiB。每路自动完成搜索、固定训练赢家、独立主测试。
+
+源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261101_traceaad_v19_3_final`，110个文件经SHA-256核对。远端35项针对性检查通过；六任务真实预检完成36次评价与21次反思，均已形成经验并用于后续生成。正式18路主进程、模型回复和实际评价均已核实。公共结果入口为 `experiments_result/traceaad_v19_3`，清单为 `batch_20261101_v19_3_co6.json`。主实验名单、默认看板、每60秒同步和原有巡检已接入。配置及核验见[启动记录](../../experiments_result/traceaad_v19_3/launch_20261101/README.md)。
+
+## 独立 Base JSON Schema 批次（10月31日）
+
+`20261031_base_schema_co6` 在server4从零启动18路，每路1000次评价。生成与修复使用明确的JSON Schema，要求 `analysis`、`design`、`code` 三个字符串并禁止额外字段；非空要求由解析器检查。提示、历史窗口、父代选择、算子、数据与评价时限沿用分析轨迹批次。
+
+源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_schema_final`，609个文件中7个变化、602个一致，远端60项检查通过。结果入口为 `experiments_result/traceaad_base_schema`，看板和同步使用该批次。上一批分析实验的18路已正常停止并保留结果；更早批次继续按各自状态运行。[启动记录](../../experiments_result/traceaad_base_schema/launch_20261031/README.md)保存配置、源码核对、停止与启动证据。
+
+## 独立 Base 分析轨迹批次（10月31日）
+
+`20261031_base_analysis_co6` 于北京时间09:22–09:23在server4从零启动18路，每路1000次评价。模型依次输出 `analysis`、`design`、`code`，分析随个体保存，祖先及已有子代按父子来源、改动分析与评价呈现局部改进脉络。修复同步更新分析、设计与代码；历史窗口、父代公式、算子配比和评价条件沿用上一批。
+
+源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_analysis_final`，609个文件经过校验，本地和远端各59项检查通过。结果入口为 `experiments_result/traceaad_base_analysis`；本批18路于10:01正常停止，由JSON Schema批次替代，源码与结果保留。上一批 `20261031_base_prompt_co6` 的18路于09:22正常停止，无遗留进程，源码与结果保留，仍可在看板查看停止状态；更早的紧凑输出批次继续运行。本批启动及真实分析上下文证据见[启动记录](../../experiments_result/traceaad_base_analysis/launch_20261031/README.md)。
+
+## 独立 Base 提示修订批次（10月31日）
+
+`20261031_base_prompt_co6` 于北京时间09:00–09:01在server4启动六任务 × 种子0、1、2，共18路，09:22按用户要求停止并由分析轨迹批次替代。该批提示先生成代码，再用自足摘要说明实际计算；Refine、交叉与修复明确保留核心计算对输出的作用。每路1000次评价、初始化5个有效个体、一次修复、温度1.0、输出上限16384 tokens，训练160秒、主测试500秒。父代公式、算子配比、参考选择及历史窗口沿用紧凑输出批次。
+
+源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_prompt_final`；609个文件中仅提示词和两份说明变化。公共新结果入口为 `experiments_result/traceaad_base_prompt`，原 `traceaad_base` 继续指向紧凑输出批次，旧实验继续运行。主实验名单保留旧方法并新增18路，自动同步已发现新批次，看板默认显示“TraceAAD Base · 新提示”。本地与远端各54项检查通过，18个主进程、实际请求及评价均已核实。配置、差异及证据见[启动记录](../../experiments_result/traceaad_base_prompt/launch_20261031/README.md)。
+
+## 独立 Base 正式批次（10月30日）
+
+10月30日重跑批次为 `20261030_base_compact_co6`，按用户要求缩短模型输出并从头重跑18路。统一要求设计说明为单段、2–3句、最多200字符，代码不含注释或文档字符串；每实例时间额度10秒，训练总时限160秒、主测试500秒。新源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261030_traceaad_base_compact_final`，公共结果入口已切换，看板与自动同步跟随新批次。原批次18路已停止，无遗留进程，原源码、结果及本地副本保留。配置、停止与启动证据和实际输出检查见[重跑记录](../../experiments_result/traceaad_base/launch_20261030_compact/README.md)。
+
+`20261030_base_co6` 于北京时间22:44–22:45启动六任务 × 种子0、1、2，共18路。每路1000次完整评价、5个有效初始个体，温度1.0、输出上限16384 tokens。搜索与主测试使用任务全部实例的总时限，各次评价从公共CPU池申请一个核；模型继续使用现有共享池。入口为 `experiments.traceaad_base.run` 和 `experiments.traceaad_base.launch_host`，说明见[独立Base实验](../traceaad_base/README.md)。
+
+源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261030_traceaad_base_final`，609个文件经过SHA-256核对。六任务真实预检各6次评价及六路主测试通过，18个正式主进程和实际请求、评价均已核实。公共结果入口 `experiments_result/traceaad_base/` 链接到冻结快照，清单为 `batch_20261030_base_co6.json`；原始记录在每路 `native/` 下，外层文件接入现有看板。主实验名单、默认看板与自动同步均已接入，旧批次继续运行。[启动记录](../../experiments_result/traceaad_base/launch_20261030/README.md)保存配置、校验与检查结果。
+
 ## V18 正式批次（10月29日）
 
 `20261029_v18_co6` 为六任务 × 种子0、1、2，共18路，每路1000次模型请求。V18 的预算包含初始化、发散、接口故障、无效程序及重复；同龄竞赛与有限偏差搜索的实现和恢复约束见 [V18 README](../../traceaad/v18/README.md)。输出上限8192，评价 worker 上限8，其余训练与主测试条件沿用公共协议。
@@ -51,9 +83,19 @@ journalctl --user -u traceaad-watch.service -n 5 --no-pager
 
 后续提示审计确认：该批额外展示实例数与时间预算，偏离公共提示协议。工作区已修订为 `v18-context-2`，去除这些信息并改进路径与尝试反馈，独立小样本对照保存于 `TraceAAD_runs/20261029_v18_context2_probe`。按用户重跑要求，原18路已停止，源码、结果与恢复点全部保留，本机副本在停止后通过 rsync 校验和核对。新旧提示不可混接同一恢复点，详见 [V18 README](../../traceaad/v18/README.md)。
 
-当前批次为 `20261029_v18_context2_co6`，从零启动六任务 × 种子0、1、2，每路1000次模型请求；机制、模型池及评价条件沿用原配置。源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261029_traceaad_v18_context2_frozen`，包含454个经过 SHA-256 核对的文件。精修版已通过408项测试、36次真实配对调用及六任务启动配置检查；每路仍自动执行“搜索 → 冻结结果检查 → 独立主测试”。
+第二批 `20261029_v18_context2_co6` 已按用户要求停止，18路恢复点与结果保留于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261029_traceaad_v18_context2_frozen`，停止后完成本机拉取及文件校验和核对。公共调度器和模型服务没有重启。该批暴露了重复起点重新取得保护、连续复制反复获配的问题，详细诊断见 [机制分析](../../experiments_result/analysis/v18_mechanism_20261029/README.md)。
 
-规范结果入口为公共仓库的 `experiments_result/traceaad_v18/`，现链接到 `context2_frozen` 快照；旧结果仍在 `final` 快照及本机目录中。当前清单为 `batch_20261029_v18_context2_co6.json`，启动、停止旧批及核验记录在 `launch_20261029_context2/`；旧启动记录保留于 `launch_20261029/`。主实验名单与看板的 V18 已切换到新批次，其他方法名单不变。本机 `traceaad-results-sync.service` 每60秒同步主实验名单中尚未完成的 server4 批次，保留远端结果；该服务及原有 `traceaad-watch.timer` 均已启用。原看板仍使用 `0.0.0.0:8765`，默认显示 V18。
+当前批次为 `20261029_v18_loopfix_co6`，10月29日15:42（北京时间）从零启动六任务 × 种子0、1、2，每路1000次请求上限。源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261029_traceaad_v18_loopfix_final`，454个文件经过 SHA-256 核对；全量422项测试和六任务各8次真实预检通过。使用 `v18-context-3`、`v18-repeat-guard-1`、`max_no_change=3`，拒绝重复源码建根，同一生成条件连续无新候选后关闭；首个有效根之前保留原16次初始化额度。计数跨状态与恢复保留，不能将旧批次检查点混接新机制。模型池、采样、同龄持平、LDS深度和评价条件保持一致。
+
+规范结果入口为公共仓库的 `experiments_result/traceaad_v18/`，现链接到 `loopfix_final` 快照；旧结果仍在各自冻结快照及本机目录中。当前清单为 `batch_20261029_v18_loopfix_co6.json`，启动、停止旧批及核验记录在 [launch_20261029_loopfix](../../experiments_result/traceaad_v18/launch_20261029_loopfix/README.md)。每路仍自动执行“搜索 → 冻结结果检查 → 独立主测试”；冻结检查允许请求用满，或明确以 `no_eligible_generation` 提前结束，要求已有有效选择且无待处理请求。主实验名单与看板的 V18 已切换到新批次，其他方法名单不变。本机 `traceaad-results-sync.service` 每60秒同步主实验名单中尚未完成的 server4 批次，保留远端结果；该服务及原有 `traceaad-watch.timer` 均已启用。原看板仍使用 `0.0.0.0:8765`，默认显示 V18。
+
+## V18.1 正式批次（10月29日）
+
+`20261029_v18_1_co6` 于北京时间23:45开始启动六任务 × 种子0、1、2，共18路。每路1000次基础生成回复，额外BirthCheck独立记录成本；同龄通道比例0.25、每思想12次保护、8代后退出。初始化、算子、提示和评价沿用基础TraceAAD；不使用V18任务树、LDS或Diverge。旧V18 loopfix继续运行。
+
+源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261029_traceaad_v18_1_birthfix_final`，版本 `v18.1-birth-age-2`，468个文件校验。全量616项测试、最终提示194项针对性检查通过；六任务各8次生成的真实预检全部完成，48次生成及36次审核共84次模型调用，六路主测试有效。首轮预检发现出生被误解为全球原创性，原记录保留于 `20261029_traceaad_v18_1_final`，正式运行只使用明确本轮登记范围的新快照。
+
+公共结果入口 `experiments_result/traceaad_v18_1/` 链接到新快照，清单为 `batch_20261029_v18_1_co6.json`。每路仍自动执行搜索、冻结检查、独立主测试。主实验名单加入V18.1并设为看板默认，保留其他版本；原自动同步和巡检按名单发现新批次，无须重启服务。[启动记录](../../experiments_result/traceaad_v18_1/launch_20261029/)保存源文件校验、验证、预检、清单与运行核对。
 
 ## server3 入口
 
@@ -103,47 +145,7 @@ TraceAAD 12.1 重跑批次为 `20261025_server4_qwen_co6_restart`，结果目录
 服务器重启后，确认旧调度器已退出，再执行 `bash experiments_result/migrations/20261022_server4/scheduler_command.txt`。实验恢复前还需核对控制器与各运行锁。环境初始验证保存在 `experiments_result/environment_setup/20261022_server4/`；该目录的旧 17 槽命令已被迁移命令替代。
 
 
-## V13 正式批次（10月26日）
-
-`20261026_v13_co6` 已启动六任务各三路（种子 0、1、2），每路 1000 次候选尝试、最多 8000 次全部模型请求，输出上限 8192，评价 worker 上限 8。它是独立批次，**不包含在旧迁移控制器的 157 项计数中**；查询 server4 总进度时需同时读取此批。
-
-源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261025_traceaad_v13_frozen`。规范结果入口为公共仓库的 `experiments_result/traceaad_v13/`，该目录链接到冻结快照中的实际结果目录；原公共代码没有被替换。清单为 `experiments_result/traceaad_v13/batch_20261026_v13_co6.json`。
-
-每路采用“搜索 → 冻结结果检查 → 独立主测试”的流水线，按三秒间隔启动。达到模型请求上限时也会对已冻结程序执行主测试，不要求候选数必须达到 1000。启动命令、核验记录与源码依据位于方法目录下的 `launch_20261026/`。本机 tmux `traceaad_v13_results_sync` 每 60 秒同步，等待搜索和主测试记录落盘，保留远端数据。
-
-```bash
-.venv/bin/python -m experiments.infra.batch_status \
-  --ssh B3-server4 --repo /home/fzy/code/LLM4AD/TraceAAD \
-  --manifest /home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v13/batch_20261026_v13_co6.json --details
-```
-
-V13 使用原参数恢复。清单中 `training_command` 是搜索入口，`heldout_command` 是测试入口，`command` 包含完整流水线；恢复前先确认该会话和写锁均已释放。旧迁移控制器不支持在线追加此批，不向其内存中的计划直接写入新条目。
-
-## V13.1 正式批次（10月26日）
-
-用户要求停止 V13 并按新主稿实现 V13.1。旧 `20261026_v13_co6` 的十八个会话及子进程已停止，数据、冻结源码与恢复点保留；停止回执为 `experiments_result/traceaad_v13/stop_20261026.json`。不自动续跑旧批次。其他历史批次及公共调度器没有停止。
-
-新批次 `20261026_v13_1_co6` 为六任务 × 种子 0／1／2，共十八路，已全部启动。每路 1000 次候选机会、最多 8000 次模型请求、输出上限 8192、输入上限 24000、评价 worker 上限 8。默认先验暖启动十六次独立自由修改；每十轮至少两轮自由修改、至多一轮诊断。完整配置与实施边界见 [V13.1 README](../../traceaad/v13_1/README.md)。
-
-初始源码冻结在 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261026_traceaad_v13_1_frozen`，启动前核对 374 个文件的 SHA-256。公共仓库的 `experiments_result/traceaad_v13_1/` 链接到冻结快照的结果目录。清单为 `batch_20261026_v13_1_co6.json`，各路三秒错峰启动，继续使用任意空闲端点的共享模型池及公共 CPU 调度器。
-
-每路仍执行“搜索 → 冻结结果检查 → 独立主测试”。清单保存训练、主测试与完整流水线命令；恢复需使用原冻结源码和原参数。V13 状态不能续接到 V13.1。阶段恢复状态在 `resume.json` 的 `state.v13_1`，配对结果为 `paired_replays.json`。
-
-本机 tmux `traceaad_v13_1_results_sync` 每 60 秒同步搜索与主测试，保留全部远端数据；旧 V13 专用同步会话已停，并完成最后一次拉取。主实验名单已将 TraceAAD 切换至 V13.1，十二个基线名单不变。
-
-启动依据与真实核验保存在 `experiments_result/traceaad_v13_1/launch_20261026/`，测试、配置、源码与模型正控制保存在 `preflight/`。首轮跟进确认十八路都已收到模型回复，接口错误为零；启动状态不能证明方法的完整搜索收益。
-
-### V13.1 匹配输入校验修复与续跑
-
-10月26日，OP 种子 1 因匹配列表中出现字符串而退出。用户授权修复并续跑。修复仅在读取匹配项前检查其是否为对象，错误回复进入已有的 `ValueError` 处理，不计入变换性能失败；提示、选择、收益模型与评价条件没有改变。
-
-当前续跑源码为 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261026_traceaad_v13_1_matchfix`。原冻结源码保留。十八路先释放写锁，再从原检查点受控迁移至修复快照；预算、随机状态、历史结果、待处理回复和信用均保留。实现签名更新后，1143 条评价缓存同步换键并逐条核对，不能因源码签名变化丢失去重。17 个已预留、未提交回复的模型请求按原规则记为不确定调用，名额不退回。
-
-十八路均已从原目录恢复，仍使用原清单与种子，结束后仍自动执行主测试。原始恢复点、停止回执、源码差异、逐路计数边界和恢复回执保存在 `experiments_result/traceaad_v13_1/recovery_match_20261026/`。正常恢复应使用清单中的当前修复快照和命令，不能把这次精确验证的签名迁移当成任意改源码的通行规则。
-
 ## V14 正式批次（10月27日）
-
-用户要求停止 V13.1，改跑针对适应度引导下保守化的 V14。旧 `20261026_v13_1_co6` 的 15 个仍在运行的会话及 33 个进程已停止（停时约 170–264／1000 次候选），数据、快照与恢复点保留；停止回执为 `experiments_result/traceaad_v13_1/stop_20261027.json`。不自动续跑旧批次。旧 V13.1 同步会话在最后一次拉取后停止。
 
 新批次 `20261027_v14_co6` 为六任务 × 种子 0／1／2，共十八路，已全部启动。每路 1000 次候选机会、输出上限 8192、评价 worker 上限 8；V14 不设单独的模型请求上限。机制与默认值见 [V14 README](../../traceaad/v14/README.md)。
 

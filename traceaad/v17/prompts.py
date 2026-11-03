@@ -1,16 +1,8 @@
-"""V17 prompts: V16 with an Import request.
+"""Matched-age lineage competition with evidence-backed component imports. Generation prompts."""
 
-An Import shows the current algorithm as a Refine does (its formation path, the
-programs already generated from it, its Design and code) and one component: a
-change that improved another lineage, given by its Change, the score of that
-algorithm before and after it, and its code diff. The program the component
-came from is not shown, neither as code nor as Design, so the reply adds a
-computation to the current algorithm rather than rebuilding the other one.
-"""
-
-from traceaad.history import code_diff, path, score_text
-from traceaad.prompts import idea_view
-from traceaad.v16.prompts import PromptBuilderV16
+from .history import code_diff, path, score_text
+from ._prompts import idea_view
+from ._change_prompts import ChangePrompts
 
 SEARCH_ACTIONS = ("Refine", "Explore", "Crossover", "Mature", "Import")
 COMPONENT = "[Component From Another Algorithm]\nA change that improved another algorithm of this search. That algorithm follows a different design and is not shown; the diff gives only the lines the change removed and added, with a little context.\nScore of that algorithm: {before} → {after} (improved)"
@@ -31,7 +23,7 @@ def step_of(program, programs):
     return (start if start is not None and start.valid else None), action
 
 
-class PromptBuilderV17(PromptBuilderV16):
+class PromptBuilderV17(ChangePrompts):
     def children_from(self, node):
         return [
             p

@@ -14,7 +14,7 @@ from experiments.visualization import ResultsMonitor
 from experiments.visualization.server import make_request_handler
 from tests.support import TinyEvaluation, TokenLLM, response
 from traceaad import Config, TraceAAD
-from traceaad.storage import write_json
+from traceaad.base.storage import write_json
 
 
 @pytest.mark.parametrize("fail", [False, True])
@@ -188,11 +188,11 @@ def test_comparison_defaults_include_traceaad_versions_and_preserve_old_links():
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const code=fs.readFileSync(process.argv[1],'utf8');
 const part=code.slice(code.indexOf('const CMP ='),code.indexOf('async function loadCompare()'));
-const data={cohorts:['traceaad_v13','traceaad_v12_1',...Array.from({length:12},(_,i)=>`baseline${i}`)].map(id=>
+const data={cohorts:['traceaad_v15','traceaad_v12_1',...Array.from({length:12},(_,i)=>`baseline${i}`)].map(id=>
  ({id,batch:id,label:id,model_name:'qwen3.8-27b',runs:18,variant:'',heldout_tasks:[]}))};
 function scope() {
  const chips={innerHTML:''};
- const context=vm.createContext({S:{batch:'traceaad_v13'},getJSON:async()=>({data}),
+ const context=vm.createContext({S:{batch:'traceaad_v15'},getJSON:async()=>({data}),
    $:()=>chips,esc:String,seriesColor:i=>String(i)});
  vm.runInContext(part,context);
  return {context,chips};
@@ -226,11 +226,11 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const code=fs.readFileSync(process.argv[1],'utf8');
 const part=code.slice(code.indexOf('const CMP ='),code.indexOf('function drawAllDots()'));
 const nodes={'cmp-summary':{},'cmp-tasks':{}};
-const data={cohorts:[{id:'v13',label:'TraceAAD V13'}],tasks:[{key:'tsp_construct',label:'TSP',unit:'距离',scales:[],cohorts:[
- {id:'v13',runs:[{train:12,status:'stopped',budget_used:200,budget:1000}]}]}]};
+const data={cohorts:[{id:'v15',label:'TraceAAD V15'}],tasks:[{key:'tsp_construct',label:'TSP',unit:'距离',scales:[],cohorts:[
+ {id:'v15',runs:[{train:12,status:'stopped',budget_used:200,budget:1000}]}]}]};
 const context=vm.createContext({$:id=>nodes[id],esc:String,seriesColor:String,fmt:String,drawAllDots:()=>{},data});
 vm.runInContext(part,context);
-vm.runInContext("CMP.ids=['v13'];CMP.ref='v13';CMP.data=data;renderCompare()",context);
+vm.runInContext("CMP.ids=['v15'];CMP.ref='v15';CMP.data=data;renderCompare()",context);
 assert.ok(nodes['cmp-tasks'].innerHTML.includes('未满预算'));
 assert.ok(!nodes['cmp-tasks'].innerHTML.includes('运行中'));
 '''
@@ -238,7 +238,7 @@ assert.ok(!nodes['cmp-tasks'].innerHTML.includes('运行中'));
 
 
 def test_traceaad_versions_use_separate_formal_batches(tmp_path):
-    for method in ('traceaad_v12_1', 'traceaad_v13', 'traceaad_v14', 'eoh'):
+    for method in ('traceaad_v12_1', 'traceaad_v15', 'traceaad_v14', 'eoh'):
         dashboard_run(tmp_path/method/'tsp_construct'/'rep1')
     dashboard_run(tmp_path/'traceaad_v12_1'/'tsp_construct'/'deepseek_pilot', model='deepseek-v4.1-flash')
     historical = tmp_path/'traceaad_v12_1'/'fssp_gls'/'rep1'
@@ -249,26 +249,26 @@ def test_traceaad_versions_use_separate_formal_batches(tmp_path):
     write_json(historical/'run_config.json', config)
     write_json(tmp_path/'traceaad_v12_1'/'batch_formal.json', dict(batch='formal', status='finished', plan=[
         dict(task=task, run_name='rep1') for task in ('tsp_construct', 'fssp_gls')]))
-    write_json(tmp_path/'traceaad_v13'/'batch_formal.json', dict(batch='formal', status='stopped', plan=[
+    write_json(tmp_path/'traceaad_v15'/'batch_formal.json', dict(batch='formal', status='stopped', plan=[
         dict(task='tsp_construct', run_name='rep1')]))
-    write_json(tmp_path/'traceaad_v13'/'tsp_construct'/'rep1'/'summary.json',
+    write_json(tmp_path/'traceaad_v15'/'tsp_construct'/'rep1'/'summary.json',
                dict(status='running', budget=1000, budget_used=200, best=dict(fitness=12)))
     write_json(tmp_path/'primary_runs.json', dict(schema=1,
         methods={m:['tsp_construct/rep1'] for m in ('traceaad_v14', 'eoh')},
-        visualization_batches={'traceaad_v12_1':'formal', 'traceaad_v13':'formal'},
-        labels={'traceaad_v12_1':'TraceAAD V12.1', 'traceaad_v13':'TraceAAD V13',
+        visualization_batches={'traceaad_v12_1':'formal', 'traceaad_v15':'formal'},
+        labels={'traceaad_v12_1':'TraceAAD V12.1', 'traceaad_v15':'TraceAAD V15',
                 'traceaad_v14':'TraceAAD V14'}))
     monitor=ResultsMonitor(tmp_path)
     assert {b['id']:b['label'] for b in monitor.batches()} == {
-        'traceaad_v12_1':'TraceAAD V12.1', 'traceaad_v13':'TraceAAD V13',
+        'traceaad_v12_1':'TraceAAD V12.1', 'traceaad_v15':'TraceAAD V15',
         'traceaad_v14':'TraceAAD V14', 'eoh':'eoh'}
     cohorts={c['id']:c for c in monitor.cohorts()}
-    assert set(cohorts)=={'traceaad_v12_1', 'traceaad_v13', 'traceaad_v14', 'eoh'}
+    assert set(cohorts)=={'traceaad_v12_1', 'traceaad_v15', 'traceaad_v14', 'eoh'}
     assert cohorts['traceaad_v12_1']['runs']==2
     overview = monitor.overview('traceaad_v12_1')
     assert next(t for t in overview['tasks'] if t['key']=='fssp_gls')['unit']=='makespan'
-    result = monitor.compare(['traceaad_v12_1', 'traceaad_v13', 'traceaad_v14'])
-    assert [c['label'] for c in result['cohorts']] == ['TraceAAD V12.1', 'TraceAAD V13', 'TraceAAD V14']
+    result = monitor.compare(['traceaad_v12_1', 'traceaad_v15', 'traceaad_v14'])
+    assert [c['label'] for c in result['cohorts']] == ['TraceAAD V12.1', 'TraceAAD V15', 'TraceAAD V14']
     runs = next(t for t in result['tasks'] if t['key']=='tsp_construct')['cohorts']
     assert [[r['name'] for r in c['runs']] for c in runs] == [['rep1'], ['rep1'], ['rep1']]
     assert runs[1]['runs'][0]['status']=='stopped'
@@ -276,19 +276,19 @@ def test_traceaad_versions_use_separate_formal_batches(tmp_path):
 
 
 def test_stop_receipt_does_not_override_a_resumed_journal(tmp_path):
-    run = tmp_path/'traceaad_v13_1'/'tsp_construct'/'rep1'
+    run = tmp_path/'traceaad_v16'/'tsp_construct'/'rep1'
     dashboard_run(run, status='running')
     summary = json.loads((run/'summary.json').read_text())
     summary['budget_used'] = 200
     write_json(run/'summary.json', summary)
-    write_json(tmp_path/'traceaad_v13_1'/'batch_formal.json', dict(batch='formal', status='running', plan=[
+    write_json(tmp_path/'traceaad_v16'/'batch_formal.json', dict(batch='formal', status='running', plan=[
         dict(task='tsp_construct', run_name='rep1', session='session1')]))
-    receipt = tmp_path/'traceaad_v13_1'/'stop_formal.json'
+    receipt = tmp_path/'traceaad_v16'/'stop_formal.json'
     write_json(receipt, dict(at='2999-01-01T00:00:00+00:00', sessions=['session1']))
     monitor=ResultsMonitor(tmp_path)
-    before = monitor.state_signature('traceaad_v13_1')
-    assert monitor.overview('traceaad_v13_1')['summary']['stopped']==1
+    before = monitor.state_signature('traceaad_v16')
+    assert monitor.overview('traceaad_v16')['summary']['stopped']==1
     write_json(receipt, dict(at='2020-01-01T00:00:00+00:00', sessions=['session1']))
     (run/'events.jsonl').write_text('')
-    assert monitor.state_signature('traceaad_v13_1') != before
-    assert monitor.overview('traceaad_v13_1')['summary']['running']==1
+    assert monitor.state_signature('traceaad_v16') != before
+    assert monitor.overview('traceaad_v16')['summary']['running']==1

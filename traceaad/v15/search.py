@@ -1,28 +1,9 @@
-"""V15: V14 with an exposure policy.
-
-An LLM operator writes from what its prompt shows, so selection acts twice: it
-picks the program to edit, and it decides what the operator sees. V15 sets both.
-
-Who is exposed (allocation="effort"). Attempts go to lineages: a program written
-without a parent and every program derived from it. A lineage below the first
-checkpoint, 1 + mature_steps attempts, is developed from its best program. At
-each later checkpoint (5, 10, 20, ... by default) it is compared with the
-champion lineage, the one holding the best program, after the same number of
-attempts: it continues while it is not worse and pauses otherwise. The next
-attempt goes to the active lineage with the fewest attempts, else to the
-champion, whose parent is sampled among its own programs. A new lineage starts
-after stagnation_window attempts without a new best since the last start.
-
-How others are exposed (exposure="info"): see prompts.PromptBuilderV15.
-
-Everything is derived from the program records, so a resumed run continues
-the same allocation. allocation="fitness" with exposure="code" is V14.
-"""
+"""Matched-investment lineage competition and controlled information exposure."""
 
 from collections import defaultdict
 
-from traceaad.selection import better
-from traceaad.v14.search import TraceAADV14
+from .selection import better
+from ._divergence import DivergenceSearch
 from .config import Config
 from .prompts import PromptBuilderV15
 
@@ -32,7 +13,7 @@ def best_score(attempts):
     return min(scores) if scores else None
 
 
-class TraceAADV15(TraceAADV14):
+class TraceAADV15(DivergenceSearch):
     METHOD = "traceaad_v15"
 
     def __init__(self, *, config=None, **kwargs):

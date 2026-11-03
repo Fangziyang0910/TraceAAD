@@ -25,7 +25,7 @@ from pathlib import Path
 from urllib.request import ProxyHandler, build_opener
 
 from experiments.infra import remote
-from traceaad.storage import read_json, read_object
+from .storage import read_json, read_object
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "experiments_result"

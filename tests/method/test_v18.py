@@ -5,11 +5,10 @@ import json
 
 import pytest
 
-from core.scheduling import SchedulerError
+from traceaad.v18.runtime.scheduling import SchedulerError
 from tests.support import TinyEvaluation, TokenLLM
-from traceaad import Program
-from traceaad.storage import committed_rows, read_json, rows
-from traceaad.v18 import Config, TraceAADV18
+from traceaad.v18 import Config, Program, TraceAADV18
+from traceaad.v18.storage import committed_rows, read_json, rows
 from traceaad.v18.prompts import normalized_source, parse_code
 
 
@@ -61,13 +60,16 @@ def test_full_tree_windows_expand_once_in_the_specified_order(tmp_path):
     assert [r["x_label"] for r in committed_rows(tmp_path) if r["kind"] == "candidate"] == ["模型请求"]*14
 
 
-def test_six_call_example_and_selected_path_do_not_include_rejected_siblings(tmp_path):
+def test_six_call_example_separates_unadopted_trials_from_the_selected_path(tmp_path):
     method = search(tmp_path, *(code(v) for v in (90, 91, 65, 92, 98, 93)), initial=[root(60)])
     method.run()
     parents = [method.programs[p.parent_id].fitness for p in developed(method)]
     assert parents == [-60, -90, -60, -91, -65, -90]
     prompts = [call[0] for call in method.llm.calls]
-    assert "return 60" in prompts[2] and "return 90" not in prompts[2] and "return 91" not in prompts[2]
+    trials, current = prompts[2].split("[Current Program]")
+    assert "return 60" in current and "return 90" not in current and "return 91" not in current
+    assert "Unadopted trial change" in trials and "+    return 90" in trials
+    assert "return 91" not in trials
     assert "Attempt 1: score -90" in prompts[2]
     assert "return 65" in prompts[4] and "return 90" not in prompts[4] and "return 91" not in prompts[4]
     assert method.tasks[1].best_curve == [60, 90, 91, 91, 92, 98, 98]
@@ -86,7 +88,7 @@ def test_worse_and_tied_distinct_children_get_the_third_request(tmp_path, child)
 def test_identical_code_has_one_edge_but_is_evaluated_and_charged(tmp_path):
     method = search(tmp_path, "\r\ndef score(x):\r\n    return 60\r\n", code(60), code(61), initial=[root(60)])
     method.run()
-    assert [p.request["decision_path"] for p in developed(method)] == ["", "0", "00"]
+    assert [p.request["decision_path"] for p in developed(method)] == ["", "", ""]
     assert method.states[1].alternative is None
     assert method.tasks[1].age == 3 and method.evaluation_calls == 3
     assert method._summary("finished")["v18"]["duplicate_requests"] == 2
@@ -224,7 +226,8 @@ def test_divergence_requires_stagnation_and_budget_for_five_development_calls(tm
     assert method.tasks[2].age == 0
     assert method.last_diverge == 4 and method._divergence_due() is False
     method.run()
-    assert sum(t.age for t in method.tasks.values()) + 1 == method.budget_used
+    setups = sum(p.action in {"Init", "Diverge"} for p in method.programs.values())
+    assert sum(t.age for t in method.tasks.values()) + setups == method.budget_used
     short = search(tmp_path / "short", *(code(60) for _ in range(5)), initial=[root(60)],
                    diverge=True, stagnation_window=1)
     short.run()
@@ -303,7 +306,7 @@ def test_plain_or_single_fenced_code_only():
 @pytest.mark.parametrize("reply", [code(1), "```python\n"+code(1), "```py\n"+code(1)+"```",
                                    ("```python\n"+code(1)+"```").replace("\n", "\r\n")])
 def test_code_envelopes_preserve_the_submitted_source(reply):
-    from traceaad.delivery import DeliveryError
+    from traceaad.v18.delivery import DeliveryError
     assert parse_code(reply, "stop") == code(1)
     with pytest.raises(DeliveryError):
         parse_code(reply, "length")
@@ -350,11 +353,119 @@ def test_divergence_reference_is_not_labelled_as_the_development_parent(tmp_path
 
 @pytest.mark.parametrize("revision", [None, "v18-context-1"])
 def test_resume_rejects_a_different_prompt_revision(tmp_path, revision):
-    from traceaad.storage import write_json
+    from traceaad.v18.storage import write_json
     method = search(tmp_path, code(60), code(70))
     method.step()
     checkpoint = read_json(tmp_path / "resume.json")
     checkpoint["state"]["v18"]["prompt_revision"] = revision
     write_json(tmp_path / "resume.json", checkpoint)
     with pytest.raises(ValueError, match="prompt revision differs"):
+        search(tmp_path, code(60), code(70))
+
+
+def test_duplicate_initialization_is_charged_without_a_new_task(tmp_path):
+    method = search(tmp_path, code(60), code(60), code(70), code(80), roots=2)
+    result = method.run()
+    assert len(method.tasks) == 2
+    assert [t.root_program_id for t in method.tasks.values()] == [1, 3]
+    duplicate = method.programs[2]
+    assert duplicate.valid and duplicate.request["root_admitted"] is False
+    assert duplicate.request["duplicate_of"] == 1
+    assert duplicate.request["origin_task_id"] == 1
+    assert result["model_calls"] == result["evaluation_calls"] == 4
+    assert sum(t.age for t in method.tasks.values()) == 1
+
+
+def test_duplicate_mature_divergence_does_not_reset_development_history(tmp_path):
+    method = search(tmp_path, code(90), code(90), code(90), initial=[root(60)],
+                    budget=10, diverge=True, stagnation_window=1)
+    for _ in range(3):
+        method.step()
+    duplicate = method.programs[4]
+    assert duplicate.action == "Diverge" and duplicate.request["duplicate_of"] == 2
+    assert len(method.tasks) == 1
+    assert method.tasks[1].age == 2 and method.tasks[1].best_curve == [60, 90, 90]
+    assert method.budget_used == method._summary("running")["model_calls"] == 3
+
+
+@pytest.mark.parametrize("lds", [False, True])
+def test_copy_loop_closes_instead_of_spending_the_remaining_budget(tmp_path, lds):
+    method = search(tmp_path, *([code(60)] * 100), initial=[root(60)], budget=100, lds=lds)
+    result = method.run()
+    assert result["budget_used"] == result["model_calls"] == 3
+    assert method.tasks[1].age == method.evaluation_calls == 3
+    assert [p.request["state_depth"] for p in developed(method)] == [0, 0, 0]
+    assert [p.request["no_change_count"] for p in developed(method)] == [1, 2, 3]
+    assert method.tasks[1].status == "EXHAUSTED"
+    assert result["best"]["fitness"] == -60
+
+
+def test_copy_counter_survives_resume_and_moves_to_other_programs(tmp_path):
+    first = search(tmp_path, code(60), code(55), initial=[root(60), root(55)], roots=2, budget=20)
+    first.step()
+    first.step()
+    resumed = search(tmp_path, *([code(60), code(55)] * 10), roots=2, budget=20)
+    result = resumed.run()
+    assert result["budget_used"] == 6 and len(resumed.llm.calls) == 4
+    assert [p.request["no_change_count"] for p in developed(resumed)] == [1, 1, 2, 2, 3, 3]
+    assert [t.age for t in resumed.tasks.values()] == [3, 3]
+    assert all(t.status == "EXHAUSTED" for t in resumed.tasks.values())
+
+
+def test_repeated_nonparent_proposal_is_not_a_fresh_continuation(tmp_path):
+    method = search(tmp_path, code(50), code(50), code(50), code(50),
+                    code(50), code(50), initial=[root(60)], budget=30, lds=False)
+    result = method.run()
+    assert result["budget_used"] == 4
+    assert developed(method)[0].request["no_new_candidate"] is False
+    assert all(p.request["no_new_candidate"] for p in developed(method)[1:])
+    assert sum(s.alternative is not None for s in method.states.values()) == 1
+
+
+def test_exhausted_generation_uses_unanchored_restart_without_clone_tasks(tmp_path):
+    method = search(tmp_path, *([code(60)] * 9), code(75), code(80),
+                    initial=[root(60)], roots=1, budget=11, diverge=True)
+    result = method.run()
+    assert len(method.tasks) == 1
+    assert result["budget_used"] == 9
+    assert [p.action for p in method.programs.values()][1:] == ["Develop"]*3+["Diverge"]*3+["Init"]*3
+    assert all("[Current Program]" not in prompt and "[Reference Program]" not in prompt
+               for prompt, _ in method.llm.calls[-3:])
+    assert result["best"]["fitness"] == -60
+
+
+def test_closed_young_champion_cannot_make_other_tasks_wait_forever(tmp_path):
+    answers = [code(v) for v in (60, 56, 60, 57, 60, 58, 59, 53, 54, 52)]
+    method = search(tmp_path, *answers, initial=[root(60), root(55)], roots=2)
+    result = method.run()
+    assert result["budget_used"] == 10
+    assert method.tasks[1].status == "EXHAUSTED" and method.tasks[1].age == 3
+    assert method.tasks[2].age == 7 and method.tasks[2].status == "ACTIVE"
+    assert method.tasks[2].comparison["reference_quality"] is None
+
+
+@pytest.mark.parametrize("limit", [0, -1, True, 1.5])
+def test_retry_limit_must_be_a_positive_integer(limit):
+    with pytest.raises(ValueError, match="max_no_change"):
+        Config(max_no_change=limit)
+
+
+def test_first_valid_root_keeps_the_existing_initialization_allowance(tmp_path):
+    method = search(tmp_path, "", "", "", code(60), code(60), code(60), code(60),
+                    code(70), budget=8, init_attempt_limit=16)
+    result = method.run()
+    assert result["init_attempts"] == 4 and len(method.tasks) == 1
+    assert result["budget_used"] == 7 and result["best"]["fitness"] == -60
+    assert [method.programs[i].request["no_change_limit"] for i in (1, 2, 3)] == [16, 16, 16]
+    assert [p.request["no_change_count"] for p in developed(method)] == [1, 2, 3]
+
+
+def test_resume_rejects_a_different_mechanism_revision(tmp_path):
+    from traceaad.v18.storage import write_json
+    method = search(tmp_path, code(60), code(70))
+    method.step()
+    checkpoint = read_json(tmp_path / "resume.json")
+    checkpoint["state"]["v18"].pop("mechanism_revision")
+    write_json(tmp_path / "resume.json", checkpoint)
+    with pytest.raises(ValueError, match="mechanism revision differs"):
         search(tmp_path, code(60), code(70))

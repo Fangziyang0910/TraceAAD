@@ -1,53 +1,28 @@
-# 当前搜索实现
+# TraceAAD 实现
 
-本页说明 2026-10-16 核对的工作区实现。**当前方法利用历史材料组织生成提示，并结合训练成绩与直接尝试的改善统计选择起点。** 这些规则的研究收益仍需实验检验。
+当前重新设计的 Base 独立实现位于 [`traceaad_base/`](../traceaad_base/README.md)，入口为 `python -m traceaad_base`。下表中的 `traceaad.base` 保留旧版机制及其兼容入口。
 
-默认参数见 [config.py](config.py)。实际运行以保存的配置与源码为准。
+V14、V15、V16、V17、V18 与 V18.1 的目录各自包含完整实现：配置、搜索、提示、选择、个体、评价、历史、状态、存储，以及本地源码解析、模型客户端和调度客户端。包内模块使用相对导入。整个目录可以复制、改名后独立导入。
 
-## 搜索怎样进行
-
-1. **建立起点。** 默认目标是得到 5 个有效初始程序，初始化最多尝试 16 次，包含修复。首次生成使用任务与模板；后续生成还会看到已有有效起点的代码、设计说明与成绩。
-2. **选择起点与操作。** 从有效程序中选择一个修改起点，称为父代。再选择 Refine、Explore 或 Crossover 操作。
-3. **生成新程序。** 模型读取选出的材料，返回分析、设计说明和完整代码。成功解析后创建一个独立的程序个体，即一次生成所得的程序记录。
-4. **评价与修复。** 检查源码并评价。失败程序在预算允许时最多修复一次。修复产生新的程序个体。
-5. **继续或结束。** 更新状态并重复搜索。结束时固定训练成绩最好的有效个体；同分选择编号较小者，不追加最终重评。
-
-相同源码也作为独立个体评价。回复应是一个 JSON 对象；整个对象外只包了一层 Markdown 代码围栏时，去掉围栏后解析，因为本机 GGUF 端点不执行 JSON 模式（10月28日起）。解析失败计入生成次数，但不创建程序个体。Repair 只返回分析与代码，设计说明沿用被修复程序的记录。
-
-## 每种操作使用什么信息
-
-各操作都收到任务、接口与成绩含义。下表说明额外材料，数量为当前默认值。
-
-| 操作 | 目标 | 额外材料 |
+| Python 包 | 机制与使用说明 | 实验入口 |
 | --- | --- | --- |
-| Refine | 改进现有决策过程中的计算。 | 当前代码、最近最多 8 步形成路径、最近最多 8 次直接生成的程序记录。 |
-| Explore | 尝试不同计算来决定输出。 | 当前代码、最近最多 8 次直接生成的程序记录、最近最多 8 次最好成绩刷新记录。 |
-| Crossover | 交叉：组合当前程序与参考程序中的有用计算。 | 双方代码、双方最近各最多 4 步形成路径、当前程序最近最多 8 次直接生成的程序记录。 |
-| Repair | 修正已报告的错误或超时。 | 失败代码、原设计说明、错误或耗时反馈。 |
+| `traceaad.base` | [Base](base/README.md) | [基础入口](../experiments/traceaad/run.py) |
+| `traceaad.v14` | [V14](v14/README.md) | [V14 入口](../experiments/traceaad_v14/run.py) |
+| `traceaad.v15` | [V15](v15/README.md) | [V15 入口](../experiments/traceaad_v15/run.py) |
+| `traceaad.v16` | [V16](v16/README.md) | [V16 入口](../experiments/traceaad_v16/run.py) |
+| `traceaad.v17` | [V17](v17/README.md) | [V17 入口](../experiments/traceaad_v17/run.py) |
+| `traceaad.v18` | [V18](v18/README.md) | [V18 入口](../experiments/traceaad_v18/run.py) |
+| `traceaad.v18_1` | [V18.1](v18_1/README.md) | [V18.1 入口](../experiments/traceaad_v18_1/run.py) |
 
-形成路径包括改动说明、代码差异与评价结果。直接生成的程序记录包括设计与结果；需要修复时，也显示修复结果。
+六个机制包统一导出 `Config`、`Program`、`TraceAAD`、`Evaluation`、`LLM` 和 `OpenAIAPI`，并保留各版原有类名。运行需要 Python 3.14 及 NumPy、OpenAI、Requests 等第三方依赖。调用方传入任务评价对象和模型客户端；也可使用包内导出的接口实现它们。
 
-材料由 [prompts.py](prompts.py) 选取和组织。[history.py](history.py) 提供路径、代码差异和结果表述等辅助函数。保存的全部轨迹与实际展示的材料应分别核对。
+```python
+from traceaad.v17 import Config, TraceAAD
 
-## 怎样分配生成机会
+search = TraceAAD(evaluation=task, llm=client, run_dir="runs/example", config=Config())
+summary = search.run()
+```
 
-| 选择 | 当前规则 |
-| --- | --- |
-| 父代 | 权重结合训练成绩与平滑后的直接改善比例，再按权重抽样。 |
-| 操作 | 默认权重：Refine 0.45、Explore 0.30、Crossover 0.25。 |
-| 交叉参考 | 排除父代，从成绩不差于全部有效程序成绩中位数的程序中均匀抽样。没有合适参考时改用 Refine。 |
+各版的 `experiments/traceaad_v*/` 自带单路运行、批次启动、环境配置、模型路由和存储工具。标准实验从 `benchmarks` 读取任务及数据；机制包的任务对象也可由其他调用方提供。
 
-直接改善统计只计入成功解析的普通生成个体。修复结果归入对应的原始尝试；解析失败不进入这个统计。具体计算见 [selection.py](selection.py)。这些统计描述已发生的局部响应，不能直接当作长期搜索收益。
-
-## 源码入口
-
-| 文件 | 负责什么 |
-| --- | --- |
-| [traceaad.py](traceaad.py) | 搜索、生成、修复与最终选择。 |
-| [program.py](program.py)、[delivery.py](delivery.py) | 程序记录、回复解析、源码检查与评价状态。 |
-| [prompts.py](prompts.py)、[history.py](history.py) | 选取材料、组织提示与处理历史。 |
-| [selection.py](selection.py) | 分配生成机会与选择交叉参考。 |
-| [evaluation.py](evaluation.py)、[instance_evaluation.py](instance_evaluation.py)、[probe.py](probe.py) | 隔离执行、评价与计时。 |
-| [state.py](state.py)、[storage.py](storage.py) | 预算、随机状态、事件、源码与恢复点。 |
-
-运行见[实验入口](../experiments/README.md)，保存格式见[结果说明](../experiments/infra/SEARCH_FORMAT.md)。历史运行使用对应源码复查或恢复。
+Base 的实现位于 `base/`。`from traceaad import Config, Program, TraceAAD` 保留为指向 Base 的兼容入口。

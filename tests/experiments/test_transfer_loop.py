@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from experiments.transfer import loop
-from traceaad.storage import read_json
+from traceaad.base.storage import read_json
 
 
 def test_reply_only_unwraps_one_complete_json_fence():

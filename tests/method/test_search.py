@@ -9,9 +9,9 @@ from core import llm as core_llm
 from core.scheduling import SchedulerError
 from tests.support import TinyEvaluation, TokenLLM, response
 from traceaad import Config, TraceAAD
-from traceaad.delivery import DeliveryError, optional_field, parse_json_response
-from traceaad.selection import choose_reference, experience, temperature, weights
-from traceaad.storage import append_jsonl, rows
+from traceaad.base.delivery import DeliveryError, optional_field, parse_json_response
+from traceaad.base.selection import choose_reference, experience, temperature, weights
+from traceaad.base.storage import append_jsonl, rows
 
 
 def search(directory, *answers, **options):

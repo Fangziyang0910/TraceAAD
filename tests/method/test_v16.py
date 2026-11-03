@@ -4,9 +4,8 @@ twice the checkpoint; the edited lineage is shown by changes, and a Crossover re
 import json
 
 from tests.support import TinyEvaluation, TokenLLM, response
-from traceaad import Program
 from traceaad.v15 import Config as V15Config, TraceAADV15
-from traceaad.v16 import Config, TraceAADV16
+from traceaad.v16 import Config, Program, TraceAADV16
 from traceaad.v16.prompts import PromptBuilderV16
 from traceaad.v16.search import projected
 

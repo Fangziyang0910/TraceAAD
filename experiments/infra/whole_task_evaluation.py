@@ -6,7 +6,7 @@ import time
 
 from core import SecureEvaluator
 from core.evaluate import EVALUATION_SEED
-from traceaad.evaluation import SeededEvaluation, clean_traceback, failing_line
+from .evaluation import SeededEvaluation, clean_traceback, failing_line
 
 
 class WholeTaskEvaluator:

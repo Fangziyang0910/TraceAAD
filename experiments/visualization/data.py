@@ -10,7 +10,7 @@ import time
 from benchmarks.tasks import FIXED_TASKS, SCALES, TEST_SCALES
 from experiments.infra.result_storage import heldout_identity, selected_program
 from experiments.infra.timing import batch_timing, search_timing
-from traceaad.storage import JOURNAL_NAME, read_json, read_object
+from experiments.infra.storage import JOURNAL_NAME, read_json, read_object
 from .history import TrainingHistory, finite
 
 DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parents[2] / "experiments_result"

@@ -35,8 +35,15 @@ class DevelopmentTask:
     comparison: dict = field(default_factory=dict)
 
 
-def next_state(task, states, config):
+def has_frontier(task, states, config, blocked=()):
+    return any(s.task_id == task.id and not s.expanded and s.program_id not in blocked
+               and (config.lds or "1" not in s.address) for s in states.values())
+
+
+def next_state(task, states, config, blocked=()):
     """Resume the exact-discrepancy DFS; returning a state does not expand it."""
+    if not has_frontier(task, states, config, blocked):
+        return None
     while True:
         while task.stack:
             state_id, remaining = task.stack.pop()
@@ -45,10 +52,10 @@ def next_state(task, states, config):
             if remaining < 0 or remaining > task.depth_limit - depth - 1:
                 continue
             if not state.expanded:
+                if state.program_id in blocked:
+                    continue
                 task.stack.append((state_id, remaining))
                 return state
-            if depth == task.depth_limit - 1:
-                continue
             successors = []
             if state.preferred is not None:
                 successors.append((state.preferred, remaining))

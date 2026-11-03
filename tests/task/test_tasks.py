@@ -1,5 +1,6 @@
 """Benchmark data, solution validity and true objective values."""
 
+import ast
 import re
 
 import numpy as np
@@ -11,9 +12,30 @@ from benchmarks.graph_colouring.evaluation import solve as color
 from benchmarks.jssp_construct.evaluation import solve as schedule
 from benchmarks.jssp_construct.evaluation import validate_schedule
 from benchmarks.shared.seeded_data import generate_dataset
-from benchmarks.tasks import CLASSES, CO_TASKS, FIXED_TASKS, training_task
+from benchmarks.tasks import ALL_TASKS, CLASSES, CO_TASKS, FIXED_TASKS, training_task
 from benchmarks.tsp_construct.evaluation import TSPEvaluation
 from core.evaluate import InvalidEvaluationResult
+
+
+@pytest.mark.parametrize("task", ALL_TASKS)
+def test_initial_program_produces_valid_results_in_the_task_solver(task):
+    if task in FIXED_TASKS:
+        options = {"settings": {"iterations": 1, "local_passes": 1}} if task == "fssp_gls" else {}
+        evaluation = CLASSES[task](limit=1, **options)
+    elif task in {"cvrp_aco", "op_aco"}:
+        evaluation = CLASSES[task](n_ants=2, n_iterations=1, n_workers=1)
+        evaluation._datasets = evaluation._datasets[:1]
+        evaluation.n_instance = 1
+    elif task == "online_bin_packing":
+        evaluation = CLASSES[task](n_instances=1, n_items=20, capacity=100)
+    else:
+        evaluation = CLASSES[task](n_instance=1, problem_size=10)
+    source = str(evaluation.template_program)
+    function = next(node.name for node in ast.parse(source).body if isinstance(node, ast.FunctionDef))
+    namespace = {}
+    exec(source, namespace)
+    result = evaluation.evaluate_program(source, namespace[function])
+    assert result is not None and np.isfinite(result)
 
 
 @pytest.mark.parametrize("task", FIXED_TASKS)

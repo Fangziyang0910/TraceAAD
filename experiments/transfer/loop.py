@@ -11,14 +11,14 @@ import random
 from benchmarks.tasks import heldout_task, training_task
 import core.llm as llm_api
 from experiments.infra.base import BACKENDS, build_llm_client
-from traceaad.config import Config
-from traceaad.delivery import validate_source
-from traceaad.history import code_diff
-from traceaad.instance_evaluation import InstanceProgramEvaluator
-from traceaad.program import Program
-from traceaad.prompts import PromptBuilder
-from traceaad.selection import better, choose_reference, sample_parent
-from traceaad.storage import read_json, write_json
+from traceaad.base.config import Config
+from traceaad.base.delivery import validate_source
+from traceaad.base.history import code_diff
+from traceaad.base.instance_evaluation import InstanceProgramEvaluator
+from traceaad.base.program import Program
+from traceaad.base.prompts import PromptBuilder
+from traceaad.base.selection import better, choose_reference, sample_parent
+from experiments.infra.storage import read_json, write_json
 from .run import canonical, digest
 
 OUTPUT_LIMIT = 8192

@@ -19,7 +19,7 @@ from experiments.infra.base import (
     resolve_backend,
     set_random_seed,
 )
-from traceaad.storage import write_json
+from experiments.infra.storage import write_json
 from experiments.infra.runner import baseline_run_config, run_baseline_experiment
 
 # Paper Circle Packing table used generations=150. Fair comparison across

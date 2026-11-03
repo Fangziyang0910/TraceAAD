@@ -1,46 +1,13 @@
-"""V17: V16's context with V15's same-age comparison and with component imports.
-
-Allocation. By default (progress_rule False, projection False) a lineage other
-than the champion stays active while, at its last checkpoint, its best score is
-not worse than the champion lineage's best after the same number of attempts
-(V15). The lineage with the fewest attempts among the active ones receives the
-attempt, otherwise the champion; a stalled search diverges first (V15).
-
-Components and imports (imports). A component is a change that set a new best
-of its lineage, made by Refine, Explore, Crossover, Mature or Import from a
-valid program of the lineage, that changed at most COMPONENT_LINES lines and
-gained at least the median relative gain of all such changes. When Crossover is
-sampled and another lineage has a component this lineage has not imported, the
-attempt imports the one whose program scores best. The prompt gives its Change
-and diff but not the program it came from (prompts.PromptBuilderV17).
-Otherwise the attempt is V16's Crossover with a reference from another lineage.
-
-Progress rule (progress_rule True, the first V17 batches). A lineage below the
-first checkpoint, 1 + mature_steps attempts, is developed first, the one with
-the fewest attempts first; the champion lineage is no exception. Otherwise the
-champion receives the attempt unless exploration is open: since the last new
-best, the attempts outside the champion lineage are fewer than the champion's
-attempts minus stagnation_window. An exploration attempt starts a new lineage
-by Diverge when V15 would: after stagnation_window attempts without a new best
-since the last new best or the last Diverge. Otherwise it goes to an active
-lineage: one whose attempts since its own last improvement are fewer than
-max(first checkpoint, half its attempts). The lineage that improved most
-recently goes first, then the one with fewer attempts, then the older one.
-Without an active lineage, a paused lineage is resumed by an import when a
-lineage scoring better has made a new component since its last attempt, the
-paused lineage scoring best first; otherwise a new lineage starts by Diverge.
-
-Everything is derived from the program records. With imports False, the search
-is V16 with the configured projection."""
+"""Matched-age lineage competition with evidence-backed component imports."""
 
 from collections import Counter
 import difflib
 import statistics
 
-from traceaad.selection import better, choose_reference, sample_parent
-from traceaad.v14 import novelty
-from traceaad.v15.search import best_score
-from traceaad.v16.search import TraceAADV16
+from .selection import better, choose_reference, sample_parent
+from . import novelty
+from ._allocation import best_score
+from ._projection import ProjectedSearch
 from .config import Config
 from .prompts import PromptBuilderV17, step_of
 
@@ -57,7 +24,7 @@ def stall(attempts):
     return len(attempts) - at
 
 
-class TraceAADV17(TraceAADV16):
+class TraceAADV17(ProjectedSearch):
     METHOD = "traceaad_v17"
 
     def __init__(self, *, config=None, **kwargs):
@@ -203,7 +170,7 @@ class TraceAADV17(TraceAADV16):
         return self._create_program(request, parent=parent, reference=component)
 
     def _step(self, eligible, sampled=None, **record):
-        """TraceAAD._step, except that a sampled Crossover imports an untried component when there is one."""
+        """SearchLoop._step, except that a sampled Crossover imports an untried component when there is one."""
         if not self.config.imports:
             return super()._step(eligible, sampled, **record)
         parent, selection = sample_parent(eligible, self.programs, self.progress.rng["parent"])

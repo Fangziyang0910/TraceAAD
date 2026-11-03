@@ -132,7 +132,7 @@ def test_mcts_invalid_replies_advance_budget_without_aborting(tmp_path, bad):
     from baselines.mcts_ahd import MCTS_AHD, MAProfiler
     from experiments.infra.resume_baseline import history
     from tests.support import TinyEvaluation
-    from traceaad.storage import read_json, rows, write_json
+    from traceaad.base.storage import read_json, rows, write_json
 
     write_json(tmp_path / 'run_config.json', {'method': 'mcts_ahd', 'task': 'toy', 'budget': 23})
     good = '{Return one}\n```python\ndef score(x):\n    return 1\n```'

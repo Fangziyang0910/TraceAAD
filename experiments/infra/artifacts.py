@@ -1,7 +1,7 @@
 """Scored programs and frozen winners from canonical result files."""
 
 from pathlib import Path
-from traceaad.storage import committed_rows, read_json
+from .storage import committed_rows, read_json
 from experiments.infra.result_storage import Programs, selected_program
 
 

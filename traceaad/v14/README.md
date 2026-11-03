@@ -1,12 +1,14 @@
 # TraceAAD V14
 
-V14 针对[适应度引导下的保守化](../../docs/论文：TraceAAD.md)：LLM 算子看到的内容由选择决定，生成侧与选择侧耦合，修改回到已有内容甚至回到父代。V14 在基础 TraceAAD 循环（初始化 → Refine／Explore／Crossover → 一次修复）上加入三个机制。每个机制只对应一个失效点。它不继承 V13／V13.1 的变换规格与重放。
+研究问题与机制设计见[独立方法说明](../../docs/机制设计/V14.md)。
 
-| 失效点 | 机制 | 来源 |
+V14 通过回访拒绝、无代码发散与定额发育，减少重复评价和代码锚定，并为新设计保留初期开发机会。搜索使用初始化、Refine、Explore、Crossover 与至多一次修复。
+
+| 失效点 | 机制 | 作用 |
 | --- | --- | --- |
-| 回复的代码与已评价程序相同，评价被浪费，已接受设计的选择权重被抬高 | 回访拒绝 | 禁忌搜索 |
-| 上下文中的父代代码锚定生成，长期没有新最优 | 停滞后发散：只给设计地图，不给代码 | 新颖性搜索、重启策略 |
-| 新设计初始分数低，进入普通父代选择后很快被淘汰 | 发育期：先改进几次再参与竞争 | NEAT 物种保护、ALPS 年龄分层 |
+| 回复与已评价程序等价，重复评价缺少新信息 | 回访拒绝 | 跳过重复评价，并反馈实际重复 |
+| 上下文中的代码锚定生成，长期没有新最优 | 无代码发散 | 用设计地图引导新的决策计算 |
+| 新设计初始成绩较差，难以获得后续机会 | 定额发育 | 先完成一段修改，再参与普通父代竞争 |
 
 ## 机制
 
@@ -29,3 +31,16 @@ V14 针对[适应度引导下的保守化](../../docs/论文：TraceAAD.md)：LL
   --backends server3 --eval-workers 8 \
   --scheduler-socket /tmp/traceaad-1003/scheduler.sock
 ```
+
+## Python 包入口
+
+本目录自带本版的配置、搜索、提示、选择、个体、评价、历史、状态、存储、执行限制与 `runtime/` 运行实现。公开入口为 `Config`、`Program`、`TraceAAD`、`Evaluation`、`LLM`、`OpenAIAPI`，原有类名 `TraceAADV14` 也可使用。任务评价对象与模型客户端由调用方传入；本包提供源码解析、模型请求、隔离执行和调度客户端。运行需要 Python 3.14 与 NumPy、OpenAI、Requests 等第三方依赖。
+
+```python
+from traceaad.v14 import Config, TraceAAD
+
+search = TraceAAD(evaluation=task, llm=client, run_dir="runs/example", config=Config())
+summary = search.run()
+```
+
+`loop.py` 负责生成、评价、修复与检查点，`search.py` 和包内辅助模块组织本机制。各模块使用包内相对导入；复制整个目录并改名后可作为独立 Python 包导入。实验入口位于 `experiments/traceaad_v14/`，自带运行准备、模型路由、批次启动与存储工具；标准实验从 `benchmarks` 读取任务和数据。

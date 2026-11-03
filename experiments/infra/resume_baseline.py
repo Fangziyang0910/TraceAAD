@@ -17,7 +17,7 @@ from baselines.shared.observability import close_llm, shutdown_executor
 from core.code import function_from_source
 from baselines.shared.checkpoint import FIELDS, read_checkpoint, restore_checkpoint
 from experiments.infra.runner import baseline_run_lock
-from traceaad.storage import append_jsonl, read_json, rows, write_json
+from .storage import append_jsonl, read_json, rows, write_json
 from experiments.infra.result_storage import Programs
 
 METHODS = ("eoh", "reevo", "funsearch", "mcts_ahd", "calm", "pathwise", "shinka_evo", "deltaevolve",

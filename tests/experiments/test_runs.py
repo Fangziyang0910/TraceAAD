@@ -9,7 +9,7 @@ import pytest
 from baselines.shared.observability import shutdown_executor
 from benchmarks.tasks import CLASSES, CO_TASKS, FUNCTION_LIMITS, INSTANCE_LIMITS, training_task
 from experiments.infra import base, runner
-from experiments.infra.search_run import build_parser
+from experiments.traceaad.run import build_parser
 from tests.support import TinyEvaluation, TokenLLM, response
 from traceaad import Config, TraceAAD
 
@@ -63,7 +63,14 @@ def test_baseline_entry_accepts_and_evaluates_a_complete_solver(name, tmp_path, 
         assert sampling and all(options == expected for options in sampling)
         outcome = method._evaluator.evaluate_program_with_details(task.TEMPLATE)
         assert outcome.failure_kind is None, outcome.error
-        assert outcome.result == task._rows[0]["reference"]
+        from benchmarks.jssp_construct.evaluation import validate_schedule
+
+        namespace = {}
+        exec(task.TEMPLATE, namespace)
+        instance = task._instances[0]
+        times, machines = instance["processing_times"], instance["machine_order"]
+        starts = namespace[task.FUNCTION_NAME](times.copy(), machines.copy())
+        assert outcome.result == validate_schedule(times, machines, starts)
         record = json.loads(log.read_text())
         assert record["function_seconds_limit"] == FUNCTION_LIMITS["jssp_construct"]
         assert record["timeout_seconds"] == INSTANCE_LIMITS["jssp_construct"]
@@ -119,7 +126,7 @@ def test_baseline_queue_skips_existing_runs_and_does_not_relaunch_finished_sessi
     tmp_path, monkeypatch
 ):
     from experiments.infra import launcher, local_queue
-    from traceaad.storage import write_json
+    from traceaad.base.storage import write_json
 
     monkeypatch.setattr(local_queue, "RESULTS_ROOT", tmp_path)
     args = [
@@ -156,7 +163,7 @@ def test_baseline_queue_skips_existing_runs_and_does_not_relaunch_finished_sessi
 
 
 def test_batch_plan_uses_actual_model_settings_and_preserves_repeat_seeds(capsys):
-    from experiments.infra.search_host_launch import main
+    from experiments.traceaad.launch_host import main
 
     main(
         [

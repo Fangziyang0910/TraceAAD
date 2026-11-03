@@ -13,7 +13,7 @@ import time
 
 from benchmarks.tasks import PRIMARY_SPLITS, SCALES, SPLITS, scale_of_split
 from experiments.infra.result_storage import heldout_identity
-from traceaad.storage import committed_size, read_json as result_json, read_object
+from .storage import committed_size, read_json as result_json, read_object
 from experiments.infra.result_storage import selected_program
 from experiments.infra.timing import batch_timing, search_timing
 
@@ -96,7 +96,8 @@ def run_status(root, row, budget, now):
     timing_row = {"budget_used": used or 0, "budget": summary.get("budget", budget),
                   "status": "running" if status == "recorded" else status,
                   "updated_at": snapshot["completed_at"]}
-    timing = search_timing(timing_row, summary, snapshot, unit="候选", now=now)
+    unit = "评价" if summary.get("budget_basis") == "evaluate_calls" else "候选"
+    timing = search_timing(timing_row, summary, snapshot, unit=unit, now=now)
     if timing["state"] == "stale" and status == "recorded":
         status = "stale"
     best = selected_program(directory)

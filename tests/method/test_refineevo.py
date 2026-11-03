@@ -14,7 +14,7 @@ from core import Evaluation
 from core.code import parse_program
 from experiments.infra.resume_baseline import recover
 from tests.support import TokenLLM
-from traceaad.storage import read_json, rows, write_json
+from traceaad.base.storage import read_json, rows, write_json
 
 
 TEMPLATE = 'def solve(x: float) -> float:\n    """Return a value."""\n    return 9.0\n'
@@ -330,7 +330,7 @@ def test_resume_during_initialization_continues_with_the_next_slot(tmp_path):
     "tsp_construct", "cvrp_aco", "fssp_gls", "graph_colouring", "jssp_construct", "op_aco"])
 def test_real_solver_entry_final_selection_monitor_and_config_rebuild(tmp_path, monkeypatch, task_name):
     from benchmarks.tasks import training_task
-    from traceaad.instance_evaluation import _instance_view
+    from traceaad.base.instance_evaluation import _instance_view
     from experiments.refineevo import run
     from experiments.infra import base
     from experiments.infra.resume_baseline import build, close_recovery_method

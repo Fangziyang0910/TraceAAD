@@ -1,13 +1,7 @@
-"""V15 prompts. With information exposure, only the program being edited is shown as code.
+"""Matched-investment lineage competition and controlled information exposure. Generation prompts."""
 
-Formation steps keep their Design and outcome but not their code diff; a
-Crossover reference and earlier initial algorithms appear by Design and score.
-The reply writes its Design after its code, so the Design describes the code
-that was written rather than a plan.
-"""
-
-from traceaad.prompts import idea_view
-from traceaad.v14.prompts import PromptBuilderV14
+from ._prompts import idea_view
+from ._divergence_prompts import DivergencePrompts
 
 RECORDS_INFO = "Scores and failures are evaluation results. Design is a description of a program's code, written when the program was generated. Code is shown only for the algorithm you are asked to change; other programs are described by their Design and evaluated outcome. A repaired program inherits the failed program's Design."
 FORMATION_INTRO_INFO = "The steps that produced the current algorithm, oldest first. Each step gives its evaluated outcome and the Design of the program it produced. If a step required repair, the first failure is stated separately."
@@ -16,7 +10,7 @@ ANOTHER_INITIAL_INFO = "[Your Task: Design a Better Algorithm]\nUse the designs 
 DESIGN_INFO = "describe the code you returned: its main computations, naming the quantities, formulas and parameter values that decide its output, and, when modifying an algorithm, the main change; at most 200 words"
 
 
-class PromptBuilderV15(PromptBuilderV14):
+class PromptBuilderV15(DivergencePrompts):
     def __init__(self, *args, info=True):
         super().__init__(*args)
         self.info = info

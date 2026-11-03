@@ -4,12 +4,12 @@ import ast
 import hashlib
 import re
 
-from traceaad.delivery import DeliveryError, signature, target
-from traceaad.history import code_diff, path
-from traceaad.prompts import corrected_description, short_error, SCORE_MEANINGS
+from .delivery import DeliveryError, signature, target
+from .history import code_diff, path
+from ._prompts import corrected_description, short_error, SCORE_MEANINGS
 
 
-PROMPT_REVISION = "v18-context-2"
+PROMPT_REVISION = "v18-context-3"
 OUTPUT = (
     "Return only the complete, self-contained Python source, including imports and helpers. "
     "Use the required function signature. Write no Markdown fences, explanations, comments or docstrings."
@@ -91,7 +91,12 @@ class PromptBuilderV18:
             while previous is not None and len(attempts) < self.config.attempts_shown:
                 prior = self.states[previous]
                 result = self.programs[prior.result_id]
-                attempts.append((result.id, f"Attempt {prior.attempt_count + 1}: {self.outcome(parent, result)}"))
+                feedback = f"Attempt {prior.attempt_count + 1}: {self.outcome(parent, result)}"
+                if result.valid and normalized_source(parent.code) != normalized_source(result.code):
+                    delta = code_diff(ast.unparse(ast.parse(parent.code)), ast.unparse(ast.parse(result.code)))
+                    if delta:
+                        feedback += f"\nUnadopted trial change:\n```diff\n{delta}\n```"
+                attempts.append((result.id, feedback))
                 previous = prior.retry_from
             attempts.reverse()
         if action == "Init":
@@ -126,8 +131,9 @@ class PromptBuilderV18:
             if attempts:
                 sections.append(
                     "[Previous Attempts at This Position]\nThese children were generated from the current program "
-                    "but were not adopted on this continuation path. Their implementations are not shown. "
-                    "Each score or error belongs to that child; the current program remains valid.\n"
+                    "but were not adopted on this continuation path. Any trial diffs below describe unadopted changes, "
+                    "not accepted development history. Use them to avoid repeating the same unsuccessful edit. "
+                    "Each score or error belongs to that child; the current program remains valid and is shown in full below.\n"
                     + "\n".join(a[1] for a in attempts))
             if parent is not None:
                 label = "Reference" if action == "Diverge" else "Current"
@@ -151,7 +157,7 @@ class PromptBuilderV18:
             "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
             "input_tokens": tokens,
             "prompt_program_ids": list(dict.fromkeys(
-                ([parent.id] if parent else []) + [i for h in history for i in (h[1], h[0])]
+                ([parent.id] if parent else []) + [i for h in history for i in (h[1], h[0])] + [a[0] for a in attempts]
             )),
             "history_edge_ids": [h[0] for h in history],
             "local_attempt_ids": [a[0] for a in attempts],

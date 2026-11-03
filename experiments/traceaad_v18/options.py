@@ -5,6 +5,7 @@ from traceaad.v18 import Config
 
 FIELDS = {
     "roots": int, "init_attempt_limit": int, "history_depth": int, "attempts_shown": int,
+    "max_no_change": int,
     "first_checkpoint": int, "checkpoint_multiplier": int, "initial_depth_limit": int,
     "depth_increment": int, "stagnation_window": int, "context_tokens": int,
     "same_age": bool, "lds": bool, "early_first": bool, "diverge": bool,

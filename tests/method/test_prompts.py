@@ -5,7 +5,7 @@ import pytest
 from benchmarks.tasks import CO_TASKS, training_task
 from tests.support import TinyEvaluation, TokenLLM, response
 from traceaad import Config, Program, TraceAAD
-from traceaad.prompts import OP_OBJECTIVE, PromptBuilder
+from traceaad.base.prompts import OP_OBJECTIVE, PromptBuilder
 
 
 @pytest.mark.parametrize("action", ["Refine", "Explore", "Crossover"])
