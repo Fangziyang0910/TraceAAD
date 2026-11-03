@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "traceaad-v19-1"
+version = "0.1.0"
+description = "Independent implementation of trajectory-guided automatic algorithm design"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+traceaad-v19-1 = "traceaad_v19_1.cli:main"
+
+[tool.setuptools]
+packages = ["traceaad_v19_1"]
+package-dir = {traceaad_v19_1 = "."}
