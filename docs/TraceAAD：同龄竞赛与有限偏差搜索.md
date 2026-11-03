@@ -4,7 +4,7 @@
 
 **英文工作标题：** TraceAAD: Age-Matched Racing with Limited-Discrepancy Development Search
 
-**文档版本：** 机制设计稿 v1.0
+**文档版本：** 机制设计稿 v1.1（重复起点准入与有限重试）
 
 **整理日期：** 2026 年 10 月 29 日
 
@@ -23,6 +23,8 @@ TraceAAD 在外层通过同龄竞赛分配开发机会，在内层通过有限�
 本稿以用户提供的详细设计 [E2] 为默认规格，并结合前轮讨论补充第 1.3 节的统计单位与证据边界，以及第 13.3 节的对照解释；这些补充不改变下文的默认调度规则。
 
 本文给出一套可直接据此实现的默认规则。真实模型上的搜索收益由正式实验评价；默认参数是起始配置。
+
+v1.1 根据高复制率诊断补充两个条件：已有有效源码不能再次建立零龄任务；同一生成操作连续三次未产生有效新候选后关闭。其余同龄检查点、持平规则及 LDS 深度调度保留。实现与记录字段见 [V18 README](../traceaad/v18/README.md)。
 
 ## 1. 研究问题与核心认识
 
@@ -181,11 +183,13 @@ B 有效且与 A 源码不同，就建立两种接续：
 
 完全相同的源码只保留一条接续边，避免为同一个起点建立两条内容相同的选择。重复请求本身仍然计入预算，并写入日志。
 
+重试保持原决策地址，不增加接续深度。按操作类型及父代源码哈希记录连续无新候选次数，计数跨状态、任务及恢复保存。无效回复、原样复制父代、重复生成该父代此前已有的有效子代，都使计数增加；有效且此前未从该父代生成的不同源码使计数清零。默认三次后关闭这一生成操作，转向其他可用接续；关闭不表示算法没有潜力。
+
 ## 5. 内层机制：有限偏差开发搜索
 
 ### 5.1 深度与偏差次数
 
-深度是当前状态之前经历的生成决策层数。根状态深度为 0。即使某一步继续使用相同父代，新的生成状态也进入下一层。
+深度是当前状态之前经历的有效接续决策层数。根状态深度为 0。产生有效新子代后，沿子代或返回父代均进入下一层；无有效新候选的重试保留原地址和深度。
 
 偏差次数是从根到该状态的接续路径上，选择替代边的次数。
 
@@ -228,7 +232,7 @@ H = 4：已有状态跳过，新增 000、100、010、001、11、110、101、011
 
 ### 5.4 在实际树上遍历
 
-遍历器直接检查已经存在的接续边。无效候选只有首选边，遍历器直接跳过不存在的替代边。
+遍历器直接检查已经存在的接续边。无新候选时只有未超上限的原层重试边；到达上限后关闭该生成操作。没有可用未展开状态时返回空值，不无限增加窗口。
 
 实现时使用显式栈，保留“当前节点、深度、剩余偏差次数”。不枚举所有理论上的二进制序列，也不为不存在的分支创建占位调用。
 
@@ -237,6 +241,8 @@ H = 4：已有状态跳过，新增 000、100、010、001、11、110、101、011
 ### 5.5 早期替代选择会获得实际调用
 
 当首次候选有效且与父代源码不同时，H＝2 的调度会展开根状态、首选状态和替代状态。因此，在该任务获得前三次开发请求时，第一次接续的两个方向均已得到后续生成机会。
+
+上述三次调用描述适用于后续也产生有效新候选的情况。v1.1 的原层重试消耗真实请求，可能使替代接续顺延；连续无新候选的上限限制这种顺延。
 
 首次候选更好时，第三次调用从原父代重新生成。首次候选更差时，第三次调用从该较差候选继续生成。这是调度规则直接带来的行为，见第 10 节示例。
 
@@ -261,10 +267,13 @@ H = 4：已有状态跳过，新增 000、100、010、001、11、110、101、011
 | ACTIVE | 最近同龄检查点不差于参考 | 是 |
 | WAIT_REFERENCE | 已到检查点，但冠军尚未达到该年龄 | 暂时等待 |
 | PAUSED | 最近同龄检查点落后于参考 | 暂停 |
+| EXHAUSTED | 当前生成规则下没有可用未展开状态 | 关闭调用，保留成果 |
 
 候选任务中，优先选择年龄最小者；同龄时按任务创建顺序选择。冠军也参加这一排序。只有冠军可继续时，就将下一次机会给冠军任务。
 
 WAIT_REFERENCE 时读取的参考值尚不存在，因此先由其他符合条件的任务推进。冠军一旦达到该年龄，再进行真实的同龄比较。
+
+若冠军已为 EXHAUSTED，它不能再补齐缺失的同龄快照；此时相应任务暂缓比较并保持 ACTIVE，参考值记录为空，不以冠军的其他年龄成绩代替。
 
 ### 6.3 冠军更换与任务恢复
 
@@ -278,15 +287,17 @@ WAIT_REFERENCE 时读取的参考值尚不存在，因此先由其他符合条�
 
 因此，本版的曲线统计与价值定义一致：比较具体开发搜索的产出，调度该搜索内部的替代路径。
 
-建立新起点的请求单列为全局建起点成本。若起点有效，创建年龄为 0 的新任务，并以起点成绩作为其初始质量。
+建立新起点的请求单列为全局建起点成本。若起点有效且源码未在本路有效档案中出现，创建年龄为0的新任务，并以起点成绩作为初始质量。重复源码仍评价、记录并关联到已有来源任务，不重置已有年龄或历史曲线。
 
 ## 7. 完整搜索流程
 
 ### 7.1 初始化
 
-默认目标为 5 个有效起点，最多发出 16 次初始化请求。每次请求使用任务描述、函数接口、输入输出约束和评价目标，生成完整算法函数。
+默认目标为5个不同源码的有效起点，最多发出16次初始化请求。每次请求使用任务描述、函数接口、输入输出约束和评价目标，生成完整算法函数。
 
-每个有效起点创建一个开发任务。初始化失败计入全局请求预算。达到有效起点数、初始化请求上限或总预算后结束初始化；已有有效起点即可进入开发。全部初始化失败时，返回明确的初始化失败状态与日志。
+每个不同的有效起点创建一个开发任务。失败或重复仍计入全局请求预算；连续三次没有新起点则关闭此 Init 入口。达到目标数、初始化上限、总预算或入口关闭时结束初始化；已有有效起点即可进入开发。没有有效起点时返回明确失败状态。
+
+在取得首个有效起点之前，继续使用原16次初始化额度。三次不同的无效程序不等同于复制已有起点；只有取得可开发对象之后，才应用三次无新候选限制。
 
 调用方可以提供已评价的初始程序作为起点。其获得方式及评价成本在运行配置中单列；比较实验采用相同的起点条件。
 
@@ -314,13 +325,15 @@ WAIT_REFERENCE 时读取的参考值尚不存在，因此先由其他符合条�
 
 默认停滞窗口为 40 次全局请求。距离最近一次全局严格改进和最近一次发散请求均至少 40 次，且剩余请求预算不少于 6 时，发起一次 Diverge。
 
-Diverge 的输入为任务、接口及当前最好完整程序，要求尝试不同的计算方式并返回完整函数。有效结果创建新的开发任务；无效结果只记录成本，并从本次请求重新计算发散间隔。
+Diverge 的输入为任务、接口及当前最好完整程序，要求尝试不同计算并返回完整函数。只有有效且未见的源码创建新任务。无效或重复结果仍计费；该参考源码对应的 Diverge 连续三次无新起点后关闭。参考对应的 Diverge 已关闭时，可使用不提供父代的 Init；新起点请求均重新计算停滞间隔。
+
+没有合格开发任务时，可以提前触发尚未关闭的新起点入口，不等待40次间隔。关闭发散的消融不启用补充建根。所有开发与建根入口均不可用时提前冻结，记录 `no_eligible_generation` 及实际请求数。
 
 新任务年龄从 0 开始，首轮同龄检查仍为第 5 次开发。Diverge 属于已有搜索循环中的起点扩展操作，有限偏差搜索负责此后如何开发。
 
 ### 7.4 结束与最终算法
 
-总请求预算耗尽或外部时间预算达到上限时停止。已完成评价的有效程序均保留，输出全局训练评价最好的完整算法。同分采用最早取得该成绩的程序。
+总请求预算耗尽、外部时间预算达到上限或所有可用生成入口关闭时停止。已完成评价的有效程序均保留，输出全局训练评价最好的完整算法。同分采用最早取得该成绩的程序。
 
 最终程序确定后，使用独立测试集执行一次既定测试协议。测试结果用于报告，不进入搜索与同龄比较。
 
@@ -349,6 +362,8 @@ Diverge 的输入为任务、接口及当前最好完整程序，要求尝试不
 沿 B 继续时，B 进入当前程序开发路径，相关父子评价记录可以展示。
 
 从 A 另试时，完整父代仍是 A。上次候选的成绩可以作为尝试反馈，但其代码不作为当前已经采纳的实现展示。若随后采用 A1，则路径更新为 A→A1。
+
+v1.1 将未采纳的有效候选以规范化差分列在独立尝试区，并明确它不是已采纳路径。分数与实际改动对应，完整当前父代仍在其后展示；无效源码仅给出实际错误反馈。
 
 这种组织方式使得有限偏差搜索不仅改变调用位置，也改变该位置真正用于下一次生成的经验。
 
@@ -417,6 +432,8 @@ Diverge 的输入为任务、接口及当前最好完整程序，要求尝试不
 
 当前父代始终是一个有效程序，所以失败后仍有明确生成起点。
 
+上述重试受连续无新候选上限约束。重试不增加决策深度；达到上限后不再建立重试边，并跳过同一操作与父代源码对应的其他未展开状态。
+
 ## 10. 完整例子：从一次高分接替到另一条改进路径
 
 以下是合成示例，质量越大越好。候选结果仅用于解释调度。
@@ -468,15 +485,23 @@ archive = all generation records and valid programs
 while global request budget remains:
     champion = owner_of_global_best(archive)
 
-    if divergence_due() and enough_budget_for_new_root():
-        result = generate_and_evaluate_new_root(champion)
-        charge_global_setup_request(result)
-        if result.valid:
-            create_task(root=result.program, age=0)
-        continue
-
     status = classify_tasks_by_same_age(champion)
     eligible = tasks with status in {YOUNG, CHAMPION, ACTIVE}
+    if divergence_enabled and (divergence_due() or not eligible):
+        entry = available_divergence_or_unanchored_init(champion)
+    else:
+        entry = None
+    if entry is not None:
+        result = generate_and_evaluate_new_root(entry)
+        charge_global_setup_request(result)
+        if result.valid and source_not_already_in_archive(result):
+            create_task(root=result.program, age=0)
+        update_persistent_no_change_count(entry, result)
+        continue
+
+    if not eligible:
+        stop_reason = no_eligible_generation
+        break
     task = min(eligible, key=(age, creation_id))
 
     state = next_unexpanded_state(task)
@@ -488,6 +513,7 @@ while global request budget remains:
     task.age += 1
     task.best_curve.append(max(task.best_curve[-1],
                                result.quality if result.valid else -infinity))
+    update_persistent_no_change_count(state.generation_key, result)
     expand_continuations(state, result)
 
 return best_valid_program(archive)
@@ -497,6 +523,8 @@ return best_valid_program(archive)
 
 ```text
 def status(task, champion):
+    if not has_available_frontier(task):
+        return EXHAUSTED
     if task is champion:
         return CHAMPION
     if task.age < 5:
@@ -504,7 +532,7 @@ def status(task, champion):
 
     r = largest value in {5, 10, 20, 40, ...} not exceeding task.age
     if champion.age < r:
-        return WAIT_REFERENCE
+        return WAIT_REFERENCE if has_available_frontier(champion) else ACTIVE
     if task.best_curve[r] >= champion.best_curve[r]:
         return ACTIVE
     return PAUSED
@@ -514,6 +542,8 @@ def status(task, champion):
 
 ```text
 def next_unexpanded_state(task):
+    if not has_available_frontier(task):
+        return None
     while True:
         H = task.depth_limit
         D = min(H - 1, floor(log2(H)))
@@ -530,18 +560,17 @@ def next_unexpanded_state(task):
                     continue
 
                 if not state.expanded:
+                    if generation_closed(state):
+                        continue
                     return state
-
-                if depth == H - 1:
-                    continue
 
                 # 栈后进先出：同一偏差轮次先访问较早的替代接续
                 if state.preferred_child exists:
                     stack.push((state.preferred_child,
-                                depth + 1, remaining))
+                                address_depth(state.preferred_child), remaining))
                 if remaining > 0 and state.alternative_child exists:
                     stack.push((state.alternative_child,
-                                depth + 1, remaining - 1))
+                                address_depth(state.alternative_child), remaining - 1))
 
         task.depth_limit += 1
 ```

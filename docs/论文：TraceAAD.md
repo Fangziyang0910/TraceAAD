@@ -1057,7 +1057,7 @@ CVRP 的固定 ACO 使用 30 只蚂蚁和 100 次迭代；OP 使用 20 只蚂蚁
 | --- | --- |
 | 同龄晋级与谱系轨迹上下文 | [同龄晋级、乐观估计与参考程序选择](../traceaad/v16/search.py)、[谱系轨迹上下文的提示](../traceaad/v16/prompts.py)、[早期实现](../traceaad/v15/) |
 | 附录 C.3 窗口校准 | [比较点事件回放](../experiments_result/analysis/v15_20261027/slope_projection.json) |
-| 父代选择与基础生成循环 | [父代权重](../traceaad/selection.py)、[基础搜索](../traceaad/traceaad.py) |
+| 父代选择与基础生成循环 | [父代权重](../traceaad/base/selection.py)、[基础搜索](../traceaad/base/traceaad.py) |
 | 任务接口、数据与评价预算 | [任务注册](../benchmarks/tasks.py)、[实验条件](../experiments/PROTOCOL.md) |
 | 表 A1–A3 | [跨方法轨迹分析](../experiments_result/analysis/conservatism_20261026/) |
 | 表 B1–B2 | [重复回复与操作距离统计](../experiments_result/analysis/v14_20261027/returns_and_distance.json) |

@@ -9,6 +9,10 @@
 | 你想做什么 | 阅读入口 |
 | --- | --- |
 | 理解本工作针对的问题 | [WWH](docs/WWH.md) |
+| 阅读各版本的研究问题与机制设计 | [机制设计文档](docs/机制设计/README.md) |
+| 了解 Base 的个体表示、上下文与提示 | [TraceAAD Base 基础方法说明](docs/TraceAAD-Base.md) |
+| 运行新 Base 的独立实现 | [traceaad_base](traceaad_base/README.md) |
+| 运行轨迹反思与全局经验版本 | [V19.3 独立实现](traceaad_v19_3/README.md) |
 | 了解当前程序怎样搜索 | [搜索实现](traceaad/README.md) |
 | 设计、运行或复查实验 | [实验入口](experiments/README.md) |
 | 查阅第三方提示的来源版本 | [来源记录](baselines/UPSTREAM.md) |
@@ -18,6 +22,8 @@
 | 目录 | 内容 |
 | --- | --- |
 | `traceaad/` | 当前搜索方法。 |
+| `traceaad_base/` | 当前 Base 机制的独立实现与运行入口。 |
+| `traceaad_v19_3/` | 轨迹反思、全局正负经验池及独立搜索实现。 |
 | `baselines/` | 比较方法。 |
 | `benchmarks/` | 任务、数据与评价。 |
 | `experiments/` | 启动、查询、同步与分析工具。 |
