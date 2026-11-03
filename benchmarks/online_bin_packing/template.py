@@ -9,7 +9,7 @@ def priority(item: float, bins: np.ndarray) -> np.ndarray:
     Return:
         Array of same size as bins with priority score of each bin.
     """
-    return item - bins
+    return item - bins.astype(float)
 '''
 
 task_description = (

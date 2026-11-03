@@ -13,18 +13,15 @@ DISTRIBUTION = 'G(300,0.5): each undirected edge independently present with prob
 
 def generate_instances(split):
     from .evaluation import solve
-    from .template import function_name, template_program
+    from .reference import dsatur
     split = canonical_split(split, SCALE)
 
-    namespace = {}
-    exec(template_program, namespace)
-    heuristic = namespace[function_name]
     for i in range(COUNTS[split]):
         rng, entropy = rng_for(2, split, i)
         group = f'generated_{split}_base{i:03d}'
         upper = np.triu(rng.random((300, 300)) < 0.5, k=1)
         arrays = {'adjacency': upper | upper.T}
-        _, reference = solve(arrays, heuristic)
+        _, reference = solve(arrays, dsatur)
         yield arrays, {'id': group, 'group': group, 'seed_entropy': entropy, 'source_kind': 'generated',
             'scale': 300, 'dimensions': {'vertices': 300},
             'density': float(arrays['adjacency'].sum() / (300*299))}, float(reference), 'DSATUR feasible upper bound'

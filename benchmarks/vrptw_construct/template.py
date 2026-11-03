@@ -19,8 +19,7 @@ def select_next_node(current_node: int, depot: int, unvisited_nodes: np.ndarray,
         Returning depot is only valid away from the depot: when current_node == depot, return a
         customer from unvisited_nodes.
     """
-    next_node = unvisited_nodes[0]
-    return next_node
+    return int(unvisited_nodes[0])
 '''
 
 task_description = (

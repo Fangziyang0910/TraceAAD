@@ -15,15 +15,13 @@ DISTRIBUTION = ('Static 20 jobs x 20 machines. Each job independently visits a u
 
 def generate_instances(split):
     from .evaluation import solve
-    from .template import template_program, function_name
+    from .reference import mwkr
     split = canonical_split(split, SCALE)
-    namespace = {}
-    exec(template_program, namespace)
     for i in range(COUNTS[split]):
         rng, entropy = rng_for(4, split, i)
         arrays = {'processing_times': rng.integers(1, 100, (20, 20), dtype=np.int64),
                   'machine_order': np.array([rng.permutation(20) for _ in range(20)], dtype=np.int64)}
-        _, reference = solve(arrays, namespace[function_name])
+        _, reference = solve(arrays, mwkr)
         group = f'generated_{split}_base{i:03d}'
         yield arrays, {'id': group, 'group': group, 'seed_entropy': entropy,
                       'source_kind': 'generated', 'scale': SCALE, 'dimensions': DIMENSIONS}, reference, 'MWKR feasible makespan'

@@ -15,9 +15,7 @@ def select_next_node(current_node: int, destination_node: int, unvisited_nodes: 
     A full-graph node ID contained in unvisited_nodes, not an array position.
     The outer solver appends the final remaining node and return-to-start edge.
     """
-    next_node = unvisited_nodes[0]
-
-    return next_node
+    return int(unvisited_nodes[0])
 '''
 
 task_description = (

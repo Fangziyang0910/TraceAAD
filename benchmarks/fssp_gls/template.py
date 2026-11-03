@@ -13,10 +13,7 @@ def get_matrix_and_jobs(current_sequence: np.ndarray, processing_times: np.ndarr
     The outer solver tests swaps and insertions involving these jobs on the
     perturbed matrix. True quality always uses the original processing times.
     """
-    jobs = np.argsort(-processing_times.sum(axis=1), kind="stable")[:min(5, n_jobs)]
-    perturbed = processing_times.astype(float).copy()
-    perturbed[jobs] *= 1.25
-    return perturbed, jobs
+    return processing_times.copy(), current_sequence[:1].copy()
 '''
 
 task_description = '''Design a guided-local-search perturbation for the permutation flow-shop scheduling problem.
