@@ -12,7 +12,7 @@ import pytest
 
 from core.scheduling import SchedulerError, SchedulerServer, SchedulerSession, scheduler_status
 from tests.support import TinyEvaluation
-from traceaad.base.instance_evaluation import InstanceProgramEvaluator
+from experiments.infra.instance_evaluation import InstanceProgramEvaluator
 
 
 @pytest.fixture

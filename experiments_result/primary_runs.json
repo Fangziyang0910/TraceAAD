@@ -497,6 +497,46 @@
       "op_aco/20261102f_v19_4_co6_main_op_traceaad_v19_4_rep1",
       "op_aco/20261102f_v19_4_co6_main_op_traceaad_v19_4_rep2",
       "op_aco/20261102f_v19_4_co6_main_op_traceaad_v19_4_rep3"
+    ],
+    "traceaad_v20_complete": [
+      "tsp_construct/20261103b_v20_complete_qwen_co6_tsp_traceaad_v20_rep1",
+      "tsp_construct/20261103b_v20_complete_qwen_co6_tsp_traceaad_v20_rep2",
+      "tsp_construct/20261103b_v20_complete_qwen_co6_tsp_traceaad_v20_rep3",
+      "cvrp_aco/20261103b_v20_complete_qwen_co6_cvrp_traceaad_v20_rep1",
+      "cvrp_aco/20261103b_v20_complete_qwen_co6_cvrp_traceaad_v20_rep2",
+      "cvrp_aco/20261103b_v20_complete_qwen_co6_cvrp_traceaad_v20_rep3",
+      "fssp_gls/20261103b_v20_complete_qwen_co6_fssp_traceaad_v20_rep1",
+      "fssp_gls/20261103b_v20_complete_qwen_co6_fssp_traceaad_v20_rep2",
+      "fssp_gls/20261103b_v20_complete_qwen_co6_fssp_traceaad_v20_rep3",
+      "graph_colouring/20261103b_v20_complete_qwen_co6_gcol_traceaad_v20_rep1",
+      "graph_colouring/20261103b_v20_complete_qwen_co6_gcol_traceaad_v20_rep2",
+      "graph_colouring/20261103b_v20_complete_qwen_co6_gcol_traceaad_v20_rep3",
+      "jssp_construct/20261103b_v20_complete_qwen_co6_jssp_traceaad_v20_rep1",
+      "jssp_construct/20261103b_v20_complete_qwen_co6_jssp_traceaad_v20_rep2",
+      "jssp_construct/20261103b_v20_complete_qwen_co6_jssp_traceaad_v20_rep3",
+      "op_aco/20261103b_v20_complete_qwen_co6_op_traceaad_v20_rep1",
+      "op_aco/20261103b_v20_complete_qwen_co6_op_traceaad_v20_rep2",
+      "op_aco/20261103b_v20_complete_qwen_co6_op_traceaad_v20_rep3"
+    ],
+    "traceaad_v20_noreflect": [
+      "tsp_construct/20261103b_v20_noreflect_qwen_co6_tsp_traceaad_v20_rep1",
+      "tsp_construct/20261103b_v20_noreflect_qwen_co6_tsp_traceaad_v20_rep2",
+      "tsp_construct/20261103b_v20_noreflect_qwen_co6_tsp_traceaad_v20_rep3",
+      "cvrp_aco/20261103b_v20_noreflect_qwen_co6_cvrp_traceaad_v20_rep1",
+      "cvrp_aco/20261103b_v20_noreflect_qwen_co6_cvrp_traceaad_v20_rep2",
+      "cvrp_aco/20261103b_v20_noreflect_qwen_co6_cvrp_traceaad_v20_rep3",
+      "fssp_gls/20261103b_v20_noreflect_qwen_co6_fssp_traceaad_v20_rep1",
+      "fssp_gls/20261103b_v20_noreflect_qwen_co6_fssp_traceaad_v20_rep2",
+      "fssp_gls/20261103b_v20_noreflect_qwen_co6_fssp_traceaad_v20_rep3",
+      "graph_colouring/20261103b_v20_noreflect_qwen_co6_gcol_traceaad_v20_rep1",
+      "graph_colouring/20261103b_v20_noreflect_qwen_co6_gcol_traceaad_v20_rep2",
+      "graph_colouring/20261103b_v20_noreflect_qwen_co6_gcol_traceaad_v20_rep3",
+      "jssp_construct/20261103b_v20_noreflect_qwen_co6_jssp_traceaad_v20_rep1",
+      "jssp_construct/20261103b_v20_noreflect_qwen_co6_jssp_traceaad_v20_rep2",
+      "jssp_construct/20261103b_v20_noreflect_qwen_co6_jssp_traceaad_v20_rep3",
+      "op_aco/20261103b_v20_noreflect_qwen_co6_op_traceaad_v20_rep1",
+      "op_aco/20261103b_v20_noreflect_qwen_co6_op_traceaad_v20_rep2",
+      "op_aco/20261103b_v20_noreflect_qwen_co6_op_traceaad_v20_rep3"
     ]
   },
   "default_experiment": "traceaad_v19_4",
@@ -514,7 +554,9 @@
     "traceaad_v19": "TraceAAD V19",
     "traceaad_v19_1": "TraceAAD V19.1",
     "traceaad_v19_3": "TraceAAD V19.3",
-    "traceaad_v19_4": "TraceAAD V19.4"
+    "traceaad_v19_4": "TraceAAD V19.4",
+    "traceaad_v20_complete": "TraceAAD V20",
+    "traceaad_v20_noreflect": "TraceAAD V20 无反思"
   },
   "visualization_batches": {
     "traceaad_v12_0": "20261013_qwen_co6",
@@ -526,6 +568,8 @@
     "traceaad_v19": "20261031_v19_co6",
     "traceaad_v19_1": "20261031_v19_1_co6",
     "traceaad_v19_3": "20261101_v19_3_co6",
-    "traceaad_v19_4": "20261102f_v19_4_co6_main"
+    "traceaad_v19_4": "20261102f_v19_4_co6_main",
+    "traceaad_v20_complete": "20261103b_v20_complete_qwen_co6",
+    "traceaad_v20_noreflect": "20261103b_v20_noreflect_qwen_co6"
   }
 }

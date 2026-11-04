@@ -73,9 +73,9 @@ def test_openai_request_records_settings_usage_and_does_not_persist_key(task, en
     assert all(field == {"type": "string"} for field in schema["properties"].values())
     if request_options:
         assert payload["top_p"] == .8
-    call = json.loads((tmp_path / "calls/000001.json").read_text())
+    call = json.loads((tmp_path / "calls.jsonl").read_text().splitlines()[0])
     assert call["usage"]["total_tokens"] == 41 and call["finish_reason"] == "stop"
-    assert all("test-secret" not in p.read_text() for p in tmp_path.rglob("*.json"))
+    assert all("test-secret" not in p.read_text() for p in tmp_path.rglob("*.json*"))
 
 
 def test_request_failure_is_not_retried_and_error_body_redacts_key(task, endpoint, tmp_path):
@@ -85,9 +85,9 @@ def test_request_failure_is_not_retried_and_error_body_redacts_key(task, endpoin
     result = TraceAAD(task, client, config=Config(max_unevaluated=1), run_dir=tmp_path).run()
     assert result.evaluations == 0 and result.model_calls == 1
     assert len(handler.requests) == 1
-    call = json.loads((tmp_path / "calls/000001.json").read_text())
+    call = json.loads((tmp_path / "calls.jsonl").read_text().splitlines()[0])
     assert "HTTP 503" in call["error"] and "[REDACTED]" in call["error"]
-    assert all("test-secret" not in p.read_text() for p in tmp_path.rglob("*.json"))
+    assert all("test-secret" not in p.read_text() for p in tmp_path.rglob("*.json*"))
 
 
 def test_model_deadline_limits_total_response_time(endpoint):
@@ -121,7 +121,7 @@ def test_package_can_be_copied_renamed_and_run_without_repository_or_dependencie
         with TraceAAD(task, Model(), config=config, run_dir=sys.argv[2]) as first:
             first.step()
             first.step()
-        resumed = TraceAAD(task, Model(), run_dir=sys.argv[2], resume=True)
+        resumed = TraceAAD(task, Model(), config=config, run_dir=sys.argv[2], resume=True)
         result = resumed.run()
         assert result.evaluations == result.model_calls == 4
         assert result.best.id == 1 and len(resumed.archive) == 4
@@ -158,4 +158,3 @@ def test_existing_task_examples_execute_through_independent_evaluator(name):
     expected = external.evaluate_program(task.example_code, namespace[task.entrypoint])
     assert result.fitness == pytest.approx(expected)
     assert "pass" in task.function_template
-    assert task.fingerprint()

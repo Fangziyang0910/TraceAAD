@@ -18,15 +18,14 @@ from . import probe
 
 
 FRAME = re.compile(r'^\s*File "([^"]*)", line (\d+)')
-HARNESS = tuple(
-    str(Path(__file__).resolve().parents[1] / name) + os.sep for name in ("core", "traceaad")
-)
+ROOT = Path(__file__).resolve().parents[2]
+HARNESS = tuple(str(ROOT / name) + os.sep for name in ("core", "experiments/infra"))
 
 
 def clean_traceback(text, code=None):
     """Drop the evaluation's own frames, with their source and caret lines.
 
-    These are the core and TraceAAD layers and the call counter: its module
+    These are the core and evaluation layers and the call counter: its module
     and the wrapper appended after the program (``<string>`` lines past the
     program's last line). Task solver frames stay: they show how the function
     was called.

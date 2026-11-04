@@ -1,11 +1,9 @@
-import copy
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from baselines.calm.calm import CALM
-from baselines.calm.parse import extract_function_from_string
 from baselines.eoh.sampler import EoHSampler
 from baselines.funsearch.funsearch import FunSearch
 from baselines.funsearch.programs_database import Island
@@ -132,7 +130,7 @@ def test_mcts_invalid_replies_advance_budget_without_aborting(tmp_path, bad):
     from baselines.mcts_ahd import MCTS_AHD, MAProfiler
     from experiments.infra.resume_baseline import history
     from tests.support import TinyEvaluation
-    from traceaad.base.storage import read_json, rows, write_json
+    from experiments.infra.storage import read_json, rows, write_json
 
     write_json(tmp_path / 'run_config.json', {'method': 'mcts_ahd', 'task': 'toy', 'budget': 23})
     good = '{Return one}\n```python\ndef score(x):\n    return 1\n```'
@@ -270,7 +268,6 @@ def test_funsearch_clusters_by_profile_not_only_mean():
 
 
 def test_shinka_official_full_and_meta_prompts_keep_roles_and_objective_direction():
-    from baselines.shinka_evo.prompts.prompts_base import BASE_SYSTEM_MSG
     from baselines.shinka_evo.prompts.prompts_meta import META_STEP3_SYSTEM_MSG
     from baselines.shinka_evo.shinka_evo import ShinkaEvo
 

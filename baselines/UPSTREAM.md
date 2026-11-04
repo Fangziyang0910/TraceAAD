@@ -36,7 +36,7 @@
 - PathWise 解析和父代码清理来自 `oguzhangungordu/PathWise@9d014a368d920d46ef4538da4c484503549214cb`；Action 的 `kappa` 接到本地字段 `rationale`。
 - `shinka_evo/edit/` 的补丁引擎来自 `SakanaAI/ShinkaEvolve@8adc053a2ce4511ad2ac310e004c530a73fb974a`，只调整包导入，许可证随代码保留。当前运行入口使用单模型。
 
-验证范围及尚未公开的 DeltaEvolve 细节见[机制移植记录](../docs/记录/2026-10-17-基线实现差异核对.md)。
+验证范围及尚未公开的 DeltaEvolve 细节见机制移植记录。
 
 ## 2026-10-22 ReEvo 全无效代恢复
 

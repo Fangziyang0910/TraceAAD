@@ -12,24 +12,35 @@ from experiments.infra import evaluate
 from experiments.infra.artifacts import pick_best_sample
 from experiments.visualization import ResultsMonitor
 from experiments.visualization.server import make_request_handler
-from tests.support import TinyEvaluation, TokenLLM, response
-from traceaad import Config, TraceAAD
-from traceaad.base.storage import write_json
+from experiments.infra.storage import write_json
+from experiments.traceaad_v20.reporting import Reporter
+from tests.support import TinyEvaluation, response
+from traceaad_base import Config, Task, TraceAAD
+
+
+def base_run(directory, *replies, budget, initial_size):
+    """A finished Base run with the public files that readers and the monitor use."""
+    task = Task.from_evaluator(TinyEvaluation(), use_template_example=False)
+    task.time_limit = 5
+
+    class Model:
+        def __init__(self):
+            self.replies = iter(replies)
+
+        def complete(self, prompt, **settings):
+            return next(self.replies)
+    config = Config(evaluation_budget=budget, initial_size=initial_size)
+    search = TraceAAD(task, Model(), config=config, run_dir=directory / "native")
+    reporter = Reporter(directory, {"task": "tsp_construct", "method": "traceaad_base",
+                                    "method_params": asdict(config)})
+    result = search.run(on_attempt=lambda attempt: reporter.publish(search))
+    return search, reporter.publish(search, result=result)
 
 
 @pytest.mark.parametrize("fail", [False, True])
 def test_heldout_evaluates_the_frozen_training_winner(tmp_path, monkeypatch, fail):
-    config = Config(budget=3, roots=3)
-    method = TraceAAD(
-        evaluation=TinyEvaluation(),
-        llm=TokenLLM(response(2), response(5), response(1)),
-        run_dir=tmp_path,
-        config=config,
-    )
-    summary = method.run()
-    write_json(
-        tmp_path / "run_config.json", {"task": "tsp_construct", "method_params": asdict(config)}
-    )
+    _, summary = base_run(tmp_path, *(response(v, analysis="Return a constant.") for v in (2, 5, 1)),
+                          budget=3, initial_size=3)
     frozen = (tmp_path / "best_program.py").read_text()
 
     class TestEvaluation(TinyEvaluation):
@@ -49,23 +60,17 @@ def test_heldout_evaluates_the_frozen_training_winner(tmp_path, monkeypatch, fai
     assert evaluate.evaluate_run(tmp_path, ["eval_50"])[0] == result
 
 
-def test_result_reader_and_monitor_follow_individual_ids_and_generation_budget(tmp_path):
+def test_result_reader_and_monitor_follow_individual_ids_and_evaluation_budget(tmp_path):
     directory = tmp_path / "traceaad" / "tsp_construct" / "run"
-    method = TraceAAD(
-        evaluation=TinyEvaluation(),
-        llm=TokenLLM("{bad", response(2, analysis="first"), response(2, analysis="second")),
-        run_dir=directory,
-        config=Config(budget=3, roots=2),
-    )
-    method.run()
-    write_json(directory / "run_config.json", {"task": "tsp_construct", "budget": 3})
+    search, _ = base_run(directory, "{bad", response(2, analysis="first"), response(2, analysis="second"),
+                         response(1, analysis="third"), budget=3, initial_size=2)
     chosen, samples = pick_best_sample(directory)
-    assert chosen["node_id"] == 1 and chosen["sample_order"] == 2
-    assert len(samples) == 2 and samples[0]["node_id"] != samples[1]["node_id"]
+    assert chosen["node_id"] == 1
+    assert len(samples) == 3 and len({sample["node_id"] for sample in samples}) == 3
     monitor = ResultsMonitor(tmp_path)
     detail = monitor.run_detail("traceaad", "tsp_construct", "run")
     assert detail["budget_used"] == 3
-    assert detail["best"]["code"] == method.programs[1].code
+    assert detail["best"]["code"] == search.archive[1].code
     assert detail["curve"][-1]["fitness"] == -2
     before = {p: p.read_bytes() for p in directory.rglob("*") if p.is_file()}
     server = ThreadingHTTPServer(("127.0.0.1", 0), make_request_handler(monitor))

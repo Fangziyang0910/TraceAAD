@@ -29,7 +29,6 @@ dist/
 Thumbs.db
 .idea/
 .vscode/
-.zcode/
 *.swp
 *.swo
 *~
@@ -39,19 +38,8 @@ Thumbs.db
 *.out
 logs/
 logs_*/
-wandb/
-.wandb/
-GUI/outputs/
-
-# Local helper files from legacy GUI/scripts
-sample2pkl.py
-gui_test.py
-ysy_main.py
 
 # Local browser state
-experiments/.traceaad_v4_slot_queue.json
-experiments/.traceaad_v8_scheduler/
-.dispatch_state.json
 .playwright-mcp/
 
 # Raw experiment results remain local; the root README stays trackable.
@@ -60,7 +48,5 @@ experiments/.traceaad_v8_scheduler/
 # Historical experiments and sealed document snapshots are local-only.
 /archive/
 
-# Local task datasets and downloaded model/data caches
-llm4ad/task/optimization/*/data/
+# Downloaded model/data caches
 .huggingface/
-unsloth_compiled_cache/

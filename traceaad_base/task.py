@@ -3,9 +3,6 @@
 import ast
 import copy
 from dataclasses import dataclass, field
-import hashlib
-import json
-import math
 from typing import Callable
 
 
@@ -25,26 +22,11 @@ class Task:
     memory_limit_bytes: int | None = None
 
     def __post_init__(self):
-        if not math.isfinite(self.time_limit) or self.time_limit <= 0:
-            raise ValueError("A task needs a finite positive total evaluation time_limit")
-        if not callable(self.evaluate_program):
-            raise TypeError("evaluate_program must be callable")
-        if type(self.evaluation_seed) is not int:
-            raise TypeError("evaluation_seed must be an integer")
-        if self.memory_limit_bytes is not None and (
-            type(self.memory_limit_bytes) is not int or self.memory_limit_bytes <= 0
-        ):
-            raise ValueError("memory_limit_bytes must be a positive integer")
         module = ast.parse(self.template_program)
         functions = [node for node in module.body if isinstance(node, ast.FunctionDef)]
         if self.entrypoint is None:
-            if len(functions) != 1:
-                raise ValueError("Specify entrypoint when the template has multiple functions")
             self.entrypoint = functions[0].name
-        matches = [node for node in functions if node.name == self.entrypoint]
-        if len(matches) != 1:
-            raise ValueError("The template must define the entrypoint exactly once")
-        self._target = matches[0]
+        self._target = next(node for node in functions if node.name == self.entrypoint)
         interface = copy.deepcopy(self._target)
         docstring = ast.get_docstring(interface, clean=False)
         interface.body = [ast.Expr(ast.Constant(docstring))] if docstring is not None else []
@@ -113,8 +95,3 @@ class Task:
             "metadata": self.metadata,
             "memory_limit_bytes": self.memory_limit_bytes,
         }
-
-    def fingerprint(self) -> str:
-        data = json.dumps(self.description(), sort_keys=True, ensure_ascii=False, allow_nan=False)
-        return hashlib.sha256(data.encode()).hexdigest()
-

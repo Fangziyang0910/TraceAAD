@@ -23,10 +23,8 @@ SUITES = {'legacy': TASKS, 'co6': CO_TASKS}
 TASK_SHORT: dict[str, str] = dict(zip(TASKS, ('tsp', 'cvrp', 'op', 'obp', 'vrptw')))
 TASK_SHORT.update(dict(zip(FIXED_TASKS, ('fssp', 'gcol', 'jssp'))))
 NATIVE_MINIMIZE = set(ALL_TASKS) - {'op_aco'}
-MINIMIZE = set(ALL_TASKS)  # Every evaluator returns a minimized scalar objective.
 CLASSES = dict(zip(ALL_TASKS, (TSPEvaluation, CVRPACOEvaluation, OPACOEvaluation, OBPEvaluation, VRPTWEvaluation,
                                     FSSPGLSEvaluation, GraphColouringEvaluation, JSSPEvaluation)))
-SELECTION_SEED = 20260927
 DEFAULT_WORKERS = 4
 # Mean candidate CPU per instance; complete solvers include all search.
 FUNCTION_SECONDS = 2
@@ -133,22 +131,6 @@ def validate_task_interface(task, config):
                          'Evaluate old runs with their saved source snapshot.')
 
 
-def selection_task(task, search):
-    if task in FIXED_TASKS:
-        raise ValueError('the six-task AHD data have no validation split; choose the training-best program')
-    if task in {'cvrp_aco', 'op_aco'}:
-        selected = CLASSES[task](split='val_50', timeout_seconds=search.timeout_seconds,
-            n_ants=search.n_ants, n_iterations=search.n_iterations,
-            aco_seed=search.aco_seed, n_workers=search.n_workers)
-        if search.timeout_seconds is not None:
-            selected.timeout_seconds *= max(1., selected.n_instance/search.n_instance)
-        return selected
-    kwargs = get_generated_task_kwargs(task, 'train')
-    kwargs.update(seed=SELECTION_SEED,
-                  timeout_seconds=None if search.timeout_seconds is None else 2*search.timeout_seconds)
-    return CLASSES[task](**kwargs)
-
-
 def heldout_task(task, split, workers=DEFAULT_WORKERS, timeout_seconds=None):
     primary = task in CO_TASKS and (split == 'eval' or split in PRIMARY_SPLITS[task])
     if timeout_seconds is not None:
@@ -180,12 +162,3 @@ def heldout_task(task, split, workers=DEFAULT_WORKERS, timeout_seconds=None):
     return CLASSES[task](**kwargs)
 
 
-def evaluation_limits(tasks=TASKS, *, final_selection='training'):
-    output = {}
-    for task in tasks:
-        train, _ = training_task(task, condition='traceaad')
-        selected = selection_task(task, train) if final_selection == 'validation' else None
-        output[task] = {'search': train.timeout_seconds,
-                        'selection': selected.timeout_seconds if selected else None,
-                        'heldout': HELDOUT_TIMEOUT[task]}
-    return output

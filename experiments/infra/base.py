@@ -66,7 +66,7 @@ BACKENDS: dict[str, BackendProfile] = {
 
 # Hosted models are called directly; a host scheduler serves only its own GPU endpoints.
 HOSTED_BACKENDS = ("deepseek",)
-DEFAULT_BACKEND: str = "deepseek"
+DEFAULT_BACKEND: str = "server3"
 
 # Qwen3.8-27B's official sampling settings per mode (model card). Every
 # control is sent explicitly: left unset, vLLM fills it from the model's

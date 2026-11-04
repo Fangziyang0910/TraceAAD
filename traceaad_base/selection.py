@@ -26,7 +26,7 @@ def weights(archive: dict[int, Program], attempts: list[Attempt]) -> dict[int, f
     costs = dict.fromkeys(quality, 0)
     offspring_quality = dict.fromkeys(quality, 0.0)
     for attempt in attempts:
-        if attempt.completed and attempt.parent_id in costs:
+        if attempt.parent_id in costs:
             costs[attempt.parent_id] += attempt.model_calls
             if attempt.program_id in quality:
                 offspring_quality[attempt.parent_id] += quality[attempt.program_id]

@@ -23,13 +23,13 @@ uv run python -m traceaad_base run \
 
 `--base-url` 使用 OpenAI 兼容接口的 `/v1` 地址，也可直接给出 `/chat/completions` 地址。`--task` 支持仓库的八个任务，读取任务已有的数据、求解器和评价配置；每次评价的总时限取任务的 `timeout_seconds`。
 
-server4共享资源池的18路实验入口见 [实验调度说明](../experiments/traceaad_base/README.md)。
+server4共享资源池的18路实验入口见 [实验入口](../experiments/traceaad_v20/README.md)，使用 `--method base`。
 
 默认配置为 1000 次评价、5 个有效初始个体、温度 1.0、最大输出 16384 tokens、单次模型请求总时限 600 秒。可用 `--budget`、`--initial-size`、`--seed`、`--temperature`、`--max-tokens` 和 `--model-timeout` 调整。`--no-example` 省略初始样例；`--quiet` 只输出最终 JSON。
 
 `OpenAIClient` 默认以 JSON Schema 约束 `analysis`、`design`、`code` 三个必填字符串，禁止额外字段。端点须支持 `response_format.type=json_schema`；请求不自动降级为普通 JSON 模式。解析仍检查字段非空，格式错误沿用一次修复。
 
-继续中断运行时，在相同命令后添加 `--resume`。省略的搜索参数从检查点恢复，显式参数须与原运行一致。已发出的调用和已启动的评价保留计数，中断中的尝试结束后继续下一次生成。模型配置仍由调用方提供。
+继续中断运行时，在相同命令后添加 `--resume`。省略的搜索参数从 `run_config.json` 读取。已完成的尝试读回程序库后继续；中断时未完成的尝试直接丢弃。每个尝试的随机数由种子与尝试序号确定，恢复后的抽样与不中断时一致。
 
 ## 接入自己的任务与模型
 
@@ -78,7 +78,7 @@ python -m traceaad_base run --task-factory my_tasks:make_task \
 | [prompts.py](prompts.py) | 机制文档中的提示词；8 个祖先、3 个有效子代、2 个失败子代 |
 | [selection.py](selection.py) | 当前倒数排名、全部有效直接子代质量与实际调用成本 |
 | [task.py](task.py)、[evaluation.py](evaluation.py)、[runtime.py](runtime.py) | 任务适配、独立评价与总时限 |
-| [llm.py](llm.py)、[storage.py](storage.py) | OpenAI 兼容请求、完整记录与检查点 |
+| [llm.py](llm.py)、[storage.py](storage.py) | OpenAI 兼容请求与追加记录 |
 
 模型依次输出 `analysis`、`design`、`code`；前两项各用两三句，最多100个英文词或200个中文字。`analysis` 随个体保存，说明本次计算变化及其依据。演化只展示当前父代完整代码；祖先与已有子代通过父代编号、分析、设计和评价呈现局部改进脉络，交叉参考展示设计和评价。修复更新同一个体的三个字段，原始回复及修复前版本仍保存在记录中。有效子代全部参与质量统计，是否超过父代不影响计分。程序库不去重，也不截断。
 
@@ -86,11 +86,9 @@ python -m traceaad_base run --task-factory my_tasks:make_task \
 
 每个运行目录保存：
 
-- `run_config.json`、`source/`：任务与搜索配置、实现源码快照。
-- `calls/`：每次实际请求的提示、回复、用量、耗时与错误。
-- `evaluations/`：每次完整评价的分析、设计、代码、结果与个体归属。
-- `programs/`、`attempts/`：个体最终版本、生成及修复归属。
-- `state.json`：程序库、计数与随机状态，用于恢复。
+- `run_config.json`：任务与搜索配置。
+- `attempts.jsonl`：每个完成的尝试一行，含调用摘要、各次评价结果和最终个体；恢复只读这一文件。
+- `calls.jsonl`：每次实际请求的提示、回复、用量、耗时与错误。
 - `result.json`、`best.py`：停止原因、总成本与最好有效程序；无有效程序时不产生 `best.py`。
 
 离线测试覆盖选择公式、历史边界、共享修复、预算、恢复、请求超时、评价进程清理、八任务接入，以及复制改名后仅用标准库运行：

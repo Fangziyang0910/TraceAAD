@@ -16,9 +16,9 @@ def program(pid, score, parent=0, *, status="success"):
                    analysis=f"Computational change for candidate [{pid}]")
 
 
-def attempt(aid, parent, child, calls, *, reference=None, completed=True):
+def attempt(aid, parent, child, calls, *, reference=None):
     return Attempt(aid, parent, "Crossover" if reference else "Refine", reference,
-                   child, [{} for _ in range(calls)], completed=completed)
+                   child, [{} for _ in range(calls)])
 
 
 def test_all_valid_child_quality_counts_with_actual_call_cost_and_current_ranks():
@@ -32,7 +32,6 @@ def test_all_valid_child_quality_counts_with_actual_call_cost_and_current_ranks(
     assert actual[3] == pytest.approx(1 / 3)
     archive[6] = program(6, 0, 2)
     attempts.append(attempt(4, 2, 6, 1))
-    attempts.append(attempt(5, 1, None, 2, completed=False))
     current = weights(archive, attempts)
     assert current[1] == pytest.approx((3 / 2 + 1 / 4) / 6)
     assert current[2] == pytest.approx((1 + 1 / 5 + 1) / 5)

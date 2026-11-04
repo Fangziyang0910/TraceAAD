@@ -316,14 +316,6 @@ class OpenAIAPI(LLM):
     def token_count_mode(self) -> str:
         return "local_tokenizer" if self._tokenizer is not None else "llm_count_tokens"
 
-    @property
-    def prompt_token_count_mode(self) -> str:
-        return (
-            "local_chat_template_tokens"
-            if self._tokenizer is not None
-            else "llm_chat_template_tokens"
-        )
-
     @staticmethod
     def _token_count_from_payload(payload: Any) -> int:
         if isinstance(payload, dict):

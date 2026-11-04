@@ -70,8 +70,7 @@ def _parser():
 
 def _config(args):
     if args.resume:
-        state = json.loads((Path(args.run_dir) / "state.json").read_text())
-        values = state["config"]
+        values = json.loads((Path(args.run_dir) / "run_config.json").read_text())["config"]
     else:
         values = asdict(Config())
     for key in values:

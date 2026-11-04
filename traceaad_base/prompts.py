@@ -90,12 +90,16 @@ def failure_summary(failure: str) -> str:
 
 
 class PromptBuilder:
+    common_template = COMMON_TEMPLATE
+    timeout_repair = TIMEOUT_REPAIR
+    summarize = staticmethod(failure_summary)
+
     def __init__(self, task: Task, config: Config):
         self.task = task
         self.config = config
 
     def _render(self, context: str, instruction: str, *, has_scores=False) -> str:
-        template = COMMON_TEMPLATE
+        template = self.common_template
         if not context:
             template = template.replace("[Context]\n{context}\n\n", "")
         elif has_scores and self.task.score_definition not in self.task.task_description:
@@ -134,7 +138,7 @@ class PromptBuilder:
     def _failure_block(cls, program: Program, *, operator: bool) -> str:
         lines = cls._origin(program, operator=operator)
         lines.extend([f"Design: {program.design}",
-                      f"Failure: {failure_summary(program.evaluation.failure)}"])
+                      f"Failure: {cls.summarize(program.evaluation.failure)}"])
         return "\n".join(lines)
 
     def initialization(self, archive: dict[int, Program]) -> str:
@@ -219,10 +223,13 @@ class PromptBuilder:
         context = f"[Original Response]\n{response}\n\n[Parsing Feedback]\n{feedback}"
         return self._render(context, FORMAT_REPAIR + "\n" + REPAIR_DESIGN)
 
+    def repair_feedback(self, failure: str) -> str:
+        return failure
+
     def repair_program(self, program: Program) -> str:
         origin = "\n".join(self._origin(program))
         context = (f"[Current Algorithm]\n{origin}\nDesign: {program.design}\n"
                    f"```python\n{program.code}\n```\n\n"
-                   f"[Failure Feedback]\n{program.evaluation.failure}")
-        instruction = {"error": ERROR_REPAIR, "timeout": TIMEOUT_REPAIR}[program.evaluation.status]
+                   f"[Failure Feedback]\n{self.repair_feedback(program.evaluation.failure)}")
+        instruction = {"error": ERROR_REPAIR, "timeout": self.timeout_repair}[program.evaluation.status]
         return self._render(context, instruction + "\n" + REPAIR_DESIGN)

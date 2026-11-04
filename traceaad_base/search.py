@@ -1,97 +1,85 @@
-"""Sequential Base search with one shared repair opportunity per attempt."""
+"""Sequential Base search with one shared repair opportunity per attempt.
 
-from dataclasses import asdict
+Each finished attempt is appended to ``attempts.jsonl`` together with its
+program. Resuming reads those rows back into the archive and continues; an
+attempt cut off by the interruption is simply lost.
+"""
+
 from contextlib import nullcontext
+from dataclasses import asdict
 import random
 import time
 
 from .config import Config
 from .evaluation import Evaluator
-from .models import Attempt, Candidate, Evaluation, FormatError, ModelReply, Program, SearchResult
+from .models import Attempt, Candidate, FormatError, ModelReply, Program, SearchResult
 from .prompts import PromptBuilder
 from .selection import choose
 from .storage import Store
 from .task import Task
 
 
-def _tuples(value):
-    return tuple(_tuples(v) for v in value) if isinstance(value, list) else value
-
-
 class TraceAAD:
+    method = "traceaad_base"
+    prompt_type = PromptBuilder
+
     def __init__(self, task: Task, model, *, config: Config | None = None,
                  run_dir=None, resume=False):
         self.task = task
         self.model = model
-        self.store = Store(run_dir, resume=resume)
-        try:
-            state = self.store.read("state.json") if resume else None
-            self.config = config or (Config(**state["config"]) if state else Config())
-            self.prompts = PromptBuilder(task, self.config)
-            self.evaluator = Evaluator(task)
-            self.rng = random.Random(self.config.seed)
-            self.archive: dict[int, Program] = {}
-            self.attempts: list[Attempt] = []
-            self.evaluations_used = 0
-            self.model_calls = 0
-            self.consecutive_unevaluated = 0
-            self.next_program_id = 1
-            if state:
-                self._restore(state)
-            else:
-                if task.example_code is not None:
-                    example = Program(0, task.example_code, task.example_design, None, None, None, None)
-                    self.archive[0] = example
-                    self.store.program(example)
-                self.store.write("run_config.json", {
-                    "method": "traceaad_base", "config": asdict(self.config),
-                    "task": task.description(),
-                    "model": getattr(model, "model", type(model).__name__),
-                })
-                self.store.snapshot()
-                self._save()
-        except BaseException:
-            self.store.close()
-            raise
+        self.config = config or Config()
+        self.store = Store(run_dir)
+        self.prompts = self.prompt_type(task, self.config)
+        self.evaluator = Evaluator(task)
+        self.archive: dict[int, Program] = {}
+        self.attempts: list[Attempt] = []
+        self.rng = random.Random(self.config.seed)
+        if task.example_code is not None:
+            self.archive[0] = Program(0, task.example_code, task.example_design, None, None, None, None)
+        if resume:
+            for row in self.store.rows("attempts.jsonl"):
+                attempt = Attempt(**row["attempt"])
+                self.attempts.append(attempt)
+                if row["program"] is not None:
+                    program = Program.from_dict(row["program"])
+                    self.archive[program.id] = program
+                self.restore(attempt)
+        else:
+            self.store.write("run_config.json", {
+                "method": self.method, "config": asdict(self.config), "task": task.description(),
+                "model": getattr(model, "model", type(model).__name__),
+            })
 
-    def _save(self):
-        self.store.write("state.json", {
-            "schema_version": 2,
-            "config": asdict(self.config),
-            "task_fingerprint": self.task.fingerprint(),
-            "archive": [self.archive[k].to_dict() for k in sorted(self.archive)],
-            "attempts": [asdict(attempt) for attempt in self.attempts],
-            "evaluations_used": self.evaluations_used,
-            "model_calls": self.model_calls,
-            "consecutive_unevaluated": self.consecutive_unevaluated,
-            "next_program_id": self.next_program_id,
-            "rng_state": self.rng.getstate(),
-        })
+    # Extension points for methods built on Base.
+    def restore(self, attempt: Attempt):
+        """Rebuild method state from one saved attempt, in order."""
 
-    def _restore(self, state):
-        if state["schema_version"] != 2:
-            raise ValueError("Unsupported checkpoint schema")
-        if state["config"] != asdict(self.config) or state["task_fingerprint"] != self.task.fingerprint():
-            raise ValueError("Resume requires the same task and search configuration")
-        self.archive = {p["id"]: Program.from_dict(p) for p in state["archive"]}
-        self.attempts = [Attempt(**a) for a in state["attempts"]]
-        self.evaluations_used = state["evaluations_used"]
-        self.model_calls = state["model_calls"]
-        self.consecutive_unevaluated = state["consecutive_unevaluated"]
-        self.next_program_id = state["next_program_id"]
-        self.rng.setstate(_tuples(state["rng_state"]))
-        for attempt in self.attempts:
-            if attempt.completed:
-                continue
-            attempt.interruption = "The previous process ended during this attempt"
-            for record in (*attempt.calls, *attempt.evaluations):
-                if record["status"] == "running":
-                    record["status"] = "interrupted"
-                    self.store.update(record["path"], {"status": "interrupted"})
-            self._finish(attempt)
-        # A run may have ended between a checkpoint and an auxiliary artifact write.
-        for program in self.archive.values():
-            self.store.program(program)
+    def select(self, attempt_id: int):
+        parent, operator, reference = choose(self.archive, self.attempts, self.config, self.rng)
+        return parent, operator, reference, {}
+
+    def evolution_prompt(self, attempt: Attempt, parent: Program, reference: Program | None) -> str:
+        return self.prompts.evolution(self.archive, parent, attempt.operator, reference)
+
+    def finish(self, attempt: Attempt):
+        """Learn from one evaluated attempt before it is saved."""
+
+    @property
+    def evaluations_used(self) -> int:
+        return sum(len(a.evaluations) for a in self.attempts)
+
+    @property
+    def model_calls(self) -> int:
+        return sum(len(a.calls) for a in self.attempts)
+
+    @property
+    def consecutive_unevaluated(self) -> int:
+        count = 0
+        for attempt in reversed(self.attempts):
+            if attempt.evaluations:
+                break
+            count += 1
+        return count
 
     @property
     def best(self) -> Program | None:
@@ -106,130 +94,85 @@ class TraceAAD:
             return "consecutive_unevaluated_limit"
         return None
 
-    def _model_call(self, attempt: Attempt, prompt: str, repair_kind=None) -> str | None:
-        # A resource queue is outside both request accounting and request timeout.
-        with getattr(self.model, "request_context", nullcontext)():
-            return self._request_model(attempt, prompt, repair_kind)
+    def _request(self, model, prompt: str, record: dict) -> str | None:
+        """Send one request; ``record`` receives its status, usage and duration."""
+        # The scheduler queue lies outside the request's own deadline.
+        with getattr(model, "request_context", nullcontext)():
+            started = time.monotonic()
+            try:
+                reply = model.complete(prompt, temperature=self.config.temperature,
+                                       max_tokens=self.config.max_tokens,
+                                       timeout=self.config.model_timeout)
+                if isinstance(reply, str):
+                    reply = ModelReply(reply)
+                record.update(status="success", model=reply.model, finish_reason=reply.finish_reason,
+                              usage=reply.usage, metadata=reply.metadata)
+                content = reply.content
+            except Exception as exc:
+                record.update(status="error", error=f"{type(exc).__name__}: {exc}",
+                              metadata=getattr(model, "last_metadata", {}))
+                content = None
+            record["seconds"] = time.monotonic() - started
+        return content
 
-    def _request_model(self, attempt: Attempt, prompt: str, repair_kind=None) -> str | None:
-        self.model_calls += 1
-        number = self.model_calls
-        record = {"id": number, "stage": "repair" if repair_kind else "generate",
-                  "repair_kind": repair_kind, "status": "running",
-                  "path": f"calls/{number:06d}.json"}
+    def _call(self, attempt: Attempt, prompt: str, repair_kind=None) -> str | None:
+        record = {"stage": "repair" if repair_kind else "generate", "repair_kind": repair_kind}
+        content = self._request(self.model, prompt, record)
         attempt.calls.append(record)
-        self.store.write(record["path"], {
-            **record, "attempt_id": attempt.id, "parent_id": attempt.parent_id,
-            "operator": attempt.operator, "reference_id": attempt.reference_id,
-            "prompt": prompt, "temperature": self.config.temperature,
-            "max_tokens": self.config.max_tokens, "timeout": self.config.model_timeout,
-        })
-        self._save()
-        started = time.monotonic()
-        try:
-            reply = self.model.complete(prompt, temperature=self.config.temperature,
-                                        max_tokens=self.config.max_tokens,
-                                        timeout=self.config.model_timeout)
-            if isinstance(reply, str):
-                reply = ModelReply(reply)
-            if not isinstance(reply, ModelReply) or not isinstance(reply.content, str):
-                raise TypeError("Model.complete must return text or ModelReply")
-        except Exception as exc:
-            record.update(status="error", error=f"{type(exc).__name__}: {exc}",
-                          seconds=time.monotonic() - started,
-                          metadata=getattr(self.model, "last_metadata", {}))
-            self.store.update(record["path"], record)
-            self._save()
-            return None
-        record.update(status="success", seconds=time.monotonic() - started,
-                      model=reply.model, finish_reason=reply.finish_reason, usage=reply.usage,
-                      metadata=reply.metadata)
-        self.store.update(record["path"], {**record, "response": reply.content})
-        self._save()
-        return reply.content
+        self.store.append("calls.jsonl", {**record, "attempt_id": attempt.id,
+                                          "prompt": prompt, "response": content})
+        return content
 
     def _parse(self, attempt: Attempt, response: str) -> Candidate | None:
         try:
             return Candidate.parse(response)
         except FormatError as exc:
-            record = attempt.calls[-1]
-            record["format_failure"] = str(exc)
-            self.store.update(record["path"], {"format_failure": str(exc)})
-            self._save()
+            attempt.calls[-1]["format_failure"] = str(exc)
             return None
 
     def _evaluate(self, attempt: Attempt, candidate: Candidate):
         with getattr(self.evaluator, "evaluation_context", nullcontext)():
-            return self._evaluate_reserved(attempt, candidate)
-
-    def _evaluate_reserved(self, attempt: Attempt, candidate: Candidate):
-        if self.evaluations_used >= self.config.evaluation_budget:
-            raise RuntimeError("No evaluation budget remains")
-        self.evaluations_used += 1
-        record = {"id": self.evaluations_used, "status": "running",
-                  "repair": attempt.repair_used,
-                  "resources": getattr(self.evaluator, "last_dispatch", {}),
-                  "path": f"evaluations/{self.evaluations_used:06d}.json"}
-        attempt.evaluations.append(record)
-        self.store.write(record["path"], {
-            **record, "attempt_id": attempt.id, "parent_id": attempt.parent_id,
-            "operator": attempt.operator, "reference_id": attempt.reference_id,
-            "candidate": asdict(candidate),
-        })
-        self._save()
-        started = time.monotonic()
-        evaluation = self.evaluator.evaluate(candidate.code)
-        record.update(status=evaluation.status, evaluation=asdict(evaluation),
-                      seconds=time.monotonic() - started)
+            started = time.monotonic()
+            evaluation = self.evaluator.evaluate(candidate.code)
+            seconds = time.monotonic() - started
         if attempt.program_id is None:
-            program = Program(self.next_program_id, candidate.code, candidate.design,
-                              attempt.operator, attempt.parent_id, attempt.reference_id, evaluation,
-                              analysis=candidate.analysis)
-            self.next_program_id += 1
-            attempt.program_id = program.id
-            self.archive[program.id] = program
-        else:
-            program = self.archive[attempt.program_id]
-            program.code, program.design, program.evaluation = candidate.code, candidate.design, evaluation
-            program.analysis = candidate.analysis
-        record["program_id"] = program.id
-        self.store.update(record["path"], record)
-        self._save()
-        self.store.program(program)
-
-    def _finish(self, attempt: Attempt):
-        if attempt.completed:
-            return
-        attempt.completed = True
-        if attempt.evaluations:
-            self.consecutive_unevaluated = 0
-        else:
-            self.consecutive_unevaluated += 1
-        self._save()
-        self.store.write(f"attempts/{attempt.id:06d}.json", asdict(attempt))
+            program_id = max(self.archive, default=0) + 1
+            attempt.program_id = program_id
+        program = Program(attempt.program_id, candidate.code, candidate.design, attempt.operator,
+                          attempt.parent_id, attempt.reference_id, evaluation,
+                          analysis=candidate.analysis)
+        self.archive[program.id] = program
+        attempt.evaluations.append({
+            "id": self.evaluations_used + 1, "status": evaluation.status, "evaluation": asdict(evaluation),
+            "seconds": seconds,
+            "repair": attempt.repair_used, "program_id": program.id,
+            "resources": getattr(self.evaluator, "last_dispatch", {}),
+        })
 
     def step(self) -> Attempt | None:
         """Complete one generation attempt, including at most one repair."""
         if self.stop_reason is not None:
             return None
+        attempt_id = len(self.attempts) + 1
+        # One random stream per attempt, so a resumed run draws as an uninterrupted one.
+        self.rng = random.Random(f"{self.config.seed}:{attempt_id}")
         initialized = sum(p.valid and p.operator == "Init" for p in self.archive.values())
         if initialized < self.config.initial_size:
-            parent_id, operator, reference_id = 0, "Init", None
+            attempt = Attempt(attempt_id, 0, "Init")
             prompt = self.prompts.initialization(self.archive)
         else:
-            parent, operator, reference = choose(self.archive, self.attempts, self.config, self.rng)
-            parent_id, reference_id = parent.id, reference.id if reference else None
-            prompt = self.prompts.evolution(self.archive, parent, operator, reference)
-        attempt = Attempt(len(self.attempts) + 1, parent_id, operator, reference_id)
+            parent, operator, reference, record = self.select(attempt_id)
+            attempt = Attempt(attempt_id, parent.id, operator,
+                              reference.id if reference else None, record=record)
+            prompt = self.evolution_prompt(attempt, parent, reference)
         self.attempts.append(attempt)
-        self._save()
-        response = self._model_call(attempt, prompt)
+        response = self._call(attempt, prompt)
         if response is not None:
             candidate = self._parse(attempt, response)
             if candidate is None:
                 attempt.repair_used = True
                 prompt = self.prompts.repair_format(response, attempt.calls[-1]["format_failure"])
-                response = self._model_call(attempt, prompt, "format")
+                response = self._call(attempt, prompt, "format")
                 candidate = self._parse(attempt, response) if response is not None else None
             if candidate is not None:
                 self._evaluate(attempt, candidate)
@@ -238,37 +181,34 @@ class TraceAAD:
                         and self.evaluations_used < self.config.evaluation_budget):
                     attempt.repair_used = True
                     prompt = self.prompts.repair_program(program)
-                    response = self._model_call(attempt, prompt, program.evaluation.status)
+                    response = self._call(attempt, prompt, program.evaluation.status)
                     repaired = self._parse(attempt, response) if response is not None else None
                     if repaired is not None:
                         self._evaluate(attempt, repaired)
-        self._finish(attempt)
+        self.finish(attempt)
+        attempt.finished_at = time.time()
+        program = self.archive.get(attempt.program_id)
+        self.store.append("attempts.jsonl", {"attempt": asdict(attempt),
+                                             "program": program.to_dict() if program else None})
         return attempt
 
     def run(self, *, on_attempt=None) -> SearchResult:
-        """Run to a stopping condition; optionally report each completed attempt."""
-        try:
-            while (attempt := self.step()) is not None:
-                if on_attempt is not None:
-                    on_attempt(attempt)
-            result = SearchResult(
-                "finished" if self.best is not None else "failed", self.stop_reason, self.best,
-                self.evaluations_used, self.model_calls, len(self.attempts),
-                sum(p.valid for p in self.archive.values()),
-            )
-            self.store.write("result.json", result.to_dict())
-            if result.best is not None and self.store.path is not None:
-                (self.store.path / "best.py").write_text(result.best.code)
-            return result
-        finally:
-            self.close()
-
-    def close(self):
-        self.store.close()
+        """Run to a stopping condition; optionally report each finished attempt."""
+        while (attempt := self.step()) is not None:
+            if on_attempt is not None:
+                on_attempt(attempt)
+        result = SearchResult(
+            "finished" if self.best is not None else "failed", self.stop_reason, self.best,
+            self.evaluations_used, self.model_calls, len(self.attempts),
+            sum(p.valid for p in self.archive.values()),
+        )
+        self.store.write("result.json", result.to_dict())
+        if result.best is not None and self.store.path is not None:
+            (self.store.path / "best.py").write_text(result.best.code)
+        return result
 
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc, tb):
-        self.close()
-
+    def __exit__(self, *args):
+        pass

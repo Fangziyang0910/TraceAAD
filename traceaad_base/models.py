@@ -1,8 +1,7 @@
-"""Program records and the separate accounting for generation attempts."""
+"""Programs, model replies and generation attempts."""
 
 from dataclasses import asdict, dataclass, field
 import json
-import math
 from typing import Literal
 
 Operator = Literal["Init", "Refine", "Explore", "Crossover"]
@@ -14,15 +13,6 @@ class Evaluation:
     status: Status
     fitness: float | None = None
     failure: str | None = None
-
-    def __post_init__(self):
-        if self.status not in {"success", "error", "timeout"}:
-            raise ValueError(f"Unknown evaluation status: {self.status}")
-        if self.status == "success":
-            if self.fitness is None or not math.isfinite(self.fitness) or self.failure is not None:
-                raise ValueError("A successful evaluation needs a finite fitness and no failure")
-        elif self.fitness is not None or not self.failure:
-            raise ValueError("A failed evaluation needs feedback and no fitness")
 
 
 @dataclass
@@ -52,7 +42,7 @@ class Program:
 
 
 class FormatError(ValueError):
-    """The model reply cannot supply the required analysis/design/code object."""
+    """The model reply does not contain the analysis/design/code object."""
 
 
 @dataclass(frozen=True)
@@ -63,19 +53,14 @@ class Candidate:
 
     @classmethod
     def parse(cls, response: str) -> "Candidate":
-        def invalid_constant(value):
-            raise ValueError(f"Invalid JSON constant: {value}")
-
         try:
-            value = json.loads(response, parse_constant=invalid_constant)
+            value = json.loads(response)
         except (TypeError, ValueError) as exc:
             raise FormatError(str(exc)) from exc
         if not isinstance(value, dict):
             raise FormatError(f"Expected a JSON object, got {type(value).__name__}")
         for name in ("analysis", "design", "code"):
-            if name not in value:
-                raise FormatError(f"Missing required field: {name}")
-            if not isinstance(value[name], str) or not value[name].strip():
+            if not isinstance(value.get(name), str) or not value[name].strip():
                 raise FormatError(f"Field {name!r} must be a nonempty string")
         return cls(analysis=value["analysis"], design=value["design"], code=value["code"])
 
@@ -91,6 +76,11 @@ class ModelReply:
 
 @dataclass
 class Attempt:
+    """One generation attempt: its model calls, evaluations and final program.
+
+    ``record`` holds method-specific information, such as V20's selection and
+    the material shown to the model.
+    """
     id: int
     parent_id: int
     operator: Operator
@@ -99,8 +89,8 @@ class Attempt:
     calls: list[dict] = field(default_factory=list)
     evaluations: list[dict] = field(default_factory=list)
     repair_used: bool = False
-    completed: bool = False
-    interruption: str | None = None
+    finished_at: float | None = None
+    record: dict = field(default_factory=dict)
 
     @property
     def model_calls(self) -> int:
@@ -119,4 +109,3 @@ class SearchResult:
 
     def to_dict(self) -> dict:
         return asdict(self)
-

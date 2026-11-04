@@ -1,6 +1,6 @@
 # DeltaEvolve 论文复现
 
-本实现依据 [ICML 2026 正式版](https://proceedings.mlr.press/v306/jiang26g.html)的 §4、Algorithm 1、Figures 5–6 和 13–14、Table 4。2026-10-16 查询作者仓库时，仅有 Coming Soon，未使用作者实现。逐项文献核对见[研究记录](../../docs/记录/2026-10-16-DeltaEvolve复现核对.md)。
+本实现依据 [ICML 2026 正式版](https://proceedings.mlr.press/v306/jiang26g.html)的 §4、Algorithm 1、Figures 5–6 和 13–14、Table 4。2026-10-16 查询作者仓库时，仅有 Coming Soon，未使用作者实现。逐项文献核对见研究记录。
 
 ## 已实现的论文机制
 
@@ -80,4 +80,4 @@ uv run python -m experiments.infra.local_queue \
 
 恢复使用 `experiments.infra.resume_baseline --run-dir RUN_DIR`，加 `--execute` 才继续。测试覆盖补丁与完整模块保存、历史披露、网格与迁移、预算、调用费用、评价中断、embedding 失败的恢复，以及六任务的完整运行入口。它们只验证机制和框架行为，不证明搜索效果或复现论文数值。
 
-本轮完整检查与真实服务验证见[2026-10-17 记录](../../docs/记录/2026-10-17-DeltaEvolve实现检查.md)。
+本轮完整检查与真实服务验证见2026-10-17 记录。

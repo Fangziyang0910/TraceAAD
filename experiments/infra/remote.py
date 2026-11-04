@@ -103,7 +103,7 @@ def main(argv=None):
     global HOST, REMOTE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("push", "pull", "prune", "watch", "sync"))
-    parser.add_argument("--experiment", default="traceaad")
+    parser.add_argument("--experiment", required=True)
     parser.add_argument("--batch")
     parser.add_argument("--interval", type=int, default=60)
     parser.add_argument("--no-heldout", action="store_true", help="prune finished runs without a held-out result")

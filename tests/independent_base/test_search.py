@@ -30,16 +30,16 @@ def test_repair_replaces_same_individual_and_keeps_both_evaluated_versions(
     assert (first.parent_id, first.operator, first.reference_id) == (0, "Init", None)
     assert (first.design, first.evaluation.fitness) == ("Repaired idea", 4)
     assert first.analysis == "Repaired computational change"
-    assert json.loads((tmp_path / "programs/000001.json").read_text())["analysis"] == first.analysis
+    rows = [json.loads(line) for line in (tmp_path / "attempts.jsonl").read_text().splitlines()]
+    assert rows[0]["program"]["analysis"] == first.analysis
     assert search.archive[2].parent_id == 1
     assert search.archive[2].operator in {"Refine", "Explore"}
-    evaluations = [json.loads(p.read_text()) for p in sorted((tmp_path / "evaluations").glob("*.json"))]
+    evaluations = [e for row in rows for e in row["attempt"]["evaluations"]]
     assert [e["program_id"] for e in evaluations] == [1, 1, 2]
     assert [e["status"] for e in evaluations] == ["error", "success", "success"]
-    assert evaluations[0]["candidate"]["design"] == "Original idea"
-    assert evaluations[1]["candidate"]["design"] == "Repaired idea"
-    assert evaluations[0]["candidate"]["analysis"] == "Original computational change"
-    assert evaluations[1]["candidate"]["analysis"] == first.analysis
+    calls = [json.loads(line) for line in (tmp_path / "calls.jsonl").read_text().splitlines()]
+    assert json.loads(calls[0]["response"])["design"] == "Original idea"
+    assert json.loads(calls[1]["response"])["design"] == "Repaired idea"
     assert "Analysis: Original computational change" in model.prompts[1]
     assert "Analysis: Repaired computational change" in model.prompts[2]
     assert "ValueError: broken" in model.prompts[1]
@@ -133,7 +133,7 @@ def test_resume_at_attempt_boundary_reproduces_selection_and_archive(task, reply
         for _ in range(6):
             first.step()
     resumed_model = scripted_model(replies[6:])
-    resumed = TraceAAD(task, resumed_model, run_dir=tmp_path, resume=True)
+    resumed = TraceAAD(task, resumed_model, config=config, run_dir=tmp_path, resume=True)
     actual = resumed.run()
     assert actual.to_dict() == expected.to_dict()
     assert [p.to_dict() for p in resumed.archive.values()] == [p.to_dict() for p in uninterrupted.archive.values()]
@@ -143,25 +143,17 @@ def test_resume_at_attempt_boundary_reproduces_selection_and_archive(task, reply
 
 
 @pytest.mark.parametrize("interrupted_stage", ["generate", "evaluate", "repair"])
-def test_interrupted_work_is_not_replayed_or_given_synthetic_fitness(
-    task, reply, scripted_model, tmp_path, interrupted_stage
-):
+def test_unfinished_attempt_is_dropped_on_resume(task, reply, scripted_model, tmp_path, interrupted_stage):
     responses = [KeyboardInterrupt()] if interrupted_stage == "generate" else [reply(body="return 1 / 0"), KeyboardInterrupt()]
-    with TraceAAD(task, scripted_model(responses), config=Config(evaluation_budget=2), run_dir=tmp_path) as first:
-        if interrupted_stage == "evaluate":
-            def interrupt(code):
-                raise KeyboardInterrupt()
-            first.evaluator.evaluate = interrupt
-        with pytest.raises(KeyboardInterrupt):
-            first.step()
-        spent = first.model_calls, first.evaluations_used
-    with TraceAAD(task, scripted_model([reply(2)] * 2), run_dir=tmp_path, resume=True) as resumed:
-        assert (resumed.model_calls, resumed.evaluations_used) == spent
-        assert resumed.attempts[0].completed and resumed.attempts[0].interruption
-        if interrupted_stage == "repair":
-            assert resumed.archive[1].evaluation.status == "error"
-        else:
-            assert resumed.archive == {}
-        result = resumed.run()
-        assert result.evaluations == 2 and result.best.evaluation.fitness == 2
-        assert result.model_calls == spent[0] + 2 - spent[1]
+    config = Config(evaluation_budget=2)
+    first = TraceAAD(task, scripted_model(responses), config=config, run_dir=tmp_path)
+    if interrupted_stage == "evaluate":
+        def interrupt(code):
+            raise KeyboardInterrupt()
+        first.evaluator.evaluate = interrupt
+    with pytest.raises(KeyboardInterrupt):
+        first.step()
+    resumed = TraceAAD(task, scripted_model([reply(2)] * 2), config=config, run_dir=tmp_path, resume=True)
+    assert resumed.attempts == [] and resumed.archive == {}
+    result = resumed.run()
+    assert result.evaluations == 2 and result.best.evaluation.fitness == 2
