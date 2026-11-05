@@ -3,6 +3,7 @@ import json
 import pytest
 
 from traceaad_base import Config, TraceAAD
+from traceaad_base.storage import Store
 
 
 def test_format_then_program_error_share_one_repair(task, reply, scripted_model):
@@ -29,7 +30,7 @@ def test_repair_replaces_same_individual_and_keeps_both_evaluated_versions(
     first = search.archive[1]
     assert (first.parent_id, first.operator, first.reference_id) == (0, "Init", None)
     assert (first.design, first.evaluation.fitness) == ("Repaired idea", 4)
-    assert first.analysis == "Repaired computational change"
+    assert first.analysis == "Original computational change\nRepair: Repaired computational change"
     rows = [json.loads(line) for line in (tmp_path / "attempts.jsonl").read_text().splitlines()]
     assert rows[0]["program"]["analysis"] == first.analysis
     assert search.archive[2].parent_id == 1
@@ -41,7 +42,7 @@ def test_repair_replaces_same_individual_and_keeps_both_evaluated_versions(
     assert json.loads(calls[0]["response"])["design"] == "Original idea"
     assert json.loads(calls[1]["response"])["design"] == "Repaired idea"
     assert "Analysis: Original computational change" in model.prompts[1]
-    assert "Analysis: Repaired computational change" in model.prompts[2]
+    assert "Repair: Repaired computational change" in model.prompts[2]
     assert "ValueError: broken" in model.prompts[1]
     assert "[Failure Feedback]" in model.prompts[1]
     assert (tmp_path / "best.py").read_text() == result.best.code
@@ -157,3 +158,55 @@ def test_unfinished_attempt_is_dropped_on_resume(task, reply, scripted_model, tm
     assert resumed.attempts == [] and resumed.archive == {}
     result = resumed.run()
     assert result.evaluations == 2 and result.best.evaluation.fitness == 2
+
+
+def test_row_after_a_cut_off_line_survives_the_next_resume(tmp_path):
+    store = Store(tmp_path)
+    store.append("a.jsonl", {"id": 1})
+    with (tmp_path / "a.jsonl").open("a") as output:
+        output.write('{"id": 2, "cut')
+    assert [row["id"] for row in store.rows("a.jsonl")] == [1]
+    store.repair_tail("a.jsonl")
+    store.append("a.jsonl", {"id": 3})
+    assert [row["id"] for row in store.rows("a.jsonl")] == [1, 3]
+
+
+def test_cut_inside_a_multibyte_character_is_only_a_cut_line(tmp_path):
+    store = Store(tmp_path)
+    store.append("a.jsonl", {"id": 1})
+    with (tmp_path / "a.jsonl").open("ab") as output:
+        output.write('{"text": "中'.encode()[:-1])
+    assert [row["id"] for row in store.rows("a.jsonl")] == [1]
+
+
+def test_unicode_line_separators_stay_inside_their_row(tmp_path):
+    store = Store(tmp_path)
+    store.append("a.jsonl", {"text": "a b\x85c"})
+    store.append("a.jsonl", {"text": "d"})
+    assert [row["text"] for row in store.rows("a.jsonl")] == ["a b\x85c", "d"]
+
+
+def test_a_damaged_middle_row_is_an_error(tmp_path):
+    (tmp_path / "a.jsonl").write_text('{"id": 1}\nbroken\n{"id": 3}\n')
+    with pytest.raises(ValueError):
+        Store(tmp_path).rows("a.jsonl")
+
+
+def test_killed_run_resumes_to_the_same_archive_as_an_uninterrupted_run(task, reply, scripted_model, tmp_path):
+    config = Config(evaluation_budget=6, initial_size=1)
+    answers = [reply(value) for value in range(1, 7)]
+    plain = TraceAAD(task, scripted_model(answers), config=config, run_dir=tmp_path / "plain")
+    plain.run()
+    killed = TraceAAD(task, scripted_model(answers[:3]), config=config, run_dir=tmp_path / "killed")
+    for _ in range(3):
+        killed.step()
+    path = tmp_path / "killed" / "attempts.jsonl"
+    with path.open("ab") as output:
+        output.write(b'{"attempt": {"id": 4, "cut')
+    resumed = TraceAAD(task, scripted_model(answers[3:]), config=config, run_dir=tmp_path / "killed", resume=True)
+    resumed.run()
+    rows = Store(tmp_path / "killed").rows("attempts.jsonl")
+    assert [row["attempt"]["id"] for row in rows] == [1, 2, 3, 4, 5, 6]
+    assert {key: program.code for key, program in resumed.archive.items()} == {
+        key: program.code for key, program in plain.archive.items()}
+    assert [(a.parent_id, a.operator) for a in resumed.attempts] == [(a.parent_id, a.operator) for a in plain.attempts]

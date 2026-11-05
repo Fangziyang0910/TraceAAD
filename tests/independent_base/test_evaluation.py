@@ -64,7 +64,7 @@ def test_timeout_spans_all_instances_and_repair_updates_same_individual(reply, s
     assert "total time limit of 0.3 seconds" in first["failure"]
     assert result.best.id == 1 and result.best.evaluation.fitness == 2
     assert len(search.archive) == 1 and result.model_calls == 2
-    assert "total time limit" in model.prompts[1]
+    assert "0.3 seconds in total" in model.prompts[1]
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Process group cleanup is POSIX-specific")

@@ -13,7 +13,8 @@
 | 了解 Base 的个体表示、上下文与提示 | [TraceAAD Base 基础方法说明](docs/TraceAAD-Base.md) |
 | 了解当前方法 V20 | [V20 机制](docs/机制设计/V20.md) |
 | 运行 Base 的独立实现 | [traceaad_base](traceaad_base/README.md) |
-| 运行 V20 | [V20 实验入口](experiments/traceaad_v20/README.md) |
+| 了解只含上下文机制的 V21 | [V21 机制](docs/机制设计/V21.md) |
+| 运行 V20 或 V21 | [实验入口](experiments/traceaad_v20/README.md) |
 | 设计、运行或复查实验 | [实验入口](experiments/README.md) |
 | 查阅第三方提示的来源版本 | [来源记录](baselines/UPSTREAM.md) |
 
@@ -22,6 +23,7 @@
 | 目录 | 内容 |
 | --- | --- |
 | `traceaad_v20/` | 当前方法：轨迹评分、轨迹上下文与经验学习。 |
+| `traceaad_v21/` | 只含轨迹上下文与算子的方法。 |
 | `traceaad_base/` | Base 机制的独立实现与运行入口。 |
 | `baselines/` | 比较方法。 |
 | `benchmarks/` | 任务、数据与评价。 |

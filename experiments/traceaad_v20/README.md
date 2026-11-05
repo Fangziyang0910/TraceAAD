@@ -1,6 +1,6 @@
-# V20 与 Base 的同条件入口
+# V20、V21 与 Base 的同条件入口
 
-默认后端为 `scheduled`。Qwen3.8-27B经server4公共调度器分配到四个端点。`--method base` 调用 `traceaad_base.TraceAAD`；`--method v20` 调用完整V20。
+默认后端为 `scheduled`。Qwen3.8-27B经server4公共调度器分配到四个端点。`--method base` 调用 `traceaad_base.TraceAAD`；`--method v20` 调用完整V20；`--method v21` 调用只含上下文机制的V21。
 
 采样对齐 `20261031_base_schema_co6` 的保存配置：温度1.0，top_p=0.8，top_k=20，min_p=0，presence_penalty=1.5，frequency_penalty=0，repetition_penalty和repeat_penalty均为1，关闭思考，输出上限16384，JSON schema输出。
 
@@ -47,6 +47,16 @@ source .env.server4
   --env-file .env.server4 --no-experience-learning --launch
 ```
 
-快照路径与核对见[操作说明](../infra/AGENT_OPERATIONS.md)。对照Base直接使用已完成的`20261031_base_schema_co6`。
+V21不需要嵌入服务。它的对照是同一份代码的Base新批次，用 `--method base` 启动。批次名和结果入口在启动时指定：
+
+```bash
+source .env.server4
+.venv/bin/python -m experiments.traceaad_v20.launch_host \
+  --method v21 --experiment traceaad_v21 --batch BATCH_NAME \
+  --repeats 3 --budget 1000 --scheduler-socket /tmp/traceaad-1003/scheduler.sock \
+  --env-file .env.server4 --launch
+```
+
+快照路径与核对见[操作说明](../infra/AGENT_OPERATIONS.md)。对照是同一快照中的Base新批次。
 
 去掉 `--launch` 只输出十八路计划。恢复用单路原命令加 `--resume`：读回已完成的尝试，丢弃未完成的尝试后继续。辅助请求与tokens单列，不占评价预算。

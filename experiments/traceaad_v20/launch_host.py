@@ -1,4 +1,4 @@
-"""Preview or start independently recorded Base or V20 searches on the current host."""
+"""Preview or start independently recorded Base, V20 or V21 searches on the current host."""
 
 import argparse
 from datetime import datetime
@@ -13,7 +13,8 @@ import time
 
 from benchmarks.tasks import CO_TASKS, TASK_SHORT
 from traceaad_base.storage import write_json
-from .scheduling import REQUEST_OPTIONS, scheduler_status
+from .run import request_options
+from .scheduling import scheduler_status
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -51,7 +52,7 @@ def build_plan(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--method", choices=("v20", "base"), default="v20")
+    parser.add_argument("--method", choices=("v20", "v21", "base"), default="v20")
     parser.add_argument("--backend", choices=("scheduled",), default="scheduled")
     for feature in ("trajectory-scoring","trajectory-context","reference-selection","experience-learning"):
         parser.add_argument("--no-"+feature,action="store_true")
@@ -83,11 +84,11 @@ def main(argv=None):
         parser.error("scheduled backend requires --scheduler-socket")
     path = ROOT / "experiments_result" / args.experiment / f"batch_{args.batch}.json"
     manifest = {
-        "batch": args.batch, "method": "traceaad_base" if args.method == "base" else "traceaad_v20", "experiment": args.experiment,
+        "batch": args.batch, "method": f"traceaad_{args.method}", "experiment": args.experiment,
         "created_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(), "suite": "co6", "repeats": args.repeats,
         "budget_per_run": args.budget, "budget_axis": "评价次数", "budget_basis": "evaluate_calls",
         "output_tokens": args.max_tokens, "temperature": 1., "initial_size": args.initial_size,
-        "sampling": REQUEST_OPTIONS, "final_selection": "training", "eval_workers": 1,
+        "sampling": request_options(args.method), "final_selection": "training", "eval_workers": 1,
         "evaluation_scope": "whole_task", "resource_scheduler": scheduler,
         "seconds_per_instance": args.seconds_per_instance,
         "source_snapshot": str(ROOT),

@@ -3,16 +3,20 @@
 import json
 from dataclasses import asdict
 from http.server import ThreadingHTTPServer
+from pathlib import Path
+import subprocess
+import sys
 from threading import Thread
 from urllib.request import urlopen
 
 import pytest
 
-from experiments.infra import evaluate
+from experiments.infra import batch_status, evaluate
 from experiments.infra.artifacts import pick_best_sample
+from experiments.infra.result_storage import Programs
 from experiments.visualization import ResultsMonitor
 from experiments.visualization.server import make_request_handler
-from experiments.infra.storage import write_json
+from experiments.infra.storage import rows, seal_calls, write_json
 from experiments.traceaad_v20.reporting import Reporter
 from tests.support import TinyEvaluation, response
 from traceaad_base import Config, Task, TraceAAD
@@ -297,3 +301,51 @@ def test_stop_receipt_does_not_override_a_resumed_journal(tmp_path):
     (run/'events.jsonl').write_text('')
     assert monitor.state_signature('traceaad_v16') != before
     assert monitor.overview('traceaad_v16')['summary']['running']==1
+
+
+def test_reporter_appends_and_sources_come_from_the_native_log(tmp_path):
+    search, summary = base_run(tmp_path, *(response(v, analysis="Return a constant.") for v in (2, 5, 1)),
+                               budget=3, initial_size=3)
+    events = [json.loads(line) for line in (tmp_path / "events.jsonl").read_text().splitlines()]
+    candidates = [row for row in events if row["kind"] == "candidate"]
+    assert [row["candidate_id"] for row in candidates] == [1, 2, 3]
+    assert events[-1]["kind"] == "progress" and events[-1]["progress"]["phase"] == "finished"
+    assert not {"calls", "evaluations", "record"} & set(candidates[0]["attempt"])
+    assert "design" not in candidates[0]["program"] and candidates[0]["program"]["idea"]
+    assert all(row["id"] == 0 for row in map(json.loads, (tmp_path / "programs.jsonl").read_text().splitlines()))
+    sources = Programs(tmp_path)
+    for key, program in search.archive.items():
+        assert sources.get(key) == program.code
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_reporter_rebuilds_once_when_a_run_is_resumed(tmp_path):
+    search, _ = base_run(tmp_path, *(response(v, analysis="Return a constant.") for v in (2, 5, 1)),
+                         budget=3, initial_size=3)
+    with (tmp_path / "events.jsonl").open("a") as output:
+        output.write('{"kind":"candidate","cut')
+    reporter = Reporter(tmp_path, {"task": "tsp_construct", "method": "traceaad_base", "method_params": {}})
+    reporter.publish(search)
+    rows = [json.loads(line) for line in (tmp_path / "events.jsonl").read_text().splitlines()]
+    assert [row["candidate_id"] for row in rows if row["kind"] == "candidate"] == [1, 2, 3]
+
+
+def test_sources_of_a_baseline_stay_in_programs_jsonl(tmp_path):
+    sources = Programs(tmp_path)
+    sources.add(4, "def f(): return 4")
+    assert sources.get(4) == "def f(): return 4"
+    assert Programs(tmp_path).get(4) == "def f(): return 4"
+
+
+def test_status_reader_runs_from_stdin_in_the_repository():
+    root = Path(batch_status.__file__).resolve().parents[2]
+    done = subprocess.run([sys.executable, "-", "--help"], input=Path(batch_status.__file__).read_text(),
+                          text=True, capture_output=True, cwd=root)
+    assert done.returncode == 0, done.stderr
+
+
+def test_sealed_calls_keep_every_row(tmp_path):
+    (tmp_path / "calls.jsonl").write_text('{"prompt":"a"}\n{"prompt":"b"}\n')
+    seal_calls(tmp_path)
+    assert not (tmp_path / "calls.jsonl").exists()
+    assert [row["prompt"] for row in rows(tmp_path / "calls.jsonl.gz")] == ["a", "b"]

@@ -120,7 +120,7 @@ def seal_calls(run_dir):
                 shutil.copyfileobj(previous, handle)
         with (
             source.open("rb") as original,
-            gzip.open(destination, "ab", compresslevel=1) as compressed,
+            gzip.open(destination, "ab", compresslevel=6) as compressed,
         ):
             shutil.copyfileobj(original, compressed)
         destination.replace(target)

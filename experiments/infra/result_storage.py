@@ -64,45 +64,59 @@ def heldout_identity(run_dir, result):
 
 
 class Programs:
-    """Read source records by program ID using file offsets."""
+    """Read source records by program ID using file offsets.
+
+    Baselines write ``programs.jsonl``. Methods built on Base keep their sources in
+    ``native/attempts.jsonl``; there ``programs.jsonl`` holds only the example program.
+    """
 
     def __init__(self, run_dir):
         self.path = Path(run_dir) / "programs.jsonl"
-        self.offsets, self.offset = {}, 0
-        self.identity = None
+        self.native = Path(run_dir) / "native" / "attempts.jsonl"
+        self.offsets, self.cursors = {}, {}
 
-    def refresh(self):
-        if not self.path.exists():
+    def _refresh(self, path):
+        if not path.exists():
             return
-        stat = self.path.stat()
+        stat = path.stat()
         identity = (stat.st_dev, stat.st_ino)
-        if identity != self.identity or stat.st_size < self.offset:
-            self.offsets, self.offset, self.identity = {}, 0, identity
-        with self.path.open("rb") as handle:
-            handle.seek(self.offset)
+        known, offset = self.cursors.get(path, (None, 0))
+        if identity != known or stat.st_size < offset:
+            self.offsets = {key: value for key, value in self.offsets.items() if value[0] != path}
+            offset = 0
+        with path.open("rb") as handle:
+            handle.seek(offset)
             while raw := handle.readline():
-                start = self.offset
                 if not raw.endswith(b"\n"):
                     break
                 row = json.loads(raw)
-                self.offsets[row["id"]] = start
-                self.offset = handle.tell()
+                program = row.get("program", row)
+                if program is not None:
+                    self.offsets[program["id"]] = (path, offset)
+                offset = handle.tell()
+        self.cursors[path] = (identity, offset)
+
+    def refresh(self):
+        self._refresh(self.native)
+        self._refresh(self.path)
 
     def add(self, program_id, code):
         self.refresh()
-        self.offsets[program_id] = self.offset
-        self.offset = append_jsonl(self.path, {"id": program_id, "code": code})
+        offset = self.cursors.get(self.path, (None, 0))[1]
+        self.offsets[program_id] = (self.path, offset)
+        offset = append_jsonl(self.path, {"id": program_id, "code": code})
         stat = self.path.stat()
-        self.identity = (stat.st_dev, stat.st_ino)
+        self.cursors[self.path] = ((stat.st_dev, stat.st_ino), offset)
 
     def get(self, program_id):
         self.refresh()
-        offset = self.offsets.get(program_id)
-        if offset is None:
+        location = self.offsets.get(program_id)
+        if location is None:
             return None
-        with self.path.open("rb") as handle:
-            handle.seek(offset)
-            return json.loads(handle.readline())["code"]
+        with location[0].open("rb") as handle:
+            handle.seek(location[1])
+            row = json.loads(handle.readline())
+        return row.get("program", row)["code"]
 
 
 def stored_heldout(run_dir, scale, variant=None):

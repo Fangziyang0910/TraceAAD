@@ -10,8 +10,8 @@
 | --- | --- | --- |
 | 这次实验用了什么条件？ | `run_config.json` | 模型、任务、参数、预算、种子与评价条件；结合源码快照核对版本。 |
 | 发生过哪些尝试？ | `events.jsonl` | 来源关系、评价、失败与阶段变化。 |
-| 实际程序是什么？ | `programs.jsonl` | 程序标识及其源码。 |
-| 模型实际看到和返回了什么？ | `calls.jsonl` 或 `.gz` | 输入、原始回复、错误与用量。 |
+| 实际程序是什么？ | 基线：`programs.jsonl`；Base 系列：`native/attempts.jsonl` | 程序标识及其源码。Base 系列的 `programs.jsonl` 只保存示例程序。 |
+| 模型实际看到和返回了什么？ | `calls.jsonl` 或 `.gz` | 输入、原始回复、错误与用量。Base 系列在 `native/` 下，搜索结束后压缩。 |
 | 哪些状态已经提交？ | `resume.json` | 恢复状态与日志提交位置。 |
 | 搜索怎样结束？ | `summary.json` | 状态、计数与最终程序标识。 |
 | 最终程序怎样选出？ | `selection.json` | 该方法保存的候选、评价与选中编号。 |
@@ -30,7 +30,7 @@
 | `program.id`、`node_id` | 成功解析后创建的程序个体编号。 | 相同源码也可以有不同编号。 |
 | `call_ids` | 关联模型请求的 `request_id`。 | 一次生成可能经历多个接口请求。 |
 
-当前 `programs.jsonl` 按 `{id, code}` 保存源码。`candidate` 事件中的 `program` 保存设计说明、来源与评价元数据。后续 `progress` 事件也可能更新程序状态。
+基线的 `programs.jsonl` 按 `{id, code}` 保存源码；Base 系列的源码在 `native/attempts.jsonl` 的 `program.code`，读取统一走 `result_storage.Programs`。`candidate` 事件中的 `program` 保存设计说明、来源与评价元数据，请求明细和方法记录只在 `native/attempts.jsonl`。Base 系列的 `events.jsonl` 在进程启动时重建一次，之后逐条追加。后续 `progress` 事件也可能更新程序状态。
 
 解析失败写为 `delivery_failed`，计入生成次数，不创建程序个体。10月28日以前的 TraceAAD 运行把外面包了一层 ```json 围栏的完整回复也记为解析失败；此后的运行去掉这层围栏再解析。已经创建但评价失败的个体、解析失败、接口故障需要分开统计。
 

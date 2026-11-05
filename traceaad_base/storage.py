@@ -35,13 +35,16 @@ class Store:
                 output.write(json.dumps(row, ensure_ascii=False) + "\n")
 
     def rows(self, relative: str) -> list[dict]:
-        """Read complete lines; a line cut off by a killed process is dropped."""
+        """Read complete lines. Only a final line without a newline can be unfinished."""
         if self.path is None or not (self.path / relative).exists():
             return []
-        rows = []
-        for line in (self.path / relative).read_text().splitlines():
-            try:
-                rows.append(json.loads(line))
-            except ValueError:
-                pass
-        return rows
+        return [json.loads(line) for line in (self.path / relative).read_bytes().split(b"\n")[:-1]]
+
+    def repair_tail(self, relative: str):
+        """Remove a line cut off by a killed process, so the next row starts on its own line."""
+        if self.path is None or not (self.path / relative).exists():
+            return
+        path = self.path / relative
+        end = path.read_bytes().rfind(b"\n") + 1
+        with path.open("r+b") as output:
+            output.truncate(end)

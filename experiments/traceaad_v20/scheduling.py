@@ -130,7 +130,7 @@ class ScheduledModel:
                 "socket": self.path, "slot": slot, "endpoint": endpoint["base_url"],
                 "model": endpoint["model"], "routing": "shared",
                 "queue_seconds": time.monotonic() - started,
-            }, "request_options": self.request_options}
+            }}
             self.client = self.factory(endpoint["base_url"], endpoint["model"],
                                        api_key=api_key(endpoint["base_url"]),
                                        request_options=self.request_options)

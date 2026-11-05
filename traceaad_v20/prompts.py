@@ -2,15 +2,29 @@
 
 import re
 
-from traceaad_base.prompts import COMMON_TEMPLATE as BASE_TEMPLATE, PromptBuilder as BasePromptBuilder
+from traceaad_base.prompts import PromptBuilder as BasePromptBuilder
 
-COMMON_TEMPLATE = BASE_TEMPLATE.replace(
-    '- "analysis": In 2–3 concise sentences, using at most 100 English words or 200 Chinese characters, explain',
-    '- "analysis": Briefly explain',
-).replace(
-    'in one self-contained paragraph of 2–3 concise sentences, using at most 100 English words or 200 Chinese characters.',
-    'in one short self-contained paragraph.',
-)
+COMMON_TEMPLATE = """{task_description}
+
+Implement the following Python function:
+```python
+{function_template}
+```
+
+[Context]
+{context}
+
+[Instruction]
+{instruction}
+
+[Output]
+Return exactly one valid JSON object with three string fields, in this order:
+- "analysis": Briefly explain the algorithmic rationale of the proposed change, the evidence that motivates it, and its expected effect on solving the task.
+- "design": Describe the final algorithm implemented in "code" in one short self-contained paragraph. State the solution representation, the main solving principle, and how the procedure determines the returned result.
+- "code": Provide the complete implementation of the required function, including necessary imports and helper definitions. Do not include comments or docstrings.
+First determine a complete executable algorithm; then make "analysis" and "design" accurately describe the final "code".
+Preserve the required function signature and satisfy the task constraints and input/output requirements.
+Return only the JSON object, without Markdown fences or additional text."""
 
 TIMEOUT_REPAIR = """Reduce runtime so the full evaluation finishes and completes successfully.
 Identify the core computation and its contribution to the returned result.

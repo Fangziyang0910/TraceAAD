@@ -3,13 +3,15 @@
 The search writes its own records under ``directory/native``. This adapter only
 writes derived files in ``directory``; it never participates in search/resume.
 Publish after construction, after each finished attempt, and with SearchResult
-after ``run()`` returns. Each attempt contributes at most one candidate event;
-its budget position includes every Evaluate, including repair.
+after ``run()`` returns. The first publish of a process rebuilds ``events.jsonl``;
+later ones append the new attempts. Each attempt contributes at most one candidate
+event; its budget position includes every Evaluate, including repair. Sources stay
+in ``native/attempts.jsonl``; ``programs.jsonl`` holds only the example program.
 """
 
 from collections import Counter
 from copy import deepcopy
-from dataclasses import asdict
+from dataclasses import fields
 from datetime import datetime
 import json
 import os
@@ -22,6 +24,8 @@ from experiments.infra.storage import read_object, write_json
 
 BUDGET_AXIS = "评价次数"
 BUDGET_BASIS = "evaluate_calls"
+# Requests, evaluations and method records are read from native/attempts.jsonl.
+NATIVE_ONLY = {"calls", "evaluations", "record"}
 
 
 def _timestamp(path, fallback):
@@ -60,6 +64,7 @@ def _jsonl(records):
 def _program(program):
     record = program.to_dict()
     record.pop("code")
+    record.pop("design")
     evaluation = record["evaluation"] or {}
     return {
         **record,
@@ -129,6 +134,7 @@ class Reporter:
         fallback = previous.get("started_at") or datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
         self.started_at = self.metadata.get("started_at") or _timestamp(
             self.directory / "native" / "run_config.json", fallback)
+        self.published = None
 
     def _progress(self, used, attempts, phase):
         # Legacy readers call the budget counter "attempts". Actual generation
@@ -156,19 +162,19 @@ class Reporter:
             status = "finished" if result.status == "finished" else "no_valid_root"
             phase = "finished" if status == "finished" else "selection_failed"
 
-        events = []
-        if 0 in programs:
-            events.append({"kind": "program", "program": programs[0], "ts": self.started_at})
+        rows = []
         used, last_at = 0, self.started_at
         for count, attempt in enumerate(search.attempts, 1):
             used = max([used, *(record["id"] for record in attempt.evaluations)])
             last_at = _beijing(attempt.finished_at) if attempt.finished_at else last_at
+            if self.published is not None and count <= self.published:
+                continue
             program = programs.get(attempt.program_id)
             if program is None:
                 outcome, reason = _delivery_failure(attempt)
             else:
                 outcome, reason = program["status"], program["reason"]
-            events.append({
+            rows.append({
                 "kind": "candidate" if program is not None else "delivery_failed",
                 "candidate_id": attempt.id,
                 "node_id": attempt.program_id,
@@ -181,16 +187,17 @@ class Reporter:
                 "valid": bool(program and program["valid"]),
                 "fitness": program["fitness"] if program else None,
                 "program": program,
-                "attempt": {**asdict(attempt), "action": attempt.operator,
-                            "idea": program["idea"] if program else "", "reason": reason,
+                "attempt": {**{field.name: getattr(attempt, field.name) for field in fields(attempt)
+                               if field.name not in NATIVE_ONLY},
+                            "action": attempt.operator, "reason": reason,
                             "model_calls": attempt.model_calls},
                 "ts": last_at,
                 "progress": self._progress(
                     used, count, "initialization" if attempt.operator == "Init" else "evolution"),
             })
         finished_at = _timestamp(native / "result.json", last_at) if result is not None else None
-        events.append({"kind": "progress", "ts": finished_at or last_at,
-                       "progress": self._progress(search.evaluations_used, len(search.attempts), phase)})
+        closing = {"kind": "progress", "ts": finished_at or last_at,
+                   "progress": self._progress(search.evaluations_used, len(search.attempts), phase)}
         auxiliary = {}
         for attempt in search.attempts:
             for request in attempt.record.get("aux", []):
@@ -234,11 +241,17 @@ class Reporter:
             summary.update(finished_at=finished_at, final_selection="training",
                            selection_evaluations=0)
 
-        write_json(self.directory / "run_config.json", metadata)
-        _replace_text(self.directory / "programs.jsonl", _jsonl(
-            {"id": program.id, "code": program.code}
-            for _, program in sorted(search.archive.items())))
-        _replace_text(self.directory / "events.jsonl", _jsonl(events))
+        if self.published is None:
+            write_json(self.directory / "run_config.json", metadata)
+            example = search.archive.get(0)
+            _replace_text(self.directory / "programs.jsonl", _jsonl(
+                [{"id": 0, "code": example.code}] if example is not None else []))
+            opening = [{"kind": "program", "program": programs[0], "ts": self.started_at}] if 0 in programs else []
+            _replace_text(self.directory / "events.jsonl", _jsonl([*opening, *rows, closing]))
+        else:
+            with (self.directory / "events.jsonl").open("a", encoding="utf-8") as output:
+                output.write(_jsonl([*rows, closing] if result is not None else rows))
+        self.published = len(search.attempts)
         if result is not None:
             write_json(self.directory / "selection.json", {
                 "criterion": "training", "selected_node": best["id"] if best else None,

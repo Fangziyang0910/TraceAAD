@@ -87,7 +87,7 @@ class TrainingHistory:
                             "node_id": row.get("node_id"), "fitness": row["fitness"],
                             "operator": row["operator"], "status": row["status"], "valid": row["valid"],
                             **{k: attempt.get(k) for k in ("reason", "channel", "parent_id", "repair_of", "created_at")},
-                            "idea": (attempt.get("idea") or "")[:280]})
+                            "idea": (attempt.get("idea") or (row.get("program") or {}).get("idea") or "")[:280]})
                     if row.get("progress"):
                         progress = row["progress"]
                         if row["kind"] in {"candidate", "delivery_failed"} or not self.clock:

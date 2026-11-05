@@ -121,7 +121,7 @@ def check():
     issues, summaries = [], {}
     try:
         failed = json.loads(command(["systemctl", "--user", "list-units", "--failed", "-o", "json"]))
-        issues += [f"本机服务失败: {unit['unit']}" for unit in failed]
+        issues += [f"本机服务失败: {unit['unit']}" for unit in failed if unit["unit"].startswith("traceaad-")]
     except (OSError, ValueError, KeyError, subprocess.SubprocessError):
         issues.append("无法查询本机服务")
     try:
@@ -157,8 +157,9 @@ def check():
                                         "--json"], timeout=75))
             summaries[key] = there["summary"]
             issues.extend(batch_issues(there, plan, sessions))
-        except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        except (OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
             issues.append(f"{key}: 无法查询批次状态")
+            print(key, type(exc).__name__, str(getattr(exc, "stderr", "") or exc)[-500:], flush=True)
             continue
         try:
             issues.extend(lag_issues(there, collect(ROOT / manifest)))

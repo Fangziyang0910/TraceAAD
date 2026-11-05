@@ -35,7 +35,7 @@ uv run python -m experiments.visualization --host 0.0.0.0 --port 8765
 
 本机看板由 systemd 用户服务 `traceaad-dashboard.service` 启动；结果同步由 `traceaad-results-sync.service` 按[主实验名单](../../experiments_result/primary_runs.json)每60秒从server4拉取。两个服务开机后自动启动。
 
-`traceaad-watch.timer` 每三分钟运行 `python -m experiments.infra.watch_server4`。它不写批次名：server4 上有清单、且主实验名单中有运行在本机尚未完成（搜索未到终止状态，或已完成但缺 `heldout.json`）的批次，就是要检查的批次。新批次的运行加入主实验名单后自动纳入，被替换的批次随之移出；不在名单中的批次（如消融）不检查。每次检查：失败的用户服务、本机模型、server4 到本机模型的转发、tmux 会话、各批次的远端状态，以及本机副本是否落后远端 20 次候选以上。新异常通过本机桌面通知；最近一次检查保存在 `~/.cache/traceaad/server4-watch.json`。同一模块的 `sync` 动作（`python -m experiments.infra.watch_server4 sync`）按同样的规则每 60 秒同步这些批次，可以用一个服务替代按版本的同步服务。查询示例：
+`traceaad-watch.timer` 每三分钟运行 `python -m experiments.infra.watch_server4`。它不写批次名：server4 上有清单、且主实验名单中有运行在本机尚未完成（搜索未到终止状态，或已完成但缺 `heldout.json`）的批次，就是要检查的批次。新批次的运行加入主实验名单后自动纳入，被替换的批次随之移出；不在名单中的批次（如消融）不检查。每次检查：失败的 `traceaad-*` 用户服务、本机模型、server4 到本机模型的转发、tmux 会话、各批次的远端状态，以及本机副本是否落后远端 20 次候选以上。新异常通过本机桌面通知；最近一次检查保存在 `~/.cache/traceaad/server4-watch.json`。同一模块的 `sync` 动作（`python -m experiments.infra.watch_server4 sync`）按同样的规则每 60 秒同步这些批次，可以用一个服务替代按版本的同步服务。查询示例：
 
 ```bash
 systemctl --user status traceaad-dashboard.service traceaad-results-sync.service
@@ -43,11 +43,11 @@ systemctl --user status traceaad-watch.timer
 journalctl --user -u traceaad-watch.service -n 5 --no-pager
 ```
 
-## 独立 Base JSON Schema 批次（10月31日）
+## 正式 Base 批次（10月31日）
 
 `20261031_base_schema_co6` 在server4从零启动18路，每路1000次评价。生成与修复使用明确的JSON Schema，要求 `analysis`、`design`、`code` 三个字符串并禁止额外字段；非空要求由解析器检查。提示、历史窗口、父代选择、算子、数据与评价时限沿用分析轨迹批次。
 
-源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_schema_final`，609个文件中7个变化、602个一致，远端60项检查通过。结果入口为 `experiments_result/traceaad_base_schema`，看板和同步使用该批次。上一批分析实验的18路已正常停止并保留结果；更早批次继续按各自状态运行。[启动记录](../../experiments_result/traceaad_base_schema/launch_20261031/README.md)保存配置、源码核对、停止与启动证据。
+源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_schema_final`，609个文件中7个变化、602个一致，远端60项检查通过。结果入口为 `experiments_result/traceaad_base`（server4主仓库中的符号链接，指向快照内的 `traceaad_base_schema` 目录），看板和同步使用该批次。它使用11月5日修改前的 Base 代码。原 `traceaad_base`（`20261030_base_compact_co6`）改名为 `traceaad_base_compact`；此前的记录中，`experiments_result/traceaad_base` 指紧凑批次。上一批分析实验的18路已正常停止并保留结果；更早批次继续按各自状态运行。[启动记录](../../experiments_result/traceaad_base/launch_20261031/README.md)保存配置、源码核对、停止与启动证据。
 
 ## V20 完整体批次（11月3日）
 
@@ -56,6 +56,14 @@ journalctl --user -u traceaad-watch.service -n 5 --no-pager
 源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261103b_traceaad_v20_complete`，由本机代码同步，741个文件写入`source_hashes.json`并在启动时校验；`benchmarks`与`core`与Base schema快照逐文件一致。结果入口为 `experiments_result/traceaad_v20_complete`（server4主仓库中的符号链接）。server4主仓库工作区的部分任务模板落后于本机，两次V20冒烟使用的是该工作区，不作为正式条件。
 
 对照批次 `20261103b_v20_noreflect_qwen_co6` 紧随其后在同一冻结源码、同一调度器下启动18路，只加 `--no-experience-learning`：不做评价后反思，不形成、更新或召回经验；评分、轨迹上下文和融合参考与完整体相同。结果入口为 `experiments_result/traceaad_v20_noreflect`。
+
+## Base 与 V21 对照批次（11月5日）
+
+`20261105_base_co6` 与 `20261105_v21_co6` 于北京时间11月5日13:00在server4同一快照、同一调度器下启动，各18路，每路1000次评价，训练后自动做独立主测试。源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261105_traceaad_base_v21`，结果入口为 `experiments_result/traceaad_base_20261105` 与 `experiments_result/traceaad_v21`（server4主仓库中的符号链接）。
+
+`20261105_v21_co6` 于13:41停止，共815次评价，不再使用。`20261105b_v21_co6` 使用精简后的V21，于13:45启动18路，继续以 `20261105_base_co6` 为对照。源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261105b_traceaad_v21`，结果入口为 `experiments_result/traceaad_v21b`。
+
+`20261105b_v21_co6` 于17:33停止，共3971次评价，不再使用。`20261105c_v21_co6` 使用按算子分配材料的V21，继续以 `20261105_base_co6` 为对照。源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261105c_traceaad_v21`，结果入口为 `experiments_result/traceaad_v21c`。
 
 ## server3 入口
 
@@ -90,6 +98,8 @@ uv run --frozen python -m experiments.infra.scheduler --status
 本机通过 systemd 用户服务 `traceaad-local-model-tunnel.service` 建立反向 SSH 隧道，将 server4 的 `127.0.0.1:18001` 转发到本机 `127.0.0.1:8001`。模型由 `qwen38-llama.service` 管理：关闭 MTP、关闭共享 KV、总上下文 147456、三个并发槽（单路 49152 tokens），超额请求在服务端排队。模型异常退出自动重启，隧道断开自动重连。使用 `systemctl --user status qwen38-llama.service traceaad-local-model-tunnel.service` 查询；配置位于本机 `~/.config/systemd/user/`，模型日志为 `/tmp/llama-qwen38-recovered.log`。原两个 tmux 会话已由这些服务替代。server4 的两张 GPU 尚未部署模型服务。
 
 需要 embedding 的基线与 V20 复用 server3 的 `qwen3-embedding-4b-fp8`。server4 的 tmux `traceaad_embedding_tunnel` 将本机 `127.0.0.1:18002` 转发到 server3 的 `127.0.0.1:8002`；专用 SSH 密钥只允许该转发。`.env.server4` 的 `SHINKA_EMBEDDING_*` 指向此接口。隧道需保持运行；重启命令保存在补齐记录的 `embedding_tunnel_command.txt`。该服务与生成模型的 27 请求槽分开。
+
+`/tmp/tmux-1003` 存 tmux socket，`/tmp/traceaad-1003` 存调度器 socket，清理 `/tmp` 时不能删。tmux socket 丢失后，服务进程仍在：先重建目录（权限700），再向 `tmux: server` 进程发 `SIGUSR1`。
 
 服务器重启后，确认旧调度器已退出，再执行 `bash experiments_result/migrations/20261022_server4/scheduler_command.txt`。实验恢复前还需核对各运行锁。环境初始验证保存在 `experiments_result/environment_setup/20261022_server4/`；该目录的旧 17 槽命令已被迁移命令替代。
 

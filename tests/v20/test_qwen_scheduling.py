@@ -28,7 +28,7 @@ def test_role_schema_uses_same_pool_and_generation_settings(monkeypatch):
     reflection = model.for_role(REFLECTION_SCHEMA)
     with reflection.request_context():
         reply = reflection.complete('briefly', temperature=1., max_tokens=16384, timeout=600)
-    assert reply.metadata['request_options']['response_format'] == REFLECTION_SCHEMA
+    assert sent[0]['request_options']['response_format'] == REFLECTION_SCHEMA
     assert sent[0]['request_options']['chat_template_kwargs'] == {'enable_thinking': False}
     assert sent[1]['max_tokens'] == 16384
     assert model.request_options['response_format'] == routing.CANDIDATE_RESPONSE_FORMAT

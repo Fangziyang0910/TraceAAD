@@ -1,8 +1,12 @@
 """Model-visible prompts and finite history windows from the Base specification."""
 
+import re
+
 from .config import Config
 from .models import Program
 from .task import Task
+
+TIMEOUT_PREFIX = "Evaluation exceeded"
 
 
 COMMON_TEMPLATE = """{task_description}
@@ -20,41 +24,39 @@ Implement the following Python function:
 
 [Output]
 Return exactly one valid JSON object with three string fields, in this order:
-- "analysis": In 2–3 concise sentences, using at most 100 English words or 200 Chinese characters, explain the algorithmic rationale of the proposed change, the evidence that motivates it, and its expected effect on solving the task.
-- "design": Describe the final algorithm implemented in "code" in one self-contained paragraph of 2–3 concise sentences, using at most 100 English words or 200 Chinese characters. State the solution representation, the main solving principle, and how the procedure determines the returned result.
+- "analysis": In 2–3 concise sentences, using at most 100 English words or 200 Chinese characters, explain the approach you will implement and why it suits the task. When modifying an algorithm, state which computations you retain, replace, or add, the relevant evidence from the provided context, and how the change affects the returned result.
+- "design": Describe the decision procedure implemented in "code" in one self-contained paragraph of 2–3 concise sentences, using at most 100 English words or 200 Chinese characters. State its representation, main computations, and how their results determine the output. Include the formulas or parameter values needed to understand the core mechanism.
 - "code": Provide the complete implementation of the required function, including necessary imports and helper definitions. Do not include comments or docstrings.
-First determine a complete executable algorithm; then make "analysis" and "design" accurately describe the final "code".
+Keep "analysis" and "design" consistent with the implementation in "code".
 Preserve the required function signature and satisfy the task constraints and input/output requirements.
 Return only the JSON object, without Markdown fences or additional text."""
 
 INIT = """Design an effective algorithm for the task described above and implement the specified Python function."""
 
 INIT_WITH_HISTORY = """Design an effective algorithm for the task and implement the specified Python function.
-Study the existing algorithms and their scores to understand the solution principles already represented.
-Choose a distinct and well-motivated algorithmic principle for this initial candidate."""
+Use the existing algorithms and their scores to identify the decision information they already use.
+Develop a solution procedure that obtains useful decision information through a different main computation."""
 
 INIT_FAILURES = """Use the failed designs, their analyses, and evaluation feedback to guide how you implement your design."""
 
-ANCESTORS = """Read the ancestor sequence as the development of an algorithmic idea.
-Use the changes and their evaluated outcomes to decide which direction should be continued, revised, or redirected."""
+ANCESTORS = """Follow the parent links, designs, and analyses to understand how the current algorithm developed.
+Use the evaluated outcomes of those changes to guide the requested design."""
 
-OFFSPRING = """Read the previous offspring as trials of alternative developments of the current idea.
-Use their analyses, designs, and outcomes to develop a meaningful next variant rather than repeating an already tested direction."""
+OFFSPRING = """Use the previous offspring analyses, designs, and evaluated outcomes to identify which changes to the current algorithm have been tried.
+Develop a further computational change beyond the designs already tried, aiming for better solution quality."""
 
-FAILURES = """Use the failed offspring and their feedback to understand which proposed directions were not executable or not suitable for the task.
-Account for that evidence when choosing and implementing the next algorithm."""
+FAILURES = """Use the failed offspring analyses and designs with their error or timeout feedback to identify issues relevant to your proposed change, and address them in the new code."""
 
-REFINE = """Develop the current algorithm as a continuation of its solution principle.
-Use its implementation, history, and outcomes to identify a specific weakness or opportunity, then make one coherent improvement to the construction method, evaluation rule, search process, or parameters.
-Implement a complete algorithm whose decisions remain grounded in the refined principle."""
+REFINE = """Identify the current algorithm's core decision mechanism from its code, including the intermediate computations that determine the returned result.
+Improve solution quality by refining those computations, their supporting steps, or their parameters, while preserving the core mechanism's role in the decision."""
 
-EXPLORE = """Design an alternative solution method based on a different algorithmic principle.
-Choose a representation and a construction or search process suited to the underlying problem; the method may reason through auxiliary solutions, future consequences, or a different search space.
-Implement the complete method using the available inputs and return the result required by the function interface."""
+EXPLORE = """Design an alternative algorithm that improves solution quality through a different main decision mechanism.
+Draw on solution methods for the underlying problem to choose an internal representation and computations.
+Implement that mechanism using the available inputs and return the result required by the function interface."""
 
-CROSSOVER = """Study the current and reference algorithms as two sources of algorithmic ideas.
-Identify complementary principles and synthesize them into one coherent solution method, explaining the role of each source and how they work together in the final decisions.
-Implement the complete synthesized algorithm using the available inputs and the required function interface."""
+CROSSOVER = """Improve solution quality by integrating a computation from the reference design that supplies information complementary to the current algorithm.
+Implement the selected computation using its stated representation and formulas, and combine its result with the current decision mechanism so both contribute to the returned result.
+Align their input representations and numerical scales so the selected computations work together."""
 
 FORMAT_REPAIR = """Convert the original response into the JSON object specified in [Output], using the parsing feedback to correct its structure, required fields, and string escaping.
 Preserve the existing algorithmic idea and computational logic.
@@ -63,30 +65,49 @@ Complete any missing or truncated content consistently with that approach and th
 ERROR_REPAIR = """Trace the reported exception or invalid result to its cause in the code, using the design to understand the intended algorithm.
 Correct the faulty computations or data handling so the function executes correctly and satisfies the task requirements, while retaining the intended core decision mechanism."""
 
-TIMEOUT_REPAIR = """Reduce runtime so the full evaluation finishes within the reported total time limit.
+TIMEOUT_REPAIR = """Reduce runtime so the full evaluation finishes within the reported time limit.
 Identify the core computation and its contribution to the returned result.
 First correct non-termination and eliminate redundant work, reusing intermediate results where possible.
 Preserve a working version of the core procedure by reducing candidate sets, iteration counts, or search ranges when needed.
 If the core method remains too costly, use a smaller search or cheaper approximation of the same decision information, keeping that estimate in the final decision."""
 
-REPAIR_DESIGN = """Update "analysis" to retain the original design rationale and describe the computational changes implemented after repair.
+REPAIR_DESIGN = """In "analysis", state only what went wrong and what you changed to correct it; the earlier analysis is kept.
 Update "design" to describe the repaired algorithm as a self-contained procedure consistent with "code"."""
 
 
-def failure_summary(failure: str) -> str:
-    """Keep the exception and a useful location, without copying its full stack."""
+def _parse_failure(failure: str):
+    """The exception message and the traceback blocks that lie in the candidate's own code."""
     lines = failure.strip().splitlines()
-    if not lines or not any(line.startswith("Traceback") for line in lines):
-        return failure.strip()
-    frames = [line.strip() for line in lines if line.lstrip().startswith('File "')]
-    message_start = len(lines) - 1
+    start = len(lines) - 1
     for i, line in enumerate(lines):
         if line and not line[0].isspace() and not line.startswith("Traceback"):
-            message_start = i
-    message = "\n".join(lines[message_start:])
-    candidate_frames = [line for line in frames if "<candidate>" in line or "<string>" in line]
-    location = (candidate_frames or frames)[-1:]
-    return "\n".join([message, *location])
+            start = i
+    message = re.sub(r"^(?:\w+\.)+(?=\w+(?::|$))", "", "\n".join(lines[start:]))
+    blocks, keep = [], False
+    for line in lines[:start]:
+        if line.lstrip().startswith('File "'):
+            keep = "<candidate>" in line or "<string>" in line
+            if keep:
+                blocks.append([line.strip()])
+        elif keep and line.startswith("  "):
+            blocks[-1].append(line)
+        else:
+            keep = False
+    return re.sub(r"\d+(?:\.\d+)?", "N", message), blocks
+
+
+def failure_summary(failure: str) -> str:
+    """The exception and where it occurred in the candidate; no limits, sizes or evaluator frames."""
+    if failure.startswith(TIMEOUT_PREFIX):
+        return "The evaluation did not finish within the allowed time."
+    message, blocks = _parse_failure(failure)
+    return "\n".join([message, *(blocks[-1][:1] if blocks else [])])
+
+
+def failure_feedback(failure: str) -> str:
+    """Repair also sees the candidate's own traceback lines."""
+    message, blocks = _parse_failure(failure)
+    return "\n".join([*(line for block in blocks for line in block), message])
 
 
 class PromptBuilder:
@@ -204,13 +225,8 @@ class PromptBuilder:
         if operator == "Crossover":
             if reference is None:
                 raise ValueError("Crossover requires a reference")
-            context.append(
-                f"[Reference Algorithm]\nAlgorithm {reference.id}\n"
-                f"Analysis: {reference.analysis}\n"
-                f"Design: {reference.design}\n"
-                f"Score: {reference.evaluation.fitness}\n"
-                f"```python\n{reference.code}\n```"
-            )
+            context.append(f"[Reference Design]\nScore: {reference.evaluation.fitness}\n"
+                           f"Design: {reference.design}")
         context.append(f"[Current Algorithm]\n{self._record(parent)}\n"
                        f"```python\n{parent.code}\n```")
         instruction = {"Refine": REFINE, "Explore": EXPLORE, "Crossover": CROSSOVER}[operator]
@@ -221,10 +237,15 @@ class PromptBuilder:
 
     def repair_format(self, response: str, feedback: str) -> str:
         context = f"[Original Response]\n{response}\n\n[Parsing Feedback]\n{feedback}"
-        return self._render(context, FORMAT_REPAIR + "\n" + REPAIR_DESIGN)
+        return self._render(context, FORMAT_REPAIR)
 
     def repair_feedback(self, failure: str) -> str:
-        return failure
+        if not failure.startswith(TIMEOUT_PREFIX):
+            return failure_feedback(failure)
+        per_instance = self.task.metadata.get("seconds_per_instance")
+        allowed = (f"{per_instance:g} seconds per problem instance" if per_instance
+                   else f"{self.task.time_limit:g} seconds in total")
+        return f"The evaluation did not finish within the allowed time of {allowed}."
 
     def repair_program(self, program: Program) -> str:
         origin = "\n".join(self._origin(program))

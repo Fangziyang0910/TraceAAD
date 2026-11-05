@@ -1,4 +1,4 @@
-"""One Base or V20 search followed by evaluation of its frozen best program."""
+"""One Base, V20 or V21 search followed by evaluation of its frozen best program."""
 
 import argparse
 from contextlib import nullcontext
@@ -17,13 +17,18 @@ from benchmarks.tasks import ALL_TASKS, PRIMARY_SPLITS, heldout_task, scale_of_s
 import traceaad_base
 from traceaad_base import Evaluator, Task
 from traceaad_base.cli import load_task
+from experiments.infra.storage import seal_calls
 from traceaad_base.storage import write_json
 import traceaad_v20
+import traceaad_v21
+from traceaad_v21.prompts import CANDIDATE_RESPONSE_FORMAT as V21_RESPONSE_FORMAT
 from .scheduling import REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, load_environment
 
 
 ROOT = Path(__file__).resolve().parents[2]
 MEMORY_BYTES = 2 << 30
+METHODS = {"base": ("traceaad_base", traceaad_base), "v20": ("traceaad_v20", traceaad_v20),
+           "v21": ("traceaad_v21", traceaad_v21)}
 
 
 def configure_time_budget(task, seconds_per_instance):
@@ -41,9 +46,15 @@ def configure_time_budget(task, seconds_per_instance):
                                      "timeout_seconds": task.time_limit}
 
 
+def request_options(method):
+    if method == "v21":
+        return {**REQUEST_OPTIONS, "response_format": V21_RESPONSE_FORMAT}
+    return REQUEST_OPTIONS
+
+
 def metadata_for(args, task, config, model):
     return {
-        "method": "traceaad_base" if args.method == "base" else "traceaad_v20", "experiment": args.experiment, "task": args.task,
+        "method": METHODS[args.method][0], "experiment": args.experiment, "task": args.task,
         "run_name": args.run_name, "batch": args.batch,
         "seed": args.seed, "repeat": args.seed + 1,
         "budget": config.evaluation_budget, "budget_axis": "评价次数", "budget_basis": "evaluate_calls",
@@ -59,7 +70,7 @@ def metadata_for(args, task, config, model):
         },
         "llm": {"model": model.model, "temperature": config.temperature,
                 "max_tokens": config.max_tokens, "timeout": config.model_timeout,
-                "enable_thinking": False, "sampling": {"temperature": config.temperature, **REQUEST_OPTIONS}},
+                "enable_thinking": False, "sampling": {"temperature": config.temperature, **request_options(args.method)}},
         "model_routing": {"policy": "shared", "endpoints": model.scheduler["endpoints"]},
         "scheduler_socket": model.path,
     }
@@ -110,7 +121,7 @@ def evaluate_heldout(directory, name, best, scheduler, *, evaluation_seed,
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--method", choices=("v20", "base"), default="v20")
+    parser.add_argument("--method", choices=tuple(METHODS), default="v20")
     parser.add_argument("--backend", choices=("scheduled",), default="scheduled")
     for feature in ("trajectory-scoring","trajectory-context","reference-selection","experience-learning"):
         parser.add_argument("--no-"+feature,action="store_true")
@@ -140,8 +151,8 @@ def main(argv=None):
             parser.error("Use alphanumeric names with underscores or hyphens")
     load_environment(ROOT / ".env")
     load_environment(args.env_file)
-    package = traceaad_base if args.method == "base" else traceaad_v20
-    switches = {} if args.method == "base" else {
+    package = METHODS[args.method][1]
+    switches = {} if args.method != "v20" else {
         name: not getattr(args, "no_" + name)
         for name in ("trajectory_scoring", "trajectory_context", "reference_selection", "experience_learning")}
     config = package.Config(**switches, evaluation_budget=args.budget, initial_size=args.initial_size,
@@ -165,6 +176,7 @@ def main(argv=None):
         raise KeyboardInterrupt(f"Received signal {signum}")
 
     signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGHUP, stop)  # Closing the tmux session.
     from .reporting import Reporter
 
     services = {}
@@ -193,6 +205,7 @@ def main(argv=None):
         summary.update(status="stopped", error=f"{type(exc).__name__}: {exc}")
         write_json(directory / "summary.json", summary)
         raise
+    seal_calls(directory / "native")
     if result.best is not None and not args.skip_heldout:
         evaluate_heldout(directory, args.task, result.best, args.scheduler_socket,
                          evaluation_seed=task.evaluation_seed,

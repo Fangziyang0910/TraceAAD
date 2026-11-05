@@ -6,7 +6,7 @@ attempt cut off by the interruption is simply lost.
 """
 
 from contextlib import nullcontext
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import random
 import time
 
@@ -14,7 +14,7 @@ from .config import Config
 from .evaluation import Evaluator
 from .models import Attempt, Candidate, FormatError, ModelReply, Program, SearchResult
 from .prompts import PromptBuilder
-from .selection import choose
+from .selection import choose, reference_pool
 from .storage import Store
 from .task import Task
 
@@ -37,6 +37,8 @@ class TraceAAD:
         if task.example_code is not None:
             self.archive[0] = Program(0, task.example_code, task.example_design, None, None, None, None)
         if resume:
+            for name in ("attempts.jsonl", "calls.jsonl"):
+                self.store.repair_tail(name)
             for row in self.store.rows("attempts.jsonl"):
                 attempt = Attempt(**row["attempt"])
                 self.attempts.append(attempt)
@@ -55,8 +57,15 @@ class TraceAAD:
         """Rebuild method state from one saved attempt, in order."""
 
     def select(self, attempt_id: int):
-        parent, operator, reference = choose(self.archive, self.attempts, self.config, self.rng)
+        parent, operator = choose(self.archive, self.attempts, self.config, self.rng)
+        reference = self.reference(parent) if operator == "Crossover" else None
+        if operator == "Crossover" and reference is None:
+            operator = "Explore"
         return parent, operator, reference, {}
+
+    def reference(self, parent: Program) -> Program | None:
+        pool = reference_pool(self.archive, parent.id)
+        return self.rng.choice(pool) if pool else None
 
     def evolution_prompt(self, attempt: Attempt, parent: Program, reference: Program | None) -> str:
         return self.prompts.evolution(self.archive, parent, attempt.operator, reference)
@@ -184,7 +193,8 @@ class TraceAAD:
                     response = self._call(attempt, prompt, program.evaluation.status)
                     repaired = self._parse(attempt, response) if response is not None else None
                     if repaired is not None:
-                        self._evaluate(attempt, repaired)
+                        analysis = f"{program.analysis}\nRepair: {repaired.analysis}"
+                        self._evaluate(attempt, replace(repaired, analysis=analysis))
         self.finish(attempt)
         attempt.finished_at = time.time()
         program = self.archive.get(attempt.program_id)

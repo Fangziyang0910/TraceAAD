@@ -13,7 +13,7 @@ import time
 
 from benchmarks.tasks import PRIMARY_SPLITS, SCALES, SPLITS, scale_of_split
 from experiments.infra.result_storage import heldout_identity
-from .storage import committed_size, read_json as result_json, read_object
+from experiments.infra.storage import committed_size, read_json as result_json, read_object
 from experiments.infra.result_storage import selected_program
 from experiments.infra.timing import batch_timing, search_timing
 

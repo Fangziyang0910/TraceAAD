@@ -4,7 +4,7 @@
 
 TraceAAD Base 利用演化轨迹指导自动算法设计（automatic algorithm design，AAD）。大模型在固定求解框架中设计指定函数，评估器将其接入框架并评价求解结果。搜索目标是在给定评价预算内找到成绩最好的有效算法。
 
-程序库保存候选的分析、设计、代码、来源与评价。祖先和已有子代的记录指导后续生成，直接子代的质量与调用成本指导父代选择。初始化提供算法起点，随后反复选择、生成与评价，直至满足停止条件。
+程序库保存候选的分析、设计、代码、来源与评价。祖先和已有子代的记录指导后续生成，当前成绩与已投入的调用指导父代选择。初始化提供算法起点，随后反复选择、生成与评价，直至满足停止条件。
 
 ```mermaid
 flowchart TD
@@ -92,10 +92,10 @@ Implement the following Python function:
 
 [Output]
 Return exactly one valid JSON object with three string fields, in this order:
-- "analysis": In 2–3 concise sentences, using at most 100 English words or 200 Chinese characters, explain the algorithmic rationale of the proposed change, the evidence that motivates it, and its expected effect on solving the task.
-- "design": Describe the final algorithm implemented in "code" in one self-contained paragraph of 2–3 concise sentences, using at most 100 English words or 200 Chinese characters. State the solution representation, the main solving principle, and how the procedure determines the returned result.
+- "analysis": In 2–3 concise sentences, using at most 100 English words or 200 Chinese characters, explain the approach you will implement and why it suits the task. When modifying an algorithm, state which computations you retain, replace, or add, the relevant evidence from the provided context, and how the change affects the returned result.
+- "design": Describe the decision procedure implemented in "code" in one self-contained paragraph of 2–3 concise sentences, using at most 100 English words or 200 Chinese characters. State its representation, main computations, and how their results determine the output. Include the formulas or parameter values needed to understand the core mechanism.
 - "code": Provide the complete implementation of the required function, including necessary imports and helper definitions. Do not include comments or docstrings.
-First determine a complete executable algorithm; then make "analysis" and "design" accurately describe the final "code".
+Keep "analysis" and "design" consistent with the implementation in "code".
 Preserve the required function signature and satisfy the task constraints and input/output requirements.
 Return only the JSON object, without Markdown fences or additional text.
 ````
@@ -183,8 +183,8 @@ Use the failed designs, their analyses, and evaluation feedback to guide how you
 
 - **祖先链**：沿 `parent_id` 回溯，取最近 8 个祖先，排除当前父代与 0 号根；按演化顺序提供编号、父代、生成操作、分析、设计与成绩。
 - **有效子代**：取当前父代下最多 3 个评价成功的直接子代。优先保留成绩最好者（同分取编号较大者），再按编号从近到远补充，按编号从旧到新呈现。
-- **失败子代**：取当前父代下最近 2 个最终失败的直接子代，按编号从旧到新呈现来源、分析、设计与失败反馈。反馈保留错误类型、关键报错或超时条件，省略重复调用栈。
-- **交叉参考**：额外提供一个有效个体的分析、设计、完整代码与成绩，使模型能够直接理解两种算法并进行综合。
+- **失败子代**：取当前父代下最近 2 个最终失败的直接子代，按编号从旧到新呈现来源、分析、设计与失败反馈。反馈保留异常类型、消息和候选代码中的位置。消息中的数字替换为 N，超时只说明未在允许时间内完成。评价器调用栈、时限和实例规模不进入生成提示。
+- **交叉参考**：额外提供一个有效个体的设计与成绩。模型依据其中的表示和公式实现所借用的计算。
 
 历史仅按个体数量限制，不另设 token 上限；不足时按实际数量提供。
 
@@ -221,14 +221,9 @@ Analysis: {failed.analysis}
 Design: {failed.design}
 Failure: {failed.evaluation.failure}
 
-[Reference Algorithm]
-Algorithm {reference.id}
-Analysis: {reference.analysis}
-Design: {reference.design}
+[Reference Design]
 Score: {reference.evaluation.fitness}
-```python
-{reference.code}
-```
+Design: {reference.design}
 
 [Current Algorithm]
 Algorithm {parent.id}
@@ -247,22 +242,21 @@ Score: {parent.evaluation.fitness}
 **祖先链：**
 
 ```text
-Read the ancestor sequence as the development of an algorithmic idea.
-Use the changes and their evaluated outcomes to decide which direction should be continued, revised, or redirected.
+Follow the parent links, designs, and analyses to understand how the current algorithm developed.
+Use the evaluated outcomes of those changes to guide the requested design.
 ```
 
 **有效子代：**
 
 ```text
-Read the previous offspring as trials of alternative developments of the current idea.
-Use their analyses, designs, and outcomes to develop a meaningful next variant rather than repeating an already tested direction.
+Use the previous offspring analyses, designs, and evaluated outcomes to identify which changes to the current algorithm have been tried.
+Develop a further computational change beyond the designs already tried, aiming for better solution quality.
 ```
 
 **失败子代：**
 
 ```text
-Use the failed offspring and their feedback to understand which proposed directions were not executable or not suitable for the task.
-Account for that evidence when choosing and implementing the next algorithm.
+Use the failed offspring analyses and designs with their error or timeout feedback to identify issues relevant to your proposed change, and address them in the new code.
 ```
 
 ### 5.2 Refine：沿原机制精炼
@@ -272,9 +266,8 @@ Account for that evidence when choosing and implementing the next algorithm.
 指令：
 
 ```text
-Develop the current algorithm as a continuation of its solution principle.
-Use its implementation, history, and outcomes to identify a specific weakness or opportunity, then make one coherent improvement to the construction method, evaluation rule, search process, or parameters.
-Implement a complete algorithm whose decisions remain grounded in the refined principle.
+Identify the current algorithm's core decision mechanism from its code, including the intermediate computations that determine the returned result.
+Improve solution quality by refining those computations, their supporting steps, or their parameters, while preserving the core mechanism's role in the decision.
 ```
 
 ### 5.3 Explore：改换核心机制
@@ -284,9 +277,9 @@ Implement a complete algorithm whose decisions remain grounded in the refined pr
 指令：
 
 ```text
-Design an alternative solution method based on a different algorithmic principle.
-Choose a representation and a construction or search process suited to the underlying problem; the method may reason through auxiliary solutions, future consequences, or a different search space.
-Implement the complete method using the available inputs and return the result required by the function interface.
+Design an alternative algorithm that improves solution quality through a different main decision mechanism.
+Draw on solution methods for the underlying problem to choose an internal representation and computations.
+Implement that mechanism using the available inputs and return the result required by the function interface.
 ```
 
 ### 5.4 Crossover：整合互补计算
@@ -296,57 +289,40 @@ Implement the complete method using the available inputs and return the result r
 指令：
 
 ```text
-Study the current and reference algorithms as two sources of algorithmic ideas.
-Identify complementary principles and synthesize them into one coherent solution method, explaining the role of each source and how they work together in the final decisions.
-Implement the complete synthesized algorithm using the available inputs and the required function interface.
+Improve solution quality by integrating a computation from the reference design that supplies information complementary to the current algorithm.
+Implement the selected computation using its stated representation and formulas, and combine its result with the current decision mechanism so both contribute to the returned result.
+Align their input representations and numerical scales so the selected computations work together.
 ```
 
 ## 6. 父代与生成操作的选择
 
-父代选择以历史产出质量估计继续开发的价值，并结合模型调用成本分配生成机会。
+父代选择回答一个问题：下一次尝试从哪个算法开始，最可能得到更好的算法。可靠的信息有两项：算法现在的成绩，以及从它出发已经投入了多少次尝试。
 
 ### 6.1 父代候选
 
-程序库中全部评价成功的生成个体均可作为父代。每轮依次选择父代、算子与所需参考，再按第 5 节组织上下文。
+每份不同的源码是一个候选，由最早产生它的有效个体代表。相同源码的后续个体留在程序库中，但不再作为父代。这样，从同一份代码出发的尝试集中在一个节点上，历史不会分散，复制品也不会增加这份代码的机会。
 
-### 6.2 开发结果与调用成本
+### 6.2 选择权重
 
-每次演化尝试记录主父代、实际算子、可选参考、模型调用数与最终评价。对父代 \(p\)，累计：
-
-- \(C_p\)：以它为主父代的尝试消耗的模型调用总数，包含生成、修复及失败请求。
-- \(\mathcal V_p\)：这些尝试产生的全部最终有效直接子代。
-
-每个有效子代都贡献其质量，是否超过父代或交叉参考不影响计分。一次尝试最多贡献一个最终子代；最终无有效产出时记零。直接生成消耗 1 次调用，经过修复合计消耗 2 次。
-
-交叉的成本与产出归主父代。统计使用全部已完成的演化尝试；提示中的历史窗口只限制展示数量。调用成本与第 9 节的评价预算分别记录。
-
-### 6.3 选择权重
-
-第 \(t\) 轮选择前，将全部父代候选按成绩从低到高排名，记个体 \(x\) 的名次为 \(r_t(x)\)。名次从 1 开始，同分取平均名次。以倒数排名表示当前质量：
+第 \(t\) 轮选择前，将全部候选按成绩从低到高排名，名次 \(r_t(p)\) 从 1 开始，同分取平均名次。\(C_p\) 是以 \(p\) 为父代的尝试消耗的模型调用总数，包含生成、修复及失败请求。
 
 \[
-q_t(x)=\frac{1}{r_t(x)}.
-\]
-
-用父代自身质量平滑单位调用的子代产出质量，得到选择权重与概率：
-
-\[
-w_p(t)=\frac{3q_t(p)+\sum_{y\in\mathcal V_p}q_t(y)}{3+C_p},
+w_p(t)=r_t(p)^{-1.5}\cdot\frac{3}{3+C_p},
 \qquad
 P_t(p)=\frac{w_p(t)}{\sum_j w_j(t)}.
 \]
 
-概率归一化时，\(j\) 遍历本轮全部父代候选。常数 3 是初始估计的平滑强度，等效于 3 次调用。未尝试父代的权重为 \(q_t(p)\)；随直接证据增加，选择逐步依据实际产出质量与成本。
+**指数 1.5。** 指数大于 1 时，低名次候选的总权重有上界，不随程序库增长。指数等于 1 时，这部分权重会随程序库持续增加。指数取 2 时，模拟中超过一半的尝试落在第 1 名上，集中过度。
 
-父代及历史子代均使用当前名次重算质量，以反映它们在程序库中的竞争位置。倒数排名参照 ShinkaEvolve，直接子代质量参照 QUBE，设计依据见[父代选择定案](记录/2026-10-30-父代选择定案.md)。
+**访问项。** 尝试增加后，节点的机会下降，搜索转向其他节点。3 是平滑强度：尝试 3 次调用后权重减半。
 
-### 6.4 算子与交叉参考
+**子代不向父代计功。** 子代更好时，搜索直接从子代开始，子代已有自己的权重。把功劳再记给父代，等于重复计算。Explore 的子代还换掉了父代的机制，其好坏不反映父代的价值。
 
-选定父代后，按固定概率选择算子：Refine 为 **0.45**，Explore 为 **0.30**，Crossover 为 **0.25**。第 5 节的适用场景说明各算子的设计用途，实际调度使用这一配比。
+### 6.3 算子与交叉参考
 
-交叉参考从全部父代候选中筛选：保留成绩不劣于候选成绩中位数者，排除当前父代，再均匀随机选择一个。参考提供设计与成绩，由交叉指令引导模型适配、整合其中的计算。
+选定父代后，按固定概率选择算子：Refine 为 **0.45**，Explore 为 **0.30**，Crossover 为 **0.25**。
 
-没有合格参考时，移除 Crossover 并归一化 Refine、Explore 的概率，记录实际执行算子。算子配比与参考选择的依据见[预算分配调研](记录/2026-10-30-TraceAAD预算分配调研.md)。
+交叉参考从候选中筛选：保留成绩不劣于候选成绩中位数者，排除与父代相同的源码，再均匀随机选择一个。参考提供设计与成绩，由交叉指令引导模型适配其中的计算。没有合格参考时，本次实际执行 Explore，并记录实际算子。
 
 ## 7. 程序评价
 
@@ -378,7 +354,7 @@ Evaluate(
 | 错误 | 代码装载或执行报错，输出或解不合法，或未得到有限成绩 | `error` | `null` | 具体错误反馈 |
 | 超时 | 总时限耗尽时，本次评价仍未结束 | `timeout` | `null` | `Evaluation exceeded the total time limit of {time_limit} seconds.` |
 
-错误反馈包含错误类型、原因与相关代码位置，并保留可用的相关调用栈（traceback）；结果非法时说明预期要求与实际结果。
+记录保存完整错误反馈。提示只使用其中的异常类型、消息和候选代码自身的调用栈；评价器调用栈不进入提示。结果非法时，消息说明违反了什么要求。
 
 ### 7.3 超时处理
 
@@ -416,7 +392,7 @@ Complete any missing or truncated content consistently with that approach and th
 
 ### 8.2 程序错误与超时的共同上下文
 
-两类修复沿用公共提示模板，提供当前来源、分析、设计、完整代码与评价反馈：
+两类修复沿用公共提示模板，提供当前来源、分析、设计、完整代码与评价反馈。程序错误的反馈为异常类型、消息和候选代码自身的调用栈，消息中的数字替换为 N。超时的反馈说明每个问题实例允许的时间：
 
 ````text
 [Current Algorithm]
@@ -430,7 +406,7 @@ Design: {program.design}
 ```
 
 [Failure Feedback]
-{program.evaluation.failure}
+{failure_feedback}
 ````
 
 ### 8.3 程序错误修复指令
@@ -447,7 +423,7 @@ Correct the faulty computations or data handling so the function executes correc
 当 `status=timeout` 时，先改善实现效率；若算法步骤本身开销过大，再调整其计算方式或规模：
 
 ```text
-Reduce runtime so the full evaluation finishes within the reported total time limit.
+Reduce runtime so the full evaluation finishes within the reported time limit.
 Identify the core computation and its contribution to the returned result.
 First correct non-termination and eliminate redundant work, reusing intermediate results where possible.
 Preserve a working version of the core procedure by reducing candidate sets, iteration counts, or search ranges when needed.
@@ -456,16 +432,18 @@ If the core method remains too costly, use a smaller search or cheaper approxima
 
 ### 8.5 修复结果与记录
 
-修复依次返回 `analysis`、`design` 与完整 `code`。三类修复指令末尾统一追加以下要求，使分析保留原设计依据并反映实际修复，使设计说明与修复后的实现一致：
+修复依次返回 `analysis`、`design` 与完整 `code`。程序错误与超时的修复指令末尾追加以下要求。格式修复只转换已有回复，不追加：
 
 ```text
-Update "analysis" to retain the original design rationale and describe the computational changes implemented after repair.
+In "analysis", state only what went wrong and what you changed to correct it; the earlier analysis is kept.
 Update "design" to describe the repaired algorithm as a self-contained procedure consistent with "code".
 ```
 
+系统把修复说明接在原分析之后，保存为 `{原分析}\nRepair: {修复说明}`。这样，个体保留原来的修改依据，历史也能看到出过什么问题。
+
 修复机会在请求发出时消耗，按回复处理结果：
 
-- **回复可解析**：调用 `Evaluate`；首次评价创建个体，重评更新原个体的分析、设计、代码与评价。
+- **回复可解析**：调用 `Evaluate`；首次评价创建个体，重评更新原个体的设计、代码与评价，并在分析后追加修复说明。
 - **未取得可解析回复**：结束尝试，保留已有个体。
 
 修复保留个体编号、父代、交叉参考与原生成操作。修复记录保存原始回复或修复前版本、失败反馈、修复回复与评价结果。尚未进入评价的格式错误保存在生成记录中。
