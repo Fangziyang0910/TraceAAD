@@ -579,7 +579,7 @@
       "tsp_construct/20261107_v23_co6_tsp_traceaad_v23_rep3"
     ]
   },
-  "default_experiment": "traceaad_base",
+  "default_experiment": "traceaad_v22",
   "labels": {
     "traceaad_v12_0": "TraceAAD V12.0",
     "traceaad_v12_1": "TraceAAD V12.1",
@@ -598,10 +598,22 @@
     "traceaad_v20_complete": "TraceAAD V20",
     "traceaad_v20_noreflect": "TraceAAD V20 无反思",
     "traceaad_base_postdesign": "TraceAAD Base · 先代码后描述",
-    "traceaad_base_20261105": "TraceAAD Base · 11月5日",
+    "traceaad_base_20261105": "Base",
     "traceaad_v21c": "V21",
     "traceaad_v22": "V22",
-    "traceaad_v23": "V23"
+    "traceaad_v23": "V23",
+    "calm": "CALM",
+    "clade_ahd": "Clade-AHD",
+    "deltaevolve": "DeltaEvolve",
+    "eoh": "EoH",
+    "funsearch": "FunSearch",
+    "hsevo": "HSEvo",
+    "mcts_ahd": "MCTS-AHD",
+    "openevolve": "OpenEvolve",
+    "pathwise": "PathWise",
+    "reevo": "ReEvo",
+    "refineevo": "RefineEvo",
+    "shinka_evo": "ShinkaEvolve"
   },
   "visualization_batches": {
     "traceaad_v12_0": "20261013_qwen_co6",
@@ -619,5 +631,24 @@
     "traceaad_v21c": "20261105c_v21_co6",
     "traceaad_v22": "20261107_v22_co6",
     "traceaad_v23": "20261107_v23_co6"
-  }
+  },
+  "visualization_methods": [
+    "traceaad_base_20261105",
+    "traceaad_v21c",
+    "traceaad_v22",
+    "traceaad_v23",
+    "calm",
+    "clade_ahd",
+    "deltaevolve",
+    "eoh",
+    "funsearch",
+    "hsevo",
+    "mcts_ahd",
+    "openevolve",
+    "pathwise",
+    "reevo",
+    "refineevo",
+    "shinka_evo"
+  ],
+  "visualization_reference": "traceaad_base_20261105"
 }

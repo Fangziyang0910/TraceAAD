@@ -66,7 +66,8 @@ def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler
                     lambda: _json_bytes(monitor.overview(batch)))
                 return self._send_body(body)
             if parsed.path == "/api/cohorts":
-                return self._send_json({"cohorts": monitor.cohorts()})
+                return self._send_json({"cohorts": monitor.cohorts(),
+                                        "default_reference": monitor.comparison_reference()})
             if parsed.path == "/api/compare":
                 cohorts = list(dict.fromkeys(c for c in params.get("cohorts", [""])[0].split(",") if c))
                 signature = monitor.compare_signature(cohorts)

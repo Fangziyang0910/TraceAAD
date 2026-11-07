@@ -43,7 +43,7 @@ function dur(sec) {
 }
 function clock(v) {
   const t = v ? new Date(v) : null;
-  return t && !Number.isNaN(+t) ? t.toLocaleString("zh-CN", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}) : "–";
+  return t && !Number.isNaN(+t) ? t.toLocaleString("zh-CN", {timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}) : "–";
 }
 function speed(t) {
   const r = t?.rate_per_minute;
@@ -114,9 +114,19 @@ function showError(message) {
 async function loadBatches() {
   const {data} = await getJSON("/api/batches");
   const select = $("batch"), previous = S.batch;
-  select.replaceChildren(...data.batches.map(b => new Option(b.label || b.id, b.id)));
+  const groups = [
+    ["TraceAAD", data.batches.filter(b => b.id.startsWith("traceaad"))],
+    ["相关方法", data.batches.filter(b => !b.id.startsWith("traceaad"))],
+  ].filter(([, items]) => items.length).map(([label, items]) => {
+    const group = document.createElement("optgroup");
+    group.label = label;
+    group.append(...items.map(b => new Option(b.label || b.id, b.id)));
+    return group;
+  });
+  select.replaceChildren(...groups);
   const wanted = previous || hashParams().get("b") || data.default_batch;
-  S.batch = data.batches.some(b => b.id === wanted) ? wanted : data.batches[0]?.id || "";
+  const fallback = data.batches.find(b => b.id === data.default_batch) || data.batches[0];
+  S.batch = data.batches.some(b => b.id === wanted) ? wanted : fallback?.id || "";
   select.value = S.batch;
   if (previous && previous !== S.batch) {
     closeRun(); S.data = null; S.structure = "";
@@ -141,7 +151,7 @@ async function refresh({force = false} = {}) {
     const {data, text} = await getJSON(stateURL(batch), {signal: request.controller.signal});
     if (S.request !== request || batch !== S.batch) return;
     S.fetchedAt = Date.now();
-    setLive("on", "实时 · 刚刚"); showError("");
+    setLive("on", "已刷新 · 刚刚"); showError("");
     if (text !== S.stateText || !S.data) { S.stateText = text; S.data = data; render(data); }
     if (S.run) await loadDetail();
   } catch (error) {
@@ -181,7 +191,7 @@ function renderKPIs(data) {
   const etas = (data.tasks || []).flatMap(task => task.runs)
     .filter(r => r.status === "running" && r.timing?.state === "estimated").map(r => r.timing.eta_seconds);
   $("k-eta").textContent = t?.state === "partial" && etas.length ? `≥ ${dur(Math.max(...etas))}` : eta(t);
-  $("k-eta-n").textContent = t?.eta_at ? `约 ${clock(t.eta_at)} · 按最慢一路` : t?.pending_runs ? `${t.eta_runs}/${t.pending_runs} 路可估算` : "不含选择与测试";
+  $("k-eta-n").textContent = t?.eta_at ? `约 ${clock(t.eta_at)} · 按最慢一路` : t?.pending_runs ? `${t.eta_runs}/${t.pending_runs} 路可估算` : "仅搜索阶段，不含独立测试";
   $("k-nodes").textContent = (s.valid_nodes ?? 0).toLocaleString();
   $("k-nodes-n").textContent = s.valid_rate != null ? `记录有效率 ${(s.valid_rate * 100).toFixed(1)}% · ${s.valid_candidate_count}/${s.candidate_count}` : "暂无候选记录";
   const alerts = (data.tasks || []).flatMap(task => task.runs).filter(r =>
@@ -527,7 +537,7 @@ function renderDetail(run) {
   };
   const ops = Object.entries(run.operators || {}).sort((a, b) => b[1] - a[1]);
   const opMax = Math.max(1, ...ops.map(([, n]) => n));
-  $("d-sub").innerHTML = `<span class="pill ${esc(run.status)}">${STATUS[run.status] || esc(run.status)}</span> · ${esc(run.backend || "–")} · seed ${esc(run.seed ?? "–")} · ${esc(run.name)}`;
+  $("d-sub").innerHTML = `<span class="pill ${esc(run.status)}">${STATUS[run.status] || esc(run.status)}</span>${run.backend ? ` · ${esc(run.backend)}` : ""} · seed ${esc(run.seed ?? "–")} · ${esc(run.name)}`;
   const tile = (k, v) => `<div class="tile"><small>${k}</small><strong>${v}</strong></div>`;
   body.innerHTML = `
     <div class="tiles">
@@ -537,7 +547,7 @@ function renderDetail(run) {
       ${tile("平均速度", speed(t))}
       ${tile(t.basis === "active_time" ? "累计搜索耗时" : "墙钟耗时", dur(t.elapsed_seconds))}
       ${tile("预计剩余", eta(t))}
-      ${tile("预计完成", t.eta_at ? clock(t.eta_at) : run.updated_at ? `完成于 ${clock(run.updated_at)}` : "–")}
+      ${tile("预计完成", t.eta_at ? clock(t.eta_at) : run.status === "finished" && run.updated_at ? `完成于 ${clock(run.updated_at)}` : "–")}
     </div>
     <section class="sec"><h3>历史最优曲线</h3><div class="d-chart"><canvas></canvas></div></section>
     <section class="sec"><h3>全局突破<small>${crumbs.length} 个 · 新 → 旧</small></h3>
@@ -607,18 +617,19 @@ async function loadCohorts() {
   // A link written before a batch was split by model names the batch: keep its main-model cohort.
   const canonical = id => known.has(id) ? id : preferred(CMP.cohorts.filter(c =>
     c.batch === String(id || "").split("::")[0].split("@")[0] && !c.variant))?.id;
+  const defaultRef = canonical(data.default_reference);
   CMP.ids = CMP.ids.map(canonical)
     .filter((id, i, a) => id && a.indexOf(id) === i);
   CMP.ref = canonical(CMP.ref);
   if (!CMP.ids.length) {
-    // Default: each TraceAAD version and every baseline method.
+    // Default: the configured controls first, then the related methods.
     const viewed = CMP.cohorts.filter(c => c.batch === S.batch && isTrace(c));
     const current = preferred(viewed.length ? viewed : CMP.cohorts.filter(c => isTrace(c) && c.batch === CMP.cohorts.find(isTrace)?.batch));
     const versions = CMP.cohorts.filter(c => isTrace(c) && !c.variant && (!main || c.model_name === main)).map(c => c.id);
     const baselines = CMP.cohorts.filter(c => !isTrace(c) && (!main || c.model_name === main)).map(c => c.id);
-    CMP.ids = [current?.id, ...versions, ...baselines].filter((id, i, a) => id && known.has(id) && a.indexOf(id) === i);
+    CMP.ids = [defaultRef, ...versions, current?.id, ...baselines].filter((id, i, a) => id && known.has(id) && a.indexOf(id) === i);
   }
-  if (!CMP.ids.includes(CMP.ref)) CMP.ref = CMP.ids[0] || null;
+  if (!CMP.ids.includes(CMP.ref)) CMP.ref = CMP.ids.includes(defaultRef) ? defaultRef : CMP.ids[0] || null;
 }
 
 function renderChips() {
@@ -631,7 +642,7 @@ function renderChips() {
   const group = (label, items) => items.length ? `<optgroup label="${label}">${items.map(c =>
     `<option value="${esc(c.id)}">${esc(c.label)}${c.heldout_tasks.length ? ` · 测试 ${c.heldout_tasks.length} 个任务` : " · 无测试"}</option>`).join("")}</optgroup>` : "";
   const html = chips + (rest.length ? `<select class="ctl chip-add" id="cmp-add" aria-label="添加对比对象">
-    <option value="">＋ 添加对比对象…</option>${group("TraceAAD", rest.filter(isTrace))}${group("基线方法", rest.filter(c => !isTrace(c)))}</select>` : "");
+    <option value="">＋ 添加对比对象…</option>${group("TraceAAD", rest.filter(isTrace))}${group("相关方法", rest.filter(c => !isTrace(c)))}</select>` : "");
   if (html !== CMP.chipsHTML) { CMP.chipsHTML = html; $("cmp-chips").innerHTML = html; }
 }
 
@@ -721,7 +732,7 @@ function renderCompare() {
   const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
   const bestRank = Object.fromEntries(groups.map(g => [g, Math.min(...order.map(id => avg(acc[id][g].ranks) ?? Infinity))]));
   $("cmp-summary").innerHTML = `
-    <div class="panel-head"><h2 title="平均名次：各任务各列按均值排名后取平均（越小越好）；Δ：相对参照的平均相对差（正 = 更好）">总览</h2></div>
+    <div class="panel-head"><h2 title="各任务各列按当前均值排名后取平均；Δ为相对参照的平均相对差（正=更好）">平均名次</h2><p>越低越好 · 进行中的训练成绩仍会变化</p></div>
     <div class="tbl-wrap"><table class="cmp"><thead><tr><th>对象</th>${groups.map(g => `<th>${GROUP[g]}</th>`).join("")}</tr></thead><tbody>
     ${order.map(id => `<tr><td>${who(id)}</td>${groups.map(g => {
       const r = avg(acc[id][g].ranks), d = avg(acc[id][g].rels), n = acc[id][g].ranks.length;
@@ -757,7 +768,7 @@ function renderCompare() {
         const ref = M[CMP.ref]?.[col.key];
         let note = "";
         if (col.key === "train" && cohort.runs.some(r => r.status === "running")) note = '<span class="flag" title="含未完成的运行：训练分仍会变化">运行中</span>';
-        if (col.key === "train" && cohort.runs.some(r => r.budget > 0 && r.budget_used < r.budget)) note += '<span class="flag" title="部分运行尚未用完搜索预算">未满预算</span>';
+        else if (col.key === "train" && cohort.runs.some(r => r.budget > 0 && r.budget_used < r.budget)) note = '<span class="flag" title="部分运行尚未用完搜索预算">未满预算</span>';
         return `<td class="${st.mean === best[col.key] ? "best" : ""}"><b>${fmt(st.mean)}</b>${note}
           <small>${st.sd == null ? "" : `± ${fmt(st.sd, 3)} · `}n=${st.n}</small>${id !== CMP.ref && ref ? delta(relGap(st.mean, ref.mean)) : ""}</td>`;
       }).join("")}</tr>`;
@@ -765,14 +776,12 @@ function renderCompare() {
     const pick = cols.some(c => c.key === CMP.col[task.key]) ? CMP.col[task.key]
       : (cols.find(c => c.group === "test") || cols[0]).key;
     CMP.col[task.key] = pick;
-    const sources = task.cohorts.filter(c => c.source).map(c => `${esc(label.get(c.id) || c.id)}：${esc(c.source)}`).join("；");
     return `<article class="panel cmp-task" data-task="${esc(task.key)}">
       <div class="panel-head"><h2>${esc(task.label)}</h2><p>${esc(task.unit)} · 越低越好</p></div>
       <div class="tbl-wrap"><table class="cmp"><thead><tr><th rowspan="2">对象</th>${head1.join("")}</tr><tr>${head2.join("")}</tr></thead><tbody>${rows}</tbody></table></div>
       <div class="dots-head"><h3>各 rep 分布（向右 = 更好）</h3><div class="segctl small">${cols.map(col =>
         `<button type="button" data-col="${esc(col.key)}" aria-pressed="${col.key === pick}">${esc(col.label)}</button>`).join("")}</div></div>
       <svg class="dots"></svg>
-      ${sources ? `<div class="src">held-out 来源 · ${sources}</div>` : ""}
     </article>`;
   }).join("");
   drawAllDots();
@@ -924,7 +933,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 function startPolling() {
   stopPolling();
   S.timer = setInterval(() => {
-    if (S.fetchedAt && !$("live").classList.contains("err")) $("live-text").textContent = `实时 · ${rel(S.fetchedAt)}`;
+    if (S.fetchedAt && !$("live").classList.contains("err")) $("live-text").textContent = `已刷新 · ${rel(S.fetchedAt)}`;
   }, 5000);
   let ticks = 0;
   // Comparison data changes slowly (finished runs, new held-out files): poll 4x less often.

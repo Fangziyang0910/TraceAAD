@@ -203,12 +203,22 @@ class ResultsMonitor:
         entries = []
         if not self.results_root.is_dir():
             return entries
+        primary = read_object(self.results_root / 'primary_runs.json')
+        visible = primary.get('visualization_methods')
         for directory in self.results_root.iterdir():
+            if visible is not None and directory.name not in visible:
+                continue
             if directory.is_dir() and not directory.is_symlink() and self._config_paths(directory):
                 entries.append((self._latest_activity(directory), directory.name))
-        entries.sort(reverse=True)
-        labels = read_object(self.results_root / 'primary_runs.json').get('labels', {})
+        if visible is None:
+            entries.sort(reverse=True)
+        else:
+            entries.sort(key=lambda entry: visible.index(entry[1]))
+        labels = primary.get('labels', {})
         return [{"id": name, "label": labels.get(name, name)} for _, name in entries]
+
+    def comparison_reference(self):
+        return read_object(self.results_root / 'primary_runs.json').get('visualization_reference')
 
     def _latest_activity(self, directory: Path) -> float:
         latest = 0.0
@@ -327,6 +337,7 @@ class ResultsMonitor:
                 continue
             score_unit = TASKS[task]['unit']
             if (task in FIXED_TASKS and config.get('score_metric') != 'raw_objective'
+                    and summary.get('source') != 'native/'
                     and config.get('revision') != 'research-protocol-v6-20261012-raw-objective'
                     and summary.get('raw_search', {}).get('status') not in ('complete', 'complete_with_missing')):
                 score_unit = '参考偏差 %'

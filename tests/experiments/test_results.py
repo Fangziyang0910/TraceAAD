@@ -222,6 +222,73 @@ function scope() {
     subprocess.run([node,'-e',check,str(source)],check=True,capture_output=True,text=True)
 
 
+def test_dashboard_scope_filters_every_view_without_changing_run_inventory(tmp_path):
+    visible = ['traceaad_base_20261105', 'traceaad_v21c', 'traceaad_v22', 'traceaad_v23', 'eoh']
+    all_methods = [*visible, 'traceaad_base', 'traceaad_v19', 'traceaad_v20_complete']
+    for method in reversed(all_methods):
+        dashboard_run(tmp_path / method / 'tsp_construct' / 'rep1')
+    index = dict(schema=1, methods={m: ['tsp_construct/rep1'] for m in all_methods},
+                 visualization_methods=visible, visualization_reference=visible[0],
+                 default_experiment='traceaad_v22', labels={visible[0]: 'Base', 'traceaad_v21c': 'V21'})
+    write_json(tmp_path / 'primary_runs.json', index)
+    before = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    monitor = ResultsMonitor(tmp_path)
+    assert [b['id'] for b in monitor.batches()] == visible
+    assert [c['id'] for c in monitor.cohorts()] == visible
+    assert monitor.default_batch() == 'traceaad_v22'
+    assert monitor.comparison_reference() == visible[0]
+    assert monitor.overview('traceaad_v19')['summary']['runs'] == 0
+    assert monitor.run_detail('traceaad_v19', 'tsp_construct', 'rep1') is None
+    assert [c['id'] for c in monitor.compare(all_methods)['cohorts']] == visible
+    # Visibility is separate from the inventory consumed by sync/watch.
+    assert {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()} == before
+
+
+@pytest.mark.parametrize('task,unit', [('fssp_gls', 'makespan'), ('jssp_construct', 'makespan'),
+                                        ('graph_colouring', '颜色数')])
+def test_native_objectives_do_not_inherit_legacy_percentage_units(tmp_path, task, unit):
+    directory = tmp_path / 'traceaad_v22' / task / 'rep1'
+    dashboard_run(directory)
+    config = json.loads((directory / 'run_config.json').read_text())
+    del config['score_metric']
+    write_json(directory / 'run_config.json', config)
+    summary = json.loads((directory / 'summary.json').read_text())
+    write_json(directory / 'summary.json', {**summary, 'source': 'native/'})
+    monitor = ResultsMonitor(tmp_path)
+    assert monitor.overview('traceaad_v22')['tasks'][0]['unit'] == unit
+    # Legacy records retain their original interpretation.
+    write_json(directory / 'summary.json', summary)
+    assert monitor.overview('traceaad_v22')['tasks'][0]['unit'] == '参考偏差 %'
+
+
+def test_comparison_uses_configured_base_reference_and_drops_hidden_links():
+    import shutil
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is unavailable for the JavaScript view check')
+    source = Path(__file__).resolve().parents[2] / 'experiments/visualization/static/app.js'
+    check = r'''
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const code=fs.readFileSync(process.argv[1],'utf8');
+const part=code.slice(code.indexOf('const CMP ='),code.indexOf('async function loadCompare()'));
+const ids=['traceaad_base_20261105','traceaad_v21c','traceaad_v22','traceaad_v23','eoh'];
+const data={default_reference:ids[0],cohorts:ids.map(id=>({id,batch:id,label:id,
+ model_name:'qwen3.8-27b',runs:18,variant:'',heldout_tasks:[]}))};
+const context=vm.createContext({S:{batch:'traceaad_v22'},getJSON:async()=>({data})});
+vm.runInContext(part,context);
+(async()=>{
+ vm.runInContext("CMP.ids=['traceaad_v19'];CMP.ref='traceaad_v19'",context);
+ await vm.runInContext('loadCohorts()',context);
+ assert.equal(vm.runInContext('JSON.stringify(CMP.ids)',context),JSON.stringify(ids));
+ assert.equal(vm.runInContext('CMP.ref',context),ids[0]);
+ vm.runInContext("CMP.ref='traceaad_v23'",context);
+ await vm.runInContext('loadCohorts()',context);
+ assert.equal(vm.runInContext('CMP.ref',context),'traceaad_v23');
+})().catch(e=>{console.error(e);process.exitCode=1});
+'''
+    subprocess.run([node, '-e', check, str(source)], check=True, capture_output=True, text=True)
+
+
 def test_comparison_marks_partial_training_budget():
     from pathlib import Path
     import shutil

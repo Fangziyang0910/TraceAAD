@@ -252,7 +252,6 @@ table.cmp { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 .d.up { color: var(--ok); } .d.down { color: var(--bad); } .d.same { color: var(--faint); }
 .cmp-tasks { display: grid; gap: 18px; }
 .cmp-task .panel-head { margin-bottom: 8px; }
-.cmp-task .src { color: var(--faint); font-size: 11px; margin-top: 8px; }
 .dots-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 14px 0 4px; }
 .dots-head h3 { margin: 0; font-size: 12.5px; color: var(--ink-2); }
 .segctl.small button { padding: 3px 9px; font-size: 11.5px; }

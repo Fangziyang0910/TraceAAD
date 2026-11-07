@@ -33,6 +33,8 @@ uv run python -m experiments.visualization --host 0.0.0.0 --port 8765
 
 看板地址为 `http://10.150.68.218:8765/`，本机也可访问 `http://127.0.0.1:8765/`。本地数据只反映已同步的状态。生成预算读取事件与恢复点，不用有效程序数代替。文件说明见[结果格式](SEARCH_FORMAT.md)。
 
+看板展示由主实验名单中的`visualization_methods`单独控制，固定为正式Base（11月5日）、V21、V22、V23与12个对照方法；默认监控V22，`visualization_reference`指定Base为默认比较参照。展示范围不删除历史运行，也不改变同步/检查使用的`methods`清单。浏览器时间统一为北京时间，刷新提示表示读取本地同步副本。
+
 本机看板由 systemd 用户服务 `traceaad-dashboard.service` 启动；结果同步由 `traceaad-results-sync.service` 按[主实验名单](../../experiments_result/primary_runs.json)每60秒从server4拉取。两个服务开机后自动启动。
 
 `traceaad-watch.timer` 每三分钟运行 `python -m experiments.infra.watch_server4`。它不写批次名：server4 上有清单、且主实验名单中有运行在本机尚未完成（搜索未到终止状态，或已完成但缺 `heldout.json`）的批次，就是要检查的批次。新批次的运行加入主实验名单后自动纳入，被替换的批次随之移出；不在名单中的批次（如消融）不检查。每次检查：失败的 `traceaad-*` 用户服务、本机模型、server4 到本机模型的转发、tmux 会话、各批次的远端状态，以及本机副本是否落后远端 20 次候选以上。新异常通过本机桌面通知；最近一次检查保存在 `~/.cache/traceaad/server4-watch.json`。同一模块的 `sync` 动作（`python -m experiments.infra.watch_server4 sync`）按同样的规则每 60 秒同步这些批次，可以用一个服务替代按版本的同步服务。查询示例：
