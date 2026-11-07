@@ -1,4 +1,4 @@
-"""One Base, V20 or V21 search followed by evaluation of its frozen best program."""
+"""One Base, V20, V21 or V22 search followed by evaluation of its frozen best program."""
 
 import argparse
 from contextlib import nullcontext
@@ -21,6 +21,7 @@ from experiments.infra.storage import seal_calls
 from traceaad_base.storage import write_json
 import traceaad_v20
 import traceaad_v21
+import traceaad_v22
 from traceaad_v21.prompts import CANDIDATE_RESPONSE_FORMAT as V21_RESPONSE_FORMAT
 from .scheduling import REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, load_environment
 
@@ -28,7 +29,7 @@ from .scheduling import REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, loa
 ROOT = Path(__file__).resolve().parents[2]
 MEMORY_BYTES = 2 << 30
 METHODS = {"base": ("traceaad_base", traceaad_base), "v20": ("traceaad_v20", traceaad_v20),
-           "v21": ("traceaad_v21", traceaad_v21)}
+           "v21": ("traceaad_v21", traceaad_v21), "v22": ("traceaad_v22", traceaad_v22)}
 
 
 def configure_time_budget(task, seconds_per_instance):
@@ -47,7 +48,7 @@ def configure_time_budget(task, seconds_per_instance):
 
 
 def request_options(method):
-    if method == "v21":
+    if method in ("v21", "v22"):
         return {**REQUEST_OPTIONS, "response_format": V21_RESPONSE_FORMAT}
     return REQUEST_OPTIONS
 
