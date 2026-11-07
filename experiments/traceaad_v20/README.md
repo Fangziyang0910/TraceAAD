@@ -1,6 +1,6 @@
-# Base、V20、V21 与 V22 的同条件入口
+# Base、V20、V21、V22 与 V23 的同条件入口
 
-默认后端为 `scheduled`。Qwen3.8-27B经server4公共调度器分配到四个端点。`--method base` 调用 `traceaad_base.TraceAAD`；`--method v20` 调用完整V20；`--method v21` 调用只含机制2的V21；`--method v22` 调用V21加机制1的V22。
+默认后端为 `scheduled`。Qwen3.8-27B经server4公共调度器分配到四个端点。`--method base` 调用 `traceaad_base.TraceAAD`；`--method v20` 调用完整V20；`--method v21` 调用只含机制2的V21；`--method v22` 调用V21加机制1的V22；`--method v23`调用Base加机制1的V23。
 
 采样对齐 `20261031_base_schema_co6` 的保存配置：温度1.0，top_p=0.8，top_k=20，min_p=0，presence_penalty=1.5，frequency_penalty=0，repetition_penalty和repeat_penalty均为1，关闭思考，输出上限16384，JSON schema输出。
 
@@ -69,5 +69,17 @@ V22为Base加机制1和机制2，不需要反思或嵌入服务。单路配置�
 ```
 
 批量入口同样支持`--method v22 --experiment traceaad_v22`。机制与验证范围见[V22](../../docs/机制设计/V22.md)。
+
+V23复用Base的完整生成流程和`analysis → design → code`输出，与V22共用机制1的选择和学习实现，状态独立。正式对照使用：
+
+```bash
+.venv/bin/python -m experiments.traceaad_v20.launch_host \
+  --method v23 --experiment traceaad_v23 --batch BATCH_NAME \
+  --repeats 3 --budget 1000 --initial-size 5 --seconds-per-instance 10 \
+  --scheduler-socket /tmp/traceaad-1003/scheduler.sock \
+  --env-file .env.server4 --launch
+```
+
+机制与验证范围见[V23](../../docs/机制设计/V23.md)。
 
 去掉 `--launch` 只输出十八路计划。恢复用单路原命令加 `--resume`：读回已完成的尝试，丢弃未完成的尝试后继续。辅助请求与tokens单列，不占评价预算。

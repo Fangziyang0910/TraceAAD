@@ -7,7 +7,7 @@
 | 设计实验、核对比较条件 | [实验条件](PROTOCOL.md) |
 | 查询状态、恢复、远端操作 | [操作说明](infra/AGENT_OPERATIONS.md) |
 | 找到源码、反馈与最终结果 | [结果格式](infra/SEARCH_FORMAT.md) |
-| 运行 V20、无反思对照、V21、V22 与 Base | [统一入口](traceaad_v20/README.md)，用 `--method` 选择方法 |
+| 运行 V20、无反思对照、V21、V22、V23 与 Base | [统一入口](traceaad_v20/README.md)，用 `--method` 选择方法 |
 | 复查历史版本的批次 | server4 上该批次的冻结源码快照，或 git 历史 |
 
 ## 训练可视化
@@ -26,7 +26,7 @@ uv run python -m experiments.visualization --host 0.0.0.0 --port 8765
 
 ## 1. 检查配置与启动计划
 
-V20、V21、V22 与 Base 的单路运行、十八路启动和恢复命令见统一入口。四者使用1000次评价预算和全部实例共享的评价总时限。正式批次在冻结源码快照中启动，改变条件时使用新批次名。
+V20、V21、V22、V23 与 Base 的单路运行、十八路启动和恢复命令见统一入口。五者使用1000次评价预算和全部实例共享的评价总时限。正式批次在冻结源码快照中启动，改变条件时使用新批次名。
 
 在仓库根目录执行。模型请求经 server4 公共调度器分配到 Qwen3.8-27B 端点，凭据由 server4 仓库的 `.env` 加载。端点与采样设置见 [base.py](infra/base.py)。下面的 `BATCH_NAME` 表示待替换的新批次名。
 

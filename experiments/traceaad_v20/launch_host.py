@@ -1,4 +1,4 @@
-"""Preview or start independently recorded Base, V20, V21 or V22 searches on the current host."""
+"""Preview or start independently recorded Base, V20, V21, V22 or V23 searches on the current host."""
 
 import argparse
 from datetime import datetime
@@ -52,7 +52,7 @@ def build_plan(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--method", choices=("v20", "v21", "v22", "base"), default="v20")
+    parser.add_argument("--method", choices=("v20", "v21", "v22", "v23", "base"), default="v20")
     parser.add_argument("--backend", choices=("scheduled",), default="scheduled")
     for feature in ("trajectory-scoring","trajectory-context","reference-selection","experience-learning"):
         parser.add_argument("--no-"+feature,action="store_true")
