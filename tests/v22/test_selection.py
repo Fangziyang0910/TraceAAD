@@ -7,10 +7,12 @@ import random
 import numpy as np
 import pytest
 from scipy.integrate import quad
+from scipy.special import stdtrit
 from scipy.stats import t
 
 from traceaad_base import Evaluation, Program
-from traceaad_v22.selection import Action, OPERATORS, ResponseModel, Selector, expected_improvement
+from traceaad_v22.selection import (Action, OPERATORS, QUANTILES, ResponseModel, Selector,
+                                    expected_improvement)
 
 
 def program(pid, fitness, operator="Init", parent=0, reference=None, code=None):
@@ -18,8 +20,8 @@ def program(pid, fitness, operator="Init", parent=0, reference=None, code=None):
                    parent, reference, Evaluation("success", fitness), analysis="a")
 
 
-def roots(fitness=(100., 110.)):
-    selector = Selector()
+def roots(fitness=(100., 110.), residual_clip=3.):
+    selector = Selector(residual_clip)
     for pid, value in enumerate(fitness, 1):
         selector.observe(pid, None, program(pid, value))
     selector.initialize()
@@ -29,7 +31,8 @@ def roots(fitness=(100., 110.)):
 def record(selector, action):
     return {**asdict(action), "x": selector.features(action, selector.nodes).tolist()
             if selector.s0 is not None else None,
-            "parent_fitness": selector.nodes[action.parent_id].fitness}
+            "parent_fitness": selector.nodes[action.parent_id].fitness,
+            "f0": selector.f0, "s0": selector.s0}
 
 
 def snapshot(selector):
@@ -41,14 +44,16 @@ def snapshot(selector):
         "champion": selector.champion, "processed": sorted(selector.processed)}, default=default, sort_keys=True)
 
 
-def test_random_intercept_recursion_matches_augmented_batch_posterior():
+def test_unclipped_random_intercept_recursion_matches_augmented_batch_posterior():
     rng = np.random.default_rng(7)
     x = rng.normal(size=(24, 9))
     groups = rng.integers(3, size=len(x))
-    y = rng.normal(size=len(x))
+    y = .2 * rng.normal(size=len(x))
     model = ResponseModel()
     actions = [Action(g, "Refine") for g in range(3)]
     for row, group, value in zip(x, groups, y):
+        _, mu, scale, _ = model.predict([actions[group]], row[None])
+        assert abs(value - mu[0]) < 3 * scale[0]
         model.observe_gate(actions[group], True)
         model.observe_usable(actions[group], row, value)
     design = np.c_[x, np.eye(3)[groups]]
@@ -195,4 +200,118 @@ def test_second_step_candidate_limit_and_family_tie_break():
     action = Action(30, 'Explore')
     child = selector._node(31, 90., action.operator, action.parent_id, action.reference_id)
     actions, _ = selector.second_actions(base, action, references, child)
-    assert len(actions) <= 28
+    assert len(actions) == 29
+    assert Action(30, 'Crossover', 31) in actions
+
+
+@pytest.mark.parametrize('sign', [-1., 1.])
+def test_single_extreme_response_bounds_mean_scale_and_local_sum(sign):
+    action = Action(1, 'Explore')
+    x = np.array([1.] + [0.] * 8)
+    outcomes = []
+    for magnitude in [1e3, 1e9]:
+        model = ResponseModel()
+        _, mu, scale, _ = model.predict([action], x[None])
+        effective_y = mu[0] + sign * 3. * scale[0]
+        model.observe_gate(action, True)
+        model.observe_usable(action, x, sign * magnitude)
+        assert model.groups[action].sy == pytest.approx(effective_y)
+        assert model.m[0] == pytest.approx(effective_y / 3.)
+        assert model.B == pytest.approx(5.)
+        assert model.A == 3.5 and model.groups[action].k == 1
+        outcomes.append(model)
+    np.testing.assert_array_equal(outcomes[0].m, outcomes[1].m)
+    np.testing.assert_array_equal(outcomes[0].V, outcomes[1].V)
+    assert outcomes[0].B == outcomes[1].B
+
+
+def test_clip_uses_old_prediction_and_effective_level_not_raw_residual():
+    model = ResponseModel()
+    action = Action(1, 'Refine')
+    x = np.array([1., .3] + [0.] * 7)
+    for y in [1., 1.5, 2.]:
+        model.observe_gate(action, True)
+        model.observe_usable(action, x, y)
+    _, mu, scale, _ = model.predict([action], x[None])
+    group = model.groups[action]
+    c = 1. / (group.k + 1.)
+    z = x - c * group.sx
+    H = 1. + c + z @ model.V @ z
+    e = -3 * scale[0]
+    expected_m = model.m + (model.V @ z) * e / H
+    expected_B = model.B + e * e / (2 * H)
+    expected_sy = group.sy + mu[0] + e
+    model.observe_gate(action, True)
+    model.observe_usable(action, x, -1e8)
+    np.testing.assert_allclose(model.m, expected_m)
+    assert model.B == pytest.approx(expected_B)
+    assert model.groups[action].sy == pytest.approx(expected_sy)
+
+
+@pytest.mark.parametrize('fitness', [-1e6, 1e6])
+def test_clipped_learning_keeps_true_champion_node_and_trajectory(fitness):
+    selector = roots()
+    action = Action(1, 'Explore')
+    selector.observe(3, record(selector, action), program(3, fitness, 'Explore', 1))
+    assert selector.champion == min(100., fitness)
+    child = selector.nodes[3]
+    assert child.fitness == fitness and child.birth_change == 100. - fitness
+    assert child.family == 3 and child.ancestor_best == min(100., fitness)
+    assert child.momentum == pytest.approx(.5 * ((100. - fitness) / 10.) / (1 + abs((100. - fitness) / 10.)))
+    assert abs(selector.models['Explore'].groups[action].sy) == pytest.approx(3 * np.sqrt(2.))
+
+
+def test_virtual_children_use_raw_samples_and_same_clipped_update(monkeypatch):
+    selector = roots(residual_clip=.01)
+    action = Action(1, 'Explore')
+    prediction = selector.forecasts([action], selector.nodes, selector.models, selector.champion)[0]
+    ys = prediction[1] + prediction[2] * stdtrit(prediction[3], QUANTILES)
+    before = snapshot(selector)
+    children, updates = [], []
+    original_node, original_update = selector._node, ResponseModel.observe_usable
+    def node(*args):
+        children.append(args[1])
+        return original_node(*args)
+    def update(model, action, x, y):
+        _, mu, scale, _ = model.predict([action], x[None])
+        original_update(model, action, x, y)
+        assert model.groups[action].sy == pytest.approx(mu[0] + np.clip(y - mu[0], -.01 * scale[0], .01 * scale[0]))
+        updates.append(float(y))
+    monkeypatch.setattr(selector, '_node', node)
+    monkeypatch.setattr(ResponseModel, 'observe_usable', update)
+    selector.two_step(action, prediction, [Action(1, 'Refine')], selector.family_champions())
+    np.testing.assert_allclose(updates, ys)
+    np.testing.assert_allclose(children, 100. - 10. * ys)
+    assert snapshot(selector) == before
+
+
+def test_first_other_family_adds_current_parent_c_without_expanding_other_parents():
+    selector = roots((100.,))
+    refine = Action(1, 'Refine')
+    selector.observe(2, record(selector, refine), program(2, 110., 'Refine', 1))
+    action = Action(1, 'Explore')
+    child = selector._node(3, 105., 'Explore', 1, None)
+    base = [Action(i, op) for i in [1, 2] for op in OPERATORS[:2]]
+    actions, _ = selector.second_actions(base, action, selector.family_champions(), child)
+    assert Action(1, 'Crossover', 3) in actions
+    assert Action(2, 'Crossover', 3) not in actions
+    assert Action(3, 'Crossover', 1) in actions
+    assert len(actions) == 8
+
+
+def test_supplemented_pair_respects_existing_best_reference_rule():
+    selector = roots()
+    action = Action(2, 'Explore')
+    child = selector._node(3, 115., 'Explore', 2, None)
+    actions, _ = selector.second_actions([Action(1, 'Refine')], action, selector.family_champions(), child)
+    assert Action(2, 'Crossover', 3) not in actions
+    assert Action(3, 'Crossover', 1) in actions
+    refined = selector._node(3, 90., 'Refine', 2, None)
+    actions, _ = selector.second_actions([], Action(2, 'Refine'), selector.family_champions(), refined)
+    assert Action(2, 'Crossover', 3) not in actions
+
+
+@pytest.mark.parametrize('threshold', [0., -1., float('inf'), float('nan')])
+def test_residual_threshold_must_be_positive_and_finite(threshold):
+    with pytest.raises(ValueError, match='residual_clip'):
+        Selector(threshold)

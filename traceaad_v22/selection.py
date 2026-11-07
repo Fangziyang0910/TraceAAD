@@ -13,6 +13,9 @@ from traceaad_base.selection import identity
 OPERATORS = ("Refine", "Explore", "Crossover")
 DIMENSION = 9
 SHORTLIST = 8
+RESIDUAL_CLIP = 3.
+UPDATE_RULE = "predictive_residual_clip_v1"
+SCALE_RULE = "positive_pairwise_median_v1"
 _points, _weights = np.polynomial.legendre.leggauss(16)
 QUANTILES, QUADRATURE_WEIGHTS = (_points + 1.) / 2., _weights / 2.
 
@@ -51,9 +54,12 @@ _EMPTY = Group()
 
 
 class ResponseModel:
-    """One operator's smoothed gate and conjugate regression with group intercepts."""
+    """One operator's gate and residual-clipped regression with group intercepts."""
 
-    def __init__(self):
+    def __init__(self, residual_clip=RESIDUAL_CLIP):
+        if not math.isfinite(residual_clip) or residual_clip <= 0:
+            raise ValueError("residual_clip must be finite and positive")
+        self.residual_clip = float(residual_clip)
         self.N = self.U = 0
         self.m = np.zeros(DIMENSION, dtype=np.float64)
         self.V = np.diag([1.] + [.25] * (DIMENSION - 1))
@@ -63,6 +69,7 @@ class ResponseModel:
     def fork(self):
         """Share untouched groups; an observation always replaces its own group."""
         model = ResponseModel.__new__(ResponseModel)
+        model.residual_clip = self.residual_clip
         model.N, model.U = self.N, self.U
         model.m, model.V = self.m.copy(), self.V.copy()
         model.A, model.B = self.A, self.B
@@ -93,13 +100,16 @@ class ResponseModel:
         z = np.asarray(x, dtype=np.float64) - c * group.sx
         mu = z @ self.m + c * group.sy
         H = 1. + c + z @ self.V @ z
-        e, v = y - mu, self.V @ z
+        scale = math.sqrt((self.B / self.A) * H)
+        limit = self.residual_clip * scale
+        e = float(np.clip(y - mu, -limit, limit))
+        effective_y, v = mu + e, self.V @ z
         self.m = self.m + v * e / H
         self.V = self.V - np.outer(v, v) / H
         self.V = (self.V + self.V.T) / 2.
         self.A += .5
         self.B += e * e / (2. * H)
-        self.groups[action] = replace(group, k=group.k + 1, sx=group.sx + x, sy=group.sy + y)
+        self.groups[action] = replace(group, k=group.k + 1, sx=group.sx + x, sy=group.sy + effective_y)
 
 
 def squash(z):
@@ -114,15 +124,20 @@ def expected_improvement(pi, mu, scale, df, gap):
 
 
 class Selector:
-    def __init__(self):
+    def __init__(self, residual_clip=RESIDUAL_CLIP):
         self.nodes = {}
         self.sources = {}
-        self.models = {operator: ResponseModel() for operator in OPERATORS}
+        self.models = {operator: ResponseModel(residual_clip) for operator in OPERATORS}
         self.processed = set()
         self.f0 = self.s0 = None
         self.champion = math.inf
         self.max_id = 0
         self.pending = []
+
+    @property
+    def settings(self):
+        return {"update_rule": UPDATE_RULE, "residual_clip": self.models["Refine"].residual_clip,
+                "scale_rule": SCALE_RULE}
 
     def _node(self, pid, fitness, operator, parent_id, reference_id):
         if operator == "Init":
@@ -215,6 +230,10 @@ class Selector:
                 actions.append(original)
         if child is not None:
             actions.extend(self.actions_for(child, references))
+            # Include the current parent's newly available C as well. It can use
+            # the child only when that child is its best eligible reference.
+            actions.extend(a for a in self.actions_for(nodes[action.parent_id], references)
+                           if a.operator == "Crossover" and a.reference_id == child.id)
         return list(dict.fromkeys(actions)), nodes
 
     def two_step(self, action, prediction, shortlist, references):
@@ -276,6 +295,10 @@ class Selector:
         """Observe one final attempt result; initialization has no selection record."""
         if attempt_id in self.processed:
             return
+        if record is not None:
+            for name, expected in (("f0", self.f0), ("s0", self.s0)):
+                if name not in record or record[name] != expected:
+                    raise ValueError(f"Incompatible V22 selection scale: {name}")
         if program is not None:
             self.max_id = max(self.max_id, program.id)
         valid = (program is not None and program.valid and program.evaluation.fitness is not None

@@ -1,6 +1,7 @@
 """V22's actual attempt, budget, prompt and recovery boundaries."""
 
 import json
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -231,3 +232,112 @@ def test_launcher_builds_v22_plan_without_launching():
     assert len(plan) == 18
     assert all(row['command'][row['command'].index('--method') + 1] == 'v22' for row in plan)
     assert all('traceaad_v22' in row['run_dir'] for row in plan)
+
+
+@pytest.mark.parametrize('field,value', [('initial_size', 3), ('seed', 8), ('evaluation_budget', 10),
+                                         ('ancestor_count', 4)])
+def test_resume_rejects_changed_config_before_touching_logs(tmp_path, field, value):
+    config = Config(evaluation_budget=6, initial_size=2, seed=7)
+    search = TraceAAD(task(), Replies(), config=config, run_dir=tmp_path)
+    search.step()
+    search.step()
+    calls = tmp_path / 'calls.jsonl'
+    calls.write_bytes(calls.read_bytes() + b'{"unfinished":')
+    before = {p.name: p.read_bytes() for p in tmp_path.iterdir() if p.is_file()}
+    model = Replies()
+    with pytest.raises(ValueError, match=f'config.{field}'):
+        TraceAAD(task(), model, config=replace(config, **{field: value}), run_dir=tmp_path, resume=True)
+    assert not model.prompts
+    assert before == {p.name: p.read_bytes() for p in tmp_path.iterdir() if p.is_file()}
+
+
+@pytest.mark.parametrize('field,value', [('update_rule', 'conjugate_v1'), ('residual_clip', 4.),
+                                         ('scale_rule', 'other_scale')])
+def test_resume_rejects_changed_update_contract(tmp_path, field, value):
+    config = Config(evaluation_budget=6, initial_size=2)
+    search = TraceAAD(task(), Replies(), config=config, run_dir=tmp_path)
+    search.step()
+    path = tmp_path / 'run_config.json'
+    saved = json.loads(path.read_text())
+    saved['selection_settings'][field] = value
+    path.write_text(json.dumps(saved))
+    with pytest.raises(ValueError, match=f'selection_settings.{field}'):
+        TraceAAD(task(), Replies(), config=config, run_dir=tmp_path, resume=True)
+
+
+def test_old_update_checkpoint_is_not_silently_replayed(tmp_path):
+    config = Config(evaluation_budget=6, initial_size=2)
+    search = TraceAAD(task(), Replies(), config=config, run_dir=tmp_path)
+    search.step()
+    path = tmp_path / 'run_config.json'
+    saved = json.loads(path.read_text())
+    saved.pop('selection_settings')
+    path.write_text(json.dumps(saved))
+    with pytest.raises(ValueError, match='selection_settings'):
+        TraceAAD(task(), Replies(), config=config, run_dir=tmp_path, resume=True)
+
+
+def test_resume_matches_threshold_and_preserves_extreme_true_results(tmp_path):
+    config = Config(evaluation_budget=6, initial_size=2)
+    values = [100., 110., 1e6, -1e6, 102., 105.]
+    search = TraceAAD(task(), Replies(values=values), config=config, residual_clip=2., run_dir=tmp_path)
+    for _ in range(4):
+        search.step()
+    assert search.best.evaluation.fitness == -1e6
+    assert search.selector.nodes[3].fitness == 1e6
+    assert search.selector.nodes[4].fitness == -1e6
+    with pytest.raises(ValueError, match='selection_settings.residual_clip'):
+        TraceAAD(task(), Replies(), config=config, run_dir=tmp_path, resume=True)
+    resumed = TraceAAD(task(), Replies(start=4, values=values), config=config, residual_clip=2.,
+                       run_dir=tmp_path, resume=True)
+    assert_same_selectors(search.selector, resumed.selector)
+    search.run()
+    resumed.run()
+    assert_same_selectors(search.selector, resumed.selector)
+    assert [a.record for a in search.attempts] == [a.record for a in resumed.attempts]
+    resumed.restore(resumed.attempts[0])
+    assert_same_selectors(search.selector, resumed.selector)
+
+
+@pytest.mark.parametrize('field', ['f0', 's0'])
+def test_resume_checks_scale_after_each_attempt(tmp_path, field):
+    config = Config(evaluation_budget=6, initial_size=2)
+    search = TraceAAD(task(), Replies(), config=config, run_dir=tmp_path)
+    search.step()
+    search.step()
+    path = tmp_path / 'attempts.jsonl'
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    rows[-1]['attempt']['record']['selection_scale'][field] += 1.
+    path.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    with pytest.raises(ValueError, match='restored scale at attempt 2'):
+        TraceAAD(task(), Replies(), config=config, run_dir=tmp_path, resume=True)
+
+
+@pytest.mark.parametrize('field', ['f0', 's0'])
+def test_resume_checks_decision_scale_before_training(tmp_path, field):
+    config = Config(evaluation_budget=6, initial_size=2)
+    search = TraceAAD(task(), Replies(), config=config, run_dir=tmp_path)
+    for _ in range(3):
+        search.step()
+    path = tmp_path / 'attempts.jsonl'
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    rows[-1]['attempt']['record']['selection'][field] += 1.
+    path.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    with pytest.raises(ValueError, match=f'selection scale: {field}'):
+        TraceAAD(task(), Replies(), config=config, run_dir=tmp_path, resume=True)
+
+
+def test_resume_rejects_changed_task_and_unknown_settings(tmp_path):
+    config = Config(evaluation_budget=6, initial_size=2)
+    search = TraceAAD(task(), Replies(), config=config, run_dir=tmp_path)
+    search.step()
+    changed = task()
+    changed.time_limit += 1.
+    with pytest.raises(ValueError, match='task.time_limit'):
+        TraceAAD(changed, Replies(), config=config, run_dir=tmp_path, resume=True)
+    path = tmp_path / 'run_config.json'
+    saved = json.loads(path.read_text())
+    saved['selection_settings']['unsupported_policy'] = True
+    path.write_text(json.dumps(saved))
+    with pytest.raises(ValueError, match='selection_settings.unsupported_policy'):
+        TraceAAD(task(), Replies(), config=config, run_dir=tmp_path, resume=True)
