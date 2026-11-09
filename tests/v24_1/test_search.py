@@ -12,7 +12,7 @@ from traceaad_base.models import Attempt
 from traceaad_v21.context import context as v21_context
 from traceaad_v21.search import TraceAAD as V21
 from traceaad_v24_1 import TraceAAD
-from traceaad_v24_1.evidence import fragment, render
+from traceaad_v24_1.evidence import build
 from traceaad_v24_1.notes import (CHAT_RESERVE, REFLECTION_FORMAT, REFLECTION_TOKENS,
                                   experience_block, reflection_prompt)
 
@@ -80,22 +80,43 @@ def search(path, generator=None, reflector=None, *, config=None, resume=False, *
 
 
 @pytest.mark.parametrize("failure_kind", ["parse", "request"])
-def test_failed_reflection_retains_events_for_next_cadence_and_reads_old_note_sources(tmp_path, failure_kind):
+def test_failed_reflection_retains_events_and_success_only_consumes_the_shown_question(tmp_path, failure_kind):
     reflector = Reflector(failures=[1], make_note=True, failure_kind=failure_kind)
     run = search(tmp_path, reflector=reflector)
     run.run()
     reflections = [a for a in run.attempts if "reflection" in a.record]
     assert [a.id for a in reflections] == [13, 23, 33, 43]
-    failed, succeeded, revised = [a.record["reflection"] for a in reflections[:3]]
+    failed, succeeded = [a.record["reflection"] for a in reflections[:2]]
     assert failed["status"] == "failed" and failed["snapshot"]["unreviewed_events"] == list(range(4, 14))
     assert succeeded["status"] == "success" and succeeded["unreviewed_before"] == list(range(4, 24))
-    assert succeeded["snapshot"]["unreviewed_events"] == []
-    old = succeeded["snapshot"]["experience"]["entries"][0]["evidence_ids"]
-    assert set(old) <= set(revised["shown_event_ids"])
-    assert "Experience source events: " + str(old) in reflector.prompts[2]
-    assert len(run.experience.active) == 1 and run.experience.active[0]["id"] == 1
-    assert run.experience.data["entries"][0]["source_ids"] != run.experience.active[0]["evidence_ids"]
-    assert succeeded["snapshot"]["experience"]["entries"][0]["evidence_ids"] == old
+    assert succeeded["reviewed_event_ids"]
+    assert succeeded["snapshot"]["unreviewed_events"] == [
+        i for i in succeeded["unreviewed_before"] if i not in succeeded["shown_event_ids"]]
+    assert succeeded["focus"]["anchor_attempt"] in succeeded["shown_event_ids"]
+    for attempt in reflections[1:]:
+        reflection = attempt.record["reflection"]
+        assert reflection["status"] == "success"
+        for update in reflection["updates"]:
+            assert set(update["evidence_ids"]) <= set(reflection["shown_event_ids"])
+
+
+def test_repeated_unchanged_computations_stay_archived_without_forcing_a_knowledge_update(tmp_path):
+    class Unchanged(Generator):
+        def complete(self, prompt, **settings):
+            self.n += 1
+            return json.dumps({"analysis": "Keep the computation.", "code": "def solve(x):\n    return x + 1\n",
+                               "design": "Add one."})
+    reflector = Reflector()
+    run = search(tmp_path, generator=Unchanged(), reflector=reflector,
+                 config=Config(evaluation_budget=26, initial_size=3))
+    run.run()
+    assert len(run.events) == 26 and run.unreviewed_events == []
+    assert not reflector.prompts
+    reflected = [a for a in run.attempts if "reflection" in a.record]
+    assert [a.id for a in reflected] == [13, 23]
+    assert all(a.record["reflection"]["status"] == "observed" for a in reflected)
+    assert all(a.record["observation"]["reason"] == "unchanged_computation"
+               for a in run.attempts if a.operator != "Init")
 
 
 def test_resume_restores_cadence_unread_entries_and_sources_without_requests(tmp_path):
@@ -122,13 +143,14 @@ def test_resume_restores_cadence_unread_entries_and_sources_without_requests(tmp
             {k: v for k, v in row.items() if k != "seconds"} for row in b.record.get("aux", [])]
 
 
-def test_whole_fragment_deferral_survives_restore(tmp_path):
+def test_whole_question_deferral_survives_restore(tmp_path):
     full = search(tmp_path / "full")
     for _ in range(13):
         full.step()
     unread = list(range(4, 14))
-    ids = fragment(full.events, unread[0])
-    size = len(reflection_prompt(task(), [], render(full.events, ids, unread, [])).encode())
+    material = build(full.events, unread, [], lambda related, text: reflection_prompt(
+        task(), related, text, active_count=0), len, full.input_limit)
+    size = material.input_size
     context_tokens = REFLECTION_TOKENS + CHAT_RESERVE + size
     limited = search(tmp_path / "limited", reflection_context_tokens=context_tokens)
     for _ in range(13):
@@ -162,7 +184,8 @@ def test_repairs_count_once_for_cadence_and_final_budget_does_not_trigger_reflec
     assert len(reflector.prompts) == 1
     assert counted[0].repair_used and len(counted[0].evaluations) == 2
     assert run.events[counted[0].id].child.code == run.archive[counted[0].program_id].code
-    assert "reflection" not in run.attempts[-1].record and len(run.unreviewed_events) == 10
+    assert "reflection" not in run.attempts[-1].record
+    assert {a.id for a in counted[-10:]} <= set(run.unreviewed_events)
     resumed = search(tmp_path, config=config, resume=True)
     assert resumed.snapshot() == run.snapshot()
 
@@ -183,7 +206,9 @@ def test_unevaluated_format_failures_do_not_advance_the_reflection_interval(tmp_
     assert len(failed.calls) == 2 and failed.id not in run.events
     reflected = [a for a in run.attempts if "reflection" in a.record]
     assert [a.id for a in reflected] == [14]
-    assert len(reflected[0].record["reflection"]["reviewed_event_ids"]) == 10
+    reflection = reflected[0].record["reflection"]
+    assert 1 <= len(reflection["reviewed_event_ids"]) <= 3
+    assert set(reflection["reviewed_event_ids"]) <= set(reflection["shown_event_ids"])
 
 
 def test_selection_evaluation_and_generation_budget_match_v21(tmp_path):
@@ -218,7 +243,8 @@ def test_operator_uses_conditions_without_changing_v21_material_or_exposing_sour
         run.step()
     run.experience.apply(json.dumps({"analysis": "A condition.", "updates": [{
         "id": None, "idea": "remainder", "when": "Remainder determines the return value.",
-        "lesson": "Check whether a change affects the remainder.", "evidence_ids": [1]}], "archive_ids": []}), {1})
+        "lesson": "Check whether a change affects the remainder.", "evidence_ids": [1]}], "archive_ids": []}),
+                         {1: run.events[1]}, editable_ids=set())
     parent, reference = run.archive[1], run.archive[2] if operator == "Crossover" else None
     attempt = Attempt(4, parent.id, operator, reference.id if reference else None)
     prompt = run.evolution_prompt(attempt, parent, reference)
@@ -265,8 +291,8 @@ def test_reflection_uses_separate_output_budget_and_requires_a_tokenizer(tmp_pat
 
 
 def test_experiment_entry_and_launcher_register_both_aliases_and_report_reflection_cost(tmp_path, monkeypatch, capsys):
-    from experiments.traceaad_v20 import run
-    from experiments.traceaad_v20.launch_host import build_plan
+    from experiments.traceaad import run
+    from experiments.traceaad.launch_host import build_plan
     from traceaad_base import Evaluator
 
     class Scheduled(Generator):

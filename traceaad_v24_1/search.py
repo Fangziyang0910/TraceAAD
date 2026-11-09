@@ -1,4 +1,4 @@
-"""V24.1 lifecycle: independent reflection cadence, unread evidence, and committed experience snapshots."""
+"""V24.1 lifecycle: focused reflection, observation retention and committed snapshots."""
 
 from copy import copy
 from contextlib import nullcontext
@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from traceaad_base import Config
+from traceaad_v21.representation import identity
 from traceaad_v21.search import TraceAAD as V21
 
 from .context import context
@@ -62,6 +63,7 @@ class TraceAAD(V21):
             "context_tokens": reflection_context_tokens, "output_reserve": reflection_max_tokens,
             "chat_reserve": CHAT_RESERVE, "input_limit": self.input_limit,
             "input_units": "tokens",
+            "organization": "focused_relations",
         }
         self.experience = Experience()
         self.experience_from = None
@@ -105,11 +107,18 @@ class TraceAAD(V21):
         event = observe(attempt, self.archive)
         if event is None:
             return False
+        duplicate = next((e.id for e in self.events.values() if e.key == event.key), None)
         self.events[event.id] = event
         if attempt.operator == "Init":
             return False
         self.interval_count += 1
-        self.unreviewed_events.append(event.id)
+        if event.parent is not None and identity(event.parent.code) == identity(event.child.code):
+            attempt.record["observation"] = {"status": "recorded", "reason": "unchanged_computation"}
+        elif duplicate is not None:
+            attempt.record["observation"] = {"status": "recorded", "reason": "duplicate_observation",
+                                             "same_as": duplicate}
+        else:
+            self.unreviewed_events.append(event.id)
         return True
 
     def finish(self, attempt):
@@ -130,15 +139,19 @@ class TraceAAD(V21):
         try:
             notes = self.experience.active
             material = build(self.events, self.unreviewed_events, notes,
-                             lambda evidence: reflection_prompt(self.task, notes, evidence),
+                             lambda related, evidence: reflection_prompt(
+                                 self.task, related, evidence, active_count=len(notes)),
                              self.measure, self.input_limit)
         except Exception as exc:
             reflection.update(status="failed", error=f"{type(exc).__name__}: {exc}")
             return
         reflection.update(input_size=material.input_size, input_units=self.reflection_settings["input_units"],
-                          input_limit=self.input_limit, deferred_event_ids=list(material.deferred_ids))
+                          input_limit=self.input_limit, deferred_event_ids=list(material.deferred_ids),
+                          focus=material.focus, related_experience_ids=list(material.related_ids))
         if material.reason is not None:
             reflection["reason"] = material.reason
+            if material.reason == "no_new_computational_question":
+                reflection["status"] = "observed"
             return
         reflection["shown_event_ids"] = list(material.event_ids)
         record = {"stage": "reflect", "max_tokens": self.reflection_max_tokens}
@@ -151,7 +164,8 @@ class TraceAAD(V21):
             reflection.update(status="failed", error=record.get("error", "No reflection response"))
             return
         try:
-            update = self.experience.apply(content, set(material.event_ids))
+            update = self.experience.apply(content, {i: self.events[i] for i in material.event_ids},
+                                           editable_ids=set(material.related_ids))
         except (TypeError, ValueError) as exc:
             reflection.update(status="failed", error=f"{type(exc).__name__}: {exc}")
             return

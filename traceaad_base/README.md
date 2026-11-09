@@ -1,6 +1,6 @@
 # TraceAAD Base 独立实现
 
-本包实现[当前 Base 机制](../docs/TraceAAD-Base.md)：用祖先与子代记录指导生成，用直接子代质量和模型调用成本选择父代。
+本包实现[当前 Base 机制](../docs/TraceAAD-Base.md)：不利用轨迹经验的基础演化搜索。演化生成读取当前算法与交叉参考，父代按当前成绩和已投入调用选择，算子使用固定概率。
 
 搜索、提示、选择、模型客户端、隔离评价和存储均在本目录内实现。包内使用相对导入；复制整个目录即可独立使用。运行库只依赖 Python 标准库，任务及生成算法所需的 NumPy 等依赖由任务环境提供。当前验证环境为 Linux、Python 3.14。
 
@@ -23,13 +23,13 @@ uv run python -m traceaad_base run \
 
 `--base-url` 使用 OpenAI 兼容接口的 `/v1` 地址，也可直接给出 `/chat/completions` 地址。`--task` 支持仓库的八个任务，读取任务已有的数据、求解器和评价配置；每次评价的总时限取任务的 `timeout_seconds`。
 
-server4共享资源池的18路实验入口见 [实验入口](../experiments/traceaad_v20/README.md)，使用 `--method base`。
+server4共享资源池的18路实验入口见 [实验入口](../experiments/traceaad/README.md)，使用 `--method base`。
 
 默认配置为 1000 次评价、5 个有效初始个体、温度 1.0、最大输出 16384 tokens、单次模型请求总时限 600 秒。可用 `--budget`、`--initial-size`、`--seed`、`--temperature`、`--max-tokens` 和 `--model-timeout` 调整。`--no-example` 省略初始样例；`--quiet` 只输出最终 JSON。
 
 `OpenAIClient` 默认以 JSON Schema 约束 `analysis`、`design`、`code` 三个必填字符串，禁止额外字段。端点须支持 `response_format.type=json_schema`；请求不自动降级为普通 JSON 模式。解析仍检查字段非空，格式错误沿用一次修复。
 
-继续中断运行时，在相同命令后添加 `--resume`。省略的搜索参数从 `run_config.json` 读取。已完成的尝试读回程序库后继续；中断时未完成的尝试直接丢弃。每个尝试的随机数由种子与尝试序号确定，恢复后的抽样与不中断时一致。
+继续本版中断运行时，在相同命令后添加 `--resume`。新运行以 `generation_protocol=static_algorithm_context_v1` 标记；旧 Base 日志使用原始源码快照恢复，不能混入本版。省略的搜索参数从 `run_config.json` 读取。已完成的尝试读回程序库后继续；中断时未完成的尝试直接丢弃。每个尝试的随机数由种子与尝试序号确定，恢复后的抽样与不中断时一致。
 
 ## 接入自己的任务与模型
 
@@ -75,12 +75,12 @@ python -m traceaad_base run --task-factory my_tasks:make_task \
 | --- | --- |
 | [models.py](models.py)、[config.py](config.py) | 个体、尝试记录与默认配置 |
 | [search.py](search.py) | 初始化、三算子生成、共享一次修复、评价预算与停止 |
-| [prompts.py](prompts.py) | 机制文档中的提示词；8 个祖先、3 个有效子代、2 个失败子代 |
-| [selection.py](selection.py) | 当前倒数排名、全部有效直接子代质量与实际调用成本 |
+| [prompts.py](prompts.py) | 当前算法与交叉参考；初始化及失败反馈保持原样；修复读取本次候选和自身错误 |
+| [selection.py](selection.py) | 当前排名与实际调用成本；固定算子概率 |
 | [task.py](task.py)、[evaluation.py](evaluation.py)、[runtime.py](runtime.py) | 任务适配、独立评价与总时限 |
 | [llm.py](llm.py)、[storage.py](storage.py) | OpenAI 兼容请求与追加记录 |
 
-模型依次输出 `analysis`、`design`、`code`；前两项各用两三句，最多100个英文词或200个中文字。`analysis` 随个体保存，说明本次计算变化及其依据。演化只展示当前父代完整代码；祖先与已有子代通过父代编号、分析、设计和评价呈现局部改进脉络，交叉参考展示设计和评价。修复更新同一个体的设计和代码，修复说明接在原分析之后，原始回复及修复前版本仍保存在记录中。父代权重为 `名次^-1.5 × 3/(3+调用数)`，子代不向父代计功；相同源码只算一个候选。程序库不去重，也不截断。
+模型依次输出 `analysis`、`design`、`code`；前两项各用两三句，最多100个英文词或200个中文字。`analysis` 随个体保存，说明本次计算变化及其依据。演化展示当前父代的完整代码、自包含设计和成绩，交叉参考展示设计和成绩。初始化保持原样，展示样例、已有初始候选及其分析与成绩，以及最近失败初始尝试的反馈。演化生成不读取祖先、子代、失败子代历史、来源和此前分析。修复保持原样，读取本次候选的代码、设计、分析、来源编号和自身错误，不查询其他节点。`ancestor_count`、`offspring_count` 仅供机制版本使用，`failure_count` 仍控制初始化失败反馈。修复更新同一个体的设计和代码，修复说明接在原分析之后，原始回复及修复前版本仍保存在记录中。父代权重为 `名次^-1.5 × 3/(3+调用数)`，子代不向父代计功；相同源码只算一个候选。程序库不去重，也不截断。
 
 ## 运行记录与验证
 
@@ -93,8 +93,14 @@ python -m traceaad_base run --task-factory my_tasks:make_task \
 两个日志只追加。进程被杀后，恢复先截掉文件尾未写完的一行；中间行损坏时直接报错。
 - `result.json`、`best.py`：停止原因、总成本与最好有效程序；无有效程序时不产生 `best.py`。
 
-离线测试覆盖选择公式、历史边界、共享修复、预算、恢复、请求超时、评价进程清理、八任务接入，以及复制改名后仅用标准库运行：
+离线测试覆盖选择公式、生成对轨迹记录的不变性、共享修复、预算、恢复、请求超时、评价进程清理、八任务接入，以及复制改名后仅用标准库运行：
 
 ```bash
 uv run pytest -q tests/independent_base
 ```
+
+保留的 V21、V22.1、V24、V24.1 版本共用的旧 Base 提示固定在 `traceaad_v21/frozen_base_prompts.py`，保留其原有行为。11月5日正式 Base 批次使用旧轨迹上下文，不能视为本版的实验结果。
+
+V23.1 已同步为当前 Base 加机制1：生成侧沿用本版提示，选择侧复用 V22.1 的机制1。其历史批次保留原有条件。
+
+纯净Base正式批次 `20261109_base_static_co6` 已于11月9日15:52在server4启动，与新V23.1共用冻结源码。条件与恢复位置见[启动记录](../docs/记录/2026-11-09-Base正式对照启动与V24停止.md)。

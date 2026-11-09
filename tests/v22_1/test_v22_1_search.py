@@ -6,9 +6,10 @@ from dataclasses import replace
 
 import pytest
 
-from experiments.traceaad_v20.launch_host import build_plan
-from experiments.traceaad_v20.run import METHODS, request_options
-from traceaad_base import Config, Task
+from experiments.traceaad.launch_host import build_plan
+from experiments.traceaad.run import METHODS, request_options
+from traceaad_base import Config, Evaluation, Program, Task
+from traceaad_base.models import Attempt
 from traceaad_base.llm import CANDIDATE_RESPONSE_FORMAT as BASE_RESPONSE_FORMAT
 from traceaad_base.search import TraceAAD as Base
 from traceaad_v21.context import context
@@ -61,16 +62,20 @@ def assert_same_selectors(a, b):
     assert a.settings == b.settings
 
 
-def test_resumed_search_matches_uninterrupted_actions_and_history(tmp_path):
+@pytest.mark.parametrize("search_type", [V22_1, V23_1])
+def test_resumed_search_matches_uninterrupted_actions_and_history(tmp_path, search_type):
+    class Model(Replies):
+        request_options = {"response_format": BASE_RESPONSE_FORMAT}
+
     config = Config(evaluation_budget=9, initial_size=2, seed=7)
-    full = V22_1(task(), Replies(), config=config, run_dir=tmp_path / "full")
+    full = search_type(task(), Model(), config=config, run_dir=tmp_path / "full")
     result = full.run()
-    split = V22_1(task(), Replies(), config=config, run_dir=tmp_path / "split")
+    split = search_type(task(), Model(), config=config, run_dir=tmp_path / "split")
     for _ in range(5):
         split.step()
-    resumed = V22_1(
+    resumed = search_type(
         task(),
-        Replies(start=split.model_calls),
+        Model(start=split.model_calls),
         config=config,
         run_dir=tmp_path / "split",
         resume=True,
@@ -174,6 +179,7 @@ def test_v22_1_and_v23_1_share_allocation_and_use_respective_prompts(tmp_path):
 
 
 def test_registry_and_launcher_support_dot_and_underscore_names():
+    assert not {"v20", "v22", "v23"} & METHODS.keys()
     for key in ("v22.1", "v22_1"):
         assert METHODS[key][0] == "traceaad_v22_1"
         assert request_options(key)["response_format"] == V21_RESPONSE_FORMAT
@@ -200,6 +206,7 @@ def test_registry_and_launcher_support_dot_and_underscore_names():
     assert len(plan) == 18
     assert all(row["session"].endswith(f"_v22_1_r{row['repeat']}") for row in plan)
     assert all("traceaad_v22_1" in row["run_name"] for row in plan)
+    assert all(row["command"][3] == "experiments.traceaad.run" for row in plan)
 
 
 def test_resume_rejects_incompatible_settings(tmp_path):
@@ -212,3 +219,54 @@ def test_resume_rejects_incompatible_settings(tmp_path):
     path.write_text(json.dumps(saved))
     with pytest.raises(ValueError, match="selection_settings.shrinkage"):
         V22_1(task(), Replies(), config=config, run_dir=tmp_path, resume=True)
+
+
+@pytest.mark.parametrize("operator", ["Refine", "Explore", "Crossover"])
+def test_v23_1_uses_current_base_generation_without_trajectory(operator):
+    archive = {
+        i: Program(i, f"def solve(x): return {i}", f"design_{i}",
+                   "Init" if i in (1, 5) else "Refine", 0 if i in (1, 5) else i - 1,
+                   None, Evaluation("success", float(i)), analysis=f"analysis_{i}")
+        for i in range(1, 6)
+    }
+    archive[4].evaluation = Evaluation("error", failure="ValueError: hidden offspring failure")
+    archive[4].parent_id = 2
+    search, base = V23_1(task(), Replies()), Base(task(), Replies())
+    search.archive = base.archive = archive
+    parent = archive[2]
+    reference = archive[5] if operator == "Crossover" else None
+    attempt = Attempt(6, parent.id, operator, reference.id if reference else None)
+    prompt = search.evolution_prompt(attempt, parent, reference)
+    assert prompt == base.evolution_prompt(attempt, parent, reference)
+    assert parent.code in prompt and parent.design in prompt
+    assert all(p.design not in prompt and p.analysis not in prompt
+               for p in (archive[1], archive[3], archive[4]))
+    assert parent.analysis not in prompt
+    assert (archive[5].design in prompt) == (operator == "Crossover")
+    assert search.prompts.initialization(archive) == base.prompts.initialization(archive)
+    assert search.prompts.repair_program(archive[4]) == base.prompts.repair_program(archive[4])
+
+
+@pytest.mark.parametrize("protocol", [None, "trajectory_context"])
+def test_v23_1_rejects_old_generation_protocol_before_log_changes(tmp_path, protocol):
+    config = Config(evaluation_budget=6, initial_size=2)
+    search = V23_1(task(), Replies(), config=config, run_dir=tmp_path)
+    search.step()
+    path = tmp_path / "run_config.json"
+    saved = json.loads(path.read_text())
+    assert saved["generation_protocol"] == Base.generation_protocol
+    if protocol is None:
+        del saved["generation_protocol"]
+    else:
+        saved["generation_protocol"] = protocol
+    path.write_text(json.dumps(saved))
+    before = {}
+    for name in ("attempts.jsonl", "calls.jsonl"):
+        log = tmp_path / name
+        log.write_bytes(log.read_bytes() + b'{"unfinished":')
+        before[name] = log.read_bytes()
+    model = Replies()
+    with pytest.raises(ValueError, match="original source snapshot"):
+        V23_1(task(), model, config=config, run_dir=tmp_path, resume=True)
+    assert not model.prompts
+    assert all((tmp_path / name).read_bytes() == value for name, value in before.items())

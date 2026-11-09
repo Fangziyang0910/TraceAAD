@@ -78,8 +78,8 @@ class ModelReply:
 class Attempt:
     """One generation attempt: its model calls, evaluations and final program.
 
-    ``record`` holds method-specific information, such as V20's selection and
-    the material shown to the model.
+    ``record`` holds method-specific information, such as trajectory allocation
+    and the material shown to the model.
     """
     id: int
     parent_id: int

@@ -11,6 +11,8 @@ class Config:
     max_tokens: int = 16384
     model_timeout: float = 600.0
     seed: int = 0
+    # Ancestor/offspring windows are for trajectory variants.
+    # Base uses failure_count only in initialization.
     ancestor_count: int = 8
     offspring_count: int = 3
     failure_count: int = 2

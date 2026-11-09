@@ -7,7 +7,7 @@
 | 设计实验、核对比较条件 | [实验条件](PROTOCOL.md) |
 | 查询状态、恢复、远端操作 | [操作说明](infra/AGENT_OPERATIONS.md) |
 | 找到源码、反馈与最终结果 | [结果格式](infra/SEARCH_FORMAT.md) |
-| 运行 Base、V20、V21、V22、V23、V24 与 V24.1 | [统一入口](traceaad_v20/README.md)，用 `--method` 选择方法 |
+| 运行 Base、V21、V22.1、V23.1、V24 与 V24.1 | [统一入口](traceaad/README.md)，用 `--method` 选择方法 |
 | 复查历史版本的批次 | server4 上该批次的冻结源码快照，或 git 历史 |
 
 ## 训练可视化

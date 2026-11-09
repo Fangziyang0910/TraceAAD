@@ -2,16 +2,18 @@
 
 独立实现与运行方式见 [`traceaad_base`](../traceaad_base/README.md)。
 
-TraceAAD Base 利用演化轨迹指导自动算法设计（automatic algorithm design，AAD）。大模型在固定求解框架中设计指定函数，评估器将其接入框架并评价求解结果。搜索目标是在给定评价预算内找到成绩最好的有效算法。
+TraceAAD Base 是不利用轨迹经验的基础演化搜索对照，用于自动算法设计（automatic algorithm design，AAD）。大模型在固定求解框架中设计指定函数，评估器将其接入框架并评价求解结果。搜索目标是在给定评价预算内找到成绩最好的有效算法。
 
-程序库保存候选的分析、设计、代码、来源与评价。祖先和已有子代的记录指导后续生成，当前成绩与已投入的调用指导父代选择。初始化提供算法起点，随后反复选择、生成与评价，直至满足停止条件。
+程序库保存候选的分析、设计、代码、来源与评价，供追溯与研究分析使用。演化生成只读取当前算法的代码、自包含设计说明和成绩；交叉增加参考设计与成绩。初始化与修复沿用原有流程。父代选择只依赖当前成绩和已投入调用，算子按固定概率选择，不做轨迹价值估计或反思。初始化提供算法起点，随后反复选择、生成与评价，直至满足停止条件。
+
+本说明自2026年11月9日修订起对应 `static_algorithm_context_v1`。11月5日正式 Base 批次仍使用祖先、子代和失败历史；保留的 V21、V22.1、V24、V24.1 版本保留各自原有提示行为，其中共用的旧 Base 提示固定在 `traceaad_v21/frozen_base_prompts.py`。旧批次的结果不代表本版对照。
 
 ```mermaid
 flowchart TD
     I["初始化"] --> A["程序库"]
     A --> S["选择父代、算子与交叉参考"]
-    S --> H["组织祖先、子代与参考上下文"]
-    A -. 设计与评价记录 .-> H
+    S --> H["组织当前算法与交叉参考"]
+    A -. 当前设计与成绩 .-> H
     H --> G["按算子生成候选"]
     G --> E["评价与必要修复"]
     E -->|保存已评价个体| A
@@ -43,7 +45,7 @@ Program {
 
 ## 2. 程序库
 
-程序库（program archive）以 `id → Program` 的映射保存全部个体。生成程序在首次评价后入库，修复更新原记录；有效个体参与父代选择，最终失败个体通过失败历史指导后续生成。
+程序库（program archive）以 `id → Program` 的映射保存全部个体。生成程序在首次评价后入库，修复更新原记录；有效个体参与父代选择，最终失败个体保留在记录中。Base 不把祖先、已有子代、失败子代历史、演化来源或此前的 `analysis` 放入演化生成提示。初始化仍可参考已有初始候选及失败反馈；修复仍读取本次候选自己的设计、分析、代码和错误，不查找祖先或其他子代。
 
 各次生成的个体独立保存，不做代码去重。每条记录的分析、设计、代码与评价对应同一版本。`analysis` 随子代保存，通过 `parent_id` 关联父代，无须另建边对象。
 
@@ -55,7 +57,7 @@ Program {
 Generate(
     task_description,  任务说明
     template_program,  任务提供的函数模板（可含初始参考实现）
-    context,           相关个体及历史上下文（可空）
+    context,           当前算法或初始化材料（可空）
     instruction        算子指令
 ) → {
     analysis       采用或修改哪些计算、依据是什么、如何影响决策
@@ -104,15 +106,15 @@ Return only the JSON object, without Markdown fences or additional text.
 
 ## 4. 初始化
 
-初始化结合已有算法与评价反馈，逐次生成采用不同核心决策机制的算法起点。
+初始化保持原有行为，结合已有算法与评价反馈，逐次生成采用不同核心决策机制的算法起点。已有初始候选的比较与失败反馈是共同基础流程，不按演化路径组织材料。
 
 ### 4.1 生成上下文
 
 初始化沿用公共提示模板，按以下顺序提供材料：
 
 - **可选样例**：0 号样例的完整代码与已有设计说明。
-- **有效初始个体**：全部有效初始个体的编号、设计、完整代码与成绩，按成绩从优到劣排列，同分时按编号升序排列。
-- **失败尝试**：按第 5.1 节的失败历史窗口，从 `parent_id=0` 下选取并呈现失败个体。
+- **有效初始个体**：全部有效初始个体的编号、来源、分析、设计、完整代码与成绩，按成绩从优到劣排列，同分时按编号升序排列。
+- **失败尝试**：从 `parent_id=0` 下取最近2个最终失败个体，按编号从旧到新呈现来源、分析、设计与失败摘要。窗口由 `failure_count` 控制。异常摘要保留候选代码位置，消息中的数字替换为 N，超时只说明未在允许时间内完成。
 
 八个基准任务均以 `template_program` 中的极简实现作为默认样例，见[任务初始参考代码](记录/2026-10-30-任务初始参考代码.md)。
 
@@ -173,63 +175,23 @@ Use the failed designs, their analyses, and evaluation feedback to guide how you
 
 达到初始化数量且仍有预算时进入演化。若提前触发第 9 节的停止条件，则直接返回已有结果。
 
-## 5. 轨迹上下文与演化算子
+## 5. 静态上下文与演化算子
 
 演化使用精炼（Refine）、探索（Explore）和交叉（Crossover）三个算子。Refine 与 Explore 属于变异（mutation），分别沿用或改换父代的核心机制；Crossover 整合不同个体的计算。三者均沿用公共生成接口，依次返回 `analysis`、`design` 与完整 `code`。
 
 ### 5.1 共同上下文
 
-演化上下文只提供当前父代的完整代码，明确本次设计的出发点；祖先与已有子代通过分析、设计及评价传递局部改进脉络。分析说明改动及其依据，成绩或错误反馈给出评价结果。
+Refine 与 Explore 只读取当前父代的编号、自包含设计说明、成绩和完整代码。Crossover 额外读取参考算法的设计与成绩；参考表示与原有 Base 保持一致。
 
-- **祖先链**：沿 `parent_id` 回溯，取最近 8 个祖先，排除当前父代与 0 号根；按演化顺序提供编号、父代、生成操作、分析、设计与成绩。
-- **有效子代**：取当前父代下最多 3 个评价成功的直接子代。优先保留成绩最好者（同分取编号较大者），再按编号从近到远补充，按编号从旧到新呈现。
-- **失败子代**：取当前父代下最近 2 个最终失败的直接子代，按编号从旧到新呈现来源、分析、设计与失败反馈。反馈保留异常类型、消息和候选代码中的位置。消息中的数字替换为 N，超时只说明未在允许时间内完成。评价器调用栈、时限和实例规模不进入生成提示。
-- **交叉参考**：额外提供一个有效个体的设计与成绩。模型依据其中的表示和公式实现所借用的计算。
-
-历史仅按个体数量限制，不另设 token 上限；不足时按实际数量提供。
-
-各部分按以下顺序组织，没有对应材料时省略。历史中的 `Algorithm` 块按记录重复；交叉产生的记录额外标明 `Reference`，没有分析的样例省略 `Analysis`：
+三种算子的指令只定义本次操作，不要求利用形成路径、已尝试修改或后代结果。当前个体的 `analysis`、父代编号、原生成算子和交叉来源也不进入提示。轨迹完整记录在程序库中。
 
 ````text
-[Ancestor History]
-Ancestors of the current algorithm, ordered from earlier to later.
-
-Algorithm {ancestor.id}
-Parent: Algorithm {ancestor.parent_id}
-Operator: {ancestor.operator}
-Analysis: {ancestor.analysis}
-Design: {ancestor.design}
-Score: {ancestor.evaluation.fitness}
-
-[Evaluated Offspring]
-Previous algorithms generated directly from the current algorithm, ordered from earlier to later.
-
-Algorithm {child.id}
-Parent: Algorithm {child.parent_id}
-Operator: {child.operator}
-Analysis: {child.analysis}
-Design: {child.design}
-Score: {child.evaluation.fitness}
-
-[Failed Offspring]
-Failed attempts generated directly from the current algorithm.
-
-Algorithm {failed.id}
-Parent: Algorithm {failed.parent_id}
-Operator: {failed.operator}
-Analysis: {failed.analysis}
-Design: {failed.design}
-Failure: {failed.evaluation.failure}
-
 [Reference Design]
 Score: {reference.evaluation.fitness}
 Design: {reference.design}
 
 [Current Algorithm]
 Algorithm {parent.id}
-Parent: Algorithm {parent.parent_id}
-Operator: {parent.operator}
-Analysis: {parent.analysis}
 Design: {parent.design}
 Score: {parent.evaluation.fitness}
 ```python
@@ -237,31 +199,11 @@ Score: {parent.evaluation.fitness}
 ```
 ````
 
-按实际提供的历史，在算子指令后追加相应要求。
-
-**祖先链：**
-
-```text
-Follow the parent links, designs, and analyses to understand how the current algorithm developed.
-Use the evaluated outcomes of those changes to guide the requested design.
-```
-
-**有效子代：**
-
-```text
-Use the previous offspring analyses, designs, and evaluated outcomes to identify which changes to the current algorithm have been tried.
-Develop a further computational change beyond the designs already tried, aiming for better solution quality.
-```
-
-**失败子代：**
-
-```text
-Use the failed offspring analyses and designs with their error or timeout feedback to identify issues relevant to your proposed change, and address them in the new code.
-```
+`[Reference Design]` 只在 Crossover 中提供。`ancestor_count`、`offspring_count` 供机制版本使用；Base 的 `failure_count` 只控制初始化失败反馈，不向演化生成提供失败子代。
 
 ### 5.2 Refine：沿原机制精炼
 
-沿用父代代码中实际参与决策的核心计算，改进其计算步骤、辅助组件或参数，包含参数调整与简化。适合完善新实现，或沿近期持续改善成绩的设计方向继续开发。
+沿用父代代码中实际参与决策的核心计算，改进其计算步骤、辅助组件或参数，包含参数调整与简化。用于完善当前实现。
 
 指令：
 
@@ -272,7 +214,7 @@ Improve solution quality by refining those computations, their supporting steps,
 
 ### 5.3 Explore：改换核心机制
 
-改变主要决策依据或产生决策信息的机制。适合引入其他求解方法，或在现有方向进展趋缓时探索替代方案。
+改变主要决策依据或产生决策信息的机制。用于引入其他求解方法。
 
 指令：
 
@@ -300,7 +242,7 @@ Align their input representations and numerical scales so the selected computati
 
 ### 6.1 父代候选
 
-每份不同的源码是一个候选，由最早产生它的有效个体代表。相同源码的后续个体留在程序库中，但不再作为父代。这样，从同一份代码出发的尝试集中在一个节点上，历史不会分散，复制品也不会增加这份代码的机会。
+每份不同的源码是一个候选，由最早产生它的有效个体代表。相同源码的后续个体留在程序库中，但不再作为父代。这样，从同一份代码出发的调用成本集中在一个节点上，复制品不会增加这份代码的机会。
 
 ### 6.2 选择权重
 
@@ -392,7 +334,7 @@ Complete any missing or truncated content consistently with that approach and th
 
 ### 8.2 程序错误与超时的共同上下文
 
-两类修复沿用公共提示模板，提供当前来源、分析、设计、完整代码与评价反馈。程序错误的反馈为异常类型、消息和候选代码自身的调用栈，消息中的数字替换为 N。超时的反馈说明每个问题实例允许的时间：
+两类修复保持原有行为，沿用公共提示模板，提供本次候选的来源、分析、设计、完整代码与自身评价反馈。来源是该候选记录中的编号信息；修复不查找祖先或其他子代，不比较演化路径。程序错误的反馈为异常类型、消息和候选代码自身的调用栈，消息中的数字替换为 N。超时的反馈说明每个问题实例允许的时间：
 
 ````text
 [Current Algorithm]
@@ -439,7 +381,7 @@ In "analysis", state only what went wrong and what you changed to correct it; th
 Update "design" to describe the repaired algorithm as a self-contained procedure consistent with "code".
 ```
 
-系统把修复说明接在原分析之后，保存为 `{原分析}\nRepair: {修复说明}`。这样，个体保留原来的修改依据，历史也能看到出过什么问题。
+系统把修复说明接在原分析之后，保存为 `{原分析}\nRepair: {修复说明}`。这样，研究记录保留原来的修改依据与修复过程；这些分析可用于本次修复与初始化候选展示，不进入后续演化生成。
 
 修复机会在请求发出时消耗，按回复处理结果：
 
@@ -485,3 +427,9 @@ flowchart TD
 ### 9.3 停止与返回
 
 评价预算耗尽或触发连续未评价上限后，停止新的生成与修复，完成已启动的评价，返回成绩最好的有效生成个体；没有有效个体则报告失败。记录停止原因与实际评价次数。Base 不因成绩停滞提前停止。
+
+新运行的 `run_config.json` 保存 `generation_protocol=static_algorithm_context_v1`。恢复前先核对该标识；旧 Base 日志须使用原始源码快照恢复，不能接入本版继续搜索。
+
+V23.1 已同步为当前 Base 加机制1：生成侧沿用本版提示，选择侧复用 V22.1 的机制1。其历史批次保留原有条件。
+
+本版正式批次 `20261109_base_static_co6` 已于11月9日15:52启动18路，与新V23.1共用同一源码和共同实验条件。结果目录为 `experiments_result/traceaad_base_static_20261109`，启动与配对核对见[记录](记录/2026-11-09-Base正式对照启动与V24停止.md)。

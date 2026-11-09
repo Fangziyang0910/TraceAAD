@@ -70,7 +70,11 @@ class StubReflection:
         new = json.loads(re.search(r"New events: (\[[^\n]*\])", prompt)[1])
         active = re.search(r"\[Current Experience\]\n(.*?)\n\n\[Trajectory Evidence\]", prompt, re.S)[1]
         notes = [] if active.startswith("No experience") else json.loads(active)
-        target = None if len(notes) < 6 else notes[(self.requests - 1) % 6]["id"]
+        active_count = int(re.search(r"Active entries: (\d+)", prompt)[1])
+        if active_count >= 6 and not notes:
+            return json.dumps({"analysis": "No related entry or free slot in this focused packet.",
+                               "updates": [], "archive_ids": []})
+        target = notes[0]["id"] if notes else None
         update = {"id": target, "idea": "Replay-only computation",
                   "when": "A fixed simulated condition used only to stress material capacity.",
                   "lesson": "This is a stub update, not a learned algorithmic claim.",
@@ -112,6 +116,8 @@ def replay(directory, counter, output):
         "source": str(directory), "source_attempts_sha256": hashlib.sha256(
             (directory / "native/attempts.jsonl").read_bytes()).hexdigest(),
         "cycles": len(cycles), "requests": reflector.requests,
+        "scope": "One computational question per cadence; full event coverage is not the objective.",
+        "focused_questions": [r["focus"] for _, r in successful],
         "statuses": dict(Counter(r["status"] + ":" + r.get("reason", "") for _, r in cycles)),
         "read_total": sum(len(r["reviewed_event_ids"]) for _, r in successful),
         "new_events": sum(a.operator != "Init" and bool(a.evaluations) for a in run.attempts),

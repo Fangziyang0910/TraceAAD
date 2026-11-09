@@ -1,10 +1,10 @@
-"""Reflection must see the evaluated computations and complete related evidence."""
+"""Reflection binds a focused relation to actual implementations and measured results."""
 
 import pytest
 
 from traceaad_base import Evaluation, Program
 from traceaad_v21.representation import bare
-from traceaad_v24_1.evidence import Event, build, fragment, render
+from traceaad_v24_1.evidence import Event, build, questions, render
 
 
 def program(i, source, parent=None, score=1., failure=None):
@@ -15,64 +15,74 @@ def program(i, source, parent=None, score=1., failure=None):
 
 
 def source(k):
-    return f"def solve(x):\n    return x + {k}\n"
+    return f"def solve(x):\n    value = x + {k}\n    return value\n"
 
 
-def test_actual_implementations_survive_small_edits_rewrites_and_execution_failures():
+def packet(events, pending, notes=(), limit=100000):
+    return build(events, pending, notes, lambda related, text: str(related) + text, len, limit)
+
+
+def test_actual_code_changes_and_results_are_adjacent_under_stable_ids():
     filler = "\n".join(f"    v{i} = x + {i}" for i in range(30))
-    before = program(1, f"def solve(x):\n{filler}\n    return x + 100\n", score=10.)
-    edited = program(2, before.code.replace("x + 100", "x + 101"), before, score=9.)
-    rewritten = program(3, "def solve(x):\n    return sum(i * i for i in range(x))\n", before, score=12.)
-    failed = program(4, "def solve(x):\n    temporary = []\n    return temporary[1]\n", before,
+    before = program(101, f"def solve(x):\n{filler}\n    return x + 100\n", score=10.)
+    edited = program(102, before.code.replace("x + 100", "x + 101"), before, score=9.)
+    rewritten = program(103, "def solve(x):\n    return sum(i * i for i in range(x))\n", before, score=12.)
+    failed = program(104, "def solve(x):\n    temporary = []\n    return temporary[1]\n", before,
                      failure='Traceback (most recent call last):\n  File "<candidate>", line 3, in solve\nIndexError: list index out of range')
     events = {7: Event(7, before, edited), 8: Event(8, before, rewritten), 9: Event(9, before, failed)}
     text = render(events, events, events, [])
     assert text.count(bare(before.code)) == 1
-    assert "-    return x + 100" in text and "+    return x + 101" in text
+    edited_section = text.split("Attempt 7: Program 101 -> Program 102")[1].split("Attempt 8:")[0]
+    assert "-    return x + 100" in edited_section and "+    return x + 101" in edited_section
+    assert "parent 10.0 -> child 9.0; improved" in edited_section
     assert bare(rewritten.code) in text and failed.code in text
-    assert "IndexError: list index out of range" in text and "most of the code was replaced" not in text
-    assert "Event 7: Algorithm 1 -> Algorithm 2" in text
+    assert "parent 10.0 -> child 12.0; regressed" in text
+    assert "IndexError: list index out of range" in text and "Code 1" not in text
+    assert "description 102" not in text and "proposal 102" not in text
 
 
-def test_connected_changes_reuse_the_intermediate_implementation_once():
-    a = program(10, source(1), score=9.)
-    b = program(11, source(2), a, score=8.)
-    c = program(12, source(3), b, score=7.)
+def test_connected_small_edits_show_each_diff_and_intermediate_code_only_once():
+    filler = "\n".join(f"    v{i} = x + {i}" for i in range(30))
+    a = program(10, f"def solve(x):\n{filler}\n    return x + 100\n")
+    b = program(11, a.code.replace("return x + 100", "return x + 101"), a)
+    c = program(12, b.code.replace("return x + 101", "return x + 102"), b)
     events = {20: Event(20, a, b), 21: Event(21, b, c)}
     text = render(events, events, [21], [20])
     assert text.count(bare(b.code)) == 1
-    assert "Algorithm 10 -> Algorithm 11" in text and "Algorithm 11 -> Algorithm 12" in text
-    assert text.index("Event 20:") < text.index("Event 21:")
-
-
-def test_continuous_small_edit_still_shows_its_diff_when_child_code_is_already_present():
-    filler = "\n".join(f"    v{i} = x + {i}" for i in range(30))
-    a = program(1, f"def solve(x):\n{filler}\n    return x + 100\n")
-    b = program(2, a.code.replace("return x + 100", "return x + 101"), a)
-    c = program(3, b.code.replace("return x + 101", "return x + 102"), b)
-    events = {1: Event(1, a, b), 2: Event(2, b, c)}
-    text = render(events, events, events, [])
-    assert text.count(bare(b.code)) == 1
     assert "-    return x + 100" in text and "+    return x + 101" in text
+    assert "-    return x + 101" in text and "+    return x + 102" in text
+    assert text.index("Attempt 20:") < text.index("Attempt 21:")
+    assert "Program 11: complete implementation shown above." in text
 
 
-def test_related_fragment_keeps_formation_best_and_recent_distinct_same_start_attempts():
+def test_same_start_comparison_targets_overlapping_edits_not_all_programs_in_the_cycle():
+    a = program(10, "def solve(x):\n    pool = 1\n    rule = 2\n    return pool * x + rule\n")
+    b = program(11, a.code.replace("pool = 1", "pool = 3"), a, score=.5)
+    c = program(12, a.code.replace("rule = 2", "rule = 4"), a, score=.1)
+    d = program(13, a.code.replace("pool = 1", "pool = 5"), a, score=.8)
+    events = {1: Event(1, None, a), 2: Event(2, a, b), 3: Event(3, a, c), 4: Event(4, a, d)}
+    material = packet(events, [2, 3, 4])
+    assert material.focus["kind"] == "same_start" and material.focus["anchor_attempt"] == 4
+    assert material.focus["events"] == [2, 4]
+    assert set(material.event_ids) == {1, 2, 4} and material.deferred_ids == (3,)
+    assert "Program 12" not in material.prompt
+
+
+def test_supporting_adjustment_preserves_the_development_instead_of_only_the_last_event():
     a = program(10, source(1))
-    b = program(11, source(2), a)
-    best = program(12, source(3), b, score=.1)
-    duplicate = program(13, best.code, b, score=.1)
-    recent = program(14, source(4), b, score=2.)
-    current = program(15, source(5), b)
-    events = {1: Event(1, None, a), 10: Event(10, a, b), 20: Event(20, b, best),
-              21: Event(21, b, duplicate), 22: Event(22, b, recent), 30: Event(30, b, current)}
-    assert fragment(events, 30) == {10, 20, 22, 30}
-    # The one-hop rule does not recursively add the grandparent's formation event.
-    assert 1 not in fragment(events, 30)
+    b = program(11, source(2), a, score=2.)
+    c = program(12, source(3), b, score=.5)
+    events = {1: Event(1, None, a), 2: Event(2, a, b), 3: Event(3, b, c)}
+    material = packet(events, [3])
+    assert material.focus["kind"] == "continuation"
+    assert material.event_ids == (2, 3) and material.new_event_ids == (3,)
+    assert "parent 1.0 -> child 2.0; regressed" in material.prompt
+    assert "parent 2.0 -> child 0.5; improved" in material.prompt
 
 
-def test_only_equal_observations_merge_constants_and_equal_score_new_code_remain():
+def test_equal_observations_merge_but_parameter_changes_and_changed_feedback_remain():
     a = program(1, source(1))
-    a_copy = program(2, "def solve(x):\n    # same computation\n    return x + 1\n")
+    a_copy = program(2, "def solve(x):\n    # same computation\n    value = x + 1\n    return value\n")
     b = program(3, source(2), a)
     duplicate = program(4, source(2), a_copy)
     parameter = program(5, source(3), a)
@@ -80,61 +90,40 @@ def test_only_equal_observations_merge_constants_and_equal_score_new_code_remain
     events = {7: Event(7, a, b), 8: Event(8, a_copy, duplicate),
               9: Event(9, a, parameter), 10: Event(10, a, changed_feedback)}
     text = render(events, events, events, [])
-    assert "Observation events: [7, 8]; occurrences: 2" in text
-    assert "Observation events: [9]; occurrences: 1" in text
-    assert "Observation events: [10]; occurrences: 1" in text
-    assert bare(parameter.code) in text and "Algorithm 2 -> Algorithm 4" in text
+    assert "same implementation and feedback as Attempt 7" in text
+    assert "Equivalent observations also recorded at Attempts [8]" in text
+    assert "Attempt 9: Program 1 -> Program 5" in text and bare(parameter.code) in text
+    assert "Measured result for Attempt 10: parent 1.0 -> child 2.0; regressed" in text
 
 
-def test_same_start_best_is_not_lost_when_new_attempt_repeats_it():
-    parent = program(1, source(1))
-    best = program(2, source(2), parent, score=.1)
-    recent = program(3, source(3), parent, score=.5)
-    repeated = program(4, source(2), parent, score=.1)
-    events = {1: Event(1, None, parent), 2: Event(2, parent, best),
-              3: Event(3, parent, recent), 4: Event(4, parent, repeated)}
-    ids = fragment(events, 4)
-    assert ids == {1, 2, 3, 4}
-    assert "Observation events: [2, 4]; occurrences: 2" in render(events, ids, [4], [])
-
-
-def test_budget_packs_complete_fragments_and_keeps_all_active_sources():
+def test_unrelated_old_sources_do_not_block_the_new_question_and_related_sources_are_whole():
     a = program(1, source(1))
     b = program(2, source(2), a)
-    unrelated = program(3, "def solve(x):\n    return sum(x for _ in range(99))\n")
-    c = program(4, source(3), b)
-    d = program(5, "def solve(x):\n" + "\n".join(f"    v{i} = x + {i}" for i in range(100))
-                + "\n    return x\n", b)
-    events = {1: Event(1, a, b), 2: Event(2, None, unrelated),
-              3: Event(3, b, c), 4: Event(4, b, d)}
-    notes = [{"evidence_ids": [2]}]
-    first = {1, 2, 3}
-    limit = len(render(events, first, [3, 4], [2]).encode())
-    material = build(events, [3, 4], notes, lambda text: text, lambda text: len(text.encode()), limit)
-    assert set(material.event_ids) == first and material.new_event_ids == (3,)
-    assert material.deferred_ids == (4,) and material.reason is None
-    blocked = build(events, [3, 4], notes, lambda text: text, len, 1)
-    assert blocked.reason == "experience_sources_exceed_input_limit" and blocked.new_event_ids == ()
-    with pytest.raises(ValueError, match="source events are missing"):
-        build(events, [3], [{"evidence_ids": [999]}], lambda text: text, len, 10000)
+    c = program(3, source(3), b)
+    d = program(4, source(4), c)
+    large = program(5, "def solve(x):\n" + "\n".join(f"    v{i} = x + {i}" for i in range(1000))
+                    + "\n    return x\n")
+    events = {1: Event(1, a, b), 2: Event(2, b, c), 3: Event(3, c, d), 4: Event(4, None, large)}
+    notes = [{"id": 1, "evidence_ids": [1, 2]}, {"id": 2, "evidence_ids": [4]}]
+    material = packet(events, [3], notes, limit=5000)
+    assert material.reason is None and material.related_ids == (1,)
+    assert material.event_ids == (1, 2, 3)
+    assert "Experience source events: [1, 2]" in material.prompt and "v999" not in material.prompt
+    base = packet(events, [3])
+    restricted = packet(events, [3], notes, limit=base.input_size)
+    assert restricted.reason is None and restricted.event_ids == (2, 3)
+    assert restricted.related_ids == ()  # A source relation is never half loaded or editable.
+    blocked = packet(events, [3], notes, limit=1)
+    assert blocked.reason == "focused_relation_exceeds_input_limit" and blocked.deferred_ids == (3,)
+    with pytest.raises(ValueError, match="Missing source events"):
+        packet(events, [3], [{"id": 3, "evidence_ids": [999]}])
 
 
-def test_six_realistic_size_sources_leave_room_for_the_current_cadence_in_token_units():
-    import math
-    filler = "\n".join(f"    value_{i} = x + {i}" for i in range(300))
-    events, notes = {}, []
-    for i in range(1, 7):
-        parent = program(2 * i, f"def solve(x):\n{filler}\n    return x + {i}\n")
-        child = program(2 * i + 1, parent.code.replace(f"return x + {i}", f"return x + {i + 20}"), parent)
-        events[i] = Event(i, parent, child)
-        notes.append({"evidence_ids": [i]})
-    parent = events[1].child
-    for i in range(20, 30):
-        child = program(100 + i, parent.code.replace("return x + 21", f"return x + {i + 40}"), parent)
-        events[i] = Event(i, parent, child)
-    # This test tokenizer has four bytes per token; the serving adapter is tested separately.
-    count_tokens = lambda text: math.ceil(len(text.encode()) / 4)
-    material = build(events, list(range(20, 30)), notes, lambda text: text, count_tokens, 44544)
-    assert len(material.prompt.encode()) > 32256
-    assert material.reason is None and material.new_event_ids == tuple(range(20, 30))
-    assert set(range(1, 7)) <= set(material.event_ids)
+def test_no_code_change_is_an_observation_and_rewrites_do_not_create_false_same_start_pairs():
+    a = program(1, source(1))
+    b = program(2, a.code, a)
+    c = program(3, "def solve(x):\n    for j in x:\n        yield j ** 2\n", a)
+    d = program(4, "def solve(x):\n    return sorted(x, reverse=True)\n", a)
+    events = {1: Event(1, a, b), 2: Event(2, a, c), 3: Event(3, a, d)}
+    assert packet(events, [1]).reason == "no_new_computational_question"
+    assert all(q.kind == "single_change" for q in questions(events, [2, 3]))

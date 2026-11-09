@@ -1,4 +1,4 @@
-"""Model-visible prompts and finite history windows from the Base specification."""
+"""Base prompts: original initialization and repair, static evolution context."""
 
 import re
 
@@ -38,14 +38,6 @@ Use the existing algorithms and their scores to identify the decision informatio
 Develop a solution procedure that obtains useful decision information through a different main computation."""
 
 INIT_FAILURES = """Use the failed designs, their analyses, and evaluation feedback to guide how you implement your design."""
-
-ANCESTORS = """Follow the parent links, designs, and analyses to understand how the current algorithm developed.
-Use the evaluated outcomes of those changes to guide the requested design."""
-
-OFFSPRING = """Use the previous offspring analyses, designs, and evaluated outcomes to identify which changes to the current algorithm have been tried.
-Develop a further computational change beyond the designs already tried, aiming for better solution quality."""
-
-FAILURES = """Use the failed offspring analyses and designs with their error or timeout feedback to identify issues relevant to your proposed change, and address them in the new code."""
 
 REFINE = """Identify the current algorithm's core decision mechanism from its code, including the intermediate computations that determine the returned result.
 Improve solution quality by refining those computations, their supporting steps, or their parameters, while preserving the core mechanism's role in the decision."""
@@ -186,53 +178,18 @@ class PromptBuilder:
             instruction += "\n" + INIT_FAILURES
         return self._render("\n\n".join(context), instruction, has_scores=bool(valid))
 
-    def histories(self, archive: dict[int, Program], parent: Program):
-        ancestors = []
-        current = parent.parent_id
-        while current and current in archive and len(ancestors) < self.config.ancestor_count:
-            ancestor = archive[current]
-            ancestors.append(ancestor)
-            current = ancestor.parent_id
-        ancestors.reverse()
-        children = [p for p in archive.values() if p.parent_id == parent.id and p.valid]
-        selected = []
-        if children and self.config.offspring_count:
-            best = min(children, key=lambda p: (p.evaluation.fitness, -p.id))
-            selected = [best] + sorted((p for p in children if p.id != best.id),
-                                       key=lambda p: -p.id)[:self.config.offspring_count - 1]
-            selected.sort(key=lambda p: p.id)
-        return ancestors, selected, self._failures(archive, parent.id)
-
     def evolution(self, archive: dict[int, Program], parent: Program,
                   operator: str, reference: Program | None = None) -> str:
-        ancestors, children, failures = self.histories(archive, parent)
         context = []
-
-        def records(programs):
-            return "\n\n".join(self._record(p) for p in programs)
-
-        if ancestors:
-            context.append("[Ancestor History]\nAncestors of the current algorithm, "
-                           "ordered from earlier to later.\n\n" + records(ancestors))
-        if children:
-            context.append("[Evaluated Offspring]\nPrevious algorithms generated directly "
-                           "from the current algorithm, ordered from earlier to later.\n\n"
-                           + records(children))
-        if failures:
-            context.append("[Failed Offspring]\nFailed attempts generated directly from "
-                           "the current algorithm.\n\n" + "\n\n".join(
-                               self._failure_block(p, operator=True) for p in failures))
         if operator == "Crossover":
             if reference is None:
                 raise ValueError("Crossover requires a reference")
             context.append(f"[Reference Design]\nScore: {reference.evaluation.fitness}\n"
                            f"Design: {reference.design}")
-        context.append(f"[Current Algorithm]\n{self._record(parent)}\n"
+        context.append(f"[Current Algorithm]\nAlgorithm {parent.id}\n"
+                       f"Design: {parent.design}\nScore: {parent.evaluation.fitness}\n"
                        f"```python\n{parent.code}\n```")
         instruction = {"Refine": REFINE, "Explore": EXPLORE, "Crossover": CROSSOVER}[operator]
-        for available, guidance in ((ancestors, ANCESTORS), (children, OFFSPRING), (failures, FAILURES)):
-            if available:
-                instruction += "\n" + guidance
         return self._render("\n\n".join(context), instruction, has_scores=True)
 
     def repair_format(self, response: str, feedback: str) -> str:

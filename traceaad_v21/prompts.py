@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 
-from traceaad_base.prompts import PromptBuilder as BasePromptBuilder
+from .frozen_base_prompts import PromptBuilder as BasePromptBuilder
 
 from .representation import bare
 
@@ -47,7 +47,7 @@ CANDIDATE_RESPONSE_FORMAT = {
 
 
 class PromptBuilder(BasePromptBuilder):
-    """Initialization and repair keep Base's text. Repair shows raw code, because failure locations refer to it."""
+    """Initialization and repair keep the frozen Base text; repair uses raw code for failure locations."""
 
     common_template = COMMON_TEMPLATE
 

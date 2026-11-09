@@ -34,4 +34,9 @@ matrix, and ``maxlen``. It must return a finite matrix with the same shape as
 the distance matrix. Larger entries indicate more promising directed edges.
 The function is called once per instance, before the ant colony starts.
 Its returned matrix is reused across all ants and iterations.
+At each construction step, ACO multiplies this fixed prior and pheromone by a
+dynamic feasibility mask based on the distance already travelled, the next
+edge, and the return distance to the depot. Candidates exceeding ``maxlen``
+are masked out before sampling. The prior changes relative weights among
+feasible moves; it does not override this mask or directly select a route.
 """.strip()

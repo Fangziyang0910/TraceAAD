@@ -29,3 +29,14 @@ def test_aco_collects_finite_prize_and_respects_budget():
     obj = aco.run(2)
     assert np.isfinite(obj)
     assert obj >= 0
+
+
+def test_fixed_prior_cannot_override_dynamic_route_feasibility():
+    distances = np.array([[0., 1., 3.], [1., 0., 3.], [3., 3., 0.]])
+    heuristic = np.ones((3, 3))
+    heuristic[:, 2] = 1e20  # Node 2 is attractive, but its return trip exceeds the budget.
+    aco = ACO(np.array([0., 1., 100.]), distances, 3., heuristic,
+              n_ants=4, rng=np.random.default_rng(7))
+    routes = aco._gen_sol()
+    assert 1 in routes and 2 not in routes
+    assert np.all(aco._gen_sol_obj(routes) == 1.)

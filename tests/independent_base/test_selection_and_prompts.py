@@ -70,30 +70,26 @@ def test_operator_weights_and_reference_fallback(task, tmp_path):
     assert op == "Crossover" and reference.id in {1, 2}
 
 
-def test_history_windows_and_evolution_code_boundary(task):
-    task.example_code = "def solve(x):\n    return 'seed_body'\n"
-    archive = {p.id: p for p in [program(i, 20 - i, i - 1) for i in range(1, 13)]}
-    archive.update({p.id: p for p in [program(i, score, 12) for i, score in
-                                    [(13, 5), (14, 3), (15, 3), (16, 9), (17, 10), (18, 11)]]})
-    archive.update({i: program(i, None, 12, status="error") for i in range(19, 23)})
-    archive[30] = program(30, 1)
+@pytest.mark.parametrize("operator", ["Refine", "Explore", "Crossover"])
+def test_evolution_ignores_trajectory_and_preserves_static_inputs(task, operator):
+    parent, reference = program(12, 8, 11), program(30, 1)
+    archive = {p.id: p for p in [program(11, 9), parent, program(13, 7, 12),
+                                program(14, None, 12, status="error"), reference]}
     builder = PromptBuilder(task, Config())
-    ancestors, children, failures = builder.histories(archive, archive[12])
-    assert [p.id for p in ancestors] == list(range(4, 12))
-    assert [p.id for p in children] == [15, 17, 18]
-    assert [p.id for p in failures] == [21, 22]
-    prompt = builder.evolution(archive, archive[12], "Crossover", archive[30])
-    assert archive[12].code in prompt
-    assert all(p.code not in prompt for p in archive.values() if p.id != 12)
-    assert all(p.design in prompt for p in [*ancestors, *children, *failures, archive[30]])
-    selected = [*ancestors, *children, *failures, archive[12]]
-    assert all(p.analysis in prompt for p in selected)
-    assert all(p.analysis not in prompt for p in archive.values() if p not in selected)
-    for p in [*ancestors, *children, *failures, archive[12]]:
-        assert f"Algorithm {p.id}\nParent: Algorithm {p.parent_id}" in prompt
-    labels = ["[Ancestor History]", "[Evaluated Offspring]", "[Failed Offspring]",
-              "[Reference Design]", "[Current Algorithm]"]
-    assert [prompt.index(label) for label in labels] == sorted(prompt.index(label) for label in labels)
+    selected_reference = reference if operator == "Crossover" else None
+    prompt = builder.evolution(archive, parent, operator, selected_reference)
+    assert parent.code in prompt and parent.design in prompt and "Score: 8" in prompt
+    assert parent.analysis not in prompt
+    assert all(label not in prompt for label in
+               ("Parent:", "Operator:", "Reference:", "Analysis:", "[Ancestor History]",
+                "[Evaluated Offspring]", "[Failed Offspring]"))
+    assert all(p.design not in prompt and p.code not in prompt
+               for p in (archive[11], archive[13], archive[14]))
+    assert (reference.design in prompt) == (operator == "Crossover")
+    assert reference.code not in prompt
+    parent.parent_id, parent.operator, parent.reference_id, parent.analysis = 999, "Explore", 888, "hidden change"
+    changed_archive = {parent.id: parent, 999: program(999, -100)}
+    assert builder.evolution(changed_archive, parent, operator, selected_reference) == prompt
 
 
 def test_initial_context_contains_seed_and_valid_code_but_interface_hides_body(task):
@@ -107,19 +103,12 @@ def test_initial_context_contains_seed_and_valid_code_but_interface_hides_body(t
     prompt = builder.initialization(archive)
     assert all(archive[i].code in prompt for i in [0, 1, 2])
     assert archive[3].code not in prompt and archive[3].design in prompt
+    assert all(p.analysis in prompt for p in (archive[1], archive[2], archive[3]))
+    assert "[Failed Attempts]" in prompt
     assert prompt.index("Algorithm 2") < prompt.index("Algorithm 1")
     evolution = builder.evolution(archive, archive[2], "Explore")
     assert "seed_marker" not in evolution
     assert "[Ancestor History]" not in evolution and "[Evaluated Offspring]" not in evolution
-
-
-def test_crossed_offspring_analysis_keeps_both_source_ids(task):
-    parent = program(1, 5)
-    child = program(2, 4, 1)
-    child.operator, child.reference_id = "Crossover", 9
-    prompt = PromptBuilder(task, Config()).evolution({1: parent, 2: child}, parent, "Refine")
-    assert "Algorithm 2\nParent: Algorithm 1\nOperator: Crossover\nReference: Algorithm 9" in prompt
-    assert child.analysis in prompt and child.code not in prompt
 
 
 def test_failure_text_hides_evaluator_frames_sizes_and_limits(task):
@@ -134,10 +123,12 @@ def test_failure_text_hides_evaluator_frames_sizes_and_limits(task):
     builder = PromptBuilder(task, Config())
     prompt = builder.evolution({1: parent, 2: failed}, parent, "Refine")
     repair = builder.repair_program(failed)
-    for text in (prompt, repair):
-        assert "IndexProblem: index N is out of bounds for axis N with size N" in text
-        assert 'File "<candidate>", line 4' in text
-        assert "/srv/runs" not in text and "core.evaluate" not in text and "Traceback (" not in text
+    assert "IndexProblem" not in prompt and failed.design not in prompt
+    assert failed.analysis in repair
+    assert "Parent: Algorithm 1" in repair and "Operator: Refine" in repair
+    assert "IndexProblem: index N is out of bounds for axis N with size N" in repair
+    assert 'File "<candidate>", line 4' in repair
+    assert "/srv/runs" not in repair and "core.evaluate" not in repair and "Traceback (" not in repair
     assert "return values[50]" in repair and "return values[50]" not in prompt
 
 
@@ -148,6 +139,21 @@ def test_timeout_text_states_a_limit_only_in_repair(task):
     failed.evaluation = Evaluation("timeout", failure="Evaluation exceeded the total time limit of 160 seconds.")
     builder = PromptBuilder(task, Config())
     prompt = builder.evolution({1: parent, 2: failed}, parent, "Refine")
-    assert "did not finish within the allowed time" in prompt and "seconds" not in prompt
+    assert "did not finish within the allowed time" not in prompt and "160" not in prompt
     repair = builder.repair_program(failed)
     assert "10 seconds per problem instance" in repair and "160" not in repair
+
+
+def test_initialization_and_repair_preserve_original_shared_prompts(task):
+    from traceaad_v21.frozen_base_prompts import PromptBuilder as OriginalPrompts
+
+    archive = {p.id: p for p in [program(1, 5), program(2, None, status="error"),
+                                program(3, None, status="timeout")]}
+    archive[0] = Program(0, "def solve(x): return x", "seed", None, None, None, None)
+    archive[3].evaluation = Evaluation("timeout", failure="Evaluation exceeded 3 seconds.")
+    current, original = PromptBuilder(task, Config()), OriginalPrompts(task, Config())
+    for inputs in ({}, archive):
+        assert current.initialization(inputs) == original.initialization(inputs)
+    for failed in (archive[2], archive[3]):
+        assert current.repair_program(failed) == original.repair_program(failed)
+    assert current.repair_format("{}", "missing") == original.repair_format("{}", "missing")

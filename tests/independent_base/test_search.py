@@ -42,7 +42,7 @@ def test_repair_replaces_same_individual_and_keeps_both_evaluated_versions(
     assert json.loads(calls[0]["response"])["design"] == "Original idea"
     assert json.loads(calls[1]["response"])["design"] == "Repaired idea"
     assert "Analysis: Original computational change" in model.prompts[1]
-    assert "Repair: Repaired computational change" in model.prompts[2]
+    assert "Repaired computational change" not in model.prompts[2]
     assert "ValueError: broken" in model.prompts[1]
     assert "[Failure Feedback]" in model.prompts[1]
     assert (tmp_path / "best.py").read_text() == result.best.code
@@ -210,3 +210,16 @@ def test_killed_run_resumes_to_the_same_archive_as_an_uninterrupted_run(task, re
     assert {key: program.code for key, program in resumed.archive.items()} == {
         key: program.code for key, program in plain.archive.items()}
     assert [(a.parent_id, a.operator) for a in resumed.attempts] == [(a.parent_id, a.operator) for a in plain.attempts]
+
+
+@pytest.mark.parametrize("protocol", [None, "trajectory_context"])
+def test_old_base_resume_is_rejected_before_log_mutation(task, tmp_path, protocol):
+    saved = {"method": "traceaad_base", "config": {}}
+    if protocol is not None:
+        saved["generation_protocol"] = protocol
+    (tmp_path / "run_config.json").write_text(json.dumps(saved))
+    calls = tmp_path / "calls.jsonl"
+    calls.write_bytes(b'{"unfinished":')
+    with pytest.raises(ValueError, match="original source snapshot"):
+        TraceAAD(task, None, run_dir=tmp_path, resume=True)
+    assert calls.read_bytes() == b'{"unfinished":'

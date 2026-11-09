@@ -22,6 +22,7 @@ from .task import Task
 class TraceAAD:
     method = "traceaad_base"
     prompt_type = PromptBuilder
+    generation_protocol = "static_algorithm_context_v1"
 
     def __init__(self, task: Task, model, *, config: Config | None = None,
                  run_dir=None, resume=False):
@@ -37,6 +38,12 @@ class TraceAAD:
         if task.example_code is not None:
             self.archive[0] = Program(0, task.example_code, task.example_design, None, None, None, None)
         if resume:
+            if self.method == "traceaad_base":
+                saved = self.store.read("run_config.json", {})
+                if (saved.get("method") != self.method
+                        or saved.get("generation_protocol") != self.generation_protocol):
+                    raise ValueError("Base resume requires static_algorithm_context_v1; "
+                                     "use the original source snapshot for older runs")
             for name in ("attempts.jsonl", "calls.jsonl"):
                 self.store.repair_tail(name)
             for row in self.store.rows("attempts.jsonl"):
@@ -50,6 +57,8 @@ class TraceAAD:
             self.store.write("run_config.json", {
                 "method": self.method, "config": asdict(self.config), "task": task.description(),
                 "model": getattr(model, "model", type(model).__name__),
+                **({"generation_protocol": self.generation_protocol}
+                   if self.method == "traceaad_base" else {}),
             })
 
     # Extension points for methods built on Base.

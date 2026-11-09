@@ -17,7 +17,7 @@ from experiments.infra.result_storage import Programs
 from experiments.visualization import ResultsMonitor
 from experiments.visualization.server import make_request_handler
 from experiments.infra.storage import rows, seal_calls, write_json
-from experiments.traceaad_v20.reporting import Reporter
+from experiments.traceaad.reporting import Reporter
 from tests.support import TinyEvaluation, response
 from traceaad_base import Config, Task, TraceAAD
 
@@ -224,7 +224,7 @@ function scope() {
 
 def test_dashboard_scope_filters_every_view_without_changing_run_inventory(tmp_path):
     visible = ['traceaad_base_20261105', 'traceaad_v21c', 'traceaad_v22', 'traceaad_v23', 'eoh']
-    all_methods = [*visible, 'traceaad_base', 'traceaad_v19', 'traceaad_v20_complete']
+    all_methods = [*visible, 'traceaad_base', 'traceaad_v19', 'traceaad_retired']
     for method in reversed(all_methods):
         dashboard_run(tmp_path / method / 'tsp_construct' / 'rep1')
     index = dict(schema=1, methods={m: ['tsp_construct/rep1'] for m in all_methods},

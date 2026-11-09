@@ -1,0 +1,52 @@
+{
+  "created_at": "2026-11-09T15:25:00.758876+08:00",
+  "generator": "image_gen built-in tool",
+  "underlying_model": "not exposed by the tool",
+  "google_imagen_api_used": false,
+  "native_resolution": true,
+  "pixel_postprocessing": "none; byte-for-byte copy",
+  "figures": [
+    {
+      "id": "overview",
+      "file": "evotrace-overview.png",
+      "width": 1774,
+      "height": 887,
+      "sha256": "87c9da21151a01735cd1a7484c5ae2b3897650686316403311aba159130804bf",
+      "caption": "三机制的概念信息流。评价形成轨迹；轨迹分别用于动作分配、算子上下文和经验反思。条件经验进入精炼与融合的生成，不直接替代数值收益。",
+      "selected_generation": "exec-9521ad08-7106-471a-a2ad-5032288d6f2d.png",
+      "initial_generation": "exec-4edac7d4-2965-4ac6-82f0-156a0e0ec4d6.png",
+      "revision_prompt": "Edit this scientific schematic, preserving its labels, node genealogy and conceptual connections. Fix only the ambiguous routing and clean up the rendering. The amber arrow from Conditional experience must travel OUTSIDE along the far right margin, then across a top gutter ABOVE the top pipeline, and enter the TOP of Generate; label it Refine / Crossover in the top gutter. It must not cross the dark Evaluate -> Trajectory archive recording arrow. Keep the dark recording arrow as a clear separate route. Keep all other arrows and semantics, especially no memory arrow to Allocate. Remove gradients, paper texture and shadows; use a perfectly pure-white canvas and flat pale fills with crisp thin borders. Preserve a compact balanced wide layout. Make the route from conditional experience to Generate unambiguously originate in the experience box, not Reflect. Do not add new modules, icons, text, data or a banner title."
+    },
+    {
+      "id": "allocation",
+      "file": "trajectory-allocation.png",
+      "width": 1774,
+      "height": 887,
+      "sha256": "d054b6e72d3a226664493e36aaa6b48ac532a0cc6a38341b1dedf9360d5b3fef",
+      "caption": "机制一：同起点记录与质量、阶段可比的共享记录共同估计收益率和证据强度，再修正基准权重，联合选出一个实际动作。",
+      "selected_generation": "exec-27fc2941-89cb-4f74-9c4b-dafa440e4099.png",
+      "initial_generation": "exec-44b64755-349b-472a-91eb-a4d086b88efb.png",
+      "revision_prompt": "Edit this scientific schematic, preserving the overall layout, labels and mechanism. Correct the evidence arrows: Local and Shared must BOTH connect to ONE clearly shared neutral junction immediately before the left border of the entire Estimate region. ONE arrow from this junction must enter the Estimate region. Inside Estimate, a small neutral fork from this common input must feed BOTH Yield V and Support η. Do not draw Local -> Yield and Shared -> Support as separate exclusive routes. Both local and shared weighted records determine both outputs. The existing two arrows from the two estimates to Correct weights can remain. Base weights β keeps its independent upper bypass. Use flat pale fills, perfectly pure-white canvas, crisp thin borders, no gradients, no shadows or texture. Make Evaluated attempts neutral gray rather than amber, to reserve amber for the separate experience mechanism in other figures. Do not change words, symbols, introduce numerical results, or add modules."
+    },
+    {
+      "id": "operator_context",
+      "file": "operator-context.png",
+      "width": 1774,
+      "height": 887,
+      "sha256": "cadef4230ab93122e45579e39a1467eed7c8a73b9c6b21d5e8e5f53a7729bdf9",
+      "caption": "机制二：按算子的设计问题组织材料。精炼读取形成路径及同起点尝试；融合读取同起点尝试与参考；探索只读取当前代码。各局部视图中，当前完整代码紧邻指令。",
+      "selected_generation": "exec-07a460d1-35ef-4398-a109-2f9d030d4b81.png",
+      "initial_generation": "exec-a2b83db6-09eb-4911-a336-c69a229acef8.png",
+      "revision_prompt": "Edit this scientific schematic to correct two misleading details while preserving the three-lane layout and exact context selection. In EACH Same-start attempts card, show FOUR separate outcome nodes: c1 with +; c2 with =; c3 with − (a valid but regressed result); and a distinct fourth node marked × with the label failed. Do not put '(failed)' next to c3 or next to −. The failure marker must be separate from all three valid results. Replace ALL literal pseudo-code in Current code + score, Current code and Reference code cards with neutral horizontal source-line glyphs (four or five short thin gray strokes). In particular REMOVE any 'score = evaluate(s)' line: evaluator output is metadata, not computation inside the candidate. For Current code + score, put a small separate 'score' metadata label below the source-line glyphs. Preserve Explore as ONLY Current code with no score or history. Preserve the absence of Formation path in Crossover. Preserve the output strip analysis → code → design. Remove gradients, paper texture and shadows; use a pure white canvas, flat pale teal fills, crisp thin borders, and keep all labels readable. Add no other text or objects."
+    },
+    {
+      "id": "conditional_experience",
+      "file": "conditional-experience.png",
+      "width": 1774,
+      "height": 887,
+      "sha256": "7a7d8d2ea655f071e2f5b21f7d3e6b510a2fb96c72476c167b1518650422dbf6",
+      "caption": "机制三：围绕一个计算问题比较相关修改，保留条件、设计含义与相连来源。后续精炼或融合在条件匹配时借鉴经验，新证据再用于回读和修订。",
+      "selected_generation": "exec-375b515c-192c-45af-aafb-698e3dd14e3d.png"
+    }
+  ]
+}

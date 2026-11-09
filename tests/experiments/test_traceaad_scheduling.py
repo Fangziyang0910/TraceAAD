@@ -1,6 +1,6 @@
-from experiments.traceaad_v20 import scheduling as routing
+from experiments.traceaad import scheduling as routing
 from traceaad_base import ModelReply
-from traceaad_v20.experience import REFLECTION_SCHEMA
+from traceaad_v24_1.notes import REFLECTION_FORMAT as REFLECTION_SCHEMA
 
 
 def test_role_schema_uses_same_pool_and_generation_settings(monkeypatch):

@@ -1,7 +1,8 @@
-"""Complete implementation fragments for reflection, independent of model requests."""
+"""Focused development relations with adjacent implementation and result evidence."""
 
 from dataclasses import dataclass
 from difflib import SequenceMatcher, unified_diff
+from functools import lru_cache
 
 from traceaad_base.models import Program
 from traceaad_base.prompts import failure_feedback, failure_summary
@@ -34,27 +35,6 @@ def observe(attempt, archive):
                  attempt.record.get("best_before"))
 
 
-def fragment(events, event_id):
-    """The new edge, its parent's formation edge, and two earlier same-start alternatives."""
-    event = events[event_id]
-    chosen = {event_id}
-    if event.parent is None:
-        return chosen
-    origin = next((e for e in events.values() if e.child.id == event.parent.id), None)
-    if origin is not None:
-        chosen.add(origin.id)
-    earlier = [e for e in events.values() if e.id < event_id and e.parent is not None
-               and e.parent.id == event.parent.id]
-    valid = [e for e in earlier if e.child.valid]
-    best = min(valid, key=lambda e: (e.child.evaluation.fitness, e.id), default=None)
-    if best is not None:
-        chosen.add(best.id)
-    recent = [e for e in earlier if e.key != event.key and (best is None or e.key != best.key)]
-    if recent:
-        chosen.add(max(recent, key=lambda e: e.id).id)
-    return chosen
-
-
 def _change(event):
     """A complete diff or the complete evaluated source, never a rewrite summary."""
     child = event.child
@@ -72,76 +52,187 @@ def _change(event):
     return ("source", new) if rewrite or len(diff) >= len(new) else ("diff", diff)
 
 
-def render(events, event_ids, new_ids, source_ids):
-    """Deduplicate implementations and equal observations while preserving every parent link."""
-    ordered = [events[i] for i in sorted(event_ids)]
-    codes = {}
+def change_sites(event):
+    """Positions in this exact parent, not a semantic classification of algorithms."""
+    if event.parent is None:
+        return frozenset()
+    return _sites(bare(event.parent.code), bare(event.child.code))
 
-    def register(code):
-        return codes.setdefault(code, f"Code {len(codes) + 1}")
 
-    # A child used as another event's parent is shown in full once.
+@lru_cache(maxsize=4096)
+def _sites(before, after):
+    before, after = before.splitlines(), after.splitlines()
+    matcher = SequenceMatcher(None, before, after, autojunk=False)
+    if matcher.ratio() < .5:
+        return frozenset()  # A rewrite does not identify one comparable parent computation.
+    return frozenset(i for tag, a, b, _, _ in matcher.get_opcodes() if tag != "equal"
+                     for i in range(a, max(a + 1, b)))
+
+
+def same_question(a, b):
+    if a.parent is None or b.parent is None:
+        return False
+    same_start = identity(a.parent.code) == identity(b.parent.code)
+    return same_start and bool(change_sites(a) & change_sites(b))
+
+
+def connected(a, b):
+    return (a.id == b.id or same_question(a, b)
+            or (a.parent is not None and a.parent.id == b.child.id)
+            or (b.parent is not None and b.parent.id == a.child.id))
+
+
+def is_relation(events, ids):
+    """One fact, same-start comparisons, or a connected development of at most three edges."""
+    if not ids or any(i not in events for i in ids):
+        return False
+    if len({events[i].key for i in ids}) != len(ids):
+        return False
+    reached = {ids[0]}
+    while True:
+        extra = {i for i in ids if i not in reached
+                 and any(connected(events[i], events[j]) for j in reached)}
+        if not extra:
+            return len(reached) == len(ids)
+        reached |= extra
+
+
+@dataclass(frozen=True)
+class Question:
+    anchor_id: int
+    kind: str
+    event_ids: tuple[int, ...]
+    background_ids: tuple[int, ...] = ()
+
+    def describe(self, events):
+        anchor = events[self.anchor_id]
+        return {"anchor_attempt": self.anchor_id, "parent_program": anchor.parent.id,
+                "kind": self.kind, "events": list(self.event_ids),
+                "background_events": list(self.background_ids)}
+
+
+def questions(events, unreviewed):
+    """Propose bounded comparisons around actual edits, with no model or text retrieval."""
+    ordered = sorted(events.values(), key=lambda e: e.id)
+    by_program = {e.child.id: e for e in ordered}
+    by_start, by_parent = {}, {}
     for event in ordered:
         if event.parent is not None:
-            register(bare(event.parent.code))
-    changes = {e.id: _change(e) for e in ordered}
-    for event in ordered:
-        kind, text = changes[event.id]
-        if kind in ("source", "unchanged"):
-            register(text)
+            by_start.setdefault(identity(event.parent.code), []).append(event)
+            by_parent.setdefault(event.parent.id, []).append(event)
+    proposals = {}
+    for i in unreviewed:
+        anchor = events[i]
+        if anchor.parent is None or identity(anchor.parent.code) == identity(anchor.child.code):
+            continue
+        peers = [e for e in by_start[identity(anchor.parent.code)] if e.id != i and e.key != anchor.key
+                 and identity(e.child.code) != identity(anchor.child.code) and same_question(anchor, e)]
+        origin = by_program.get(anchor.parent.id)
+        following = [e for e in by_parent.get(anchor.child.id, [])
+                     if e.child.operator in ("Refine", "Crossover")
+                     and identity(e.parent.code) != identity(e.child.code)]
+        core, kind = {i}, "single_change"
+        if peers:
+            core.add(peers[-1].id)
+            kind = "same_start"
+        elif origin is not None and origin.child.operator != "Init":
+            core.add(origin.id)
+            kind = "continuation"
+        if following:
+            core.add(following[-1].id)
+            kind = "continuation" if kind == "single_change" else kind
+        background = ((origin.id,) if origin is not None and origin.id not in core else ())
+        question = Question(i, kind, tuple(sorted(core)), background)
+        proposals[question.event_ids] = question
+    return sorted(proposals.values(), key=lambda q: (len(q.event_ids) > 1, q.anchor_id), reverse=True)
 
-    groups = {}
+
+def related_notes(events, question, notes):
+    core = [events[i] for i in question.event_ids]
+    related = []
+    for note in notes:
+        if any(i not in events for i in note["evidence_ids"]):
+            raise ValueError(f"Missing source events for experience {note['id']}")
+        if any(connected(events[i], event) for i in note["evidence_ids"] for event in core):
+            related.append(note)
+    return sorted(related, key=lambda n: (len(set(n["evidence_ids"]) & set(question.event_ids)),
+                                          max(n["evidence_ids"])), reverse=True)
+
+
+def render(events, event_ids, new_ids, source_ids, question=None):
+    """Starting code, actual edits and results stay together under stable Program/Attempt IDs."""
+    ordered = [events[i] for i in sorted(event_ids)]
+    parents = {e.parent.id for e in ordered if e.parent is not None}
+    printed, groups, represented = {}, {}, {}
     for event in ordered:
-        groups.setdefault(event.key, []).append(event)
-    rows = []
-    for group in groups.values():
-        event = group[0]
-        child, parent = event.child, event.parent
-        ids = [e.id for e in group]
-        lines = [f"Observation events: {ids}; occurrences: {len(group)}"]
-        for member in group:
-            p = member.parent.id if member.parent else None
-            c = member.child
-            relation = f"Event {member.id}: Algorithm {p} -> Algorithm {c.id}; operator {c.operator}"
-            if c.reference_id is not None:
-                relation += f"; reference Algorithm {c.reference_id}"
-            if (c.valid and member.best_before is not None
-                    and c.evaluation.fitness < member.best_before):
-                relation += "; this attempt set a new search best"
-            lines.append(relation)
-        if child.valid:
-            if parent is not None and parent.valid:
-                a, b = parent.evaluation.fitness, child.evaluation.fitness
-                outcome = "improved" if b < a else "tied" if b == a else "regressed"
-                lines.append(f"Measured result: parent {a} -> child {b}; {outcome}")
-            else:
-                lines.append(f"Measured score: {child.evaluation.fitness}")
-        else:
-            failure = child.evaluation.failure or ""
-            feedback = (failure_summary(failure) if child.evaluation.status == "timeout"
-                        else failure_feedback(failure))
-            lines.append(f"Execution result: {child.evaluation.status}\n{feedback}")
+        groups.setdefault(event.parent.id if event.parent else None, []).append(event)
+
+    def implementation(program, *, exact=False):
+        code = program.code if exact else bare(program.code)
+        if code in printed:
+            prior = printed[code]
+            return (f"Program {program.id}: complete implementation shown above." if prior == program.id
+                    else f"Program {program.id}: identical implementation to Program {prior}, shown above.")
+        printed[code] = program.id
+        return f"Program {program.id} implementation:\n```python\n{code}\n```"
+
+    selected = set(event_ids)
+    rows = ["[Trajectory Evidence]"]
+    if question is not None:
+        anchor = events[question.anchor_id]
+        rows.append(f"[One Computational Question]\nExamine the computation changed by Attempt {anchor.id} "
+                    f"from Program {anchor.parent.id}. Compare only its related same-start changes and "
+                    "continuations. Identify the concrete computational question from these edits, "
+                    "then establish which implementation changed and which measured result followed.")
+    rows.extend([f"New events: {sorted(selected & set(new_ids))}",
+                 f"Experience source events: {sorted(selected & set(source_ids))}"])
+    for parent_id, group in groups.items():
+        parent = group[0].parent
+        rows.append(f"[Same Starting Point: Program {parent_id}]" if parent is not None else "[Initialization]")
         if parent is not None:
-            lines.append(f"Parent implementation: {codes[bare(parent.code)]}")
-        kind, text = changes[event.id]
-        source = child.code if not child.valid else bare(child.code)
-        if source in codes:
-            lines.append(f"Evaluated implementation: {codes[source]}"
-                         + ("; identical to parent" if kind == "unchanged" else ""))
-        if kind == "diff":
-            lines.append(f"Complete change from parent:\n```diff\n{text}\n```")
-        lines.extend([f"Generator design (description): {child.design}",
-                      f"Proposed change (description): {child.analysis}"])
-        rows.append("\n".join(lines))
-
-    ids = set(event_ids)
-    index = (f"New events: {sorted(ids & set(new_ids))}\n"
-             f"Experience source events: {sorted(ids & set(source_ids))}\n"
-             f"Event order: {sorted(ids)}. Follow the explicit Algorithm parent -> child links; "
-             "equal observations are grouped, and their occurrence count is not independent support.")
-    implementations = "\n\n".join(f"{label}\n```python\n{code}\n```" for code, label in codes.items())
-    return ("[Trajectory Evidence]\n" + index + "\n\n[Implementations]\n" + implementations
-            + "\n\n[Changes and Results]\n" + "\n\n".join(rows))
+            rows.append(implementation(parent))
+        for event in group:
+            child = event.child
+            before = event.parent
+            if event.key in represented:
+                rows.append(f"Attempt {event.id}: Program {before.id if before else None} -> Program {child.id}; "
+                            f"same implementation and feedback as Attempt {represented[event.key]}. "
+                            "This is a repeated observation, not independent support.")
+                continue
+            represented[event.key] = event.id
+            lines = [f"Attempt {event.id}: Program {before.id if before else None} -> Program {child.id}; "
+                     f"operator {child.operator}"]
+            if child.reference_id is not None:
+                lines.append(f"Reference: Program {child.reference_id}")
+            mode, changed = _change(event)
+            if mode == "diff":
+                lines.append(f"Actual change:\n```diff\n{changed}\n```")
+            elif mode == "unchanged":
+                lines.append("Actual change: none; the evaluated computation is unchanged.")
+            else:
+                lines.append("Actual change: complete evaluated implementation follows.")
+            if child.valid:
+                if before is not None and before.valid:
+                    a, b = before.evaluation.fitness, child.evaluation.fitness
+                    result = "improved" if b < a else "tied" if b == a else "regressed"
+                    lines.append(f"Measured result for Attempt {event.id}: parent {a} -> child {b}; {result}")
+                else:
+                    lines.append(f"Measured score for Attempt {event.id}: {child.evaluation.fitness}")
+                if event.best_before is not None and child.evaluation.fitness < event.best_before:
+                    lines.append("This attempt set a new search best at that time.")
+            else:
+                failure = child.evaluation.failure or ""
+                feedback = (failure_summary(failure) if child.evaluation.status == "timeout"
+                            else failure_feedback(failure))
+                lines.append(f"Execution result for Attempt {event.id}: {child.evaluation.status}\n{feedback}")
+            if mode == "source" or child.id in parents:
+                lines.append(implementation(child, exact=not child.valid))
+            duplicates = [e.id for e in events.values() if e.id != event.id and e.key == event.key]
+            if duplicates:
+                lines.append(f"Equivalent observations also recorded at Attempts {sorted(duplicates)}; "
+                             "these are occurrences, not independent support.")
+            rows.append("\n".join(lines))
+    return "\n\n".join(rows)
 
 
 @dataclass(frozen=True)
@@ -151,44 +242,37 @@ class Material:
     new_event_ids: tuple[int, ...]
     deferred_ids: tuple[int, ...]
     input_size: int
+    related_ids: tuple[int, ...] = ()
+    focus: dict | None = None
     reason: str | None = None
 
 
 def build(events, unreviewed, notes, prompt_for, measure, limit):
-    """Pack whole fragments, with all active representative sources as required material."""
-    sources = {i for note in notes for i in note["evidence_ids"]}
-    missing = sources - events.keys()
-    if missing:
-        raise ValueError(f"Experience source events are missing: {sorted(missing)}")
-    selected = set(sources)
-
-    def prompt(ids):
-        return prompt_for(render(events, ids, unreviewed, sources))
-
-    # The usual cadence needs a single tokenizer call, not one call per edge.
-    if len(unreviewed) <= 10:
-        complete = selected | {i for event_id in unreviewed for i in fragment(events, event_id)}
-        complete_text = prompt(complete)
-        complete_size = measure(complete_text)
-        if complete_size <= limit:
-            return Material(complete_text, tuple(sorted(complete)), tuple(unreviewed), (), complete_size)
-
-    text = prompt(selected)
-    size = measure(text)
-    if size > limit:
-        return Material(text, (), (), tuple(unreviewed), size, "experience_sources_exceed_input_limit")
-    # Give the oldest retained fact a turn, then current-cadence evidence, then the rest.
-    # No event is dropped, including fragments that cannot fit this request.
-    order = dict.fromkeys(unreviewed[:1] + unreviewed[-10:] + unreviewed[1:-10])
-    for event_id in order:
-        # Related context is one hop from this entry, not a recursive tree expansion.
-        candidate = selected | fragment(events, event_id)
-        proposed = prompt(candidate)
-        proposed_size = measure(proposed)
-        if proposed_size <= limit:
-            selected, text, size = candidate, proposed, proposed_size
-    # A newly shown edge may also be complete evidence inside another fragment.
+    """Select one question first; only related complete source relations may join it."""
+    proposals = questions(events, unreviewed)
+    if not proposals:
+        return Material("", (), (), tuple(unreviewed), 0, reason="no_new_computational_question")
+    for question in proposals:
+        selected = set(question.event_ids) | set(question.background_ids)
+        text = render(events, selected, unreviewed, (), question)
+        prompt = prompt_for([], text)
+        size = measure(prompt)
+        if size <= limit:
+            break
+    else:
+        return Material("", (), (), tuple(unreviewed), size, reason="focused_relation_exceeds_input_limit")
+    shown_notes, sources = [], set()
+    for note in related_notes(events, question, notes):
+        candidate_ids = selected | set(note["evidence_ids"])
+        candidate_sources = sources | set(note["evidence_ids"])
+        candidate_notes = shown_notes + [note]
+        candidate = prompt_for(candidate_notes, render(events, candidate_ids, unreviewed,
+                                                       candidate_sources, question))
+        candidate_size = measure(candidate)
+        if candidate_size <= limit:
+            selected, sources, shown_notes = candidate_ids, candidate_sources, candidate_notes
+            prompt, size = candidate, candidate_size
     read = tuple(i for i in unreviewed if i in selected)
     deferred = tuple(i for i in unreviewed if i not in selected)
-    reason = None if read else "no_complete_new_fragment_fits"
-    return Material(text, tuple(sorted(selected)), read, deferred, size, reason)
+    return Material(prompt, tuple(sorted(selected)), read, deferred, size,
+                    tuple(n["id"] for n in shown_notes), question.describe(events))

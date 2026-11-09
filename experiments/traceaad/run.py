@@ -19,11 +19,8 @@ from traceaad_base import Evaluator, Task
 from traceaad_base.cli import load_task
 from experiments.infra.storage import seal_calls
 from traceaad_base.storage import write_json
-import traceaad_v20
 import traceaad_v21
-import traceaad_v22
 import traceaad_v22_1
-import traceaad_v23
 import traceaad_v23_1
 import traceaad_v24
 import traceaad_v24_1
@@ -33,10 +30,9 @@ from .scheduling import REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, loa
 
 ROOT = Path(__file__).resolve().parents[2]
 MEMORY_BYTES = 2 << 30
-METHODS = {"base": ("traceaad_base", traceaad_base), "v20": ("traceaad_v20", traceaad_v20),
-           "v21": ("traceaad_v21", traceaad_v21), "v22": ("traceaad_v22", traceaad_v22),
+METHODS = {"base": ("traceaad_base", traceaad_base),
+           "v21": ("traceaad_v21", traceaad_v21),
            "v22.1": ("traceaad_v22_1", traceaad_v22_1), "v22_1": ("traceaad_v22_1", traceaad_v22_1),
-           "v23": ("traceaad_v23", traceaad_v23),
            "v23.1": ("traceaad_v23_1", traceaad_v23_1), "v23_1": ("traceaad_v23_1", traceaad_v23_1),
            "v24": ("traceaad_v24", traceaad_v24),
            "v24.1": ("traceaad_v24_1", traceaad_v24_1), "v24_1": ("traceaad_v24_1", traceaad_v24_1)}
@@ -58,7 +54,7 @@ def configure_time_budget(task, seconds_per_instance):
 
 
 def request_options(method):
-    if method in ("v21", "v22", "v22.1", "v22_1", "v24", "v24.1", "v24_1"):
+    if method in ("v21", "v22.1", "v22_1", "v24", "v24.1", "v24_1"):
         return {**REQUEST_OPTIONS, "response_format": V21_RESPONSE_FORMAT}
     return REQUEST_OPTIONS
 
@@ -88,7 +84,7 @@ def metadata_for(args, task, config, model):
 
 
 def evaluate_heldout(directory, name, best, scheduler, *, evaluation_seed,
-                     seconds_per_instance=None, condition="traceaad_v20"):
+                     seconds_per_instance=None, condition="traceaad_base"):
     path = directory / "heldout.json"
     if path.exists():
         previous = json.loads(path.read_text())
@@ -132,14 +128,12 @@ def evaluate_heldout(directory, name, best, scheduler, *, evaluation_seed,
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--method", choices=tuple(METHODS), default="v20")
+    parser.add_argument("--method", choices=tuple(METHODS), default="base")
     parser.add_argument("--backend", choices=("scheduled",), default="scheduled")
-    for feature in ("trajectory-scoring","trajectory-context","reference-selection","experience-learning"):
-        parser.add_argument("--no-"+feature,action="store_true")
     parser.add_argument("--task", choices=ALL_TASKS, required=True)
     parser.add_argument("--run-name", required=True)
     parser.add_argument("--batch", required=True)
-    parser.add_argument("--experiment", default="traceaad_v20")
+    parser.add_argument("--experiment", help="Result directory name; defaults to the selected method")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--budget", type=int, default=1000)
     parser.add_argument("--initial-size", type=int, default=5)
@@ -153,6 +147,7 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-heldout", action="store_true")
     args = parser.parse_args(argv)
+    args.experiment = args.experiment or METHODS[args.method][0]
     if not args.scheduler_socket and args.backend == "scheduled":
         parser.error("A resource scheduler socket is required")
     if not math.isfinite(args.seconds_per_instance) or args.seconds_per_instance <= 0:
@@ -163,10 +158,7 @@ def main(argv=None):
     load_environment(ROOT / ".env")
     load_environment(args.env_file)
     package = METHODS[args.method][1]
-    switches = {} if args.method != "v20" else {
-        name: not getattr(args, "no_" + name)
-        for name in ("trajectory_scoring", "trajectory_context", "reference_selection", "experience_learning")}
-    config = package.Config(**switches, evaluation_budget=args.budget, initial_size=args.initial_size,
+    config = package.Config(evaluation_budget=args.budget, initial_size=args.initial_size,
                             seed=args.seed, max_tokens=args.max_tokens, model_timeout=args.model_timeout)
     task = load_task(name=args.task)
     configure_time_budget(task, args.seconds_per_instance)
@@ -190,11 +182,7 @@ def main(argv=None):
     signal.signal(signal.SIGHUP, stop)  # Closing the tmux session.
     from .reporting import Reporter
 
-    services = {}
-    if args.method == "v20":
-        from traceaad_v20.embedding import EmbeddingClient
-        services["embedder"] = EmbeddingClient()
-    search = package.TraceAAD(task, model, **services, config=config,
+    search = package.TraceAAD(task, model, config=config,
                               run_dir=directory / "native", resume=args.resume)
     search.evaluator = ScheduledEvaluator(task, args.scheduler_socket, args.run_name + ":search")
     reporter = Reporter(directory, metadata)

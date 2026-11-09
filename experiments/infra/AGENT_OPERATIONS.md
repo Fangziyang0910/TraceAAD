@@ -51,13 +51,6 @@ journalctl --user -u traceaad-watch.service -n 5 --no-pager
 
 源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_schema_final`，609个文件中7个变化、602个一致，远端60项检查通过。结果入口为 `experiments_result/traceaad_base`（server4主仓库中的符号链接，指向快照内的 `traceaad_base_schema` 目录），看板和同步使用该批次。它使用11月5日修改前的 Base 代码。原 `traceaad_base`（`20261030_base_compact_co6`）改名为 `traceaad_base_compact`；此前的记录中，`experiments_result/traceaad_base` 指紧凑批次。上一批分析实验的18路已正常停止并保留结果；更早批次继续按各自状态运行。[启动记录](../../experiments_result/traceaad_base/launch_20261031/README.md)保存配置、源码核对、停止与启动证据。
 
-## V20 完整体批次（11月3日）
-
-`20261103b_v20_complete_qwen_co6` 于北京时间11月3日23:17在server4从零启动六任务 × 种子0、1、2，共18路，每路1000次评价，训练后自动做独立主测试。方法为V20完整体：轨迹评分（符号约束）、轨迹上下文、融合参考短名单、经验学习与召回四项全开。生成与反思使用Qwen3.8-27B，经公共调度器分配；嵌入使用server4的`127.0.0.1:18002/v1`（qwen3-embedding-4b-fp8）。采样、输出上限16384、每实例10秒与`20261031_base_schema_co6`一致，对照直接使用该Base批次。
-
-源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261103b_traceaad_v20_complete`，由本机代码同步，741个文件写入`source_hashes.json`并在启动时校验；`benchmarks`与`core`与Base schema快照逐文件一致。结果入口为 `experiments_result/traceaad_v20_complete`（server4主仓库中的符号链接）。server4主仓库工作区的部分任务模板落后于本机，两次V20冒烟使用的是该工作区，不作为正式条件。
-
-对照批次 `20261103b_v20_noreflect_qwen_co6` 紧随其后在同一冻结源码、同一调度器下启动18路，只加 `--no-experience-learning`：不做评价后反思，不形成、更新或召回经验；评分、轨迹上下文和融合参考与完整体相同。结果入口为 `experiments_result/traceaad_v20_noreflect`。
 
 ## Base 与 V21 对照批次（11月5日）
 
@@ -69,6 +62,8 @@ journalctl --user -u traceaad-watch.service -n 5 --no-pager
 
 ## V22 正式批次（11月7日）
 
+旧实现已删除。下文保留历史启动与结果位置，复查和恢复使用该批次冻结源码。
+
 `20261107_v22_co6`于北京时间11月7日13:09在server4启动，六任务×种子0、1、2，共18路，每路1000次评价，初始化5个有效程序，搜索后自动执行独立主测试。V22为V21加机制1，包含预测尺度±3倍的稳健残差更新、最多29个第二步候选和严格恢复校验，不含经验、反思或嵌入。
 
 源码冻结于`/home/fzy/code/LLM4AD/TraceAAD_runs/20261107_traceaad_v22`，结果入口为`experiments_result/traceaad_v22`（server4主仓库中的符号链接）。411份源码和文档按SHA-256核验；67份Base、V21、benchmarks与core的Python文件与V21快照逐文件一致。远端156项测试通过；六任务的预算、方法参数、任务定义、评价执行、模型采样和路由配置与`20261105c_v21_co6`一致。训练16例共享160秒，主测试50例共享500秒，内存2 GiB。
@@ -76,6 +71,8 @@ journalctl --user -u traceaad-watch.service -n 5 --no-pager
 启动检查在13:10确认18路会话及搜索全部存活，均已完成真实评价，已提交62次评价，模型请求错误为0；12次已提交演化的算子、参考和尺度记录对应正确。这只是启动状态。V22已加入主实验名单，现有结果同步和看板自动读取。配置预览、源码哈希、远端测试和启动检查保存在`experiments_result/traceaad_v22/launch_20261107/`。
 
 ## V23 正式对照批次（11月7日）
+
+旧实现已删除。下文保留历史启动与结果位置，复查和恢复使用该批次冻结源码。
 
 `20261107_v23_co6`于北京时间11月7日13:33在server4启动18路，六任务×种子0/1/2，每路1000次评价，初始化5个有效程序，训练后自动做独立主测试。V23为Base加机制1，完整保留Base的生成流程和`analysis → design → code`输出，与V22共用选择和学习代码、分别维护状态。
 
@@ -118,8 +115,8 @@ ssh B3-server4
 cd /home/fzy/code/LLM4AD/TraceAAD
 source .env.server4
 uv run --frozen python -m experiments.infra.scheduler --status
-.venv/bin/python -m experiments.traceaad_v20.run \
-  --task tsp_construct --run-name v20_dry --batch v20_dry \
+.venv/bin/python -m experiments.traceaad.run \
+  --method base --task tsp_construct --run-name base_dry --batch base_dry \
   --scheduler-socket "$TRACEAAD_SCHEDULER_SOCKET" --env-file .env.server4 --dry-run
 ```
 
@@ -129,7 +126,7 @@ uv run --frozen python -m experiments.infra.scheduler --status
 
 本机通过 systemd 用户服务 `traceaad-local-model-tunnel.service` 建立反向 SSH 隧道，将 server4 的 `127.0.0.1:18001` 转发到本机 `127.0.0.1:8001`。模型由 `qwen38-llama.service` 管理：关闭 MTP、关闭共享 KV、总上下文 147456、三个并发槽（单路 49152 tokens），超额请求在服务端排队。模型异常退出自动重启，隧道断开自动重连。使用 `systemctl --user status qwen38-llama.service traceaad-local-model-tunnel.service` 查询；配置位于本机 `~/.config/systemd/user/`，模型日志为 `/tmp/llama-qwen38-recovered.log`。原两个 tmux 会话已由这些服务替代。server4 的两张 GPU 尚未部署模型服务。
 
-需要 embedding 的基线与 V20 复用 server3 的 `qwen3-embedding-4b-fp8`。server4 的 tmux `traceaad_embedding_tunnel` 将本机 `127.0.0.1:18002` 转发到 server3 的 `127.0.0.1:8002`；专用 SSH 密钥只允许该转发。`.env.server4` 的 `SHINKA_EMBEDDING_*` 指向此接口。隧道需保持运行；重启命令保存在补齐记录的 `embedding_tunnel_command.txt`。该服务与生成模型的 27 请求槽分开。
+需要 embedding 的基线复用 server3 的 `qwen3-embedding-4b-fp8`。server4 的 tmux `traceaad_embedding_tunnel` 将本机 `127.0.0.1:18002` 转发到 server3 的 `127.0.0.1:8002`；专用 SSH 密钥只允许该转发。`.env.server4` 的 `SHINKA_EMBEDDING_*` 指向此接口。隧道需保持运行；重启命令保存在补齐记录的 `embedding_tunnel_command.txt`。该服务与生成模型的 27 请求槽分开。
 
 `/tmp/tmux-1003` 存 tmux socket，`/tmp/traceaad-1003` 存调度器 socket，清理 `/tmp` 时不能删。tmux socket 丢失后，服务进程仍在：先重建目录（权限700），再向 `tmux: server` 进程发 `SIGUSR1`。
 
@@ -207,3 +204,19 @@ TraceAAD 使用原入口、原目录和相同参数加 `--resume` 续跑。操�
 相对评分转换前的原件通常位于运行目录的 `logs/raw_search_originals/`。仅有平均相对改进，不能精确还原原始目标均值。`score_source` 区分换算与重新评价；放宽 CPU 或墙钟限制的结果保留其条件。
 
 旧格式转换、评分换算和专项归档脚本已清理。相关历史结果与处理记录保留在对应实验目录中，当前读取器按程序个体编号读取结果。
+
+
+## 新 V23.1 纯净 Base 对照（11月9日）
+
+`20261109_v23_1_static_co6` 于北京时间11月9日15:37在server4启动，六任务×种子0/1/2，各1000次评价。冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261109_traceaad_v23_1_static`，以11月8日共用快照为底，只调整Base演化提示和V23.1接入及生成协议识别，任务、数据、机制1与评价实现保持一致。初始化和修复保持原样，18路实际条件已核对。
+
+旧 `20261108_v23_1_co6` 剩余6路已停止，12路完成结果与旧源码保留。主仓库 `experiments_result/traceaad_v23_1` 指向新快照的结果目录，新目录保留旧结果软链接。本机与server4主实验名单均使用新批次；原有同步与检查服务继续接管。新日志带 `static_algorithm_context_v1`，旧日志按旧冻结源码恢复。
+
+远端102项检查通过。15:39复查18路存活且均已真实评价，共66次，模型请求错误0。V22.1与V24继续运行。详见[启动记录](../../docs/记录/2026-11-09-V23.1纯净Base对照启动.md)与[原始证据](../../experiments_result/traceaad_v23_1/launch_20261109_static/README.md)。
+
+
+## 纯净 Base 正式批次与 V24 停止（11月9日）
+
+`20261109_base_static_co6` 于北京时间11月9日15:52启动18路，各1000次评价，结果入口为 `experiments_result/traceaad_base_static_20261109`。它与新V23.1直接共用 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261109_traceaad_v23_1_static`，恢复使用该快照内批次清单记录的原入口命令；当前仓库的入口重命名不改变冻结运行。六任务预览及18路实际配置逐项核对，含任务、预算、评价、模型及源码路径均一致；只由选择实现区分机制1。
+
+V24批次 `20261109_v24_co6` 的18路已停止，结果保留。从活动同步/检查名单移出V24，保留其历史展示；新Base加入主名单并成为默认比较参照。V22.1和新V23.1继续运行。15:57复查Base18路均有真实评价，共169次，模型请求错误0。见[启动记录](../../docs/记录/2026-11-09-Base正式对照启动与V24停止.md)与[证据](../../experiments_result/traceaad_base_static_20261109/launch_20261109_static/README.md)。

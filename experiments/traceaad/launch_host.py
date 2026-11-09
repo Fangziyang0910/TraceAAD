@@ -32,7 +32,7 @@ def build_plan(args):
             name = f"{args.batch}_{TASK_SHORT[task]}_traceaad_{slug}_rep{seed + 1}"
             session = f"{args.batch}_{TASK_SHORT[task]}_{slug}_r{seed + 1}"
             directory = ROOT / "experiments_result" / args.experiment / task / name
-            command = [sys.executable, "-u", "-m", "experiments.traceaad_v20.run",
+            command = [sys.executable, "-u", "-m", "experiments.traceaad.run",
                        "--method", args.method, "--backend", args.backend, "--task", task, "--run-name", name, "--batch", args.batch,
                        "--experiment", args.experiment, "--seed", str(seed),
                        "--budget", str(args.budget),
@@ -41,8 +41,6 @@ def build_plan(args):
             if args.scheduler_socket:
                 command += ["--scheduler-socket", args.scheduler_socket]
             command += ["--seconds-per-instance", str(args.seconds_per_instance)]
-            for feature in ("trajectory-scoring","trajectory-context","reference-selection","experience-learning"):
-                if getattr(args,"no_"+feature.replace("-","_"),False):command += ["--no-"+feature]
             if args.env_file:
                 command += ["--env-file", str(args.env_file)]
             if args.skip_heldout:
@@ -57,12 +55,10 @@ def build_plan(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--method", choices=tuple(METHODS), default="v20")
+    parser.add_argument("--method", choices=tuple(METHODS), default="base")
     parser.add_argument("--backend", choices=("scheduled",), default="scheduled")
-    for feature in ("trajectory-scoring","trajectory-context","reference-selection","experience-learning"):
-        parser.add_argument("--no-"+feature,action="store_true")
     parser.add_argument("--batch", required=True)
-    parser.add_argument("--experiment", default="traceaad_v20")
+    parser.add_argument("--experiment", help="Result directory name; defaults to the selected method")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--budget", type=int, default=1000)
     parser.add_argument("--initial-size", type=int, default=5)
@@ -76,6 +72,7 @@ def main(argv=None):
     parser.add_argument("--skip-heldout", action="store_true")
     parser.add_argument("--launch", action="store_true")
     args = parser.parse_args(argv)
+    args.experiment = args.experiment or METHODS[args.method][0]
     if args.repeats < 1 or args.spacing < 0:
         parser.error("repeats must be positive and spacing must be nonnegative")
     if not math.isfinite(args.seconds_per_instance) or args.seconds_per_instance <= 0:
