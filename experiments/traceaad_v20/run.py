@@ -1,4 +1,4 @@
-"""One Base, V20, V21, V22, V22.1, V23, V23.1 or V24 search followed by evaluation of its frozen best program."""
+"""One versioned TraceAAD search followed by evaluation of its frozen best program."""
 
 import argparse
 from contextlib import nullcontext
@@ -26,6 +26,7 @@ import traceaad_v22_1
 import traceaad_v23
 import traceaad_v23_1
 import traceaad_v24
+import traceaad_v24_1
 from traceaad_v21.prompts import CANDIDATE_RESPONSE_FORMAT as V21_RESPONSE_FORMAT
 from .scheduling import REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, load_environment
 
@@ -37,7 +38,8 @@ METHODS = {"base": ("traceaad_base", traceaad_base), "v20": ("traceaad_v20", tra
            "v22.1": ("traceaad_v22_1", traceaad_v22_1), "v22_1": ("traceaad_v22_1", traceaad_v22_1),
            "v23": ("traceaad_v23", traceaad_v23),
            "v23.1": ("traceaad_v23_1", traceaad_v23_1), "v23_1": ("traceaad_v23_1", traceaad_v23_1),
-           "v24": ("traceaad_v24", traceaad_v24)}
+           "v24": ("traceaad_v24", traceaad_v24),
+           "v24.1": ("traceaad_v24_1", traceaad_v24_1), "v24_1": ("traceaad_v24_1", traceaad_v24_1)}
 
 
 def configure_time_budget(task, seconds_per_instance):
@@ -56,7 +58,7 @@ def configure_time_budget(task, seconds_per_instance):
 
 
 def request_options(method):
-    if method in ("v21", "v22", "v22.1", "v22_1", "v24"):
+    if method in ("v21", "v22", "v22.1", "v22_1", "v24", "v24.1", "v24_1"):
         return {**REQUEST_OPTIONS, "response_format": V21_RESPONSE_FORMAT}
     return REQUEST_OPTIONS
 

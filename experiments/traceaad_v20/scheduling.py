@@ -104,6 +104,7 @@ class ScheduledModel:
         self.client = None
         self.last_metadata = {}
         self.request_options = dict(REQUEST_OPTIONS)
+        self._token_counter = None
         hosts = {urlsplit(e["base_url"]).hostname for e in self.scheduler["endpoints"]}
         hosts.update(os.environ.get("NO_PROXY", "").split(","))
         os.environ["NO_PROXY"] = os.environ["no_proxy"] = ",".join(sorted(h for h in hosts if h))
@@ -114,7 +115,19 @@ class ScheduledModel:
         model.label = self.label + ":reflection"
         model.client = None
         model.last_metadata = {}
+        model._token_counter = None
         return model
+
+    def count_prompt_tokens(self, prompt):
+        """Count with the serving tokenizer; this is not a generation or a GPU lease."""
+        if self._token_counter is None:
+            from core.llm import OpenAIAPI
+            endpoint = self.scheduler["endpoints"][0]
+            self._token_counter = OpenAIAPI(
+                base_url=endpoint["base_url"], model=endpoint["model"],
+                api_key=api_key(endpoint["base_url"]), timeout=10,
+                extra_body={"chat_template_kwargs": self.request_options.get("chat_template_kwargs", {})})
+        return self._token_counter.count_prompt_tokens(prompt)
 
     @contextmanager
     def request_context(self):

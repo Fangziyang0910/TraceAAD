@@ -1,4 +1,4 @@
-# Base、V20、V21、V22、V23 与 V24 的同条件入口
+# Base、V20、V21、V22、V23、V24 与 V24.1 的同条件入口
 
 默认后端为 `scheduled`。Qwen3.8-27B经server4公共调度器分配到四个端点。`--method base` 调用 `traceaad_base.TraceAAD`；`--method v20` 调用完整V20；`--method v21` 调用只含机制2的V21；`--method v22` 调用V21加机制1的V22；`--method v23`调用Base加机制1的V23。
 
@@ -95,3 +95,30 @@ V24为V21加机制3，不需要嵌入服务。反思请求经同一调度器发�
 ```
 
 机制与记录见[V24](../../docs/机制设计/V24.md)。
+
+V24.1 使用条件经验、完整计算背景和可恢复的待审阅队列，入口为 `--method v24.1` 或 `--method v24_1`。它不需要嵌入服务，沿用原模型调度、评价与最终测试流程；不要用 V24 的运行目录恢复 V24.1。单路配置检查示例：
+
+```bash
+.venv/bin/python -m experiments.traceaad_v20.run \
+  --method v24.1 --experiment traceaad_v24_1 --task tsp_construct \
+  --run-name v24_1_dry --batch v24_1_dry \
+  --scheduler-socket /tmp/traceaad-1003/scheduler.sock --dry-run
+```
+
+批量计划使用 `launch_host --method v24.1 --experiment traceaad_v24_1`，其余参数同上；只有明确启动新批次时添加 `--launch`。已完成小规模真实模型验证，尚未启动正式搜索。规格与状态见[V24.1](../../docs/机制设计/V24.1.md)。
+
+V24.1 的材料吞吐与冻结窗口回放可单独复查：
+
+```bash
+# 仅调tokenizer，不请求生成、不评价程序
+.venv/bin/python -m experiments.traceaad_v20.validate_v24_1 \
+  --pack-root experiments_result/traceaad_v21c \
+  --output experiments_result/traceaad_v24_1_validation/NEW_PACKING_RUN
+
+# 明确指定 --live 才发送模型反思；同一窗口从空经验开始，不回写源档案
+.venv/bin/python -m experiments.traceaad_v20.validate_v24_1 \
+  --live --case RUN_DIR:ATTEMPT_ID --repeats 2 \
+  --output experiments_result/traceaad_v24_1_validation/NEW_REFLECTION_RUN
+```
+
+反思独立使用4096 tokens输出；输入按服务端聊天tokenizer计数，默认上限44544 tokens。原始提示、回复、计数缓存与来源哈希留在结果目录，提交到仓库的摘要和解释见[修正验证记录](../../docs/记录/2026-11-09-V24.1修正与小规模实验.md)。

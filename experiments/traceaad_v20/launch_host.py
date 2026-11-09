@@ -1,4 +1,4 @@
-"""Preview or start independently recorded Base, V20, V21, V22, V22.1, V23, V23.1 or V24 searches on the current host."""
+"""Preview or start independently recorded versioned TraceAAD searches on the current host."""
 
 import argparse
 from datetime import datetime
@@ -13,7 +13,7 @@ import time
 
 from benchmarks.tasks import CO_TASKS, TASK_SHORT
 from traceaad_base.storage import write_json
-from .run import request_options
+from .run import METHODS, request_options
 from .scheduling import scheduler_status
 
 
@@ -57,7 +57,7 @@ def build_plan(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--method", choices=("v20", "v21", "v22", "v22.1", "v22_1", "v23", "v23.1", "v23_1", "v24", "base"), default="v20")
+    parser.add_argument("--method", choices=tuple(METHODS), default="v20")
     parser.add_argument("--backend", choices=("scheduled",), default="scheduled")
     for feature in ("trajectory-scoring","trajectory-context","reference-selection","experience-learning"):
         parser.add_argument("--no-"+feature,action="store_true")

@@ -1,0 +1,1801 @@
+{
+  "recorded_at": "2026-11-09T14:17:51.483371+08:00",
+  "scope": "Packing replay, frozen-window reflection, and training smoke; no search-benefit claim.",
+  "baseline_fssp": {
+    "cycles": 79,
+    "requests": 6,
+    "last_success_attempt": 65,
+    "read_total": 18,
+    "final_unreviewed": 782,
+    "evidence": "2026-11-09-V24与V24.1-Opus5.5对比审查.md; parent reproduction before changes"
+  },
+  "packing_final": {
+    "started_at": "2026-11-09T14:05:36.078911+08:00",
+    "tokenizer": {
+      "url": "http://222.201.145.6:8000/v1",
+      "model": "qwen3.8-27b-awq",
+      "enable_thinking": false
+    },
+    "packing": [
+      {
+        "source": "experiments_result/traceaad_v21c/tsp_construct/20261105c_v21_co6_tsp_traceaad_v21_rep1",
+        "source_attempts_sha256": "3b864f27b8929f628b1763e5da7ce68696bdd7ac98a0d79a672b77580d3d3a46",
+        "cycles": 92,
+        "requests": 92,
+        "statuses": {
+          "success:": 92
+        },
+        "read_total": 920,
+        "new_events": 930,
+        "final_unreviewed": [
+          926,
+          927,
+          928,
+          929,
+          930,
+          931,
+          932,
+          933,
+          934,
+          935
+        ],
+        "last_success_attempt": 925,
+        "input_tokens_median": 28573.0,
+        "input_tokens_max": 43951,
+        "lag_median": 4.5,
+        "lag_max": 4.5,
+        "reflection_settings": {
+          "interval": 10,
+          "capacity": 6,
+          "representatives": 1,
+          "context_tokens": 49152,
+          "output_reserve": 4096,
+          "chat_reserve": 512,
+          "input_limit": 44544,
+          "input_units": "tokens"
+        }
+      },
+      {
+        "source": "experiments_result/traceaad_v21c/cvrp_aco/20261105c_v21_co6_cvrp_traceaad_v21_rep1",
+        "source_attempts_sha256": "b8be927831ed3a7893c82df7606be4bf43aef431ef1d4d60309cd575bf10f82c",
+        "cycles": 96,
+        "requests": 96,
+        "statuses": {
+          "success:": 96
+        },
+        "read_total": 960,
+        "new_events": 961,
+        "final_unreviewed": [
+          966
+        ],
+        "last_success_attempt": 965,
+        "input_tokens_median": 33761.5,
+        "input_tokens_max": 43373,
+        "lag_median": 4.5,
+        "lag_max": 5.5,
+        "reflection_settings": {
+          "interval": 10,
+          "capacity": 6,
+          "representatives": 1,
+          "context_tokens": 49152,
+          "output_reserve": 4096,
+          "chat_reserve": 512,
+          "input_limit": 44544,
+          "input_units": "tokens"
+        }
+      },
+      {
+        "source": "experiments_result/traceaad_v21c/fssp_gls/20261105c_v21_co6_fssp_traceaad_v21_rep1",
+        "source_attempts_sha256": "74492864cc106fd85b9f51539630489ffe363432c1f2eb59abe250ab0f270402",
+        "cycles": 79,
+        "requests": 79,
+        "statuses": {
+          "success:": 79
+        },
+        "read_total": 790,
+        "new_events": 800,
+        "final_unreviewed": [
+          797,
+          798,
+          799,
+          800,
+          801,
+          802,
+          803,
+          804,
+          805,
+          806
+        ],
+        "last_success_attempt": 796,
+        "input_tokens_median": 30367,
+        "input_tokens_max": 41864,
+        "lag_median": 4.5,
+        "lag_max": 5.100000000000023,
+        "reflection_settings": {
+          "interval": 10,
+          "capacity": 6,
+          "representatives": 1,
+          "context_tokens": 49152,
+          "output_reserve": 4096,
+          "chat_reserve": 512,
+          "input_limit": 44544,
+          "input_units": "tokens"
+        }
+      },
+      {
+        "source": "experiments_result/traceaad_v21c/graph_colouring/20261105c_v21_co6_gcol_traceaad_v21_rep1",
+        "source_attempts_sha256": "712bead609c59ce578990d9c469658cfd7748b36f9a23135170a705f63ec2fb4",
+        "cycles": 76,
+        "requests": 76,
+        "statuses": {
+          "success:": 76
+        },
+        "read_total": 727,
+        "new_events": 770,
+        "final_unreviewed": [
+          646,
+          653,
+          666,
+          674,
+          675,
+          676,
+          682,
+          683,
+          685,
+          693,
+          694,
+          695,
+          696,
+          703,
+          704,
+          705,
+          713,
+          716,
+          722,
+          724,
+          725,
+          726,
+          733,
+          736,
+          746,
+          752,
+          753,
+          755,
+          756,
+          762,
+          763,
+          765,
+          766,
+          767,
+          768,
+          769,
+          770,
+          771,
+          772,
+          773,
+          774,
+          775,
+          776
+        ],
+        "last_success_attempt": 766,
+        "input_tokens_median": 43170.5,
+        "input_tokens_max": 44518,
+        "lag_median": 6.755244755244746,
+        "lag_max": 37.875,
+        "reflection_settings": {
+          "interval": 10,
+          "capacity": 6,
+          "representatives": 1,
+          "context_tokens": 49152,
+          "output_reserve": 4096,
+          "chat_reserve": 512,
+          "input_limit": 44544,
+          "input_units": "tokens"
+        }
+      },
+      {
+        "source": "experiments_result/traceaad_v21c/jssp_construct/20261105c_v21_co6_jssp_traceaad_v21_rep1",
+        "source_attempts_sha256": "5118391dc6c08cbcff324ed78a7812ae59a8c4f7c3be6fbc3266fd76f1ed5e1a",
+        "cycles": 78,
+        "requests": 78,
+        "statuses": {
+          "success:": 78
+        },
+        "read_total": 764,
+        "new_events": 782,
+        "final_unreviewed": [
+          695,
+          701,
+          702,
+          704,
+          723,
+          733,
+          735,
+          743,
+          745,
+          750,
+          751,
+          752,
+          754,
+          764,
+          765,
+          774,
+          786,
+          787
+        ],
+        "last_success_attempt": 785,
+        "input_tokens_median": 42357.0,
+        "input_tokens_max": 44531,
+        "lag_median": 5.0,
+        "lag_max": 25.454545454545496,
+        "reflection_settings": {
+          "interval": 10,
+          "capacity": 6,
+          "representatives": 1,
+          "context_tokens": 49152,
+          "output_reserve": 4096,
+          "chat_reserve": 512,
+          "input_limit": 44544,
+          "input_units": "tokens"
+        }
+      },
+      {
+        "source": "experiments_result/traceaad_v21c/op_aco/20261105c_v21_co6_op_traceaad_v21_rep1",
+        "source_attempts_sha256": "f8ebd549796155bda2c2eb00e3e770dede5e55272727ad103b366bebfafe99da",
+        "cycles": 94,
+        "requests": 94,
+        "statuses": {
+          "success:": 94
+        },
+        "read_total": 927,
+        "new_events": 941,
+        "final_unreviewed": [
+          892,
+          894,
+          895,
+          904,
+          905,
+          913,
+          914,
+          915,
+          923,
+          932,
+          933,
+          934,
+          935,
+          946
+        ],
+        "last_success_attempt": 945,
+        "input_tokens_median": 37503.0,
+        "input_tokens_max": 44456,
+        "lag_median": 4.5,
+        "lag_max": 21.33333333333337,
+        "reflection_settings": {
+          "interval": 10,
+          "capacity": 6,
+          "representatives": 1,
+          "context_tokens": 49152,
+          "output_reserve": 4096,
+          "chat_reserve": 512,
+          "input_limit": 44544,
+          "input_units": "tokens"
+        }
+      }
+    ],
+    "reflection": [],
+    "source_hashes": {
+      "traceaad_v24_1/notes.py": "af36178d1e4addbc0759a421b6a0ab8d2cf45398dec80de621a3557256f0a8c3",
+      "traceaad_v24_1/context.py": "5513ce51a5df88f143118c003a61a8b038e00015489b5497acae0d82a2da0ea3",
+      "traceaad_v24_1/evidence.py": "bede165c529e9cf1c0b6da6882179b1c4d189ce94f06658cd8ccff2a67ad3be8",
+      "traceaad_v24_1/search.py": "9ba2dde690cc0ffb28a66b34a03027eff2b31703e4660c5327cb286afb137aec",
+      "traceaad_v24_1/__init__.py": "0f7d7cb60fff46c25644c8b5cc9a7d67e5b94fe31ac871cffc64a6e9db292c0a",
+      "traceaad_v24/notes.py": "c59bc2e65c9b99d8ddafd3e531df6e334b22c6d24fabbc1c2910251704d1a355",
+      "traceaad_v24/search.py": "5b4e69d6c734bf975af9776231a6a5cd0d3815f8a3272519781aa3c2edaa5999",
+      "traceaad_v24/__init__.py": "5de9875c8910f4ae81494052e1dd46403d084743c0e89be1d8080983d4faa993"
+    }
+  },
+  "reflection_round1": {
+    "started_at": "2026-11-09T13:59:18.750644+08:00",
+    "tokenizer": {
+      "url": "http://222.201.145.6:8000/v1",
+      "model": "qwen3.8-27b-awq",
+      "enable_thinking": false
+    },
+    "packing": [],
+    "reflection": [
+      {
+        "version": "v24",
+        "repeat": 1,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/graph_colouring/20261109_v24_co6_gcol_traceaad_v24_rep1",
+        "cutoff": 85,
+        "window": [
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "status": "success",
+        "seconds": 9.035989705007523,
+        "analysis": "The best performance (Algorithm 77) came from randomized DSATUR with a specific tie-breaking mechanism that introduced stochasticity into vertex selection, allowing the algorithm to escape local minima. Attempts to add deterministic post-processing local search (Algorithms 78, 84) or complex color impact calculations (Algorithm 80) consistently regressed, indicating that greedy heuristics are sensitive to overhead and that simple stochastic exploration during the construction phase is more effective than corrective moves after the fact.",
+        "notes": [
+          {
+            "idea": "Randomized DSATUR heuristic with stochastic tie-breaking for vertex selection.",
+            "lesson": "Introducing randomization in the saturation/degree tie-breaking allows multiple diverse valid colorings to be explored; taking the minimum over many restarts significantly outperforms deterministic or locally-optimized variants."
+          },
+          {
+            "idea": "Post-hoc local search or recoloring to reduce color count after greedy initialization.",
+            "lesson": "Simple local search steps often fail to escape the structure created by the greedy heuristic and can introduce overhead without consistent gains; it is better to rely on the diversity of the initial greedy passes."
+          },
+          {
+            "idea": "Complex color assignment strategies like impact minimization or probabilistic weighting.",
+            "lesson": "Calculating the 'impact' of a color choice on future neighbors or using weighted sampling adds computational cost and complexity that does not translate to lower average color counts compared to simpler random choices."
+          }
+        ],
+        "shown_event_ids": [
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "usage": {
+          "prompt_tokens": 5733,
+          "total_tokens": 6061,
+          "completion_tokens": 328,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 5733,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 1,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/graph_colouring/20261109_v24_co6_gcol_traceaad_v24_rep1",
+        "cutoff": 85,
+        "window": [
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "status": "success",
+        "seconds": 11.491594013059512,
+        "analysis": "The evidence indicates that deterministic heuristics and complex local search post-processing (like backtracking or impact-minimization) either regress performance or time out, while randomized DSATUR with simple restarts is robust. Specifically, replacing random color selection with a 'lowest impact' heuristic (Event 80) caused a regression and required repair for timeouts, whereas adding a random tie-breaker to vertex selection (Event 77) improved results by escaping local minima without increasing computational overhead.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Randomized Vertex Selection Overlook Complexity",
+            "when": "When using DSATUR-style greedy coloring on graph instances where deterministic tie-breaking leads to suboptimal local minima.",
+            "lesson": "Introducing random perturbation in the vertex selection tie-breaking logic improves solution quality over deterministic ordering without significant runtime cost, unlike complex color-impact calculations which can cause timeouts or regressions.",
+            "evidence_ids": [
+              77
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Greedy Color Assignment Efficiency",
+            "when": "When optimizing the color assignment step within a greedy DSATUR solver.",
+            "lesson": "Assigning the lowest available color index is computationally efficient and effective; replacing it with heuristic-based selection (e.g., minimizing neighbor saturation impact) increases complexity and can lead to performance regressions or timeouts.",
+            "evidence_ids": [
+              80
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          60,
+          72,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "usage": {
+          "prompt_tokens": 14489,
+          "total_tokens": 14832,
+          "completion_tokens": 343,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 14489,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24",
+        "repeat": 2,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/graph_colouring/20261109_v24_co6_gcol_traceaad_v24_rep1",
+        "cutoff": 85,
+        "window": [
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "status": "success",
+        "seconds": 9.454233441036195,
+        "analysis": "The attempts confirm that simple post-hoc local search (eliminating highest colors) and simulated annealing regress performance compared to pure randomized DSATUR, as they are inefficient or get stuck in local minima. The most effective realization is the core Algorithm 77 approach: high-restart randomized DSATUR with specific tie-breaking logic. Adding complex deterministic color selection (impact-based) or backtracking for small graphs generally fails to improve upon the stochastic baseline within the time budget.",
+        "notes": [
+          {
+            "idea": "Randomized DSATUR with high restarts",
+            "lesson": "Running ~50 passes of DSATUR where ties in saturation/degree are broken randomly yields robust results; deterministic variants or lower restart counts typically perform worse."
+          },
+          {
+            "idea": "Post-hoc Local Search (Color Elimination)",
+            "lesson": "Attempting to eliminate the highest color index after a greedy pass often fails to reduce the count significantly and can introduce overhead without benefit compared to more restarts."
+          },
+          {
+            "idea": "Simulated Annealing for Graph Coloring",
+            "lesson": "SA starting from valid colorings tends to regress in this context; it struggles to escape local minima effectively enough to beat the variance provided by randomized greedy restarts."
+          },
+          {
+            "idea": "Backtracking for Small Graphs",
+            "lesson": "Hybridizing with exact backtracking for small $n$ did not improve the mean score, likely due to implementation overhead or the limited number of small instances relative to the total dataset."
+          },
+          {
+            "idea": "Deterministic Color Selection Heuristics",
+            "lesson": "Selecting colors based on 'impact' (neighbor constraints) rather than random sampling regressed performance, suggesting that randomness in color assignment is valuable for exploring the solution space."
+          }
+        ],
+        "shown_event_ids": [
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "usage": {
+          "prompt_tokens": 5733,
+          "total_tokens": 6141,
+          "completion_tokens": 408,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 5733,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 2,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/graph_colouring/20261109_v24_co6_gcol_traceaad_v24_rep1",
+        "cutoff": 85,
+        "window": [
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "status": "success",
+        "seconds": 7.895841371966526,
+        "analysis": "The evidence confirms that randomized DSATUR with tie-breaking (Event 77) is superior to deterministic variants or those using weighted color selection (Events 80, 81). While adding a post-processing local search to eliminate the highest color index (Event 84) provided a slight improvement over the base randomized DSATUR, it was less effective than the pure randomized approach and more computationally expensive. Attempts to use exact backtracking or simulated annealing generally regressed performance due to computational overhead or failure to escape local minima effectively.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Randomized DSATUR vs Deterministic/Weighted",
+            "when": "Comparing vertex ordering heuristics for graph coloring where saturation degree is the primary key.",
+            "lesson": "Introducing randomization into the tie-breaking logic of the DSATUR heuristic yields better average color counts than deterministic lowest-index selection or weighted probability distributions over available colors.",
+            "evidence_ids": [
+              77
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Post-processing Local Search Effectiveness",
+            "when": "Applying a local search phase after greedy DSATUR to reduce the number of distinct colors by merging the highest color class.",
+            "lesson": "While post-processing can slightly improve results, a simple randomized DSATUR with multiple restarts often achieves comparable or better results with lower computational complexity, making complex local search phases less efficient per unit time.",
+            "evidence_ids": [
+              84
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          60,
+          72,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "usage": {
+          "prompt_tokens": 14489,
+          "total_tokens": 14838,
+          "completion_tokens": 349,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 14489,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24",
+        "repeat": 1,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/jssp_construct/20261109_v24_co6_jssp_traceaad_v24_rep1",
+        "cutoff": 136,
+        "window": [
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "status": "success",
+        "seconds": 13.504914273973554,
+        "analysis": "The attempts consistently show that relaxing the 'active set' constraint (allowing operations with finish times greater than the global minimum) or introducing complex dynamic heuristics (Softmax, Critical Path, Machine Load) leads to significant performance regressions compared to strict active schedule generation. The most successful approach remains simple: strictly selecting from operations with the absolute minimum earliest finish time and using a robust tie-breaking mechanism (such as Remaining Processing Time) rather than pure random sampling. Complex stochastic exploration within the active set or broad candidate pools fails because it introduces unnecessary machine idle time and ignores immediate precedence constraints.",
+        "notes": [
+          {
+            "idea": "Strict Active Schedule Generation",
+            "lesson": "Restricting selection to operations with the absolute minimum earliest finish time is essential for high performance; allowing 'non-active' starts (relaxing the min-finish constraint) causes severe regression by introducing avoidable machine idle time."
+          },
+          {
+            "idea": "Static Tie-Breaking via RPT",
+            "lesson": "Deterministically breaking ties among active-set candidates by maximizing Remaining Processing Time (RPT) yields better results than uniform random sampling or dynamic congestion metrics, as it prioritizes jobs with longer remaining tails without adding computational overhead."
+          },
+          {
+            "idea": "Stochastic Exploration of Sub-optimal Candidates",
+            "lesson": "Using softmax sampling or expanding the candidate pool beyond the strict active set (e.g., top 50% or min-finish + epsilon) significantly degrades makespan; diversity should be introduced only through randomized tie-breaking within the strict active set if necessary, but deterministic heuristics often suffice."
+          },
+          {
+            "idea": "Dynamic Congestion Heuristics",
+            "lesson": "Complex dynamic priorities based on machine load or critical path estimates during decoding do not outperform simple static metrics like RPT in this context, likely due to increased variance and failure to exploit the structural benefits of the active schedule constraint."
+          }
+        ],
+        "shown_event_ids": [
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "usage": {
+          "prompt_tokens": 7221,
+          "total_tokens": 7651,
+          "completion_tokens": 430,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 7221,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 1,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/jssp_construct/20261109_v24_co6_jssp_traceaad_v24_rep1",
+        "cutoff": 136,
+        "window": [
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "status": "success",
+        "seconds": 23.965925470925868,
+        "analysis": "The evidence consistently shows that deterministic or static priority rules (e.g., pure RPT, greedy earliest start) and complex local search heuristics significantly regress compared to randomized active schedule generation with a wide candidate pool. Specifically, restricting the selection to the 'active set' (minimum finish time only) or using static RPT as a hard filter yields worse makespans than selecting from the top 20% of candidates by finish time with stochastic tie-breaking. This suggests that exploring sub-optimal immediate choices within a constrained window is more effective for minimizing global makespan than greedily enforcing strict local optimality.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Stochastic Top-20% Selection Outperforms Strict Active Sets",
+            "when": "Comparing active schedule generation strategies for JSSP where operations are selected based on earliest feasible finish times.",
+            "lesson": "Restricting operation selection strictly to the global minimum finish time (strict active set) or using static Remaining Processing Time (RPT) as a primary deterministic filter leads to significant performance regression (e.g., 1865 -> 2435). Selecting randomly from the top 20% of candidates by finish time maintains necessary diversity to escape local minima and achieve better makespans.",
+            "evidence_ids": [
+              127
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Local Search and Complex Heuristics Regress vs Simple Random Restarts",
+            "when": "Implementing Iterated Local Search, Simulated Annealing, or complex dynamic priority scoring (like Critical Path estimation) on top of basic active schedule construction.",
+            "lesson": "Complex deterministic local searches (swaps, shifts) and sophisticated dynamic priority calculations often fail to improve upon simple randomized multi-restart heuristics in this context, sometimes resulting in massive regressions (e.g., 1937 -> 14607). The computational overhead and structural rigidity of these methods do not translate to better makespan minimization compared to broad stochastic exploration of the active schedule space.",
+            "evidence_ids": [
+              136
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          55,
+          69,
+          71,
+          74,
+          77,
+          79,
+          83,
+          93,
+          95,
+          102,
+          103,
+          104,
+          107,
+          110,
+          115,
+          116,
+          118,
+          119,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "usage": {
+          "prompt_tokens": 29480,
+          "total_tokens": 29970,
+          "completion_tokens": 490,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 29480,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24",
+        "repeat": 2,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/jssp_construct/20261109_v24_co6_jssp_traceaad_v24_rep1",
+        "cutoff": 136,
+        "window": [
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "status": "success",
+        "seconds": 15.854945332976058,
+        "analysis": "Attempts 127, 129, and 133 all regressed by strictly restricting selection to the global minimum finish time (active set), confirming that forcing the earliest possible start creates machine idle time bottlenecks; allowing operations to wait for less congested machines is superior. Attempts 131 and 135 regressed when they introduced complex dynamic heuristics like Critical Path estimates or machine delay sorting, suggesting that simple static metrics combined with stochastic top-k sampling are more robust than complex adaptive scoring. Attempt 134's move to deterministic RPT tie-breaking also regressed, highlighting that randomness within a good candidate pool is essential for escaping local minima in this search space.",
+        "notes": [
+          {
+            "idea": "Restricting operation selection to the strict active set (global minimum earliest finish time) to avoid delaying any single operation unnecessarily.",
+            "lesson": "Strict active schedule generation consistently regresses performance because it forces immediate scheduling on potentially busy machines, creating idle-time cascades; allowing operations to be scheduled later (within a top-k pool) to balance load across the horizon yields significantly better makespans."
+          },
+          {
+            "idea": "Using dynamic heuristics such as Critical Path estimation or machine waiting-time analysis to prioritize operations based on current system congestion.",
+            "lesson": "Complex dynamic priority calculations often regress against simpler static metrics because they introduce noise and computational overhead without providing reliable guidance in small-scale JSSP instances; static Remaining Processing Time (RPT) remains a more stable baseline for ranking candidates."
+          },
+          {
+            "idea": "Replacing stochastic random restarts with deterministic greedy decoding using specific tie-breakers like maximum RPT.",
+            "lesson": "Deterministic decoders get trapped in suboptimal local minima and regress compared to stochastic approaches; maintaining multiple random restarts with diverse tie-breaking is necessary to explore the solution space effectively."
+          },
+          {
+            "idea": "Selecting from a fixed percentage of the top-ranked candidates (e.g., top 20%) rather than the entire pool or only the absolute best.",
+            "lesson": "A moderate top-k window (like top 20% or 50%) balances exploitation of good schedules with exploration of alternatives; shrinking this window to 1 (greedy) or expanding it too widely both degrade solution quality."
+          }
+        ],
+        "shown_event_ids": [
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "usage": {
+          "prompt_tokens": 7221,
+          "total_tokens": 7735,
+          "completion_tokens": 514,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 7221,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 2,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/jssp_construct/20261109_v24_co6_jssp_traceaad_v24_rep1",
+        "cutoff": 136,
+        "window": [
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "status": "success",
+        "seconds": 13.40429612994194,
+        "analysis": "The evidence demonstrates that the quality of the dispatching rule (specifically, prioritizing operations with high Remaining Processing Time within a constrained active set) is more significant for makespan reduction than the search breadth or the stochastic selection mechanism (e.g., random vs. softmax vs. greedy). Attempts to broaden the candidate pool beyond the strict active set (events 74, 95, 127) consistently caused performance regressions, confirming that the constraint 'start time must be minimal' is crucial. Furthermore, introducing complex local search or simulated annealing (events 83, 107, 136) resulted in execution errors or massive regressions compared to the stable baseline of multi-restart greedy decoding.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Strict Active Set Constraint",
+            "when": "When implementing a serial schedule generation scheme for Job Shop Scheduling.",
+            "lesson": "Selecting operations strictly from those with the minimum possible start/finish time (the active set) yields superior makespans compared to relaxing this constraint to include sub-optimal 'early' candidates; broadening the pool introduces unnecessary machine idle time and congestion.",
+            "evidence_ids": [
+              127
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Priority Rule Superiority over Search Width",
+            "when": "Comparing different tie-breaking rules (RPT vs. Random vs. Softmax) within an active set decoder.",
+            "lesson": "A deterministic or semi-deterministic priority rule like Longest Remaining Processing Time (LRPT/RPT) consistently outperforms random sampling or probabilistic selection, indicating that the heuristic logic is more critical than the diversity of the search process.",
+            "evidence_ids": [
+              102
+            ]
+          },
+          {
+            "id": 3,
+            "idea": "Stability of Greedy Decoding",
+            "when": "Attempting to improve a baseline greedy solver with complex local search, simulated annealing, or CPM-based perturbations.",
+            "lesson": "Complex meta-heuristics often introduce validity violations (precedence/machine conflicts) or severe performance regressions in static JSSP; a simple, robust multi-restart greedy approach with a strong priority rule remains the most reliable baseline.",
+            "evidence_ids": [
+              136
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          55,
+          69,
+          71,
+          74,
+          77,
+          79,
+          83,
+          93,
+          95,
+          102,
+          103,
+          104,
+          107,
+          110,
+          115,
+          116,
+          118,
+          119,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "usage": {
+          "prompt_tokens": 29480,
+          "total_tokens": 30021,
+          "completion_tokens": 541,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 29480,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24",
+        "repeat": 1,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/op_aco/20261109_v24_co6_op_traceaad_v24_rep3",
+        "cutoff": 245,
+        "window": [
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "status": "success",
+        "seconds": 15.182791025843471,
+        "analysis": "Attempts to use complex forward simulations (greedy/nearest-neighbor) or state-dependent path estimates consistently regressed, likely due to computational overhead and heuristic bias from inaccurate partial-path approximations. In contrast, simple static formulas combining destination prize, inverse distance, and budget slack achieved the best results (-14.56). The squared distance denominator proved superior to linear for balancing prize value against travel cost, while hard feasibility masking outperformed soft exponential penalties by strictly preventing infeasible moves.",
+        "notes": [
+          {
+            "idea": "Compute edge desirability using a simple static formula based on destination prize, distance, and remaining budget slack, avoiding complex forward simulations.",
+            "lesson": "Static heuristics like $p_j \\cdot \\text{slack} / d_{ij}^2$ outperform dynamic simulations or greedy completions, which suffer from high computational cost and biased path approximations that mislead pheromone accumulation."
+          },
+          {
+            "idea": "Apply strict binary masking to set infeasible edges (where estimated tour length exceeds maxlen) to a minimal floor value.",
+            "lesson": "Hard masking is superior to soft exponential penalties because it prevents ants from wasting updates on impossible tours, focusing search effort entirely on feasible regions without unnecessary exploration noise."
+          },
+          {
+            "idea": "Scale edge desirability by a linear factor of remaining budget slack $(1 + R/maxlen)$ to favor moves that preserve capacity for future nodes.",
+            "lesson": "Linear scaling provides a stable gradient that balances immediate prize collection with long-term feasibility, whereas exponential or multiplicative slack factors can over-penalize longer edges or destabilize convergence."
+          },
+          {
+            "idea": "Use the squared inverse of distance ($1/d^2$) as the base distance penalty in the heuristic.",
+            "lesson": "Squared distance decays more rapidly than linear distance, creating a stronger preference for close neighbors that is better calibrated for Orienteering Problem instances where short hops maximize prize density per unit cost."
+          }
+        ],
+        "shown_event_ids": [
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "usage": {
+          "prompt_tokens": 4221,
+          "total_tokens": 4668,
+          "completion_tokens": 447,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 4221,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 1,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/op_aco/20261109_v24_co6_op_traceaad_v24_rep3",
+        "cutoff": 245,
+        "window": [
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "status": "success",
+        "seconds": 18.43078941712156,
+        "analysis": "The evidence demonstrates that switching from squared distance ($d^2$) to linear distance ($d$) in the denominator consistently regresses performance, indicating that stronger penalization of long edges is beneficial for budget-constrained Orienteering. Additionally, replacing hard feasibility masks with soft exponential penalties or complex greedy simulations (Floyd-Warshall/nearest-neighbor) leads to significant regressions, confirming that strict binary enforcement of the immediate return-to-depot constraint is superior to allowing 'near-feasible' exploration.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Squared Distance Penalty Preference",
+            "when": "Comparing heuristics that use $1/d^2$ versus $1/d$ as the base desirability factor for edge selection in ACO.",
+            "lesson": "Squared distance ($d^2$) outperforms linear distance ($d$), suggesting that heavily penalizing long jumps is critical for staying within the travel budget and maximizing prize density per unit cost.",
+            "evidence_ids": [
+              80
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Hard Feasibility Mask Superiority",
+            "when": "Evaluating static heuristic matrices where infeasible edges are either zeroed out (hard mask) or given small non-zero values via exponential decay (soft penalty).",
+            "lesson": "Hard masks that strictly set infeasible edges to a minimal floor (1e-9) outperform soft exponential penalties, as the latter mislead the ant colony by maintaining non-negligible probability mass for structurally impossible moves.",
+            "evidence_ids": [
+              153
+            ]
+          },
+          {
+            "id": 3,
+            "idea": "Static Heuristic Efficiency vs. Simulation",
+            "when": "Contrasting simple vectorized ratio heuristics against computationally expensive greedy forward simulations (e.g., nearest-neighbor extension) for edge prior calculation.",
+            "lesson": "Complex local search simulations for heuristic generation cause severe regressions (e.g., -7.7 score vs -14.5), likely due to computational overhead or overfitting to local paths; simple static ratios with slack scaling remain more robust.",
+            "evidence_ids": [
+              239
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          73,
+          80,
+          150,
+          153,
+          167,
+          173,
+          184,
+          188,
+          191,
+          196,
+          213,
+          217,
+          225,
+          227,
+          230,
+          234,
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "usage": {
+          "prompt_tokens": 16368,
+          "total_tokens": 16879,
+          "completion_tokens": 511,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 16368,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24",
+        "repeat": 2,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/op_aco/20261109_v24_co6_op_traceaad_v24_rep3",
+        "cutoff": 245,
+        "window": [
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "status": "success",
+        "seconds": 11.100609974004328,
+        "analysis": "The recent attempts confirm that hard feasibility masking (zeroing or flooring infeasible edges) outperforms soft exponential penalties and linear distance denominators, which destabilize the heuristic signal. The most successful realizations consistently combine a destination-prize base with an inverse-squared distance penalty and a linear budget slack factor. Attempts using greedy simulation or complex state-dependent cost estimates regressed significantly, indicating that simple static local ratios are more effective than computationally expensive lookahead heuristics for this specific ACO setup.",
+        "notes": [
+          {
+            "idea": "Use a hard feasibility mask to set infeasible edges to a minimum floor value.",
+            "lesson": "Strictly enforcing budget constraints via hard masking prevents ants from wasting pheromone on invalid tours and outperforms soft exponential penalties."
+          },
+          {
+            "idea": "Scale edge desirability by the ratio of remaining budget to total budget after returning to the depot.",
+            "lesson": "A linear slack factor (1 + slack/maxlen) effectively balances prize collection with constraint adherence without over-penalizing longer feasible moves."
+          },
+          {
+            "idea": "Penalize long edges using the squared inverse of the Euclidean distance.",
+            "lesson": "Inverse-squared distance provides a stronger preference for short moves than linear distance, helping the algorithm focus on high-value nearby nodes within tight budgets."
+          },
+          {
+            "idea": "Base edge desirability primarily on the destination node's prize value.",
+            "lesson": "Using only the destination prize (p_j) rather than source-destination sums creates a cleaner signal that prioritizes lucrative targets regardless of the current position."
+          },
+          {
+            "idea": "Replace static local heuristics with dynamic greedy tour simulations.",
+            "lesson": "Simulating full tour completions for each edge is computationally expensive and led to regression; simple static local ratios provide better stability and performance."
+          }
+        ],
+        "shown_event_ids": [
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "usage": {
+          "prompt_tokens": 4221,
+          "total_tokens": 4648,
+          "completion_tokens": 427,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 4221,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 2,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/op_aco/20261109_v24_co6_op_traceaad_v24_rep3",
+        "cutoff": 245,
+        "window": [
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "status": "success",
+        "seconds": 9.61929977289401,
+        "analysis": "The evidence confirms that for the Orienteering Problem, a destination-prize-centric heuristic with a squared distance denominator and linear slack scaling is the most robust baseline. Attempts to improve upon this by adding source prizes, using soft exponential penalties instead of hard masks, or implementing complex greedy simulations consistently regressed performance, suggesting that static, local edge desirability outperforms dynamic or global approximations in this context.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Destination-Prize Heuristic with Squared Distance",
+            "when": "Static ACO heuristic design for OP where ants sample edges based on node prizes and distances.",
+            "lesson": "Using only the destination prize (p_j) divided by squared distance (d_ij^2), scaled by linear budget slack (1 + R/maxlen), provides a stable and effective signal. Adding source prize terms (p_i + p_j) or changing to linear distance denominators degrades performance by over-emphasizing immediate return costs or shortening long-range options.",
+            "evidence_ids": [
+              167
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Hard Feasibility Masking vs Soft Penalties",
+            "when": "Enforcing the travel budget constraint (maxlen) in the heuristic matrix.",
+            "lesson": "A hard binary mask that sets infeasible edges to a minimal value (1e-9) outperforms soft exponential decay penalties. Hard masking prevents the colony from wasting pheromone updates on structurally impossible moves, whereas soft penalties introduce noise and allow sampling of invalid tours.",
+            "evidence_ids": [
+              243
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          73,
+          80,
+          150,
+          153,
+          167,
+          173,
+          184,
+          188,
+          191,
+          196,
+          213,
+          217,
+          225,
+          227,
+          230,
+          234,
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "usage": {
+          "prompt_tokens": 16368,
+          "total_tokens": 16758,
+          "completion_tokens": 390,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 16368,
+        "error": null,
+        "reason": null
+      }
+    ],
+    "source_hashes": {
+      "traceaad_v24_1/notes.py": "2b7ab52d31eb5c6f3509253b57bf90fec1f6c0e2f7fe407fec3883d640692cbb",
+      "traceaad_v24_1/__init__.py": "0f7d7cb60fff46c25644c8b5cc9a7d67e5b94fe31ac871cffc64a6e9db292c0a",
+      "traceaad_v24_1/search.py": "9ba2dde690cc0ffb28a66b34a03027eff2b31703e4660c5327cb286afb137aec",
+      "traceaad_v24_1/context.py": "5513ce51a5df88f143118c003a61a8b038e00015489b5497acae0d82a2da0ea3",
+      "traceaad_v24_1/evidence.py": "31dda245d59a0dbb1717b1bec999b953e45002acd532b9ebbd44aa4781fb470c",
+      "traceaad_v24/notes.py": "c59bc2e65c9b99d8ddafd3e531df6e334b22c6d24fabbc1c2910251704d1a355",
+      "traceaad_v24/__init__.py": "5de9875c8910f4ae81494052e1dd46403d084743c0e89be1d8080983d4faa993",
+      "traceaad_v24/search.py": "5b4e69d6c734bf975af9776231a6a5cd0d3815f8a3272519781aa3c2edaa5999"
+    }
+  },
+  "reflection_final": {
+    "started_at": "2026-11-09T14:06:11.005181+08:00",
+    "tokenizer": {
+      "url": "http://222.201.145.6:8000/v1",
+      "model": "qwen3.8-27b-awq",
+      "enable_thinking": false
+    },
+    "packing": [],
+    "reflection": [
+      {
+        "version": "v24_1",
+        "repeat": 1,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/graph_colouring/20261109_v24_co6_gcol_traceaad_v24_rep1",
+        "cutoff": 85,
+        "window": [
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "status": "success",
+        "seconds": 15.422850864008069,
+        "analysis": "Comparing Code 3 (41.6875) and Code 4 (41.125), adding randomization to vertex tie-breaking in DSATUR improved performance by escaping local minima without altering the core heuristic. In contrast, replacing the greedy assignment with exact backtracking or complex impact-based color selection (Code 8, Code 80) caused regressions, likely due to computational overhead or suboptimal exploration on larger graphs. The evidence supports maintaining the efficient randomized DSATUR structure while avoiding expensive post-processing or strict feasibility checks that do not scale.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Randomized Tie-Breaking in Greedy Heuristics",
+            "when": "When using a greedy heuristic like DSATUR where multiple vertices have identical saturation and degree scores during selection.",
+            "lesson": "Introducing randomization into the tie-breaking logic for vertex selection improves the final coloring quality by exploring diverse ordering paths, outperforming deterministic tie-breaking or complex color-impact calculations that increase overhead without proportional gain.",
+            "evidence_ids": [
+              77
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          60,
+          72,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "usage": {
+          "completion_tokens": 260,
+          "prompt_tokens": 16922,
+          "total_tokens": 17182,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        },
+        "input_tokens_counted": 16922,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 2,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/graph_colouring/20261109_v24_co6_gcol_traceaad_v24_rep1",
+        "cutoff": 85,
+        "window": [
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "status": "success",
+        "seconds": 21.242652786895633,
+        "analysis": "Comparing Code 4 (41.125) and Code 80 (42.875), replacing the random color choice with a deterministic 'minimum impact' heuristic significantly regressed performance, indicating that randomization in color assignment is crucial for escaping local minima in this context. Furthermore, comparing Code 4 (41.125) and Code 84 (41.3125), adding a post-processing phase to merge high-index colors into lower ones yielded no improvement, suggesting that the randomized DSATUR heuristic with 50 restarts already effectively saturates the search space for color reduction.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Randomization vs Deterministic Heuristics",
+            "when": "Using a randomized DSATUR solver where vertex selection is fixed by saturation/degree but color assignment varies between random selection (Code 4) and deterministic minimum-impact selection (Code 80).",
+            "lesson": "Deterministic heuristics for color assignment (minimizing neighbor impact) perform worse than random color selection, which provides necessary stochastic diversity to find better global optima across restarts.",
+            "evidence_ids": [
+              80
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Post-Processing Limitations",
+            "when": "Applying a local search phase after a strong randomized greedy heuristic (like 50-restart DSATUR) to attempt further reduction of distinct colors by merging highest-color classes (Code 84 vs Code 4).",
+            "lesson": "Adding complex post-processing steps to an already robust randomized heuristic often yields diminishing returns or neutral results; the primary gains come from the quality and quantity of the initial randomized greedy passes rather than secondary optimization loops.",
+            "evidence_ids": [
+              84
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          60,
+          72,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85
+        ],
+        "usage": {
+          "prompt_tokens": 16922,
+          "total_tokens": 17349,
+          "completion_tokens": 427,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 16922,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 1,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/jssp_construct/20261109_v24_co6_jssp_traceaad_v24_rep1",
+        "cutoff": 136,
+        "window": [
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "status": "success",
+        "seconds": 32.754999968921766,
+        "analysis": "The evidence confirms that the core performance driver is the combination of a strict 'Active Set' constraint (selecting only from operations with the global minimum earliest finish time) and a strong static priority rule (specifically, Remaining Processing Time or RPT). Attempts to broaden the candidate pool (top-20% cutoffs), introduce dynamic noise/softmax sampling, or replace RPT with more complex metrics like Critical Path estimates consistently caused regressions compared to the baseline using min-finish + max-RPT. This indicates that for this specific JSSP formulation, simple greedy heuristics restricted to active schedules outperform complex stochastic or dynamic evaluation methods.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Strict Active Set with Static RPT Priority",
+            "when": "When constructing a serial schedule by selecting the next operation from the set of all currently available operations based on their computed earliest finish times.",
+            "lesson": "Restricting the selection pool strictly to operations achieving the global minimum earliest finish time (the 'active set') and breaking ties by maximizing Remaining Processing Time (RPT) yields significantly better makespans than using broader top-k pools, softmax sampling, or dynamic critical path estimates.",
+            "evidence_ids": [
+              133
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Regressions from Dynamic Heuristic Complexity",
+            "when": "When replacing static priority rules (like RPT) with dynamic calculations (e.g., machine load balancing, critical path length estimation) or stochastic mechanisms (noise, simulated annealing) within an active schedule generator.",
+            "lesson": "Introducing dynamic complexity or randomness into the decision rule of an active schedule decoder often leads to performance regressions; simple, deterministic tie-breaking based on remaining work is more robust and effective for minimizing makespan in this context.",
+            "evidence_ids": [
+              131
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          55,
+          69,
+          71,
+          74,
+          77,
+          79,
+          83,
+          93,
+          95,
+          102,
+          103,
+          104,
+          107,
+          110,
+          115,
+          116,
+          118,
+          119,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "usage": {
+          "prompt_tokens": 32433,
+          "total_tokens": 32871,
+          "completion_tokens": 438,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 32433,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 2,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/jssp_construct/20261109_v24_co6_jssp_traceaad_v24_rep1",
+        "cutoff": 136,
+        "window": [
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "status": "success",
+        "seconds": 26.358322861837223,
+        "analysis": "The evidence consistently demonstrates that replacing static priority rules (like RPT) with dynamic, state-dependent selection strategies (such as the 'strict active set' constraint or CP-based estimation) significantly degrades performance compared to simple randomized restarts of a greedy heuristic. Specifically, attempts to filter candidates by strict minimum finish time or calculate complex machine loads resulted in higher makespans (e.g., ~2100-2400 vs ~1878), whereas maintaining a broader candidate pool (top 20% by finish time) combined with stochastic tie-breaking via Remaining Processing Time yielded the best results.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Static Priority vs Dynamic Filtering",
+            "when": "When choosing between using a fixed priority rule (RPT) on a broad candidate pool versus implementing dynamic filtering (strict active sets or CP estimates) during schedule generation.",
+            "lesson": "Broad candidate pools with static RPT tie-breaking outperform strict active-set constraints and dynamic CP calculations; overly restrictive eligibility filters often lead to suboptimal makespans due to loss of structural diversity.",
+            "evidence_ids": [
+              55
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Stochastic Sampling Stability",
+            "when": "When selecting operations from a top-k subset of eligible candidates during the decoding phase of a Job Shop Scheduling heuristic.",
+            "lesson": "Uniform random sampling within a top-20% finish-time pool is more stable and effective than softmax sampling or complex weighted scoring, which introduce unnecessary variance and regress performance.",
+            "evidence_ids": [
+              69
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          55,
+          69,
+          71,
+          74,
+          77,
+          79,
+          83,
+          93,
+          95,
+          102,
+          103,
+          104,
+          107,
+          110,
+          115,
+          116,
+          118,
+          119,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136
+        ],
+        "usage": {
+          "prompt_tokens": 32433,
+          "total_tokens": 32808,
+          "completion_tokens": 375,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 32433,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 1,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/op_aco/20261109_v24_co6_op_traceaad_v24_rep3",
+        "cutoff": 245,
+        "window": [
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "status": "success",
+        "seconds": 16.67566043813713,
+        "analysis": "The evidence consistently demonstrates that linear distance denominators and complex forward simulations significantly degrade performance compared to simple static heuristics. Specifically, switching from squared to linear distance in the denominator caused a measurable regression (Event 245), confirming that quadratic decay is crucial for balancing prize value against travel cost. Additionally, replacing static feasibility masks with dynamic greedy simulations or soft penalties resulted in substantial regressions (Events 239, 241, 245), indicating that static, hard-masked heuristics based on destination prize and squared distance are more robust for this ACO implementation.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Squared Distance Decay Preference",
+            "when": "When calculating the base heuristic term as prize divided by distance power.",
+            "lesson": "Using a squared distance denominator (d^2) outperforms linear distance (d^1). Event 245 showed that changing d^2 to d^1 caused a significant regression (-13.09 vs -14.57), suggesting that the stronger penalty for long edges in the squared version better aligns with the budget constraints of the Orienteering Problem.",
+            "evidence_ids": [
+              245
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Static Heuristic Robustness",
+            "when": "When choosing between static analytical heuristics and dynamic forward-simulation or soft-penalty approaches.",
+            "lesson": "Simple static heuristics using destination prize, squared distance, and hard feasibility masks consistently outperform complex dynamic simulations (greedy look-ahead) and soft exponential penalties. Events 239, 241, and 245 show that introducing simulation-based costs or relaxing hard masks leads to severe performance drops, likely due to noise or computational instability in the heuristic signal.",
+            "evidence_ids": [
+              239
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          73,
+          80,
+          150,
+          153,
+          167,
+          173,
+          184,
+          188,
+          191,
+          196,
+          213,
+          217,
+          225,
+          227,
+          230,
+          234,
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "usage": {
+          "prompt_tokens": 17559,
+          "total_tokens": 17992,
+          "completion_tokens": 433,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 17559,
+        "error": null,
+        "reason": null
+      },
+      {
+        "version": "v24_1",
+        "repeat": 2,
+        "source": "/home/fzy/code/LLM4AD/TraceAAD/experiments_result/traceaad_v24/op_aco/20261109_v24_co6_op_traceaad_v24_rep3",
+        "cutoff": 245,
+        "window": [
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "status": "success",
+        "seconds": 10.42502721096389,
+        "analysis": "The evidence consistently shows that switching from squared distance denominators ($d^2$) to linear distance denominators ($d$) in the base heuristic results in significant performance regressions (e.g., -14.2 to -13.0, -14.5 to -12.6). This indicates that for this ACO implementation on the Orienteering Problem, the quadratic penalty is necessary to maintain a strong bias towards short edges, which is critical for maximizing prize collection within tight budget constraints. Additionally, hard feasibility masks generally outperform or tie with soft exponential penalties, and adding source node prizes to the heuristic tends to degrade performance compared to destination-only prizes.",
+        "notes": [
+          {
+            "id": 1,
+            "idea": "Quadratic vs Linear Distance Penalty",
+            "when": "When defining the base desirability metric $\\eta_{ij}$ for ACO on the Orienteering Problem, specifically choosing between $p_j/d_{ij}^2$ and $p_j/d_{ij}$.",
+            "lesson": "Using a linear distance denominator ($1/d$) causes performance regression compared to a squared distance denominator ($1/d^2$). The stronger quadratic preference for short edges is required to guide ants effectively within the travel budget constraint; relaxing this penalty allows suboptimal long moves that waste budget.",
+            "evidence_ids": [
+              80
+            ]
+          },
+          {
+            "id": 2,
+            "idea": "Hard Mask vs Soft Penalty for Feasibility",
+            "when": "When enforcing the budget constraint $d_{ij} + d_{j0} \\le maxlen$ in the static edge-prior matrix, comparing binary masking (zeroing infeasible edges) against continuous exponential decay.",
+            "lesson": "Hard feasibility masks (setting infeasible edges to a minimal floor like 1e-9) perform at least as well as, and often better than, soft exponential penalties. Strictly preventing sampling of structurally infeasible edges avoids wasting pheromone updates on invalid tours, whereas soft penalties may introduce noise by keeping infeasible options slightly attractive.",
+            "evidence_ids": [
+              73
+            ]
+          }
+        ],
+        "shown_event_ids": [
+          73,
+          80,
+          150,
+          153,
+          167,
+          173,
+          184,
+          188,
+          191,
+          196,
+          213,
+          217,
+          225,
+          227,
+          230,
+          234,
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          245
+        ],
+        "usage": {
+          "prompt_tokens": 17559,
+          "total_tokens": 18043,
+          "completion_tokens": 484,
+          "prompt_tokens_details": null,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "input_tokens_counted": 17559,
+        "error": null,
+        "reason": null
+      }
+    ],
+    "source_hashes": {
+      "traceaad_v24_1/notes.py": "af36178d1e4addbc0759a421b6a0ab8d2cf45398dec80de621a3557256f0a8c3",
+      "traceaad_v24_1/__init__.py": "0f7d7cb60fff46c25644c8b5cc9a7d67e5b94fe31ac871cffc64a6e9db292c0a",
+      "traceaad_v24_1/search.py": "9ba2dde690cc0ffb28a66b34a03027eff2b31703e4660c5327cb286afb137aec",
+      "traceaad_v24_1/context.py": "5513ce51a5df88f143118c003a61a8b038e00015489b5497acae0d82a2da0ea3",
+      "traceaad_v24_1/evidence.py": "bede165c529e9cf1c0b6da6882179b1c4d189ce94f06658cd8ccff2a67ad3be8",
+      "traceaad_v24/notes.py": "c59bc2e65c9b99d8ddafd3e531df6e334b22c6d24fabbc1c2910251704d1a355",
+      "traceaad_v24/__init__.py": "5de9875c8910f4ae81494052e1dd46403d084743c0e89be1d8080983d4faa993",
+      "traceaad_v24/search.py": "5b4e69d6c734bf975af9776231a6a5cd0d3815f8a3272519781aa3c2edaa5999"
+    }
+  },
+  "smoke": [
+    {
+      "run": "20261109_v24_1_smoke_tsp",
+      "native": "experiments_result/traceaad_v24_1_validation/tsp_construct/20261109_v24_1_smoke_tsp/native",
+      "evaluations": 26,
+      "model_calls": 26,
+      "attempts": 24,
+      "best_training_fitness": 6.820211505568105,
+      "best_program": 6,
+      "best_attempt": 6,
+      "evaluation_statuses": {
+        "error": 3,
+        "success": 23
+      },
+      "reflection": [
+        {
+          "at": 16,
+          "status": "success",
+          "usage": {
+            "prompt_tokens": 5669,
+            "total_tokens": 6061,
+            "completion_tokens": 392,
+            "prompt_tokens_details": null,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            }
+          },
+          "notes": [
+            {
+              "id": 1,
+              "idea": "Destination-Aware vs Local Connectivity Penalty",
+              "when": "When selecting the next node in a TSP heuristic, comparing strategies that penalize based on distance to the final destination versus distance to the nearest remaining unvisited neighbor.",
+              "lesson": "Using the minimum distance to other unvisited nodes as a lookahead penalty causes performance regression compared to using the distance to the destination. The destination term acts as a crucial anchor for tour closure, whereas local connectivity metrics can lead to suboptimal clustering or dead-ends.",
+              "evidence_ids": [
+                11
+              ],
+              "active": true,
+              "source_ids": [
+                11
+              ]
+            },
+            {
+              "id": 2,
+              "idea": "Dynamic Weighting of Destination Cost",
+              "when": "When combining immediate travel cost with a return-to-start cost in the scoring function.",
+              "lesson": "Applying a dynamic weight to the destination distance (e.g., inversely proportional to remaining nodes or square root of count) improves results over a static unweighted sum. This allows the heuristic to prioritize local proximity early in the tour and shift focus to efficient return paths later.",
+              "evidence_ids": [
+                8
+              ],
+              "active": true,
+              "source_ids": [
+                8
+              ]
+            }
+          ]
+        }
+      ],
+      "experience_used_by_operator": {
+        "Refine": 5,
+        "Crossover": 2
+      },
+      "explore_without_experience": true,
+      "restore_without_calls_verified": true,
+      "heldout": "not_run_smoke_only"
+    },
+    {
+      "run": "20261109d_v24_1_smoke_tsp",
+      "native": "experiments_result/traceaad_v24_1_validation/tsp_construct/20261109d_v24_1_smoke_tsp/native",
+      "evaluations": 20,
+      "model_calls": 20,
+      "attempts": 20,
+      "best_training_fitness": 6.18989507194251,
+      "best_program": 8,
+      "best_attempt": 8,
+      "evaluation_statuses": {
+        "success": 20
+      },
+      "reflection": [
+        {
+          "at": 15,
+          "status": "success",
+          "usage": {
+            "prompt_tokens": 5701,
+            "total_tokens": 6102,
+            "completion_tokens": 401,
+            "prompt_tokens_details": null,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            }
+          },
+          "notes": [
+            {
+              "id": 1,
+              "idea": "Constructive Lookahead vs Lower-Bound Estimation",
+              "when": "Selecting the next node in TSP where future cost is estimated either by the weight of a Minimum Spanning Tree (MST) over remaining nodes or by simulating a Greedy Nearest Neighbor (GNN) path from the candidate to the destination.",
+              "lesson": "Using GNN simulation to estimate future cost outperforms MST estimation because MST provides a loose lower bound that underestimates actual path lengths, leading to suboptimal branch choices. GNN simulation better approximates the actual traversal cost.",
+              "evidence_ids": [
+                8
+              ],
+              "active": true,
+              "source_ids": [
+                8
+              ]
+            },
+            {
+              "id": 2,
+              "idea": "Beam Search Constraint for Complex Heuristics",
+              "when": "Applying computationally expensive heuristics like GNN lookahead or MST calculation during node selection, comparing full-node evaluation against a restricted beam of top-k nearest neighbors.",
+              "lesson": "Complex heuristics must be applied to a restricted beam of candidates (e.g., top 5 nearest) to maintain performance and decision quality; applying them to all unvisited nodes or using simpler but less informative global metrics (like weighted distance sums) results in regression compared to the beam-based approach.",
+              "evidence_ids": [
+                15
+              ],
+              "active": true,
+              "source_ids": [
+                15
+              ]
+            }
+          ]
+        }
+      ],
+      "experience_used_by_operator": {
+        "Crossover": 3,
+        "Refine": 2
+      },
+      "explore_without_experience": true,
+      "restore_without_calls_verified": true,
+      "heldout": "not_run_smoke_only"
+    }
+  ],
+  "checks": {
+    "pytest_passed": 448,
+    "pytest_warnings": 6,
+    "targeted_passed": 64,
+    "live_reflection_count_agreement": 20
+  },
+  "frozen_source_prefix_sha256": {
+    "traceaad_v24/graph_colouring/20261109_v24_co6_gcol_traceaad_v24_rep1:85": "23ce9fcba3ac33f461d0e245ea02cc97c49d981fa8222c7407bb57a68005b788",
+    "traceaad_v24/jssp_construct/20261109_v24_co6_jssp_traceaad_v24_rep1:136": "6fef01986055b7d02fc5fe9b004cd37c52589eaa521b321b58228c4dcef99c25",
+    "traceaad_v24/op_aco/20261109_v24_co6_op_traceaad_v24_rep3:245": "15a48b9111db0c725e7393d9c0b6f92b3fe7c44829a3c2e8ad067b8f0ced94a2"
+  }
+}

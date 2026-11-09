@@ -39,3 +39,22 @@ def test_common_default_and_explicit_historical_backend():
     assert DEFAULT_BACKEND == 'server3'
     assert resolve_backend('deepseek', None, None, None).model == 'deepseek-v4.1-flash'
     assert 'deepseek' in HOSTED_BACKENDS and 'server3' not in HOSTED_BACKENDS
+
+
+def test_prompt_count_uses_serving_chat_template_without_a_gpu_lease(monkeypatch):
+    import core.llm
+    state = {'instance_id': 'a', 'endpoints': [{'base_url': 'http://one/v1', 'model': 'qwen'}]}
+    monkeypatch.setattr(routing, 'scheduler_status', lambda _: state)
+    calls = []
+    class Counter:
+        def __init__(self, **settings): calls.append(settings)
+        def count_prompt_tokens(self, text): return len(text)
+    monkeypatch.setattr(core.llm, 'OpenAIAPI', Counter)
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError('Tokenization must not request a GPU slot')
+    monkeypatch.setattr(routing, 'Lease', forbidden)
+    model = routing.ScheduledModel('/fake', 'test').for_role(REFLECTION_SCHEMA)
+    assert model.count_prompt_tokens('abc') == 3
+    assert model.count_prompt_tokens('abcde') == 5
+    assert len(calls) == 1
+    assert calls[0]['extra_body'] == {'chat_template_kwargs': {'enable_thinking': False}}

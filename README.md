@@ -16,7 +16,8 @@
 | 查阅此前的V20 | [V20机制](docs/机制设计/V20.md) |
 | 运行 Base 的独立实现 | [traceaad_base](traceaad_base/README.md) |
 | 了解只含上下文机制的 V21 | [V21 机制](docs/机制设计/V21.md) |
-| 运行 Base、V20、V21、V22 或 V23 | [实验入口](experiments/traceaad_v20/README.md) |
+| 了解带计算条件的经验机制 V24.1 | [V24.1 机制](docs/机制设计/V24.1.md) |
+| 运行 Base、V20、V21、V22、V23、V24 或 V24.1 | [实验入口](experiments/traceaad_v20/README.md) |
 | 设计、运行或复查实验 | [实验入口](experiments/README.md) |
 | 查阅第三方提示的来源版本 | [来源记录](baselines/UPSTREAM.md) |
 
@@ -24,6 +25,7 @@
 
 | 目录 | 内容 |
 | --- | --- |
+| `traceaad_v24_1/` | V21加条件经验与完整实现反思；V24的旧设计笔记保留于 `traceaad_v24/`。 |
 | `traceaad_v23/` | Base加机制1，与V22共用轨迹价值预测和预算分配。 |
 | `traceaad_v22/` | V21加机制1：轨迹价值预测、两步预算分配和轨迹上下文。 |
 | `traceaad_v20/` | 此前的轨迹评分、轨迹上下文与经验学习实现。 |
