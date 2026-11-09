@@ -83,6 +83,20 @@ journalctl --user -u traceaad-watch.service -n 5 --no-pager
 
 13:34:49检查确认18路存活且运行，全部完成真实评价，共42次已提交评价，模型请求错误为0；4次已提交演化的动作、参考和评价计数正确，实际提示均使用Base输出顺序。V22的18路继续运行，冻结源码未改动。V23已加入主实验名单，现有同步、看板与检查服务自动识别。配置、源码、测试与启动证据见[启动记录](../../experiments_result/traceaad_v23/launch_20261107/README.md)。
 
+## V22.1 与 V23.1 正式批次（11月8日）
+
+`20261108_v22_1_co6` 与 `20261108_v23_1_co6` 于北京时间11月8日19:22在server4同一冻结快照启动，各六任务×种子0/1/2，共18路，每路1000次评价，初始化5个有效程序，训练后自动做独立主测试。V22.1为V21加最新版机制1，V23.1为Base加同一机制1：直接学习真实冠军改善，只在近期且质量状态可比的历史内借用，并按经验强度修正Base联合概率，单动作乘子封顶4倍。
+
+源码冻结于`/home/fzy/code/LLM4AD/TraceAAD_runs/20261108_traceaad_v22_1_v23_1`，424份文件按SHA-256核验。结果入口为`experiments_result/traceaad_v22_1`与`experiments_result/traceaad_v23_1`（server4主仓库中的符号链接）。两批六任务配置分别与`20261105c_v21_co6`、`20261105_base_co6`逐字段差异为零。远端193项测试通过，1项进程竞态测试首跑失败、隔离复跑通过。训练16例共享160秒，主测试50例共享500秒，内存2 GiB。
+
+19:27–19:29启动检查确认36路全部存活且running，均已完成真实评价，模型请求错误为0；已提交演化的动作、记录字段、评价计数与提示顺序通过只读核对。两批已加入本机与server4主实验名单。启动证据见`experiments_result/traceaad_v22_1/launch_20261108/`与`experiments_result/traceaad_v23_1/launch_20261108/`。
+
+## V24 正式批次（11月9日）
+
+`20261109_v24_co6` 于北京时间11月9日11:48在server4启动18路，六任务×种子0/1/2，每路1000次评价，初始化5个有效程序，训练后自动做独立主测试。V24为V21加机制3，对照为`20261105c_v21_co6`。反思请求经同一调度器发出，不占评价预算，token 汇总在 `summary.json` 的 `auxiliary.reflect`。
+
+源码冻结于`/home/fzy/code/LLM4AD/TraceAAD_runs/20261109b_traceaad_v24`，结果入口为`experiments_result/traceaad_v24`（server4主仓库中的符号链接）。Base、V21、benchmarks与core的Python文件与V21正式快照逐文件一致；远端80项测试通过。同一快照的`experiments_result/replay/`保存反思回放，`20261109_traceaad_v24`快照保存旧提示的TSP冒烟。启动证据见[启动记录](../../experiments_result/traceaad_v24/launch_20261109/README.md)。
+
 ## server3 入口
 
 | 对象 | 位置 |

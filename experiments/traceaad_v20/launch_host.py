@@ -1,4 +1,4 @@
-"""Preview or start independently recorded Base, V20, V21, V22 or V23 searches on the current host."""
+"""Preview or start independently recorded Base, V20, V21, V22, V22.1, V23, V23.1 or V24 searches on the current host."""
 
 import argparse
 from datetime import datetime
@@ -20,12 +20,17 @@ from .scheduling import scheduler_status
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _slug(method):
+    return method.replace(".", "_")
+
+
 def build_plan(args):
     plan = []
+    slug = _slug(args.method)
     for task in CO_TASKS:
         for seed in range(args.repeats):
-            name = f"{args.batch}_{TASK_SHORT[task]}_traceaad_{args.method}_rep{seed + 1}"
-            session = f"{args.batch}_{TASK_SHORT[task]}_{args.method}_r{seed + 1}"
+            name = f"{args.batch}_{TASK_SHORT[task]}_traceaad_{slug}_rep{seed + 1}"
+            session = f"{args.batch}_{TASK_SHORT[task]}_{slug}_r{seed + 1}"
             directory = ROOT / "experiments_result" / args.experiment / task / name
             command = [sys.executable, "-u", "-m", "experiments.traceaad_v20.run",
                        "--method", args.method, "--backend", args.backend, "--task", task, "--run-name", name, "--batch", args.batch,
@@ -52,7 +57,7 @@ def build_plan(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--method", choices=("v20", "v21", "v22", "v23", "base"), default="v20")
+    parser.add_argument("--method", choices=("v20", "v21", "v22", "v22.1", "v22_1", "v23", "v23.1", "v23_1", "v24", "base"), default="v20")
     parser.add_argument("--backend", choices=("scheduled",), default="scheduled")
     for feature in ("trajectory-scoring","trajectory-context","reference-selection","experience-learning"):
         parser.add_argument("--no-"+feature,action="store_true")
@@ -84,7 +89,7 @@ def main(argv=None):
         parser.error("scheduled backend requires --scheduler-socket")
     path = ROOT / "experiments_result" / args.experiment / f"batch_{args.batch}.json"
     manifest = {
-        "batch": args.batch, "method": f"traceaad_{args.method}", "experiment": args.experiment,
+        "batch": args.batch, "method": f"traceaad_{_slug(args.method)}", "experiment": args.experiment,
         "created_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(), "suite": "co6", "repeats": args.repeats,
         "budget_per_run": args.budget, "budget_axis": "评价次数", "budget_basis": "evaluate_calls",
         "output_tokens": args.max_tokens, "temperature": 1., "initial_size": args.initial_size,

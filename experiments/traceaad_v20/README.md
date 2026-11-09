@@ -1,4 +1,4 @@
-# Base、V20、V21、V22 与 V23 的同条件入口
+# Base、V20、V21、V22、V23 与 V24 的同条件入口
 
 默认后端为 `scheduled`。Qwen3.8-27B经server4公共调度器分配到四个端点。`--method base` 调用 `traceaad_base.TraceAAD`；`--method v20` 调用完整V20；`--method v21` 调用只含机制2的V21；`--method v22` 调用V21加机制1的V22；`--method v23`调用Base加机制1的V23。
 
@@ -83,3 +83,15 @@ V23复用Base的完整生成流程和`analysis → design → code`输出，与V
 机制与验证范围见[V23](../../docs/机制设计/V23.md)。
 
 去掉 `--launch` 只输出十八路计划。恢复用单路原命令加 `--resume`：读回已完成的尝试，丢弃未完成的尝试后继续。辅助请求与tokens单列，不占评价预算。
+
+V24为V21加机制3，不需要嵌入服务。反思请求经同一调度器发出，使用独立schema，不占评价预算。正式对照为V21批次`20261105c_v21_co6`：
+
+```bash
+.venv/bin/python -m experiments.traceaad_v20.launch_host \
+  --method v24 --experiment traceaad_v24 --batch BATCH_NAME \
+  --repeats 3 --budget 1000 --initial-size 5 --seconds-per-instance 10 \
+  --scheduler-socket /tmp/traceaad-1003/scheduler.sock \
+  --env-file .env.server4 --launch
+```
+
+机制与记录见[V24](../../docs/机制设计/V24.md)。

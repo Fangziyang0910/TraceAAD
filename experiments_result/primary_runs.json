@@ -577,6 +577,66 @@
       "tsp_construct/20261107_v23_co6_tsp_traceaad_v23_rep1",
       "tsp_construct/20261107_v23_co6_tsp_traceaad_v23_rep2",
       "tsp_construct/20261107_v23_co6_tsp_traceaad_v23_rep3"
+    ],
+    "traceaad_v22_1": [
+      "cvrp_aco/20261108_v22_1_co6_cvrp_traceaad_v22_1_rep1",
+      "cvrp_aco/20261108_v22_1_co6_cvrp_traceaad_v22_1_rep2",
+      "cvrp_aco/20261108_v22_1_co6_cvrp_traceaad_v22_1_rep3",
+      "fssp_gls/20261108_v22_1_co6_fssp_traceaad_v22_1_rep1",
+      "fssp_gls/20261108_v22_1_co6_fssp_traceaad_v22_1_rep2",
+      "fssp_gls/20261108_v22_1_co6_fssp_traceaad_v22_1_rep3",
+      "graph_colouring/20261108_v22_1_co6_gcol_traceaad_v22_1_rep1",
+      "graph_colouring/20261108_v22_1_co6_gcol_traceaad_v22_1_rep2",
+      "graph_colouring/20261108_v22_1_co6_gcol_traceaad_v22_1_rep3",
+      "jssp_construct/20261108_v22_1_co6_jssp_traceaad_v22_1_rep1",
+      "jssp_construct/20261108_v22_1_co6_jssp_traceaad_v22_1_rep2",
+      "jssp_construct/20261108_v22_1_co6_jssp_traceaad_v22_1_rep3",
+      "op_aco/20261108_v22_1_co6_op_traceaad_v22_1_rep1",
+      "op_aco/20261108_v22_1_co6_op_traceaad_v22_1_rep2",
+      "op_aco/20261108_v22_1_co6_op_traceaad_v22_1_rep3",
+      "tsp_construct/20261108_v22_1_co6_tsp_traceaad_v22_1_rep1",
+      "tsp_construct/20261108_v22_1_co6_tsp_traceaad_v22_1_rep2",
+      "tsp_construct/20261108_v22_1_co6_tsp_traceaad_v22_1_rep3"
+    ],
+    "traceaad_v23_1": [
+      "cvrp_aco/20261108_v23_1_co6_cvrp_traceaad_v23_1_rep1",
+      "cvrp_aco/20261108_v23_1_co6_cvrp_traceaad_v23_1_rep2",
+      "cvrp_aco/20261108_v23_1_co6_cvrp_traceaad_v23_1_rep3",
+      "fssp_gls/20261108_v23_1_co6_fssp_traceaad_v23_1_rep1",
+      "fssp_gls/20261108_v23_1_co6_fssp_traceaad_v23_1_rep2",
+      "fssp_gls/20261108_v23_1_co6_fssp_traceaad_v23_1_rep3",
+      "graph_colouring/20261108_v23_1_co6_gcol_traceaad_v23_1_rep1",
+      "graph_colouring/20261108_v23_1_co6_gcol_traceaad_v23_1_rep2",
+      "graph_colouring/20261108_v23_1_co6_gcol_traceaad_v23_1_rep3",
+      "jssp_construct/20261108_v23_1_co6_jssp_traceaad_v23_1_rep1",
+      "jssp_construct/20261108_v23_1_co6_jssp_traceaad_v23_1_rep2",
+      "jssp_construct/20261108_v23_1_co6_jssp_traceaad_v23_1_rep3",
+      "op_aco/20261108_v23_1_co6_op_traceaad_v23_1_rep1",
+      "op_aco/20261108_v23_1_co6_op_traceaad_v23_1_rep2",
+      "op_aco/20261108_v23_1_co6_op_traceaad_v23_1_rep3",
+      "tsp_construct/20261108_v23_1_co6_tsp_traceaad_v23_1_rep1",
+      "tsp_construct/20261108_v23_1_co6_tsp_traceaad_v23_1_rep2",
+      "tsp_construct/20261108_v23_1_co6_tsp_traceaad_v23_1_rep3"
+    ],
+    "traceaad_v24": [
+      "cvrp_aco/20261109_v24_co6_cvrp_traceaad_v24_rep1",
+      "cvrp_aco/20261109_v24_co6_cvrp_traceaad_v24_rep2",
+      "cvrp_aco/20261109_v24_co6_cvrp_traceaad_v24_rep3",
+      "fssp_gls/20261109_v24_co6_fssp_traceaad_v24_rep1",
+      "fssp_gls/20261109_v24_co6_fssp_traceaad_v24_rep2",
+      "fssp_gls/20261109_v24_co6_fssp_traceaad_v24_rep3",
+      "graph_colouring/20261109_v24_co6_gcol_traceaad_v24_rep1",
+      "graph_colouring/20261109_v24_co6_gcol_traceaad_v24_rep2",
+      "graph_colouring/20261109_v24_co6_gcol_traceaad_v24_rep3",
+      "jssp_construct/20261109_v24_co6_jssp_traceaad_v24_rep1",
+      "jssp_construct/20261109_v24_co6_jssp_traceaad_v24_rep2",
+      "jssp_construct/20261109_v24_co6_jssp_traceaad_v24_rep3",
+      "op_aco/20261109_v24_co6_op_traceaad_v24_rep1",
+      "op_aco/20261109_v24_co6_op_traceaad_v24_rep2",
+      "op_aco/20261109_v24_co6_op_traceaad_v24_rep3",
+      "tsp_construct/20261109_v24_co6_tsp_traceaad_v24_rep1",
+      "tsp_construct/20261109_v24_co6_tsp_traceaad_v24_rep2",
+      "tsp_construct/20261109_v24_co6_tsp_traceaad_v24_rep3"
     ]
   },
   "default_experiment": "traceaad_v22",
@@ -613,7 +673,10 @@
     "pathwise": "PathWise",
     "reevo": "ReEvo",
     "refineevo": "RefineEvo",
-    "shinka_evo": "ShinkaEvolve"
+    "shinka_evo": "ShinkaEvolve",
+    "traceaad_v22_1": "V22.1",
+    "traceaad_v23_1": "V23.1",
+    "traceaad_v24": "V24"
   },
   "visualization_batches": {
     "traceaad_v12_0": "20261013_qwen_co6",
@@ -630,7 +693,10 @@
     "traceaad_base_20261105": "20261105_base_co6",
     "traceaad_v21c": "20261105c_v21_co6",
     "traceaad_v22": "20261107_v22_co6",
-    "traceaad_v23": "20261107_v23_co6"
+    "traceaad_v23": "20261107_v23_co6",
+    "traceaad_v22_1": "20261108_v22_1_co6",
+    "traceaad_v23_1": "20261108_v23_1_co6",
+    "traceaad_v24": "20261109_v24_co6"
   },
   "visualization_methods": [
     "traceaad_base_20261105",
@@ -648,7 +714,10 @@
     "pathwise",
     "reevo",
     "refineevo",
-    "shinka_evo"
+    "shinka_evo",
+    "traceaad_v22_1",
+    "traceaad_v23_1",
+    "traceaad_v24"
   ],
   "visualization_reference": "traceaad_base_20261105"
 }
