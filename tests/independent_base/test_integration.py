@@ -134,6 +134,18 @@ def test_package_can_be_copied_renamed_and_run_without_repository_or_dependencie
     assert "independent search and resume passed" in result.stdout
 
 
+def test_cli_keeps_parent_and_model_temperatures_separate(tmp_path):
+    from traceaad_base.cli import _config, _parser
+
+    args = _parser().parse_args([
+        "run", "--task-factory", "example:task", "--run-dir", str(tmp_path),
+        "--temperature", "0.7", "--selection-temperature", "0.1",
+    ])
+    config = _config(args)
+    assert config.temperature == 0.7
+    assert config.selection_temperature == 0.1
+
+
 @pytest.mark.parametrize("name", ["tsp_construct", "cvrp_aco", "op_aco", "online_bin_packing",
                                   "vrptw_construct", "fssp_gls", "graph_colouring", "jssp_construct"])
 def test_existing_task_examples_execute_through_independent_evaluator(name):

@@ -1,11 +1,8 @@
-"""Which programs share a computation, what changed between a parent and its child, and the source the model reads."""
+"""Normalize displayed source and describe actual parent-child code changes."""
 
 import ast
 from difflib import SequenceMatcher, unified_diff
 from functools import lru_cache
-import hashlib
-
-from traceaad_base.selection import identity
 
 REWRITE_BELOW = .5
 
@@ -27,19 +24,6 @@ def bare(code):
         return ast.unparse(_tree(code))
     except (SyntaxError, ValueError):
         return code
-
-
-@lru_cache(maxsize=None)
-def computation(code):
-    """Same parsed source apart from constant values: such programs offer no different computation to borrow."""
-    try:
-        tree = _tree(code)
-    except (SyntaxError, ValueError):
-        return identity(code)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Constant):
-            node.value = None
-    return hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest()
 
 
 def changes(before, after):

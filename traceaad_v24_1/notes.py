@@ -1,14 +1,15 @@
 """Conditional experience, atomic local updates, and the reflection interface."""
 
+from collections import Counter
 from copy import deepcopy
 import json
-
-from traceaad_v21.context import COMMON
-
-from .evidence import is_relation
+from keyword import kwlist
+from math import log, sqrt
+import re
 
 INTERVAL = 10
-CAPACITY = 6
+DISPLAY_LIMIT = 6
+UPDATE_LIMIT = 6
 REPRESENTATIVES = 3
 CONTEXT_TOKENS = 49152
 CHAT_RESERVE = 512
@@ -22,29 +23,27 @@ This search is designing the following Python function:
 {function_template}
 ```
 {score}
-[Current Experience]
+[Experience Candidates]
 {notes}
 
 {evidence}
 
 [Instruction]
 You maintain design experience for designers modifying other programs in this search.
-Resolve the one computational question in this packet. First connect each relevant actual change to its starting Program, evaluated Program and measured result. Then state which relationship changed your understanding and what it implies for a similar computation elsewhere.
+Resolve the computational question introduced by the focal edits. Connect each relevant change to its starting Program, evaluated Program and measured result. Use the task's calling semantics to trace how the changed computation reaches the decision. Explain the conditions under which the observed comparison guides a similar computation elsewhere.
 
-{common}
+Compare the experience candidates with these edits and their results. Cases from different branches can refine the same experience when they share a computational condition. Read each case through its own starting implementation, change and result, then identify the shared condition and the differences that matter. An experience listed during generation is a candidate connection; locate its computation in the evaluated code.
 
-An entry preserves a reliable relation: in this computation, what changed, what the related attempts actually showed, and what to retain, adjust or check in the next implementation. A static computational fact may need only one event; a same-start comparison or a change that works only after a supporting adjustment needs the corresponding related attempts. Select the smallest connected evidence relation that explains the lesson, using at most {representatives} events. Performance differences alone do not establish their cause. When later results improve, check whether the computation under discussion remained in the code.
-Use the task's calling semantics to locate the computation's effect. Separate what the candidate function controls from what its caller already guarantees. Results can support a conditional implementation comparison without a complete causal explanation. If the packet does not establish a new relation, keep it as an observation and return no experience update.
+An entry records the computational problem, applicable conditions, the relationship learned and its design implication. It may capture an implementation fact, a performance tradeoff, or a computation that benefits from a supporting adjustment. Choose 1–{representatives} shown Attempt events that preserve the relationship, including the cases needed for a cross-branch comparison. Tie explanations to the implemented operations and measured changes. Write the experience using self-contained computational terms.
 
-Only the related entries shown above and their source relations are under review. Other active entries stay unchanged. Use null for a new ID; existing IDs are stable. evidence_ids are Attempt IDs, not Program IDs. Preserve observations before extracting a design implication; content must stand alone without local Program labels. Unchanged entries, earlier versions and cumulative sources are retained by the system.
-Active entries: {active_count}. Capacity: {capacity}. Update or merge the related entries when this question changes their lesson; archive a related entry only if the new relation removes its design use. If no slot is available and no related entry can be revised or archived, record the understanding in analysis without creating a new entry. A weaker current implementation does not erase its implementation lesson.
+Add a reusable understanding as a new entry with a null ID. Refine or merge a shown entry when the cases develop its conditions or lesson, keeping its stable ID. Archive a shown entry when its useful content has been incorporated into another entry or the evidence establishes a replacement. The system retains entries, cumulative sources and previous versions, and selects a bounded subset for each generation. For observations that leave the experience unchanged, return empty update and archive lists.
 
 [Output]
 Return exactly one valid JSON object, in this order:
-- "analysis": In 2-4 concise sentences, first identify the specific Attempt changes and measured directions used to answer this one question, then explain what relationship changed your understanding. Do not give an overall ranking of the programs.
+- "analysis": In 2-4 concise sentences, identify the Attempt changes and measured directions, then explain the relationship and computational conditions they reveal.
 - "updates": Entries to create or revise, each with "id" (integer or null), "idea" (a short computational title), "when" (computational conditions), "lesson" (what was learned and its design implication), and "evidence_ids" (representative event IDs). Each content field uses 1-2 short sentences.
-- "archive_ids": IDs of active entries to archive. Unmentioned entries remain unchanged.
-Return only the JSON object, without Markdown fences or additional text."""
+- "archive_ids": IDs of shown entries to archive. Unmentioned entries remain unchanged.
+Use Attempt IDs in evidence_ids. Return the JSON object directly."""
 
 REFLECTION_FORMAT = {
     "type": "json_schema",
@@ -55,7 +54,7 @@ REFLECTION_FORMAT = {
             "properties": {
                 "analysis": {"type": "string"},
                 "updates": {
-                    "type": "array", "maxItems": CAPACITY,
+                    "type": "array", "maxItems": UPDATE_LIMIT,
                     "items": {
                         "type": "object", "additionalProperties": False,
                         "properties": {
@@ -69,7 +68,7 @@ REFLECTION_FORMAT = {
                         "required": list(FIELDS),
                     },
                 },
-                "archive_ids": {"type": "array", "maxItems": CAPACITY,
+                "archive_ids": {"type": "array", "maxItems": DISPLAY_LIMIT,
                                 "items": {"type": "integer"}},
             },
             "required": ["analysis", "updates", "archive_ids"],
@@ -78,14 +77,57 @@ REFLECTION_FORMAT = {
 }
 
 
+_COMMON_WORDS = frozenset(word.casefold() for word in kwlist) | frozenset(
+    "the and for from with this that these those when where which what how into over under "
+    "before after each any all its use uses using used can may has have had are was were "
+    "will would should then than also through their them they both same other one two "
+    "code function program implementation computation value result change return solve numpy".split())
+
+
+def _terms(text):
+    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+    return {word for word in re.findall(r"[^\W\d_]+", text.casefold())
+            if len(word) > 2 and word not in _COMMON_WORDS}
+
+
+def ranked_notes(notes, text):
+    """Rank short experience by IDF-weighted word overlap with the current computation."""
+    documents = [_terms(" ".join(note.get(k, "") for k in ("idea", "when", "lesson"))) for note in notes]
+    counts = Counter(term for terms in documents for term in terms)
+    weights = {term: 1 + log((1 + len(notes)) / (1 + count)) for term, count in counts.items()}
+    query = _terms(text) & weights.keys()
+    query_norm = sqrt(sum(weights[t] ** 2 for t in sorted(query)))
+    ranked = []
+    for note, terms in zip(notes, documents, strict=True):
+        norm = query_norm * sqrt(sum(weights[t] ** 2 for t in sorted(terms)))
+        score = sum(weights[t] ** 2 for t in sorted(query & terms)) / norm if norm else 0.
+        ranked.append((score, note))
+    return sorted(ranked, key=lambda row: (row[0], row[1]["id"]), reverse=True)
+
+
+def select_notes(notes, text, *, cursor):
+    """Five matches and one rotating entry keep retained experience available over time."""
+    if len(notes) <= DISPLAY_LIMIT:
+        return notes
+    rotating = sorted(notes, key=lambda n: n["id"])[cursor % len(notes)]
+    matches = [n for _, n in ranked_notes(notes, text) if n["id"] != rotating["id"]]
+    return matches[:DISPLAY_LIMIT - 1] + [rotating]
+
+
+def program_query(program):
+    """Descriptions provide recall terms; evaluated code supplies the implementation context."""
+    return "\n".join((program.code, program.design or "", program.analysis or ""))
+
+
 class Experience:
-    """Active and archived entries; old versions remain in committed reflection snapshots."""
+    """Retained knowledge and archived revisions, independent of the display budget."""
 
     def __init__(self, snapshot=None):
         self.data = deepcopy(snapshot) if snapshot is not None else {"next_id": 1, "entries": []}
 
     @property
     def active(self):
+        """All retained, unarchived knowledge, available for display selection and reflection."""
         return [{k: deepcopy(entry[k]) for k in FIELDS} for entry in self.data["entries"] if entry["active"]]
 
     def snapshot(self):
@@ -96,7 +138,8 @@ class Experience:
         value = json.loads(response)
         if (not isinstance(value, dict) or set(value) != {"analysis", "updates", "archive_ids"}
                 or not isinstance(value["analysis"], str) or not isinstance(value["updates"], list)
-                or not isinstance(value["archive_ids"], list) or len(value["updates"]) > CAPACITY):
+                or not isinstance(value["archive_ids"], list) or len(value["updates"]) > UPDATE_LIMIT
+                or len(value["archive_ids"]) > DISPLAY_LIMIT):
             raise ValueError("Expected analysis, updates and archive_ids")
         state = self.snapshot()
         entries = {entry["id"]: entry for entry in state["entries"]}
@@ -120,8 +163,10 @@ class Experience:
             sources = raw["evidence_ids"]
             if (not isinstance(sources, list) or not 1 <= len(sources) <= REPRESENTATIVES
                     or any(type(e) is not int or e not in visible_events for e in sources)
-                    or len(set(sources)) != len(sources) or not is_relation(visible_events, sources)):
-                raise ValueError("Sources must form one connected shown evidence relation")
+                    or len(set(sources)) != len(sources)):
+                raise ValueError("Sources must name distinct shown Attempt events")
+            if len({visible_events[e].key for e in sources}) != len(sources):
+                raise ValueError("Sources must represent distinct observations")
             if i is None:
                 i = state["next_id"]
                 state["next_id"] += 1
@@ -131,22 +176,18 @@ class Experience:
             previous = entries.get(i, {}).get("source_ids", [])
             entries[i] = {**update, "active": True, "source_ids": list(dict.fromkeys(previous + sources))}
             applied.append(update)
-        if sum(entry["active"] for entry in entries.values()) > CAPACITY:
-            raise ValueError("Updates would exceed six active entries")
         state["entries"] = list(entries.values())
         self.data = state
         return {"analysis": value["analysis"].strip(), "updates": applied, "archive_ids": list(archive_ids)}
 
 
-def reflection_prompt(task, notes, evidence, *, active_count):
+def reflection_prompt(task, notes, evidence):
     score = ("" if task.score_definition in task.task_description
              else f"\nScore definition: {task.score_definition}\n")
-    listed = json.dumps(notes, ensure_ascii=False, indent=2) if notes else "No experience yet."
+    listed = json.dumps(notes, ensure_ascii=False, indent=2)
     return REFLECTION_TEMPLATE.format(task_description=task.task_description,
                                       function_template=task.function_template, score=score,
-                                      notes=listed, evidence=evidence, common=COMMON,
-                                      capacity=CAPACITY, representatives=REPRESENTATIVES,
-                                      active_count=active_count)
+                                      notes=listed, evidence=evidence, representatives=REPRESENTATIVES)
 
 
 def experience_block(notes):

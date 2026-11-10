@@ -3,12 +3,11 @@
 import math
 import random
 from dataclasses import asdict, dataclass
-from itertools import groupby
 
 import numpy as np
 
 from traceaad_base import Config
-from traceaad_base.selection import RANK_EXPONENT, VISIT_SMOOTHING, identity
+from traceaad_base.selection import SELECTION_RULE, boltzmann_weights, identity
 
 OPERATORS = ("Refine", "Explore", "Crossover")
 MOMENTUM_DECAY = 0.5
@@ -17,7 +16,7 @@ SHARED_NEIGHBORS = 32
 SHARED_CAP = 16.0
 SHRINKAGE = 16.0
 MULTIPLIER_CAP = 4.0
-UPDATE_RULE = "base_anchored_champion_yield_v1"
+UPDATE_RULE = "base_anchored_champion_yield_v3"
 TRAJECTORY_RULE = "continuous_origin_momentum_drawdown_v1"
 MATCHING_RULE = "quality_state_nearest32_linear_kernel_v1"
 
@@ -134,8 +133,7 @@ class Selector:
             "update_rule": UPDATE_RULE,
             "trajectory_rule": TRAJECTORY_RULE,
             "matching_rule": MATCHING_RULE,
-            "rank_exponent": RANK_EXPONENT,
-            "visit_smoothing": float(VISIT_SMOOTHING),
+            "base_selection_rule": SELECTION_RULE,
             "momentum_decay": MOMENTUM_DECAY,
             "history_window_cap": HISTORY_WINDOW_CAP,
             "shared_neighbors": SHARED_NEIGHBORS,
@@ -175,52 +173,18 @@ class Selector:
             ancestor_best,
         )
 
-    def qualities(self) -> dict[int, float]:
-        ordered = sorted(self.nodes.values(), key=lambda node: (node.fitness, node.id))
-        result: dict[int, float] = {}
-        offset = 0
-        for _, tied in groupby(ordered, key=lambda node: node.fitness):
-            group = list(tied)
-            rank = offset + (len(group) + 1) / 2.0
-            weight = rank**-RANK_EXPONENT
-            for node in group:
-                result[node.id] = weight
-            offset += len(group)
-        return result
-
-    def model_calls_spent(self) -> dict[int, int]:
-        spent = dict.fromkeys(self.nodes, 0)
-        for record in self.history:
-            if record.action.parent_id in spent:
-                spent[record.action.parent_id] += record.model_calls
-        return spent
-
-    def family_champions(self) -> list[Node]:
-        champions: dict[int, Node] = {}
-        for node in self.nodes.values():
-            old = champions.get(node.family)
-            if old is None or (node.fitness, node.id) < (old.fitness, old.id):
-                champions[node.family] = node
-        return sorted(champions.values(), key=lambda node: (node.fitness, node.id))[:2]
-
     @staticmethod
-    def actions_for(parent: Node, references: list[Node]) -> list[Action]:
+    def actions_for(parent: Node, reference: Node | None) -> list[Action]:
         actions = [Action(parent.id, operator) for operator in OPERATORS[:2]]
-        reference = min(
-            (node for node in references if node.family != parent.family),
-            key=lambda node: (node.fitness, node.id),
-            default=None,
-        )
         if reference is not None:
             actions.append(Action(parent.id, "Crossover", reference.id))
         return actions
 
-    def actions(self) -> list[Action]:
-        references = self.family_champions()
+    def actions(self, reference_ids: dict[int, int | None]) -> list[Action]:
         return [
             action
             for node in sorted(self.nodes.values(), key=lambda node: node.id)
-            for action in self.actions_for(node, references)
+            for action in self.actions_for(node, self.nodes.get(reference_ids[node.id]))
         ]
 
     def quality_state(self, action: Action) -> tuple[float, ...]:
@@ -372,23 +336,27 @@ class Selector:
         budget = (config or Config()).evaluation_budget
         return self._estimates([action], evaluation_budget=budget, first_only=first_only)[0]
 
-    def allocation(self, config: Config | None = None, *, first_only: bool = False):
+    def allocation(self, config: Config | None = None, *, first_only: bool = False,
+                   reference_ids: dict[int, int | None]):
         """Return actions, Base probabilities, estimates, final probabilities, diagnostics."""
         config = config or Config()
         if not self.nodes:
             raise ValueError("No valid parent candidates")
-        actions = self.actions()
-        quality = self.qualities()
-        spent = self.model_calls_spent()
+        actions = self.actions(reference_ids)
+        quality = boltzmann_weights(
+            {node.id: node.fitness for node in self.nodes.values()}, config.selection_temperature
+        )
         operator_weights = {
             "Refine": config.refine_weight,
             "Explore": config.explore_weight,
             "Crossover": config.crossover_weight,
         }
         base_weights = [
-            quality[action.parent_id]
-            * (VISIT_SMOOTHING / (VISIT_SMOOTHING + spent[action.parent_id]))
-            * operator_weights[action.operator]
+            quality[action.parent_id] * (
+                operator_weights[action.operator]
+                + (config.crossover_weight if action.operator == "Explore"
+                   and reference_ids[action.parent_id] is None else 0.0)
+            )
             for action in actions
         ]
         base_sum = sum(base_weights)
@@ -431,14 +399,15 @@ class Selector:
         return actions, beta, estimates, probs, diagnostics
 
     def choose(
-        self, remaining_evaluations: int, rng: random.Random, config: Config | None = None
+        self, remaining_evaluations: int, rng: random.Random, config: Config | None = None,
+        *, reference_ids: dict[int, int | None],
     ) -> tuple[Action, dict]:
         if remaining_evaluations < 1:
             raise ValueError("No evaluation budget remains")
         config = config or Config()
         first_only = remaining_evaluations == 1
         actions, beta, estimates, probs, diagnostics = self.allocation(
-            config, first_only=first_only
+            config, first_only=first_only, reference_ids=reference_ids
         )
         index = rng.choices(range(len(actions)), weights=probs, k=1)[0]
         chosen = actions[index]

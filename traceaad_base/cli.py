@@ -61,6 +61,8 @@ def _parser():
     run.add_argument("--initial-size", type=int, default=None)
     run.add_argument("--seed", type=int, default=None)
     run.add_argument("--temperature", type=float, default=None)
+    run.add_argument("--selection-temperature", type=float, default=None,
+                     help="Boltzmann parent temperature in fitness units; independent of model temperature")
     run.add_argument("--max-tokens", type=int, default=None)
     run.add_argument("--model-timeout", type=float, default=None)
     run.add_argument("--no-example", action="store_true")

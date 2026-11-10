@@ -3,7 +3,7 @@
 import pytest
 
 from traceaad_base import Evaluation, Program
-from traceaad_v21.representation import bare
+from traceaad_v21_1.representation import bare
 from traceaad_v24_1.evidence import Event, build, questions, render
 
 
@@ -127,3 +127,28 @@ def test_no_code_change_is_an_observation_and_rewrites_do_not_create_false_same_
     events = {1: Event(1, a, b), 2: Event(2, a, c), 3: Event(3, a, d)}
     assert packet(events, [1]).reason == "no_new_computational_question"
     assert all(q.kind == "single_change" for q in questions(events, [2, 3]))
+
+
+@pytest.mark.parametrize("recall", ["content", "exposure"])
+def test_independent_branch_recalls_complete_experience_sources(recall):
+    a = program(10, "def solve(x):\n    distance = x + 1\n    return distance\n")
+    a1 = program(11, "def solve(x):\n    distance = x + 1\n    return distance / 10\n", a)
+    b = program(20, "def solve(x):\n    scale = x * 2\n    return scale + 3\n")
+    b1 = program(21, "def solve(x):\n    scale = x * 2\n    return scale / 5 + 3\n", b)
+    note = {"id": 1, "idea": "Scale normalization", "when": "Scores have different scale.",
+            "lesson": "Normalize the scale before combination.", "evidence_ids": [1]}
+    if recall == "exposure":
+        note = {**note, "idea": "Calibration", "when": "Heterogeneous magnitudes.",
+                "lesson": "Calibrate heterogeneous magnitudes."}
+    events = {1: Event(1, a, a1), 2: Event(2, b, b1, experience_ids=(1,) if recall == "exposure" else ())}
+    material = packet(events, [2], [note])
+    assert material.related_ids == (1,) and material.event_ids == (1, 2)
+    assert bare(a.code) in material.prompt and bare(b.code) in material.prompt
+    assert "Attempt 1: Program 10 -> Program 11" in material.prompt
+    assert "Attempt 2: Program 20 -> Program 21" in material.prompt
+    if recall == "exposure":
+        assert "Experience available during generation: [1]" in material.prompt
+    # An oversized cross-branch source leaves the focal case available and the note uneditable.
+    base = packet(events, [2])
+    limited = packet(events, [2], [note], limit=base.input_size)
+    assert limited.related_ids == () and limited.event_ids == (2,)

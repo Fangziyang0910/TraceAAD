@@ -17,6 +17,17 @@ def test_watch_distinguishes_live_search_from_missing_session_and_test():
     assert "主测试缺失" in batch_issues({"runs": [row]}, plan, set())[0]
 
 
+def test_intentionally_deferred_and_queued_runs_are_not_crashes():
+    heldout = {"failed": [], "mismatched": [], "unverified": [], "missing": ["test"]}
+    plan = [{"run_name": "slow", "session": "slow", "status": "deferred"},
+            {"run_name": "next", "session": "next", "status": "queued"}]
+    payload = {"runs": [{"name": "slow", "status": "stopped", "heldout": heldout},
+                        {"name": "next", "status": "queued", "heldout": heldout}]}
+    assert batch_issues(payload, plan, {"controller"}, queue_session="controller") == []
+    assert batch_issues(payload, plan, set(), queue_session="controller") == [
+        "等待队列的控制会话已退出: controller"]
+
+
 def test_active_batches_are_those_on_server4_with_a_primary_run_not_complete_here(monkeypatch, tmp_path):
     # b_rerun is the longest prefix of its run; a's run is complete; c's manifest is not on server4.
     monkeypatch.setattr(watch_server4, "RESULTS", tmp_path)

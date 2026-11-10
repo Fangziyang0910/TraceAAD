@@ -177,7 +177,9 @@ class ResultsMonitor:
             manifest = read_object(directory / f'batch_{batch}.json')
             allowed.update(f"{row['task']}/{row['run_name']}" for row in manifest.get('plan', [])
                            if row.get('task') and row.get('run_name'))
-        return [p for p in paths if p.parent.relative_to(directory).as_posix() in allowed]
+        tasks = primary.get('visualization_tasks', {}).get(directory.name)
+        return [p for p in paths if p.parent.relative_to(directory).as_posix() in allowed
+                and (tasks is None or p.parent.parent.name in tasks)]
 
     def _journal_is_hot(self, run_dir: Path, *, max_age_sec: float = 1200.0) -> bool:
         """A run whose journal was appended recently is live even without a summary.

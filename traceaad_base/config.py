@@ -1,6 +1,7 @@
 """Search settings for TraceAAD Base."""
 
 from dataclasses import dataclass
+import math
 
 
 @dataclass(frozen=True)
@@ -8,6 +9,7 @@ class Config:
     evaluation_budget: int = 1000
     initial_size: int = 5
     temperature: float = 1.0
+    selection_temperature: float = 1.0
     max_tokens: int = 16384
     model_timeout: float = 600.0
     seed: int = 0
@@ -20,3 +22,7 @@ class Config:
     refine_weight: float = 0.45
     explore_weight: float = 0.30
     crossover_weight: float = 0.25
+
+    def __post_init__(self):
+        if not math.isfinite(self.selection_temperature) or self.selection_temperature <= 0:
+            raise ValueError("selection_temperature must be finite and positive")

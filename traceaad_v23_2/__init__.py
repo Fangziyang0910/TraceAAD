@@ -1,4 +1,4 @@
-"""TraceAAD V24: V21 with mechanism 3, design notes revised from the search's interventions."""
+"""V23.2: Boltzmann Base plus trajectory allocation and optional trajectory references."""
 
 from traceaad_base import Config
 

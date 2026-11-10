@@ -7,7 +7,7 @@
 | 设计实验、核对比较条件 | [实验条件](PROTOCOL.md) |
 | 查询状态、恢复、远端操作 | [操作说明](infra/AGENT_OPERATIONS.md) |
 | 找到源码、反馈与最终结果 | [结果格式](infra/SEARCH_FORMAT.md) |
-| 运行 Base、V21、V22.1、V23.1、V24 与 V24.1 | [统一入口](traceaad/README.md)，用 `--method` 选择方法 |
+| 运行 Base、V21.1、V22.2、V23.2 与 V24.1 | [统一入口](traceaad/README.md)，用 `--method` 选择方法 |
 | 复查历史版本的批次 | server4 上该批次的冻结源码快照，或 git 历史 |
 
 ## 训练可视化
@@ -21,6 +21,8 @@ uv run python -m experiments.visualization --host 0.0.0.0 --port 8765
 浏览器打开 `http://10.150.68.218:8765/`；本机也可使用 `http://127.0.0.1:8765/`。用 `--experiment` 选择方法目录，或用 `--batch` 筛选运行批次。看板读取当前结果格式，在进程内保留增量状态，不改写实验记录。
 
 当前主实验范围由[主实验名单](../experiments_result/primary_runs.json)固定：12 个基线和当前 TraceAAD，每个方法六任务 × 种子 0／1／2，共 18 路 Qwen3.8 实验。看板还按名单中的 `visualization_batches` 读取历史 TraceAAD 正式批次，并按版本分别展示。默认对比全部版本和基线；未用完预算的训练结果会标记。名单沿用既有基线盘点，不按成绩或完成情况挑选运行。ReEvo、FunSearch 的 GGUF 第三路属于主实验；EoH 额外的 GGUF 种子 0 六路和其他先导实验不进入看板。
+
+当前TraceAAD四任务阶段先运行TSP、CVRP、FSSP、OP，各版本12路；图着色与JSSP暂缓，原六任务数据保留。`visualization_tasks`只过滤指定当前版本的展示，不删除运行。Base、V23.2和V21.1共36路，V22.2与V24.1各12路等待自动补位，配置与恢复见[四任务记录](../docs/记录/2026-11-09-四任务阶段与36路补位队列.md)。
 
 主对比使用 `variant` 为空的原主测试。`relaxed_time_cpu120_wall600` 等放宽限制补测保留在原始 `heldout.json` 中，不再生成单独的默认对比对象，也不替代主测试失败或缺失。新增正式批次时需更新主实验名单；没有该名单的结果目录仍可按原方式查看全部记录。
 

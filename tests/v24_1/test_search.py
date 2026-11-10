@@ -9,9 +9,10 @@ import pytest
 
 from traceaad_base import Config, Evaluation, Task
 from traceaad_base.models import Attempt
-from traceaad_v21.context import context as v21_context
-from traceaad_v21.search import TraceAAD as V21
+from traceaad_v21_1.context import context as v21_context
+from traceaad_v21_1.search import TraceAAD as V21
 from traceaad_v24_1 import TraceAAD
+from traceaad_v24_1.context import EXPLORE
 from traceaad_v24_1.evidence import build
 from traceaad_v24_1.notes import (CHAT_RESERVE, REFLECTION_FORMAT, REFLECTION_TOKENS,
                                   experience_block, reflection_prompt)
@@ -149,7 +150,7 @@ def test_whole_question_deferral_survives_restore(tmp_path):
         full.step()
     unread = list(range(4, 14))
     material = build(full.events, unread, [], lambda related, text: reflection_prompt(
-        task(), related, text, active_count=0), len, full.input_limit)
+        task(), related, text), len, full.input_limit)
     size = material.input_size
     context_tokens = REFLECTION_TOKENS + CHAT_RESERVE + size
     limited = search(tmp_path / "limited", reflection_context_tokens=context_tokens)
@@ -223,17 +224,27 @@ def test_selection_evaluation_and_generation_budget_match_v21(tmp_path):
         (x.parent_id, x.operator, x.reference_id) for x in revised.attempts]
 
 
-@pytest.mark.parametrize("operator", ["Refine", "Crossover"])
-def test_no_experience_keeps_the_complete_v21_instruction(tmp_path, operator):
+@pytest.mark.parametrize("operator", ["Refine", "Crossover", "Explore"])
+def test_no_experience_keeps_v21_material_with_positive_operator_guidance(tmp_path, operator):
     run = search(tmp_path)
     for _ in range(3):
         run.step()
     parent = run.archive[1]
     reference = run.archive[2] if operator == "Crossover" else None
     attempt = Attempt(4, parent.id, operator, reference.id if reference else None)
-    expected, instruction, _ = v21_context(run.archive, parent, operator, reference, run.config)
-    assert run.evolution_prompt(attempt, parent, reference) == run.prompts._render(
-        expected, instruction, has_scores=True)
+    expected, _, view = v21_context(run.archive, parent, operator, reference, run.config)
+    prompt = run.evolution_prompt(attempt, parent, reference)
+    assert expected in prompt and attempt.record["context"] == view
+    assert "[Design Experience]" not in prompt and attempt.record["experience_ids"] == []
+    assert not re.search(r"\b(do not|does not|not merely|cannot|never|avoid|without)\b", prompt, re.I)
+    output = prompt.split("[Output]")[1]
+    assert output.index('"analysis"') < output.index('"code"') < output.index('- "design"')
+    if operator == "Refine":
+        assert "keeping its main mechanism" in prompt
+    elif operator == "Crossover":
+        assert "reference computation" in prompt
+    else:
+        assert "Introduce a different computation" in prompt
 
 
 @pytest.mark.parametrize("operator", ["Refine", "Crossover", "Explore"])
@@ -251,7 +262,7 @@ def test_operator_uses_conditions_without_changing_v21_material_or_exposing_sour
     text, instruction, view = v21_context(run.archive, parent, operator, reference, run.config)
     assert attempt.record["context"] == view
     if operator == "Explore":
-        assert prompt == run.prompts._render(text, instruction, has_scores=False)
+        assert prompt == run.prompts._render(text, EXPLORE, has_scores=False)
         assert attempt.record["experience_ids"] == []
     else:
         assert experience_block(run.experience.active) + "\n\n" + text in prompt
@@ -324,10 +335,102 @@ def test_experiment_entry_and_launcher_register_both_aliases_and_report_reflecti
     assert summary["auxiliary"]["reflect"]["requests"] == 2
     assert native["reflection_settings"]["interval"] == 10
     assert run.METHODS["v24.1"] == run.METHODS["v24_1"]
-    args = Namespace(method="v24.1", batch="new", experiment="traceaad_v24_1", repeats=3, backend="scheduled",
-                     budget=1000, initial_size=5, max_tokens=16384, model_timeout=600,
+    args = Namespace(tasks=None, method="v24.1", batch="new", experiment="traceaad_v24_1", repeats=3, backend="scheduled",
+                     budget=1000, initial_size=5, max_tokens=16384, model_timeout=600, selection_temperature=1.0,
+                     trajectory_reference_embedding=False,
                      scheduler_socket="/fake", seconds_per_instance=10., env_file=None, skip_heldout=False)
     plan = build_plan(args)
     assert len(plan) == 18 and all("--method" in row["command"] for row in plan)
     assert all("traceaad_v24_1" in row["run_name"] for row in plan)
     capsys.readouterr()
+
+
+def test_cross_branch_feedback_and_new_knowledge_survive_display_budget_and_resume(tmp_path):
+    class BranchGenerator(Generator):
+        def complete(self, prompt, **settings):
+            self.n += 1
+            self.prompts.append(prompt)
+            if self.n == 1:
+                code = "def solve(x):\n    scale = 100.\n    return x + scale\n"
+            elif self.n == 2:
+                code = "def solve(x):\n    magnitude = 1000.\n    offset = 4.\n    return magnitude + offset\n"
+            elif self.n <= 12:
+                code = f"def solve(x):\n    scale = 100.\n    return x + scale / {self.n}\n"
+            else:
+                assert "Normalize the magnitude before combination." in prompt or "before adding the offset" in prompt
+                code = ("def solve(x):\n    magnitude = 1000.\n    offset = 4.\n"
+                        f"    return magnitude / {self.n} + offset\n")
+            return json.dumps({"analysis": "Normalize the magnitude used in the decision.",
+                               "code": code, "design": "Combine the normalized magnitude with the remaining term."})
+
+    class BranchReflector(Reflector):
+        def complete(self, prompt, **settings):
+            self.prompts.append(prompt)
+            new_ids = json.loads(re.search(r"New events: (\[[^\n]*\])", prompt)[1])
+            source = max(new_ids)
+            main = {"id": None, "idea": "Magnitude normalization", "when": "Different magnitudes enter a decision.",
+                    "lesson": "Normalize the magnitude before combination.", "evidence_ids": [source]}
+            if source <= 12:
+                updates = [main, *[{**main, "idea": f"Population restart {i}",
+                                    "when": "Population search restarts.", "lesson": "Reuse restart candidates."}
+                                   for i in range(5)]]
+            else:
+                assert "Program 1" in prompt and "Program 2" in prompt
+                assert "Experience available during generation: [1, 2, 3, 4, 5, 6]" in prompt
+                updates = [
+                    {**main, "id": 1, "when": "A magnitude and an additive offset enter the decision.",
+                     "lesson": "Normalize the magnitude before adding the offset.", "evidence_ids": [12, source]},
+                    {**main, "idea": "Additive offset", "when": "The normalized magnitude shares a decision with an offset.",
+                     "lesson": "Keep the additive offset at its intended scale."},
+                ]
+            return json.dumps({"analysis": "The two branches reveal how normalization interacts with combination.",
+                               "updates": updates, "archive_ids": []})
+
+    def choose_branch(run):
+        def select(attempt_id):
+            return run.archive[1 if attempt_id <= 12 else 2], "Refine", None, {}
+        run.select = select
+
+    config = Config(evaluation_budget=24, initial_size=2)
+    generator, reflector = BranchGenerator(), BranchReflector()
+    run = search(tmp_path / "first", generator, reflector, config=config)
+    choose_branch(run)
+    for _ in range(23):
+        run.step()
+    assert len(reflector.prompts) == 2 and len(run.experience.active) == 7
+    first, revised = run.attempts[11].record["reflection"], run.attempts[21].record["reflection"]
+    assert first["status"] == revised["status"] == "success"
+    assert first["updates"][0]["id"] == revised["updates"][0]["id"] == 1
+    assert revised["updates"][0]["evidence_ids"] == [12, 22]
+    assert run.events[12].parent.id == 1 and run.events[22].parent.id == 2
+    assert "magnitude / 13 + offset" in run.events[13].child.code
+    assert run.events[13].experience_ids == (1, 2, 3, 4, 5, 6)
+    assert 7 in run.attempts[22].record["experience_ids"]
+    assert len(run.attempts[22].record["experience_ids"]) == 6
+    assert 22 in revised["reviewed_event_ids"] and 22 not in run.unreviewed_events
+    saved = run.snapshot()
+    shutil.copytree(tmp_path / "first", tmp_path / "resumed")
+    resumed_generator, resumed_reflector = BranchGenerator(start=23), BranchReflector()
+    resumed = search(tmp_path / "resumed", resumed_generator, resumed_reflector, config=config, resume=True)
+    choose_branch(resumed)
+    assert resumed.snapshot() == saved and resumed.events == run.events
+    assert resumed_generator.prompts == resumed_reflector.prompts == []
+    run.step()
+    resumed.step()
+    assert generator.prompts[-1] == resumed_generator.prompts[-1]
+    assert resumed.snapshot() == run.snapshot()
+    assert run.model_calls == run.evaluations_used == 24
+    for prompt in reflector.prompts + [generator.prompts[-1]]:
+        assert not re.search(r"\b(do not|does not|not merely|cannot|never|avoid|without)\b", prompt, re.I)
+
+
+def test_old_experience_protocol_is_rejected_before_log_repair(tmp_path):
+    run = search(tmp_path)
+    config = run.store.read("run_config.json")
+    config["reflection_settings"]["organization"] = "focused_relations"
+    run.store.write("run_config.json", config)
+    calls = tmp_path / "calls.jsonl"
+    calls.write_bytes(b'{"unfinished":')
+    with pytest.raises(ValueError, match="resume settings: reflection_settings"):
+        search(tmp_path, resume=True)
+    assert calls.read_bytes() == b'{"unfinished":'

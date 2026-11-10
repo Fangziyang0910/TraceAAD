@@ -585,12 +585,6 @@
       "fssp_gls/20261108_v22_1_co6_fssp_traceaad_v22_1_rep1",
       "fssp_gls/20261108_v22_1_co6_fssp_traceaad_v22_1_rep2",
       "fssp_gls/20261108_v22_1_co6_fssp_traceaad_v22_1_rep3",
-      "graph_colouring/20261108_v22_1_co6_gcol_traceaad_v22_1_rep1",
-      "graph_colouring/20261108_v22_1_co6_gcol_traceaad_v22_1_rep2",
-      "graph_colouring/20261108_v22_1_co6_gcol_traceaad_v22_1_rep3",
-      "jssp_construct/20261108_v22_1_co6_jssp_traceaad_v22_1_rep1",
-      "jssp_construct/20261108_v22_1_co6_jssp_traceaad_v22_1_rep2",
-      "jssp_construct/20261108_v22_1_co6_jssp_traceaad_v22_1_rep3",
       "op_aco/20261108_v22_1_co6_op_traceaad_v22_1_rep1",
       "op_aco/20261108_v22_1_co6_op_traceaad_v22_1_rep2",
       "op_aco/20261108_v22_1_co6_op_traceaad_v22_1_rep3",
@@ -598,48 +592,78 @@
       "tsp_construct/20261108_v22_1_co6_tsp_traceaad_v22_1_rep2",
       "tsp_construct/20261108_v22_1_co6_tsp_traceaad_v22_1_rep3"
     ],
-    "traceaad_v23_1": [
-      "tsp_construct/20261109_v23_1_static_co6_tsp_traceaad_v23_1_rep1",
-      "tsp_construct/20261109_v23_1_static_co6_tsp_traceaad_v23_1_rep2",
-      "tsp_construct/20261109_v23_1_static_co6_tsp_traceaad_v23_1_rep3",
-      "cvrp_aco/20261109_v23_1_static_co6_cvrp_traceaad_v23_1_rep1",
-      "cvrp_aco/20261109_v23_1_static_co6_cvrp_traceaad_v23_1_rep2",
-      "cvrp_aco/20261109_v23_1_static_co6_cvrp_traceaad_v23_1_rep3",
-      "fssp_gls/20261109_v23_1_static_co6_fssp_traceaad_v23_1_rep1",
-      "fssp_gls/20261109_v23_1_static_co6_fssp_traceaad_v23_1_rep2",
-      "fssp_gls/20261109_v23_1_static_co6_fssp_traceaad_v23_1_rep3",
-      "graph_colouring/20261109_v23_1_static_co6_gcol_traceaad_v23_1_rep1",
-      "graph_colouring/20261109_v23_1_static_co6_gcol_traceaad_v23_1_rep2",
-      "graph_colouring/20261109_v23_1_static_co6_gcol_traceaad_v23_1_rep3",
-      "jssp_construct/20261109_v23_1_static_co6_jssp_traceaad_v23_1_rep1",
-      "jssp_construct/20261109_v23_1_static_co6_jssp_traceaad_v23_1_rep2",
-      "jssp_construct/20261109_v23_1_static_co6_jssp_traceaad_v23_1_rep3",
-      "op_aco/20261109_v23_1_static_co6_op_traceaad_v23_1_rep1",
-      "op_aco/20261109_v23_1_static_co6_op_traceaad_v23_1_rep2",
-      "op_aco/20261109_v23_1_static_co6_op_traceaad_v23_1_rep3"
+    "traceaad_base_boltzmann_20261109": [
+      "tsp_construct/20261109_base_boltzmann_co6_tsp_traceaad_base_rep1",
+      "tsp_construct/20261109_base_boltzmann_co6_tsp_traceaad_base_rep2",
+      "tsp_construct/20261109_base_boltzmann_co6_tsp_traceaad_base_rep3",
+      "cvrp_aco/20261109_base_boltzmann_co6_cvrp_traceaad_base_rep1",
+      "cvrp_aco/20261109_base_boltzmann_co6_cvrp_traceaad_base_rep2",
+      "cvrp_aco/20261109_base_boltzmann_co6_cvrp_traceaad_base_rep3",
+      "fssp_gls/20261109_base_boltzmann_co6_fssp_traceaad_base_rep1",
+      "fssp_gls/20261109_base_boltzmann_co6_fssp_traceaad_base_rep2",
+      "fssp_gls/20261109_base_boltzmann_co6_fssp_traceaad_base_rep3",
+      "op_aco/20261109_base_boltzmann_co6_op_traceaad_base_rep1",
+      "op_aco/20261109_base_boltzmann_co6_op_traceaad_base_rep2",
+      "op_aco/20261109_base_boltzmann_co6_op_traceaad_base_rep3"
     ],
-    "traceaad_base_static_20261109": [
-      "tsp_construct/20261109_base_static_co6_tsp_traceaad_base_rep1",
-      "tsp_construct/20261109_base_static_co6_tsp_traceaad_base_rep2",
-      "tsp_construct/20261109_base_static_co6_tsp_traceaad_base_rep3",
-      "cvrp_aco/20261109_base_static_co6_cvrp_traceaad_base_rep1",
-      "cvrp_aco/20261109_base_static_co6_cvrp_traceaad_base_rep2",
-      "cvrp_aco/20261109_base_static_co6_cvrp_traceaad_base_rep3",
-      "fssp_gls/20261109_base_static_co6_fssp_traceaad_base_rep1",
-      "fssp_gls/20261109_base_static_co6_fssp_traceaad_base_rep2",
-      "fssp_gls/20261109_base_static_co6_fssp_traceaad_base_rep3",
-      "graph_colouring/20261109_base_static_co6_gcol_traceaad_base_rep1",
-      "graph_colouring/20261109_base_static_co6_gcol_traceaad_base_rep2",
-      "graph_colouring/20261109_base_static_co6_gcol_traceaad_base_rep3",
-      "jssp_construct/20261109_base_static_co6_jssp_traceaad_base_rep1",
-      "jssp_construct/20261109_base_static_co6_jssp_traceaad_base_rep2",
-      "jssp_construct/20261109_base_static_co6_jssp_traceaad_base_rep3",
-      "op_aco/20261109_base_static_co6_op_traceaad_base_rep1",
-      "op_aco/20261109_base_static_co6_op_traceaad_base_rep2",
-      "op_aco/20261109_base_static_co6_op_traceaad_base_rep3"
+    "traceaad_v23_2": [
+      "tsp_construct/20261109_v23_2_co6_tsp_traceaad_v23_2_rep1",
+      "tsp_construct/20261109_v23_2_co6_tsp_traceaad_v23_2_rep2",
+      "tsp_construct/20261109_v23_2_co6_tsp_traceaad_v23_2_rep3",
+      "cvrp_aco/20261109_v23_2_co6_cvrp_traceaad_v23_2_rep1",
+      "cvrp_aco/20261109_v23_2_co6_cvrp_traceaad_v23_2_rep2",
+      "cvrp_aco/20261109_v23_2_co6_cvrp_traceaad_v23_2_rep3",
+      "fssp_gls/20261109_v23_2_co6_fssp_traceaad_v23_2_rep1",
+      "fssp_gls/20261109_v23_2_co6_fssp_traceaad_v23_2_rep2",
+      "fssp_gls/20261109_v23_2_co6_fssp_traceaad_v23_2_rep3",
+      "op_aco/20261109_v23_2_co6_op_traceaad_v23_2_rep1",
+      "op_aco/20261109_v23_2_co6_op_traceaad_v23_2_rep2",
+      "op_aco/20261109_v23_2_co6_op_traceaad_v23_2_rep3"
+    ],
+    "traceaad_v21_1": [
+      "tsp_construct/20261109_v21_1_co4_tsp_traceaad_v21_1_rep1",
+      "tsp_construct/20261109_v21_1_co4_tsp_traceaad_v21_1_rep2",
+      "tsp_construct/20261109_v21_1_co4_tsp_traceaad_v21_1_rep3",
+      "cvrp_aco/20261109_v21_1_co4_cvrp_traceaad_v21_1_rep1",
+      "cvrp_aco/20261109_v21_1_co4_cvrp_traceaad_v21_1_rep2",
+      "cvrp_aco/20261109_v21_1_co4_cvrp_traceaad_v21_1_rep3",
+      "fssp_gls/20261109_v21_1_co4_fssp_traceaad_v21_1_rep1",
+      "fssp_gls/20261109_v21_1_co4_fssp_traceaad_v21_1_rep2",
+      "fssp_gls/20261109_v21_1_co4_fssp_traceaad_v21_1_rep3",
+      "op_aco/20261109_v21_1_co4_op_traceaad_v21_1_rep1",
+      "op_aco/20261109_v21_1_co4_op_traceaad_v21_1_rep2",
+      "op_aco/20261109_v21_1_co4_op_traceaad_v21_1_rep3"
+    ],
+    "traceaad_v22_2": [
+      "tsp_construct/20261109_v22_2_co4_tsp_traceaad_v22_2_rep1",
+      "tsp_construct/20261109_v22_2_co4_tsp_traceaad_v22_2_rep2",
+      "tsp_construct/20261109_v22_2_co4_tsp_traceaad_v22_2_rep3",
+      "cvrp_aco/20261109_v22_2_co4_cvrp_traceaad_v22_2_rep1",
+      "cvrp_aco/20261109_v22_2_co4_cvrp_traceaad_v22_2_rep2",
+      "cvrp_aco/20261109_v22_2_co4_cvrp_traceaad_v22_2_rep3",
+      "fssp_gls/20261109_v22_2_co4_fssp_traceaad_v22_2_rep1",
+      "fssp_gls/20261109_v22_2_co4_fssp_traceaad_v22_2_rep2",
+      "fssp_gls/20261109_v22_2_co4_fssp_traceaad_v22_2_rep3",
+      "op_aco/20261109_v22_2_co4_op_traceaad_v22_2_rep1",
+      "op_aco/20261109_v22_2_co4_op_traceaad_v22_2_rep2",
+      "op_aco/20261109_v22_2_co4_op_traceaad_v22_2_rep3"
+    ],
+    "traceaad_v24_1": [
+      "tsp_construct/20261109_v24_1_co4_tsp_traceaad_v24_1_rep1",
+      "tsp_construct/20261109_v24_1_co4_tsp_traceaad_v24_1_rep2",
+      "tsp_construct/20261109_v24_1_co4_tsp_traceaad_v24_1_rep3",
+      "cvrp_aco/20261109_v24_1_co4_cvrp_traceaad_v24_1_rep1",
+      "cvrp_aco/20261109_v24_1_co4_cvrp_traceaad_v24_1_rep2",
+      "cvrp_aco/20261109_v24_1_co4_cvrp_traceaad_v24_1_rep3",
+      "fssp_gls/20261109_v24_1_co4_fssp_traceaad_v24_1_rep1",
+      "fssp_gls/20261109_v24_1_co4_fssp_traceaad_v24_1_rep2",
+      "fssp_gls/20261109_v24_1_co4_fssp_traceaad_v24_1_rep3",
+      "op_aco/20261109_v24_1_co4_op_traceaad_v24_1_rep1",
+      "op_aco/20261109_v24_1_co4_op_traceaad_v24_1_rep2",
+      "op_aco/20261109_v24_1_co4_op_traceaad_v24_1_rep3"
     ]
   },
-  "default_experiment": "traceaad_v22",
+  "default_experiment": "traceaad_v21_1",
   "labels": {
     "traceaad_v12_0": "TraceAAD V12.0",
     "traceaad_v12_1": "TraceAAD V12.1",
@@ -675,7 +699,12 @@
     "traceaad_v22_1": "V22.1",
     "traceaad_v23_1": "V23.1",
     "traceaad_v24": "V24",
-    "traceaad_base_static_20261109": "Base（纯净）"
+    "traceaad_base_static_20261109": "Base（纯净）",
+    "traceaad_base_boltzmann_20261109": "Base（Boltzmann）",
+    "traceaad_v23_2": "V23.2",
+    "traceaad_v21_1": "V21.1",
+    "traceaad_v22_2": "V22.2",
+    "traceaad_v24_1": "V24.1"
   },
   "visualization_batches": {
     "traceaad_v12_0": "20261013_qwen_co6",
@@ -696,9 +725,19 @@
     "traceaad_v22_1": "20261108_v22_1_co6",
     "traceaad_v23_1": "20261109_v23_1_static_co6",
     "traceaad_v24": "20261109_v24_co6",
-    "traceaad_base_static_20261109": "20261109_base_static_co6"
+    "traceaad_base_static_20261109": "20261109_base_static_co6",
+    "traceaad_base_boltzmann_20261109": "20261109_base_boltzmann_co6",
+    "traceaad_v23_2": "20261109_v23_2_co6",
+    "traceaad_v21_1": "20261109_v21_1_co4",
+    "traceaad_v22_2": "20261109_v22_2_co4",
+    "traceaad_v24_1": "20261109_v24_1_co4"
   },
   "visualization_methods": [
+    "traceaad_base_boltzmann_20261109",
+    "traceaad_v21_1",
+    "traceaad_v22_2",
+    "traceaad_v23_2",
+    "traceaad_v24_1",
     "traceaad_base_static_20261109",
     "traceaad_base_20261105",
     "traceaad_v21c",
@@ -720,5 +759,53 @@
     "traceaad_v23_1",
     "traceaad_v24"
   ],
-  "visualization_reference": "traceaad_base_static_20261109"
+  "visualization_reference": "traceaad_base_boltzmann_20261109",
+  "visualization_tasks": {
+    "traceaad_base_boltzmann_20261109": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco"
+    ],
+    "traceaad_v23_2": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco"
+    ],
+    "traceaad_v21_1": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco"
+    ],
+    "traceaad_v22_2": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco"
+    ],
+    "traceaad_v24_1": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco"
+    ]
+  },
+  "active_campaign": {
+    "tasks": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco"
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "runs_per_method": 12,
+    "controller_session": "20261109_co4_queue",
+    "capacity": 36
+  }
 }

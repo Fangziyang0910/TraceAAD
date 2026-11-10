@@ -223,3 +223,22 @@ def test_old_base_resume_is_rejected_before_log_mutation(task, tmp_path, protoco
     with pytest.raises(ValueError, match="original source snapshot"):
         TraceAAD(task, None, run_dir=tmp_path, resume=True)
     assert calls.read_bytes() == b'{"unfinished":'
+
+
+@pytest.mark.parametrize("change", ["selection_rule", "selection_temperature"])
+def test_selection_changes_cannot_silently_resume_old_searches(task, tmp_path, change):
+    TraceAAD(task, None, run_dir=tmp_path)
+    path = tmp_path / "run_config.json"
+    saved = json.loads(path.read_text())
+    assert saved["selection_rule"] == "boltzmann_fitness_v1"
+    assert saved["config"]["selection_temperature"] == 1.0
+    if change == "selection_rule":
+        saved.pop("selection_rule")
+    else:
+        saved["config"]["selection_temperature"] = 0.1
+    path.write_text(json.dumps(saved))
+    calls = tmp_path / "calls.jsonl"
+    calls.write_bytes(b'{"unfinished":')
+    with pytest.raises(ValueError, match="same Boltzmann selection rule and temperature"):
+        TraceAAD(task, None, run_dir=tmp_path, resume=True)
+    assert calls.read_bytes() == b'{"unfinished":'

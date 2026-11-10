@@ -6,7 +6,10 @@ from functools import lru_cache
 
 from traceaad_base.models import Program
 from traceaad_base.prompts import failure_feedback, failure_summary
-from traceaad_v21.representation import bare, identity
+from traceaad_base.selection import identity
+from traceaad_v21_1.representation import bare
+
+from .notes import DISPLAY_LIMIT, program_query, ranked_notes
 
 
 @dataclass(frozen=True)
@@ -17,6 +20,7 @@ class Event:
     parent: Program | None
     child: Program
     best_before: float | None = None
+    experience_ids: tuple[int, ...] = ()
 
     @property
     def key(self):
@@ -32,7 +36,7 @@ def observe(attempt, archive):
     if not attempt.evaluations or attempt.program_id is None:
         return None
     return Event(attempt.id, archive.get(attempt.parent_id), archive[attempt.program_id],
-                 attempt.record.get("best_before"))
+                 attempt.record.get("best_before"), tuple(attempt.record.get("experience_ids", ())))
 
 
 def _change(event):
@@ -80,21 +84,6 @@ def connected(a, b):
     return (a.id == b.id or same_question(a, b)
             or (a.parent is not None and a.parent.id == b.child.id)
             or (b.parent is not None and b.parent.id == a.child.id))
-
-
-def is_relation(events, ids):
-    """One fact, same-start comparisons, or a connected development of at most three edges."""
-    if not ids or any(i not in events for i in ids):
-        return False
-    if len({events[i].key for i in ids}) != len(ids):
-        return False
-    reached = {ids[0]}
-    while True:
-        extra = {i for i in ids if i not in reached
-                 and any(connected(events[i], events[j]) for j in reached)}
-        if not extra:
-            return len(reached) == len(ids)
-        reached |= extra
 
 
 @dataclass(frozen=True)
@@ -149,14 +138,18 @@ def questions(events, unreviewed):
 
 def related_notes(events, question, notes):
     core = [events[i] for i in question.event_ids]
+    exposed = {i for event in core for i in event.experience_ids}
+    query = "\n".join(program_query(event.child) + "\n" + program_query(event.parent) for event in core)
     related = []
-    for note in notes:
+    for score, note in ranked_notes(notes, query):
         if any(i not in events for i in note["evidence_ids"]):
             raise ValueError(f"Missing source events for experience {note['id']}")
-        if any(connected(events[i], event) for i in note["evidence_ids"] for event in core):
-            related.append(note)
-    return sorted(related, key=lambda n: (len(set(n["evidence_ids"]) & set(question.event_ids)),
-                                          max(n["evidence_ids"])), reverse=True)
+        linked = any(connected(events[i], event) for i in note["evidence_ids"] for event in core)
+        shown = note["id"] in exposed
+        if linked or shown or score > 0:
+            overlap = len(set(note["evidence_ids"]) & set(question.event_ids))
+            related.append(((overlap, score, linked, shown, note["id"]), note))
+    return [note for _, note in sorted(related, key=lambda row: row[0], reverse=True)]
 
 
 def render(events, event_ids, new_ids, source_ids, question=None):
@@ -181,9 +174,9 @@ def render(events, event_ids, new_ids, source_ids, question=None):
     if question is not None:
         anchor = events[question.anchor_id]
         rows.append(f"[One Computational Question]\nExamine the computation changed by Attempt {anchor.id} "
-                    f"from Program {anchor.parent.id}. Compare only its related same-start changes and "
-                    "continuations. Identify the concrete computational question from these edits, "
-                    "then establish which implementation changed and which measured result followed.")
+                    f"from Program {anchor.parent.id}. Establish the change and result within each case, "
+                    "then compare cases that share the computational condition. The packet includes "
+                    "local development and candidate experience sources from across the search.")
     rows.extend([f"New events: {sorted(selected & set(new_ids))}",
                  f"Experience source events: {sorted(selected & set(source_ids))}"])
     for parent_id, group in groups.items():
@@ -197,11 +190,13 @@ def render(events, event_ids, new_ids, source_ids, question=None):
             if event.key in represented:
                 rows.append(f"Attempt {event.id}: Program {before.id if before else None} -> Program {child.id}; "
                             f"same implementation and feedback as Attempt {represented[event.key]}. "
-                            "This is a repeated observation, not independent support.")
+                            "These occurrences share one observation.")
                 continue
             represented[event.key] = event.id
             lines = [f"Attempt {event.id}: Program {before.id if before else None} -> Program {child.id}; "
                      f"operator {child.operator}"]
+            if event.experience_ids:
+                lines.append(f"Experience available during generation: {list(event.experience_ids)}")
             if child.reference_id is not None:
                 lines.append(f"Reference: Program {child.reference_id}")
             mode, changed = _change(event)
@@ -230,7 +225,7 @@ def render(events, event_ids, new_ids, source_ids, question=None):
             duplicates = [e.id for e in events.values() if e.id != event.id and e.key == event.key]
             if duplicates:
                 lines.append(f"Equivalent observations also recorded at Attempts {sorted(duplicates)}; "
-                             "these are occurrences, not independent support.")
+                             "these occurrences share one observation.")
             rows.append("\n".join(lines))
     return "\n\n".join(rows)
 
@@ -248,7 +243,7 @@ class Material:
 
 
 def build(events, unreviewed, notes, prompt_for, measure, limit):
-    """Select one question first; only related complete source relations may join it."""
+    """Start with a focused question, then add complete candidate experience sources."""
     proposals = questions(events, unreviewed)
     if not proposals:
         return Material("", (), (), tuple(unreviewed), 0, reason="no_new_computational_question")
@@ -263,6 +258,8 @@ def build(events, unreviewed, notes, prompt_for, measure, limit):
         return Material("", (), (), tuple(unreviewed), size, reason="focused_relation_exceeds_input_limit")
     shown_notes, sources = [], set()
     for note in related_notes(events, question, notes):
+        if len(shown_notes) == DISPLAY_LIMIT:
+            break
         candidate_ids = selected | set(note["evidence_ids"])
         candidate_sources = sources | set(note["evidence_ids"])
         candidate_notes = shown_notes + [note]

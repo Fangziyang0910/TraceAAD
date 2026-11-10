@@ -73,7 +73,8 @@ def sync():
         try:
             for experiment, batch in active_batches(remote_manifests()):
                 remote.pull(experiment, batch)
-                plan = read_object(RESULTS / experiment / f"batch_{batch}.json").get("plan", [])
+                plan = [row for row in read_object(RESULTS / experiment / f"batch_{batch}.json").get("plan", [])
+                        if row.get("status") != "deferred"]
                 done = sum(complete(RESULTS / experiment / row["task"] / row["run_name"]) for row in plan)
                 print(f"{experiment}/{batch} complete={done}/{len(plan)}", flush=True)
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
@@ -81,11 +82,19 @@ def sync():
         time.sleep(60)
 
 
-def batch_issues(payload, plan, sessions):
+def batch_issues(payload, plan, sessions, *, queue_session=None):
     sessions_by_run = {row["run_name"]: row["session"] for row in plan}
+    plans = {row["run_name"]: row for row in plan}
     issues = []
+    waiting = False
     for row in payload["runs"]:
         name, status, heldout = row["name"], row["status"], row["heldout"]
+        planned = plans.get(name, {})
+        if planned.get("status") == "deferred" or status == "deferred":
+            continue
+        if status == "queued" or (planned.get("status") in {"queued", "starting"} and status in {"absent", "unknown"}):
+            waiting = True
+            continue
         session = sessions_by_run.get(name)
         if not session:
             issues.append(f"{name}: 批次清单缺少会话")
@@ -101,6 +110,8 @@ def batch_issues(payload, plan, sessions):
             issues.append(f"{name}: 最终程序未核验")
         if status == "finished" and heldout["missing"] and sessions is not None and session not in sessions:
             issues.append(f"{name}: 主测试缺失且会话已退出")
+    if waiting and queue_session and sessions is not None and queue_session not in sessions:
+        issues.append(f"等待队列的控制会话已退出: {queue_session}")
     return issues
 
 
@@ -147,7 +158,8 @@ def check():
 
     for experiment, batch in batches:
         key, manifest = f"{experiment}/{batch}", f"experiments_result/{experiment}/batch_{batch}.json"
-        plan = read_object(ROOT / manifest).get("plan")
+        batch_manifest = read_object(ROOT / manifest)
+        plan = batch_manifest.get("plan")
         if not plan:
             issues.append(f"{key}: 本机没有批次清单，同步可能未运行")
             continue
@@ -156,7 +168,8 @@ def check():
                                         "--ssh", HOST, "--repo", REMOTE, "--manifest", f"{REMOTE}/{manifest}",
                                         "--json"], timeout=75))
             summaries[key] = there["summary"]
-            issues.extend(batch_issues(there, plan, sessions))
+            issues.extend(batch_issues(there, plan, sessions,
+                                      queue_session=batch_manifest.get("queue", {}).get("controller_session")))
         except (OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
             issues.append(f"{key}: 无法查询批次状态")
             print(key, type(exc).__name__, str(getattr(exc, "stderr", "") or exc)[-500:], flush=True)

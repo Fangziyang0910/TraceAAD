@@ -76,6 +76,10 @@ def run_status(root, row, budget, now):
         status = 'archived'
     elif raw == "finished":
         status = "finished"
+    elif row.get("status") == "deferred":
+        status = "deferred"
+    elif row.get("status") in {"queued", "starting"} and not raw and not checkpoint and not candidate:
+        status = "queued"
     elif raw == "stopped" and not resumed:
         status = "stopped"
     elif raw and raw != "running" and not resumed:
@@ -142,7 +146,7 @@ def collect(manifest_path):
                         "heldout_failed": sum(len(r["heldout"]["failed"]) for r in rows),
                         "heldout_mismatched": sum(len(r["heldout"]["mismatched"]) for r in rows),
                         "heldout_unverified": sum(len(r["heldout"]["unverified"]) for r in rows),
-                        "ready_for_heldout": sum(r['status'] != 'archived' and r["frozen"]
+                        "ready_for_heldout": sum(r['status'] not in {'archived', 'deferred', 'queued'} and r["frozen"]
                                                  and bool(r["heldout"]["missing"]) for r in rows)},
             "search_timing": batch_timing([{**r, "status": "running" if r["status"] == "recorded" else r["status"]} for r in rows])}
 

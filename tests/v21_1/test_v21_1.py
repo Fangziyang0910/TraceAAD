@@ -3,12 +3,14 @@ import ast
 import json
 import random
 
+import pytest
+
 from traceaad_base import Evaluation, Program, Task
 import traceaad_base
-import traceaad_v21
-from traceaad_v21.context import COMMON, CROSSOVER, EXPLORE, FAILURES, REFINE, ancestors, attempts, card, context, reference
-from traceaad_v21.prompts import CANDIDATE_RESPONSE_FORMAT, COMMON_TEMPLATE, PromptBuilder
-from traceaad_v21.representation import bare, changes, computation
+import traceaad_v21_1
+from traceaad_v21_1.context import COMMON, CROSSOVER, EXPLORE, FAILURES, REFINE, ancestors, attempts, card, context
+from traceaad_v21_1.prompts import CANDIDATE_RESPONSE_FORMAT, COMMON_TEMPLATE, PromptBuilder
+from traceaad_v21_1.representation import bare, changes
 
 CONFIG = traceaad_base.Config()
 
@@ -57,7 +59,7 @@ def test_real_clients_request_the_v21_field_order(tmp_path):
         request_options = {"temperature": 1.0}
 
     client = Client()
-    traceaad_v21.TraceAAD(task(), client, config=traceaad_base.Config(evaluation_budget=1), run_dir=tmp_path / "run")
+    traceaad_v21_1.TraceAAD(task(), client, config=traceaad_base.Config(evaluation_budget=1), run_dir=tmp_path / "run")
     assert client.request_options == {"temperature": 1.0, "response_format": CANDIDATE_RESPONSE_FORMAT}
 
 
@@ -166,7 +168,7 @@ def test_explore_prompt_has_no_score_definition(tmp_path):
     model = Reply()
     scored = Task("Return a finite score.", "def solve(x):\n    return 1\n", lambda _, fn: float(fn(0)),
                   score_definition="lower is better", entrypoint="solve", time_limit=5., evaluation_seed=1)
-    run = traceaad_v21.TraceAAD(scored, model, config=traceaad_base.Config(evaluation_budget=24, initial_size=3, seed=3),
+    run = traceaad_v21_1.TraceAAD(scored, model, config=traceaad_base.Config(evaluation_budget=24, initial_size=3, seed=3),
                                 run_dir=tmp_path / "run")
     run.run()
     explore = [p for p in model.prompts if EXPLORE in p]
@@ -198,14 +200,22 @@ def test_output_limits_both_descriptions_as_base_does():
     assert COMMON_TEMPLATE.count("using at most 100 English words or 200 Chinese characters") == 2
 
 
-def test_reference_offers_a_different_computation_and_varies():
+def test_reference_keeps_constant_variants_and_matches_base_random_selection():
     archive = {1: program(1, 5., operator="Init", source=code(1)), 2: program(2, 4., 1, source=code(2))}
-    assert computation(code(1)) == computation(code(2))
-    assert reference(archive, archive[1], random.Random(0)) is None
-    archive = {i: program(i, float(i), operator="Init", source=f"def solve(x):\n    return x + {'+ x ' * i}\n")
-               for i in range(1, 21)}
-    picks = {reference(archive, archive[20], random.Random(seed)).id for seed in range(200)}
-    assert len(picks) >= 8 and 1 in picks and all(archive[i].evaluation.fitness <= 10.5 for i in picks)
+    revised = traceaad_v21_1.TraceAAD(task(), Reply())
+    revised.archive = archive
+    assert revised.reference(archive[1]).id == 2
+    archive = {i: program(i, float(i), operator="Init", source=code(i)) for i in range(1, 21)}
+    base = traceaad_base.TraceAAD(task(), Reply())
+    revised.archive = base.archive = archive
+    picks = set()
+    for seed in range(200):
+        revised.rng = random.Random(seed)
+        base.rng = random.Random(seed)
+        actual = revised.reference(archive[20]).id
+        assert actual == base.reference(archive[20]).id
+        picks.add(actual)
+    assert picks == set(range(1, 11))
 
 
 def test_each_operator_gets_instructions_that_agree_with_it():
@@ -236,11 +246,29 @@ def test_failure_cards_hide_the_limit():
 def test_search_uses_base_budget_and_resumes(tmp_path):
     config = traceaad_base.Config(evaluation_budget=24, initial_size=3, seed=3)
     model = Reply()
-    v21 = traceaad_v21.TraceAAD(task(), model, config=config, run_dir=tmp_path / "v21")
+    v21 = traceaad_v21_1.TraceAAD(task(), model, config=config, run_dir=tmp_path / "v21")
     result = v21.run()
     assert result.evaluations == 24
     assert any("[Current Algorithm]" in prompt and "Proposed change" in prompt for prompt in model.prompts)
     crossover = [a for a in v21.attempts if a.operator == "Crossover"]
     assert crossover and all(a.reference_id is not None for a in crossover)
-    resumed = traceaad_v21.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path / "v21", resume=True)
+    resumed = traceaad_v21_1.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path / "v21", resume=True)
     assert resumed.evaluations_used == 24 and set(resumed.archive) == set(v21.archive)
+
+
+@pytest.mark.parametrize("change", ["method", "reference_rule", "generation_protocol", "mechanisms"])
+def test_changed_combination_is_rejected_before_log_repair(tmp_path, change):
+    config = traceaad_base.Config(evaluation_budget=3, initial_size=2)
+    search = traceaad_v21_1.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path)
+    search.step()
+    saved = search.store.read("run_config.json")
+    saved[change] = "old-rule" if change != "mechanisms" else []
+    search.store.write("run_config.json", saved)
+    before = {}
+    for name in ("calls.jsonl", "attempts.jsonl"):
+        p = tmp_path / name
+        p.write_bytes(p.read_bytes() + b'{"unfinished":')
+        before[name] = p.read_bytes()
+    with pytest.raises(ValueError, match=change):
+        traceaad_v21_1.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path, resume=True)
+    assert all((tmp_path / name).read_bytes() == data for name, data in before.items())

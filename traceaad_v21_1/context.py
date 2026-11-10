@@ -1,9 +1,8 @@
 """Trajectory views and instructions for one generation; nothing here asks the model."""
 
 from traceaad_base.prompts import failure_summary
-from traceaad_base.selection import reference_pool
-
-from .representation import bare, changes, computation, identity
+from traceaad_base.selection import identity
+from .representation import bare, changes
 
 COMMON = ("Results and changed computations are measured facts. Designs and proposed changes are descriptions, "
           "and do not establish why a result occurred.")
@@ -58,17 +57,6 @@ def attempts(archive, parent, config):
         selected = [best] + sorted((p for p in valid if p is not best), key=lambda p: -p.id)[:config.offspring_count - 1]
     failures = sorted(failed, key=lambda p: -p.id)[:config.failure_count]
     return sorted(selected, key=lambda p: p.id), sorted(failures, key=lambda p: p.id)
-
-
-def reference(archive, parent, rng):
-    """One program drawn uniformly from those offering a different computation; the best of each computation stands in."""
-    own = computation(parent.code)
-    distinct = {}
-    for program in reference_pool(archive, parent.id):  # Already best first.
-        key = computation(program.code)
-        if key != own:
-            distinct.setdefault(key, program)
-    return rng.choice(list(distinct.values())) if distinct else None
 
 
 def _changed(parent, program):

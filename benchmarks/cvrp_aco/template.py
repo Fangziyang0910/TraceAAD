@@ -28,8 +28,8 @@ def heuristics(
 task_description = """
 Design an edge-prior heuristic for Ant Colony Optimization (ACO) on the
 Capacitated Vehicle Routing Problem (CVRP). A solution consists of routes that
-start and end at depot node 0, visit every customer exactly once, and never
-exceed vehicle capacity. ACO combines the returned heuristic matrix with its
+start and end at depot node 0, visit every customer exactly once, and keep each
+route's total demand within vehicle capacity. ACO combines the returned heuristic matrix with its
 pheromone matrix to sample feasible moves. The objective is to minimize the
 best total route length found across all ants and iterations.
 

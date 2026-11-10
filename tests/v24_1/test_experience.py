@@ -1,12 +1,15 @@
 """Local updates preserve minimal evidence relations and protect unrelated experience."""
 
 import json
+import os
+import subprocess
+import sys
 
 import pytest
 
 from traceaad_base import Evaluation, Program
 from traceaad_v24_1.evidence import Event
-from traceaad_v24_1.notes import Experience
+from traceaad_v24_1.notes import Experience, select_notes
 
 
 def note(i=None, sources=(1,), when="The minimum is taken over a set containing the candidate itself."):
@@ -53,15 +56,13 @@ def test_local_update_keeps_other_entries_and_accumulates_sources_beyond_represe
     assert Experience(revised).active == experience.active
 
 
-def test_capacity_failure_is_atomic_and_archive_does_not_reuse_an_id_or_lose_evidence():
+def test_seventh_experience_is_retained_and_archive_preserves_stable_ids_and_sources():
     experience = Experience()
     apply(experience, response([note(sources=(i,)) for i in range(1, 7)]), set(range(1, 7)))
-    before = experience.snapshot()
-    with pytest.raises(ValueError, match="six active"):
-        apply(experience, response([note(sources=(7,))]), {7})
-    assert experience.snapshot() == before
-    apply(experience, response([note(sources=(7,))], archives=[2]), {2, 7}, [2])
-    assert [n["id"] for n in experience.active] == [1, 3, 4, 5, 6, 7]
+    apply(experience, response([note(sources=(7,))]), {7}, [])
+    assert [n["id"] for n in experience.active] == list(range(1, 8))
+    apply(experience, response([note(sources=(8,))], archives=[2]), {2, 8}, [2])
+    assert [n["id"] for n in experience.active] == [1, 3, 4, 5, 6, 7, 8]
     archived = next(n for n in experience.data["entries"] if n["id"] == 2)
     assert not archived["active"] and archived["source_ids"] == [2]
 
@@ -93,7 +94,7 @@ def test_merge_preserves_sources_and_unrelated_entries_cannot_be_changed_or_arch
         assert experience.snapshot() == before
 
 
-def test_connected_source_relations_allow_a_comparison_or_supporting_continuation():
+def test_sources_preserve_local_comparisons_and_cross_branch_revisions():
     experience = Experience()
     visible = events([1, 2])  # Two different implementations from the same computation.
     b = visible[2].child
@@ -102,12 +103,56 @@ def test_connected_source_relations_allow_a_comparison_or_supporting_continuatio
     assert [n["evidence_ids"] for n in experience.active] == [[1, 2], [2, 3]]
     unrelated = program(900, 20)
     visible[4] = Event(4, unrelated, program(901, 21, unrelated))
+    apply(experience, response([note(1, sources=(1, 4))]), visible)
+    assert experience.active[0]["evidence_ids"] == [1, 4]
+    assert experience.data["entries"][0]["source_ids"] == [1, 2, 4]
     before = experience.snapshot()
-    with pytest.raises(ValueError, match="connected shown"):
-        apply(experience, response([note(1, sources=(1, 4))]), visible)
-    assert experience.snapshot() == before
     repeated = program(104, 1, visible[1].parent)
     visible[5] = Event(5, visible[1].parent, repeated)
-    with pytest.raises(ValueError, match="connected shown"):
+    with pytest.raises(ValueError, match="distinct observations"):
         apply(experience, response([note(1, sources=(1, 5))]), visible)
     assert experience.snapshot() == before
+
+
+def test_display_budget_reselects_matching_old_knowledge_and_rotates_retained_entries():
+    experience = Experience()
+    old = {**note(sources=(1,)), "idea": "Distance normalization", "when": "Distance scores have different scales.",
+           "lesson": "Normalize the distance scores before combining them."}
+    recent = [{**note(sources=(i,)), "idea": f"Population restart {i}",
+               "when": "A population search repeatedly restarts.", "lesson": "Reuse restart candidates."}
+              for i in range(2, 9)]
+    apply(experience, response([old, *recent[:5]]), set(range(1, 7)))
+    apply(experience, response(recent[5:]), {7, 8})
+    saved = experience.snapshot()
+    # The earlier distance lesson leaves one context, then returns for matching computations.
+    first = select_notes(experience.active, "population restart candidates", cursor=7)
+    assert len(first) == 6 and 1 not in {n["id"] for n in first}
+    returned = select_notes(experience.active, "distance scores normalization scale", cursor=7)
+    assert len(returned) == 6 and 1 in {n["id"] for n in returned}
+    seen = set()
+    for cursor in range(8):
+        selected = select_notes(experience.active, "population restart candidates", cursor=cursor)
+        assert len({n["id"] for n in selected}) == 6
+        seen.update(n["id"] for n in selected)
+    assert seen == set(range(1, 9))
+    assert experience.snapshot() == saved
+    assert select_notes(Experience(saved).active, "distance scores normalization scale", cursor=7) == returned
+
+
+def test_retrieval_order_is_stable_across_process_hash_seeds():
+    script = """
+import json
+from traceaad_v24_1.notes import ranked_notes, select_notes
+topics = ["distance scores", "scores normalization offset", "distance penalty scale",
+          "normalization scale offset", "distance scale", "population restart penalty",
+          "distance normalization", "scores offset penalty"]
+notes = [{"id": i, "idea": text, "when": "scoring", "lesson": "calibrate magnitudes"}
+         for i, text in enumerate(topics, 1)]
+query = "distance scores normalization scale offset penalty"
+print(json.dumps({"ranks": [(score, note["id"]) for score, note in ranked_notes(notes, query)],
+                  "shown": [note["id"] for note in select_notes(notes, query, cursor=5)]}))
+"""
+    outputs = [subprocess.check_output([sys.executable, "-c", script],
+                                      env={**os.environ, "PYTHONHASHSEED": seed})
+               for seed in ("1", "2", "3")]
+    assert outputs[0] == outputs[1] == outputs[2]

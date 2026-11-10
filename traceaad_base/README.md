@@ -1,6 +1,6 @@
 # TraceAAD Base 独立实现
 
-本包实现[当前 Base 机制](../docs/TraceAAD-Base.md)：不利用轨迹经验的基础演化搜索。演化生成读取当前算法与交叉参考，父代按当前成绩和已投入调用选择，算子使用固定概率。
+本包实现[当前 Base 机制](../docs/TraceAAD-Base.md)：不利用轨迹经验的基础演化搜索。演化生成读取当前算法与交叉参考，父代按当前成绩做纯Boltzmann采样，算子使用固定概率。
 
 搜索、提示、选择、模型客户端、隔离评价和存储均在本目录内实现。包内使用相对导入；复制整个目录即可独立使用。运行库只依赖 Python 标准库，任务及生成算法所需的 NumPy 等依赖由任务环境提供。当前验证环境为 Linux、Python 3.14。
 
@@ -25,11 +25,11 @@ uv run python -m traceaad_base run \
 
 server4共享资源池的18路实验入口见 [实验入口](../experiments/traceaad/README.md)，使用 `--method base`。
 
-默认配置为 1000 次评价、5 个有效初始个体、温度 1.0、最大输出 16384 tokens、单次模型请求总时限 600 秒。可用 `--budget`、`--initial-size`、`--seed`、`--temperature`、`--max-tokens` 和 `--model-timeout` 调整。`--no-example` 省略初始样例；`--quiet` 只输出最终 JSON。
+默认配置为 1000 次评价、5 个有效初始个体、模型生成温度 1.0、最大输出 16384 tokens、单次模型请求总时限 600 秒。可用 `--budget`、`--initial-size`、`--seed`、`--temperature`、`--max-tokens` 和 `--model-timeout` 调整。父代采样温度单独由 `--selection-temperature` 设置，对应 `Config.selection_temperature`，默认 1.0，单位与成绩相同；实验单路入口和 `launch_host` 也支持该参数。温度不按候选范围自动缩放，六任务的默认值尚未校准。`--no-example` 省略初始样例；`--quiet` 只输出最终 JSON。
 
 `OpenAIClient` 默认以 JSON Schema 约束 `analysis`、`design`、`code` 三个必填字符串，禁止额外字段。端点须支持 `response_format.type=json_schema`；请求不自动降级为普通 JSON 模式。解析仍检查字段非空，格式错误沿用一次修复。
 
-继续本版中断运行时，在相同命令后添加 `--resume`。新运行以 `generation_protocol=static_algorithm_context_v1` 标记；旧 Base 日志使用原始源码快照恢复，不能混入本版。省略的搜索参数从 `run_config.json` 读取。已完成的尝试读回程序库后继续；中断时未完成的尝试直接丢弃。每个尝试的随机数由种子与尝试序号确定，恢复后的抽样与不中断时一致。
+继续本版中断运行时，在相同命令后添加 `--resume`。新运行保存 `generation_protocol=static_algorithm_context_v1`、`selection_rule=boltzmann_fitness_v1` 与父代采样温度；恢复要求选择规则和温度相同。旧 Base 日志使用原始源码快照恢复，不能混入本版。省略的搜索参数从 `run_config.json` 读取。已完成的尝试读回程序库后继续；中断时未完成的尝试直接丢弃。每个尝试的随机数由种子与尝试序号确定，恢复后的抽样与不中断时一致。
 
 ## 接入自己的任务与模型
 
@@ -101,6 +101,8 @@ uv run pytest -q tests/independent_base
 
 保留的 V21、V22.1、V24、V24.1 版本共用的旧 Base 提示固定在 `traceaad_v21/frozen_base_prompts.py`，保留其原有行为。11月5日正式 Base 批次使用旧轨迹上下文，不能视为本版的实验结果。
 
-V23.1 已同步为当前 Base 加机制1：生成侧沿用本版提示，选择侧复用 V22.1 的机制1。其历史批次保留原有条件。
+V23.2 为当前 Base 加新版机制1：生成侧沿用本版提示，选择侧复用 V22.2 的机制1。其历史批次保留原有条件。
 
-纯净Base正式批次 `20261109_base_static_co6` 已于11月9日15:52在server4启动，与新V23.1共用冻结源码。条件与恢复位置见[启动记录](../docs/记录/2026-11-09-Base正式对照启动与V24停止.md)。
+先前静态生成批次 `20261109_base_static_co6` 已于11月9日15:52在server4启动，与新V23.1共用冻结源码。条件与恢复位置见[启动记录](../docs/记录/2026-11-09-Base正式对照启动与V24停止.md)。
+
+纯Boltzmann的新Base批次为`20261109_base_boltzmann_co6`，于11月9日22:48启动，与V23.2共用新冻结源码；旧静态生成批次已停止，仍属于旧选择条件。

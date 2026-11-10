@@ -2,18 +2,18 @@
 
 from copy import copy
 from contextlib import nullcontext
-from dataclasses import asdict
 import json
 from pathlib import Path
 
 from traceaad_base import Config
-from traceaad_v21.representation import identity
-from traceaad_v21.search import TraceAAD as V21
+from traceaad_base.selection import identity
+from traceaad_v21_1.search import TraceAAD as V21_1
 
-from .context import context
+from .context import PromptBuilder, context
 from .evidence import build, observe
-from .notes import (CAPACITY, CHAT_RESERVE, CONTEXT_TOKENS, INTERVAL, REPRESENTATIVES,
-                    Experience, REFLECTION_FORMAT, REFLECTION_TOKENS, reflection_prompt)
+from .notes import (DISPLAY_LIMIT, UPDATE_LIMIT, CHAT_RESERVE, CONTEXT_TOKENS, INTERVAL, REPRESENTATIVES,
+                    Experience, REFLECTION_FORMAT, REFLECTION_TOKENS, program_query, reflection_prompt,
+                    select_notes)
 
 
 class ReflectionRequest:
@@ -33,8 +33,11 @@ class ReflectionRequest:
         return self.model.complete(prompt, **{**settings, "max_tokens": self.max_tokens})
 
 
-class TraceAAD(V21):
+class TraceAAD(V21_1):
     method = "traceaad_v24_1"
+    prompt_type = PromptBuilder
+    generation_protocol = "conditional_experience_context_v1"
+    mechanisms = (2, 3)
 
     def __init__(self, task, model, *, config=None, reflection_model=None,
                  reflection_context_tokens=CONTEXT_TOKENS, reflection_max_tokens=REFLECTION_TOKENS,
@@ -59,19 +62,20 @@ class TraceAAD(V21):
             raise ValueError("V24.1 requires count_prompt_tokens or an explicit reflection_counter")
         self.measure = counter
         self.reflection_settings = {
-            "interval": INTERVAL, "capacity": CAPACITY, "representatives": REPRESENTATIVES,
+            "interval": INTERVAL, "display_limit": DISPLAY_LIMIT, "update_limit": UPDATE_LIMIT,
+            "representatives": REPRESENTATIVES,
             "context_tokens": reflection_context_tokens, "output_reserve": reflection_max_tokens,
             "chat_reserve": CHAT_RESERVE, "input_limit": self.input_limit,
             "input_units": "tokens",
-            "organization": "focused_relations",
+            "organization": "cross_branch_experience",
+            "presentation": "idf_overlap_with_rotation",
+            "prompts": "positive_computational_guidance",
         }
         self.experience = Experience()
         self.experience_from = None
         self.events = {}
         self.interval_count = 0
         self.unreviewed_events = []
-        if options.get("resume"):
-            self._validate_resume(task, config, options.get("run_dir"))
         super().__init__(task, model, config=config, **options)
         if not options.get("resume"):
             saved = self.store.read("run_config.json", {})
@@ -80,12 +84,9 @@ class TraceAAD(V21):
         self.store.write("experience.json", self.snapshot())
 
     def _validate_resume(self, task, config, directory):
-        if directory is None or not (Path(directory) / "run_config.json").is_file():
-            raise ValueError("V24.1 resume requires its original run_config.json")
+        super()._validate_resume(task, config, directory)
         saved = json.loads((Path(directory) / "run_config.json").read_text())
-        expected = {"method": self.method, "config": asdict(config),
-                    "task": json.loads(json.dumps(task.description())),
-                    "reflection_settings": self.reflection_settings}
+        expected = {"reflection_settings": self.reflection_settings}
         differences = [name for name, value in expected.items() if saved.get(name) != value]
         if differences:
             raise ValueError("Incompatible V24.1 resume settings: " + ", ".join(differences))
@@ -96,7 +97,13 @@ class TraceAAD(V21):
 
     def evolution_prompt(self, attempt, parent, reference):
         attempt.record["best_before"] = self.best.evaluation.fitness
-        notes = self.experience.active if attempt.operator != "Explore" else []
+        notes = []
+        if attempt.operator != "Explore":
+            query = program_query(parent)
+            if reference is not None:
+                query += "\n" + program_query(reference)
+            cursor = sum(bool(a.record.get("experience_ids")) for a in self.attempts)
+            notes = select_notes(self.experience.active, query, cursor=cursor)
         text, instruction, view = context(self.archive, parent, attempt.operator, reference, self.config, notes)
         attempt.record["context"] = view
         attempt.record["experience_from"] = self.experience_from if notes else None
@@ -139,8 +146,7 @@ class TraceAAD(V21):
         try:
             notes = self.experience.active
             material = build(self.events, self.unreviewed_events, notes,
-                             lambda related, evidence: reflection_prompt(
-                                 self.task, related, evidence, active_count=len(notes)),
+                             lambda related, evidence: reflection_prompt(self.task, related, evidence),
                              self.measure, self.input_limit)
         except Exception as exc:
             reflection.update(status="failed", error=f"{type(exc).__name__}: {exc}")

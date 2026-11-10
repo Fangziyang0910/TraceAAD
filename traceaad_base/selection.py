@@ -1,16 +1,15 @@
-"""Parent choice: better current programs first, fewer chances as attempts from them accumulate."""
+"""Boltzmann parent sampling from current fitness, without visit penalties."""
 
 import ast
 from functools import lru_cache
 import hashlib
-from itertools import groupby
+import math
 import random
 
 from .config import Config
-from .models import Attempt, Program
+from .models import Program
 
-RANK_EXPONENT = 1.5  # Above 1, so the share of low ranks does not keep growing with the archive.
-VISIT_SMOOTHING = 3
+SELECTION_RULE = "boltzmann_fitness_v1"
 
 
 @lru_cache(maxsize=None)
@@ -33,30 +32,48 @@ def identity(code: str) -> str:
 def sources(archive: dict[int, Program]) -> list[Program]:
     """The earliest valid program of each distinct source, best first."""
     earliest = {}
-    for program in sorted((p for p in archive.values() if p.valid), key=lambda p: p.id):
+    valid = (p for p in archive.values() if p.valid and p.evaluation.fitness is not None
+             and math.isfinite(p.evaluation.fitness))
+    for program in sorted(valid, key=lambda p: p.id):
         earliest.setdefault(identity(program.code), program)
     return sorted(earliest.values(), key=lambda p: (p.evaluation.fitness, p.id))
 
 
-def qualities(archive: dict[int, Program]) -> dict[int, float]:
+def boltzmann_weights(fitness: dict[int, float], temperature: float) -> dict[int, float]:
+    """Unnormalized exp(-fitness / temperature), shifted so the best weight is one."""
+    if not math.isfinite(temperature) or temperature <= 0:
+        raise ValueError("selection_temperature must be finite and positive")
+    if not fitness:
+        return {}
+    if not all(math.isfinite(value) for value in fitness.values()):
+        raise ValueError("Boltzmann sampling requires finite fitness values")
+    best = min(fitness.values())
     result = {}
-    offset = 0
-    for _, tied in groupby(sources(archive), key=lambda p: p.evaluation.fitness):
-        group = list(tied)
-        rank = offset + (len(group) + 1) / 2
-        for program in group:
-            result[program.id] = rank ** -RANK_EXPONENT
-        offset += len(group)
+    for pid, value in fitness.items():
+        gap = value - best
+        # Scaling first avoids overflow in a gap spanning both finite float extremes.
+        scaled = (value / temperature - best / temperature
+                  if math.isinf(gap) else gap / temperature)
+        result[pid] = math.exp(-scaled)
     return result
 
 
-def weights(archive: dict[int, Program], attempts: list[Attempt]) -> dict[int, float]:
-    quality = qualities(archive)
-    costs = dict.fromkeys(quality, 0)
-    for attempt in attempts:
-        if attempt.parent_id in costs:
-            costs[attempt.parent_id] += attempt.model_calls
-    return {pid: quality[pid] * VISIT_SMOOTHING / (VISIT_SMOOTHING + costs[pid]) for pid in quality}
+def weights(archive: dict[int, Program], temperature: float) -> dict[int, float]:
+    return boltzmann_weights(
+        {p.id: p.evaluation.fitness for p in sources(archive)}, temperature
+    )
+
+
+def reference_candidates(fitness: dict[int, float]) -> list[int]:
+    """Reference eligibility uses current quality only, with ties at the median retained."""
+    ordered = sorted(fitness, key=lambda pid: (fitness[pid], pid))
+    if not ordered:
+        return []
+    n = len(ordered)
+    median = fitness[ordered[n // 2]]
+    if n % 2 == 0:
+        median = median / 2 + fitness[ordered[n // 2 - 1]] / 2
+    return [pid for pid in ordered if fitness[pid] <= median]
 
 
 def reference_pool(archive: dict[int, Program], parent_id: int) -> list[Program]:
@@ -64,17 +81,23 @@ def reference_pool(archive: dict[int, Program], parent_id: int) -> list[Program]
     candidates = sources(archive)
     if not candidates:
         return []
-    n = len(candidates)
-    median = candidates[n // 2].evaluation.fitness
-    if n % 2 == 0:
-        median = median / 2 + candidates[n // 2 - 1].evaluation.fitness / 2
+    eligible = reference_candidates({p.id: p.evaluation.fitness for p in candidates})
     own = identity(archive[parent_id].code)
-    return [p for p in candidates if identity(p.code) != own and p.evaluation.fitness <= median]
+    return [archive[pid] for pid in eligible if identity(archive[pid].code) != own]
 
 
-def choose(archive: dict[int, Program], attempts: list[Attempt], config: Config,
+def random_references(fitness: dict[int, float], rng: random.Random) -> dict[int, int | None]:
+    eligible = reference_candidates(fitness)
+    result = {}
+    for pid in sorted(fitness):
+        pool = [reference for reference in eligible if reference != pid]
+        result[pid] = rng.choice(pool) if pool else None
+    return result
+
+
+def choose(archive: dict[int, Program], config: Config,
            rng: random.Random) -> tuple[Program, str]:
-    allocation = weights(archive, attempts)
+    allocation = weights(archive, config.selection_temperature)
     if not allocation:
         raise ValueError("No valid parent candidates")
     ids = sorted(allocation)

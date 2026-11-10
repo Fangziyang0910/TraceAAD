@@ -7,6 +7,8 @@ attempt cut off by the interruption is simply lost.
 
 from contextlib import nullcontext
 from dataclasses import asdict, replace
+import json
+from pathlib import Path
 import random
 import time
 
@@ -14,7 +16,7 @@ from .config import Config
 from .evaluation import Evaluator
 from .models import Attempt, Candidate, FormatError, ModelReply, Program, SearchResult
 from .prompts import PromptBuilder
-from .selection import choose, reference_pool
+from .selection import SELECTION_RULE, choose, reference_pool
 from .storage import Store
 from .task import Task
 
@@ -23,6 +25,8 @@ class TraceAAD:
     method = "traceaad_base"
     prompt_type = PromptBuilder
     generation_protocol = "static_algorithm_context_v1"
+    reference_rule = "quality_pool_uniform_v1"
+    mechanisms = ()
 
     def __init__(self, task: Task, model, *, config: Config | None = None,
                  run_dir=None, resume=False):
@@ -38,12 +42,7 @@ class TraceAAD:
         if task.example_code is not None:
             self.archive[0] = Program(0, task.example_code, task.example_design, None, None, None, None)
         if resume:
-            if self.method == "traceaad_base":
-                saved = self.store.read("run_config.json", {})
-                if (saved.get("method") != self.method
-                        or saved.get("generation_protocol") != self.generation_protocol):
-                    raise ValueError("Base resume requires static_algorithm_context_v1; "
-                                     "use the original source snapshot for older runs")
+            self._validate_resume(task, self.config, run_dir)
             for name in ("attempts.jsonl", "calls.jsonl"):
                 self.store.repair_tail(name)
             for row in self.store.rows("attempts.jsonl"):
@@ -57,16 +56,41 @@ class TraceAAD:
             self.store.write("run_config.json", {
                 "method": self.method, "config": asdict(self.config), "task": task.description(),
                 "model": getattr(model, "model", type(model).__name__),
-                **({"generation_protocol": self.generation_protocol}
-                   if self.method == "traceaad_base" else {}),
+                "selection_rule": SELECTION_RULE,
+                "generation_protocol": self.generation_protocol,
+                "reference_rule": self.reference_rule,
+                "mechanisms": list(self.mechanisms),
             })
+
+    def _validate_resume(self, task, config, directory):
+        """Validate shared conditions before repairing or replaying journals."""
+        path = Path(directory) / "run_config.json" if directory is not None else None
+        if path is None or not path.is_file():
+            raise ValueError("Resume requires its original run_config.json and original source snapshot")
+        saved = json.loads(path.read_text())
+        version = self.method.removeprefix("traceaad_").upper().replace("_", ".")
+        differences = [name for name, value in {
+            "method": self.method, "generation_protocol": self.generation_protocol,
+        }.items() if saved.get(name) != value]
+        if differences:
+            raise ValueError(f"Incompatible {version} resume settings: " + ", ".join(differences)
+                             + "; use the original source snapshot for older runs")
+        if (saved.get("selection_rule") != SELECTION_RULE
+                or saved.get("config", {}).get("selection_temperature") != config.selection_temperature):
+            raise ValueError("Resume requires the same Boltzmann selection rule and temperature; "
+                             "use the original source snapshot for older runs")
+        expected = {"config": asdict(config), "task": json.loads(json.dumps(task.description())),
+                    "reference_rule": self.reference_rule, "mechanisms": list(self.mechanisms)}
+        differences = [name for name, value in expected.items() if saved.get(name) != value]
+        if differences:
+            raise ValueError(f"Incompatible {version} resume settings: " + ", ".join(differences))
 
     # Extension points for methods built on Base.
     def restore(self, attempt: Attempt):
         """Rebuild method state from one saved attempt, in order."""
 
     def select(self, attempt_id: int):
-        parent, operator = choose(self.archive, self.attempts, self.config, self.rng)
+        parent, operator = choose(self.archive, self.config, self.rng)
         reference = self.reference(parent) if operator == "Crossover" else None
         if operator == "Crossover" and reference is None:
             operator = "Explore"

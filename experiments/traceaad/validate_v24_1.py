@@ -1,4 +1,4 @@
-"""Replay real archives for packing, or compare V24/V24.1 reflection on frozen windows.
+"""Replay real archives for packing or inspect current V24.1 reflection on frozen windows.
 
 Packing calls only the serving tokenizer. Live reflection requires --live and the
 shared scheduler; it never evaluates a candidate or updates the source archive.
@@ -7,7 +7,6 @@ shared scheduler; it never evaluates a candidate or updates the source archive.
 import argparse
 from collections import Counter
 from copy import deepcopy
-from dataclasses import replace
 from datetime import datetime
 import hashlib
 import json
@@ -21,8 +20,6 @@ from core.llm import OpenAIAPI
 from traceaad_base import Config, Task
 from traceaad_base.models import Attempt, Program
 from traceaad_base.storage import write_json
-from traceaad_v24 import TraceAAD as V24
-from traceaad_v24.notes import REFLECTION_FORMAT as V24_FORMAT
 from traceaad_v24_1 import TraceAAD as V241
 from traceaad_v24_1.evidence import observe
 from traceaad_v24_1.notes import REFLECTION_FORMAT as V241_FORMAT
@@ -158,45 +155,34 @@ def frozen_window(run, rows, cutoff):
     return eligible[-10:]
 
 
-def live_case(directory, cutoff, scheduler, counter, output, repeats, versions):
+def live_case(directory, cutoff, scheduler, counter, output, repeats):
     task, config, rows = read_run(directory)
     results = []
     model = ScheduledModel(scheduler, "v24_1_validation")
     for repeat in range(repeats):
-        for version, method, schema in (("v24", V24, V24_FORMAT), ("v24_1", V241, V241_FORMAT)):
-            if version not in versions:
-                continue
-            path = output / f"{version}_r{repeat + 1}"
-            if path.exists():
-                raise FileExistsError(path)
-            role = model.for_role(schema)
-            options = {"reflection_counter": counter} if version == "v24_1" else {}
-            run = method(task, NoGeneration(), config=(replace(config, max_tokens=4096)
-                         if version == "v24" else config), reflection_model=role, run_dir=path, **options)
-            ids = frozen_window(run, rows, cutoff)
-            if version == "v24":
-                run.pending = ids
-            else:
-                run.unreviewed_events = ids
-            attempt = run.attempts[-1]
-            started = time.monotonic()
-            run._reflect(attempt)
-            record = attempt.record["reflection"]
-            write_json(path / "reflection.json", record)
-            calls = run.store.rows("calls.jsonl")
-            result = {"version": version, "repeat": repeat + 1, "source": str(directory),
-                      "cutoff": cutoff, "window": ids, "status": record["status"],
-                      "seconds": time.monotonic() - started, "analysis": record.get("analysis"),
-                      "notes": run.notes if version == "v24" else run.experience.active,
-                      "shown_event_ids": record.get("shown_event_ids", ids),
-                      "usage": calls[-1].get("usage", {}) if calls else {},
-                      "input_tokens_counted": counter(calls[-1]["prompt"]) if calls else None,
-                      "error": record.get("error"), "reason": record.get("reason")}
-            write_json(path / "summary.json", result)
-            results.append(result)
-            counter.save()
-            print(json.dumps({"case": output.name, "version": version, "repeat": repeat + 1,
-                              "status": result["status"], "usage": result["usage"]}), flush=True)
+        path = output / f"v24_1_r{repeat + 1}"
+        if path.exists():
+            raise FileExistsError(path)
+        role = model.for_role(V241_FORMAT)
+        run = V241(task, NoGeneration(), config=config, reflection_model=role,
+                   run_dir=path, reflection_counter=counter)
+        ids = frozen_window(run, rows, cutoff)
+        run.unreviewed_events = ids
+        attempt = run.attempts[-1]
+        started = time.monotonic()
+        run._reflect(attempt)
+        record = attempt.record["reflection"]
+        write_json(path / "reflection.json", record)
+        calls = run.store.rows("calls.jsonl")
+        result = {"version": "v24_1", "repeat": repeat + 1, "source": str(directory),
+                  "cutoff": cutoff, "window": ids, "status": record["status"],
+                  "seconds": time.monotonic() - started, "analysis": record.get("analysis"),
+                  "notes": run.experience.active, "shown_event_ids": record.get("shown_event_ids", ids),
+                  "usage": calls[-1].get("usage", {}) if calls else {},
+                  "input_tokens_counted": counter(calls[-1]["prompt"]) if calls else None,
+                  "error": record.get("error"), "reason": record.get("reason")}
+        write_json(path / "summary.json", result)
+        results.append(result)
     return results
 
 
@@ -209,7 +195,6 @@ def main():
     parser.add_argument("--pack-root", type=Path)
     parser.add_argument("--case", action="append", default=[], help="RUN_DIR:ATTEMPT_CUTOFF")
     parser.add_argument("--repeats", type=int, default=2)
-    parser.add_argument("--versions", nargs="+", choices=("v24", "v24_1"), default=("v24", "v24_1"))
     parser.add_argument("--scheduler-socket", default="/tmp/traceaad-1003/scheduler.sock")
     parser.add_argument("--live", action="store_true")
     args = parser.parse_args()
@@ -223,7 +208,7 @@ def main():
     result = {"started_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
               "tokenizer": counter.settings, "packing": [], "reflection": [],
               "source_hashes": {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
-                                for folder in ("traceaad_v24_1", "traceaad_v24") for p in Path(folder).glob("*.py")}}
+                                for folder in ("traceaad_base", "traceaad_v21_1", "traceaad_v24_1") for p in Path(folder).glob("*.py")}}
     try:
         if args.pack_root:
             for task in ("tsp_construct", "cvrp_aco", "fssp_gls", "graph_colouring", "jssp_construct", "op_aco"):
@@ -239,8 +224,7 @@ def main():
         for index, case in enumerate(args.case):
             directory, cutoff = case.rsplit(":", 1)
             result["reflection"].extend(live_case(Path(directory), int(cutoff), args.scheduler_socket,
-                                                 counter, args.output / f"case{index + 1}", args.repeats,
-                                                 args.versions))
+                                                 counter, args.output / f"case{index + 1}", args.repeats))
             write_json(args.output / "summary.json", result)
     finally:
         counter.save()

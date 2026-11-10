@@ -1,4 +1,4 @@
-"""Shared mechanism-1.1 lifecycle, independent of the generation protocol."""
+"""Shared current mechanism-1 lifecycle, independent of the generation protocol."""
 
 import json
 import math
@@ -6,9 +6,10 @@ from dataclasses import asdict
 from pathlib import Path
 
 from traceaad_base import Config
-from traceaad_base.selection import identity
+from traceaad_base.selection import identity, random_references
 
 from .selection import Selector
+from .references import TrajectoryReferences, settings_for
 
 
 class TrajectoryAllocation:
@@ -18,28 +19,29 @@ class TrajectoryAllocation:
     def _version(self) -> str:
         return self.method.removeprefix("traceaad_").upper().replace("_", ".")
 
-    def __init__(self, task, model, *, config=None, **options):
+    def __init__(self, task, model, *, config=None, reference_embedding=None, **options):
         config = config or Config()
         if config.initial_size < 1:
             raise ValueError(f"{self._version} needs at least one initial program")
         self.selector = Selector()
-        if options.get("resume"):
-            self._validate_resume(task, config, options.get("run_dir"))
+        self.reference_settings = settings_for(reference_embedding) if reference_embedding is not None else None
+        self.reference_rule = (self.reference_settings["rule"] if self.reference_settings is not None
+                               else "quality_pool_uniform_v1")
         super().__init__(task, model, config=config, **options)
+        self.references = (TrajectoryReferences(reference_embedding, self.store)
+                           if reference_embedding is not None else None)
         if not options.get("resume") and self.store.path is not None:
             saved = self.store.read("run_config.json")
-            self.store.write("run_config.json", {**saved, "selection_settings": self.selector.settings})
+            self.store.write("run_config.json", {**saved, "selection_settings": self.selector.settings,
+                                                 "reference_settings": self.reference_settings})
 
     def _validate_resume(self, task, config, directory):
         """Reject changed settings before Base repairs or replays any logs."""
-        if directory is None or not (Path(directory) / "run_config.json").is_file():
-            raise ValueError(f"{self._version} resume requires its original run_config.json")
+        super()._validate_resume(task, config, directory)
         saved = json.loads((Path(directory) / "run_config.json").read_text())
         expected = {
-            "method": self.method,
-            "config": asdict(config),
             "selection_settings": self.selector.settings,
-            "task": json.loads(json.dumps(task.description())),
+            "reference_settings": self.reference_settings,
         }
         differences = []
         for name, value in expected.items():
@@ -55,11 +57,28 @@ class TrajectoryAllocation:
             raise ValueError(f"Incompatible {self._version} resume settings: " + ", ".join(differences))
 
     def select(self, attempt_id: int):
+        if self.config.crossover_weight == 0:
+            reference_ids = dict.fromkeys(self.selector.nodes)
+        elif self.references is not None:
+            reference_ids = self.references.select(self.archive)
+        else:
+            reference_ids = random_references(
+                {pid: node.fitness for pid, node in self.selector.nodes.items()}, self.rng
+            )
         action, record = self.selector.choose(
             self.config.evaluation_budget - self.evaluations_used,
             self.rng,
             self.config,
+            reference_ids=reference_ids,
         )
+        if self.references is not None:
+            record["reference_selection"] = (
+                dict(self.references.records[action.parent_id]) if action.operator == "Crossover"
+                else {"rule": self.reference_settings["rule"], "reference_id": None}
+            )
+        else:
+            record["reference_selection"] = {"rule": "quality_pool_uniform_v1",
+                                              "reference_id": action.reference_id}
         return (
             self.archive[action.parent_id],
             action.operator,

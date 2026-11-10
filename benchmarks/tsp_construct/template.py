@@ -12,7 +12,7 @@ def select_next_node(current_node: int, destination_node: int, unvisited_nodes: 
     distance_matrix: Full symmetric Euclidean (n,n) matrix, with a zero diagonal.
 
     Return:
-    A full-graph node ID contained in unvisited_nodes, not an array position.
+    Select an entry from unvisited_nodes and return that full-graph node ID.
     The outer solver appends the final remaining node and return-to-start edge.
     """
     return int(unvisited_nodes[0])
@@ -20,7 +20,7 @@ def select_next_node(current_node: int, destination_node: int, unvisited_nodes: 
 
 task_description = (
     "The Traveling Salesman Problem asks for a shortest tour that visits each node once and returns to the start. "
-    "Instances are generated from node coordinates, but the constructive heuristic does not receive coordinates. "
+    "The graph is Euclidean, with pairwise distances derived from node coordinates. "
     "At each step it receives the current node id, the destination/start node id, an array of unvisited candidate "
     "node ids, and the pairwise distance matrix, and must return the id of the next node to visit. "
     "Help me design a novel algorithm to select the next node in each step."

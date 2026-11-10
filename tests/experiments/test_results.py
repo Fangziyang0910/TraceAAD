@@ -223,13 +223,13 @@ function scope() {
 
 
 def test_dashboard_scope_filters_every_view_without_changing_run_inventory(tmp_path):
-    visible = ['traceaad_base_20261105', 'traceaad_v21c', 'traceaad_v22', 'traceaad_v23', 'eoh']
+    visible = ['traceaad_base_20261105', 'traceaad_v21_1c', 'traceaad_v22', 'traceaad_v23', 'eoh']
     all_methods = [*visible, 'traceaad_base', 'traceaad_v19', 'traceaad_retired']
     for method in reversed(all_methods):
         dashboard_run(tmp_path / method / 'tsp_construct' / 'rep1')
     index = dict(schema=1, methods={m: ['tsp_construct/rep1'] for m in all_methods},
                  visualization_methods=visible, visualization_reference=visible[0],
-                 default_experiment='traceaad_v22', labels={visible[0]: 'Base', 'traceaad_v21c': 'V21'})
+                 default_experiment='traceaad_v22', labels={visible[0]: 'Base', 'traceaad_v21_1c': 'V21'})
     write_json(tmp_path / 'primary_runs.json', index)
     before = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
     monitor = ResultsMonitor(tmp_path)
@@ -271,7 +271,7 @@ def test_comparison_uses_configured_base_reference_and_drops_hidden_links():
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const code=fs.readFileSync(process.argv[1],'utf8');
 const part=code.slice(code.indexOf('const CMP ='),code.indexOf('async function loadCompare()'));
-const ids=['traceaad_base_20261105','traceaad_v21c','traceaad_v22','traceaad_v23','eoh'];
+const ids=['traceaad_base_20261105','traceaad_v21_1c','traceaad_v22','traceaad_v23','eoh'];
 const data={default_reference:ids[0],cohorts:ids.map(id=>({id,batch:id,label:id,
  model_name:'qwen3.8-27b',runs:18,variant:'',heldout_tasks:[]}))};
 const context=vm.createContext({S:{batch:'traceaad_v22'},getJSON:async()=>({data})});
@@ -349,6 +349,20 @@ def test_traceaad_versions_use_separate_formal_batches(tmp_path):
     assert [[r['name'] for r in c['runs']] for c in runs] == [['rep1'], ['rep1'], ['rep1']]
     assert runs[1]['runs'][0]['status']=='stopped'
     assert runs[1]['runs'][0]['budget_used']==200 and runs[1]['runs'][0]['budget']==1000
+
+
+def test_current_task_subset_preserves_unfiltered_baselines_and_raw_runs(tmp_path):
+    for method in ('traceaad_base', 'eoh'):
+        for task in ('tsp_construct', 'graph_colouring'):
+            dashboard_run(tmp_path/method/task/'rep1')
+    write_json(tmp_path/'primary_runs.json', dict(schema=1,
+        methods={m:[f'{task}/rep1' for task in ('tsp_construct', 'graph_colouring')]
+                 for m in ('traceaad_base', 'eoh')},
+        visualization_tasks={'traceaad_base':['tsp_construct']}))
+    cohorts={c['id']:c for c in ResultsMonitor(tmp_path).cohorts()}
+    assert cohorts['traceaad_base']['runs']==1
+    assert cohorts['eoh']['runs']==2
+    assert (tmp_path/'traceaad_base/graph_colouring/rep1/run_config.json').is_file()
 
 
 def test_stop_receipt_does_not_override_a_resumed_journal(tmp_path):

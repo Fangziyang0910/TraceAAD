@@ -18,9 +18,9 @@ machine_order[j, k] is its zero-based machine ID; each row is a permutation of
 0..m-1. Both inputs have shape (n, m), with columns indexing OPERATION positions.
 Return a finite nonnegative numeric array starts of shape (n, m). starts[j, k]
 is the start time of that operation. Each operation must start after its job's
-preceding operation finishes. Operations on the same machine must not overlap.
-Minimize makespan, max(starts + processing_times). Return start times, not a score.
+preceding operation finishes. Operations on the same machine occupy disjoint time intervals.
+Minimize makespan, max(starts + processing_times). Return the matrix of operation start times.
 The supplied construction executes all operations serially in job order.
 You may change or replace the entire algorithm and add helper functions.
 solve is called once per instance with the complete problem.
-This is deterministic static makespan scheduling, not dynamic arrivals or a flexible-machine assignment problem.'''
+All jobs and their fixed machine assignments are specified at the start of this deterministic scheduling problem.'''

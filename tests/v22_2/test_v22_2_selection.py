@@ -1,11 +1,14 @@
 """Check the Base-anchored champion-yield estimator against hand calculations."""
 
 import random
+from itertools import product
+from math import prod
 
 import pytest
 
-from traceaad_base import Evaluation, Program
-from traceaad_v22_1.selection import MULTIPLIER_CAP, Action, AttemptRecord, Estimate, Selector
+from traceaad_base import Config, Evaluation, Program
+from traceaad_base.selection import random_references, reference_pool, weights
+from traceaad_v22_2.selection import MULTIPLIER_CAP, Action, AttemptRecord, Estimate, Selector
 
 
 def program(pid, fitness, operator="Init", parent=0, reference=None, code=None, status="success"):
@@ -30,6 +33,14 @@ def roots(fitness=(100.0, 110.0)):
     for pid, value in enumerate(fitness, 1):
         selector.observe(pid, None, program(pid, value), evaluations=1, model_calls=1)
     return selector
+
+
+def references_for(selector):
+    return random_references({pid: node.fitness for pid, node in selector.nodes.items()}, random.Random(0))
+
+
+def allocation(selector, config=None, *, first_only=False):
+    return selector.allocation(config, first_only=first_only, reference_ids=references_for(selector))
 
 
 def record_for(selector, action):
@@ -249,7 +260,7 @@ def test_far_shared_breakthrough_gets_zero_quality_weight():
     assert estimate.eta == 0.0
 
 
-def test_scale_and_shift_invariance_of_allocation():
+def test_scale_and_shift_invariance_when_temperature_uses_the_same_units():
     def build(scale, shift):
         def value(v):
             return scale * v + shift
@@ -266,7 +277,7 @@ def test_scale_and_shift_invariance_of_allocation():
             evaluations=2,
             first_result=ERROR_FIRST,
         )
-        actions, _, _, probs, _ = selector.allocation()
+        actions, _, _, probs, _ = allocation(selector, Config(selection_temperature=scale))
         return {(a.parent_id, a.operator, a.reference_id): p for a, p in zip(actions, probs)}
 
     original = build(1.0, 0.0)
@@ -276,11 +287,11 @@ def test_scale_and_shift_invariance_of_allocation():
         assert original[key] == pytest.approx(transformed[key], rel=1e-12, abs=1e-12)
 
 
-def test_no_crossover_beta_renormalizes_and_no_evidence_keeps_base():
+def test_no_reference_redirects_crossover_mass_to_explore():
     selector = roots((100.0,))
-    actions, beta, estimates, probs, _ = selector.allocation()
+    actions, beta, estimates, probs, _ = allocation(selector)
     assert [a.operator for a in actions] == ["Refine", "Explore"]
-    assert beta == pytest.approx([0.60, 0.40])
+    assert beta == pytest.approx([0.45, 0.55])
     assert probs == pytest.approx(beta)
     assert all(estimate.eta == 0.0 for estimate in estimates)
 
@@ -301,18 +312,18 @@ def test_first_view_ignores_repair_breakthrough():
     first = selector.estimate_action(Action(1, "Refine"), first_only=True)
     assert full.value == pytest.approx(5.0)
     assert first.value == 0.0
-    _, chosen = selector.choose(1, random.Random(0))
+    _, chosen = selector.choose(1, random.Random(0), reference_ids=references_for(selector))
     assert chosen["valuation_view"] == "first_result"
 
 
 def test_multiplier_cap_bounds_single_positive_dominance():
     selector = roots((100.0, 105.0, 110.0, 115.0, 120.0))
-    actions = selector.actions()
+    actions = selector.actions(references_for(selector))
     crafted = [Estimate(0.0, 0.5, 10.0, 0.0, 1.0, 0)] * (len(actions) - 1) + [
         Estimate(100.0, 0.5, 10.0, 0.0, 1.0, 1)
     ]
     selector._estimates = lambda given, **kwargs: crafted
-    given, beta, _, probs, diagnostics = selector.allocation()
+    given, beta, _, probs, diagnostics = allocation(selector)
     assert given == actions
     assert diagnostics["uncapped_multipliers"][-1] > MULTIPLIER_CAP
     assert diagnostics["multipliers"][-1] == MULTIPLIER_CAP
@@ -320,15 +331,66 @@ def test_multiplier_cap_bounds_single_positive_dominance():
     assert probs[-1] / beta[-1] < diagnostics["uncapped_multipliers"][-1]
 
 
-def test_zero_evaluation_record_excluded_from_yield_but_counts_model_calls():
+def test_zero_evaluation_record_keeps_cost_without_penalizing_base_probability():
     selector = roots((100.0, 110.0))
+    _, before, _, _, _ = allocation(selector)
     record = record_for(selector, Action(1, "Refine"))
     selector.observe(3, record, None, evaluations=0, model_calls=2)
     assert len(selector.history) == 1
     assert selector.history[0].evaluations == 0
     estimate = selector.estimate_action(Action(1, "Refine"))
     assert estimate.value == 0.0 and estimate.eta == 0.0
-    assert selector.model_calls_spent()[1] == 2
+    assert selector.history[0].model_calls == 2
+    _, after, _, _, _ = allocation(selector)
+    assert after == before
+
+
+def test_mechanism_and_base_share_boltzmann_quality_prior():
+    selector = roots((5.69, 5.70, 5.80))
+    config = Config(selection_temperature=0.1)
+    archive = {pid: program(pid, node.fitness) for pid, node in selector.nodes.items()}
+    quality = weights(archive, config.selection_temperature)
+    normalizer = sum(quality.values())
+    actions, beta, estimates, probabilities, _ = allocation(selector, config)
+    by_parent = dict.fromkeys(quality, 0.0)
+    for action, probability in zip(actions, beta):
+        by_parent[action.parent_id] += probability
+    assert by_parent == pytest.approx({pid: value / normalizer for pid, value in quality.items()})
+    assert probabilities == beta
+    assert all(estimate.eta == 0.0 for estimate in estimates)
+
+
+@pytest.mark.parametrize("fitness", [(1.0, 2.0), (1.0, 2.0, 3.0, 4.0), (1.0, 1.0, 2.0)])
+def test_random_reference_prior_matches_base_full_joint_distribution(fitness):
+    selector = roots(fitness)
+    config = Config()
+    archive = {pid: program(pid, node.fitness) for pid, node in selector.nodes.items()}
+    quality = weights(archive, config.selection_temperature)
+    normalizer = sum(quality.values())
+    ids = sorted(archive)
+    pools = {pid: [p.id for p in reference_pool(archive, pid)] for pid in ids}
+    options = [pools[pid] or [None] for pid in ids]
+    count = prod(len(pool) for pool in options)
+    actual = {}
+    for references in product(*options):
+        actions, beta, _, probabilities, _ = selector.allocation(
+            config, reference_ids=dict(zip(ids, references))
+        )
+        assert probabilities == beta
+        for action, probability in zip(actions, beta):
+            actual[action] = actual.get(action, 0.0) + probability / count
+    expected = {}
+    for pid in ids:
+        parent_probability = quality[pid] / normalizer
+        expected[Action(pid, "Refine")] = parent_probability * config.refine_weight
+        expected[Action(pid, "Explore")] = parent_probability * (
+            config.explore_weight + (config.crossover_weight if not pools[pid] else 0.0)
+        )
+        for reference in pools[pid]:
+            expected[Action(pid, "Crossover", reference)] = (
+                parent_probability * config.crossover_weight / len(pools[pid])
+            )
+    assert actual == pytest.approx(expected)
 
 
 def test_history_window_excludes_old_records():

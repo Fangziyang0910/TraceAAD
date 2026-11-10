@@ -25,8 +25,8 @@ def heuristics(
 task_description = """
 Design an edge-prior heuristic for Ant Colony Optimization (ACO) on the
 Orienteering Problem (OP). A tour starts at depot node 0, collects prizes at
-visited nodes, and must return to the depot without exceeding the travel
-budget ``maxlen``. The objective is to maximize the total collected prize.
+visited nodes, and returns to the depot with total travel length at most
+``maxlen``. The objective is to maximize the total collected prize.
 
 ACO combines the returned heuristic matrix with its pheromone matrix to sample
 feasible moves. The function receives node prizes, the pairwise distance
@@ -37,6 +37,6 @@ Its returned matrix is reused across all ants and iterations.
 At each construction step, ACO multiplies this fixed prior and pheromone by a
 dynamic feasibility mask based on the distance already travelled, the next
 edge, and the return distance to the depot. Candidates exceeding ``maxlen``
-are masked out before sampling. The prior changes relative weights among
-feasible moves; it does not override this mask or directly select a route.
+are masked out before sampling. The prior supplies relative weights among
+feasible moves, and ACO constructs the route through masked sampling.
 """.strip()

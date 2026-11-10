@@ -1,4 +1,5 @@
 import random
+import math
 
 import pytest
 
@@ -6,7 +7,7 @@ from traceaad_base import Config, Evaluation, Program
 from traceaad_base.models import Attempt
 from traceaad_base.prompts import PromptBuilder
 from traceaad_base.search import TraceAAD
-from traceaad_base.selection import choose, qualities, reference_pool, sources, weights
+from traceaad_base.selection import boltzmann_weights, choose, reference_pool, sources, weights
 
 
 def program(pid, score, parent=0, *, status="success"):
@@ -22,31 +23,71 @@ def attempt(aid, parent, child, calls, *, reference=None):
                    child, [{} for _ in range(calls)])
 
 
-def test_weight_falls_with_rank_and_calls_and_children_earn_no_credit():
+def test_parent_selection_ignores_call_history_and_children_earn_no_credit(task):
     archive = {p.id: p for p in [program(1, 1), program(2, 2), program(3, 9, 1),
                                 program(4, 12, 2), program(5, None, 1, status="error")]}
     attempts = [attempt(1, 1, 3, 2, reference=2), attempt(2, 1, 5, 1), attempt(3, 2, 4, 1)]
-    actual = weights(archive, attempts)
-    assert actual[1] == pytest.approx(3 / 6)
-    assert actual[2] == pytest.approx(2 ** -1.5 * 3 / 4)
-    assert actual[3] == pytest.approx(3 ** -1.5)
+    search = TraceAAD(task, None)
+    search.archive = archive
+    search.rng = random.Random(21)
+    before = [search.select(i)[:3] for i in range(30)]
+    search.attempts = attempts
+    search.rng = random.Random(21)
+    assert [search.select(i)[:3] for i in range(30)] == before
+    actual = weights(archive, 1.0)
+    assert actual[1] / actual[2] == pytest.approx(math.e)
     archive[6] = program(6, 0, 2)
     attempts.append(attempt(4, 2, 6, 1))
-    assert weights(archive, attempts)[2] == pytest.approx(3 ** -1.5 * 3 / 5)
+    changed = weights(archive, 1.0)
+    assert changed[1] / changed[2] == pytest.approx(actual[1] / actual[2])
+
+
+def test_near_scores_and_temperature_use_fitness_gaps_not_rank():
+    actual = boltzmann_weights({1: 5.69, 2: 5.70}, 0.1)
+    assert actual[1] / actual[2] == pytest.approx(math.exp(0.01 / 0.1))
+    assert boltzmann_weights({1: 5.69, 2: 5.70}, 0.2)[2] > actual[2]
+    # A better newcomer changes both weights by the same factor.
+    newcomer = boltzmann_weights({1: 5.69, 2: 5.70, 3: 5.60}, 0.1)
+    assert newcomer[1] / newcomer[2] == pytest.approx(actual[1] / actual[2])
+
+
+def test_boltzmann_handles_negative_large_and_extreme_scores_without_overflow():
+    original = boltzmann_weights({1: -5.0, 2: -4.0}, 2.0)
+    assert boltzmann_weights({1: 999995.0, 2: 999996.0}, 2.0) == pytest.approx(original)
+    assert boltzmann_weights({1: -50.0, 2: -40.0}, 20.0) == pytest.approx(original)
+    assert boltzmann_weights({1: -1e308, 2: 1e308}, 1e308) == pytest.approx(
+        {1: 1.0, 2: math.exp(-2.0)}
+    )
+    assert boltzmann_weights({1: -1e308, 2: 1e308}, 1.0) == {1: 1.0, 2: 0.0}
+    assert boltzmann_weights({}, 1.0) == {}
+
+
+@pytest.mark.parametrize("temperature", [0.0, -1.0, math.inf, math.nan])
+def test_selection_temperature_must_be_finite_and_positive(temperature):
+    with pytest.raises(ValueError, match="selection_temperature"):
+        Config(selection_temperature=temperature)
+
+
+def test_parent_candidates_exclude_nonfinite_fitness():
+    archive = {p.id: p for p in [program(1, 1.0), program(2, math.nan),
+                                program(3, math.inf), program(4, None)]}
+    assert weights(archive, 1.0) == {1: 1.0}
 
 
 def test_identical_source_is_one_parent_candidate_kept_at_its_earliest_program():
     archive = {p.id: p for p in [program(1, 1), program(2, 1, 1), program(3, 5)]}
     archive[2].code = archive[1].code + "\n# same\n"
-    assert set(weights(archive, [])) == {1, 3}
+    assert set(weights(archive, 1.0)) == {1, 3}
     assert [p.id for p in sources(archive)] == [1, 3]
     assert reference_pool(archive, 2) == []
 
 
-def test_average_tied_ranks_and_median_reference_candidates():
+def test_tied_scores_get_equal_weights_and_median_references_stay_unchanged():
     archive = {p.id: p for p in [program(1, -4), program(2, -2), program(3, -2), program(4, 5)]}
     archive[0] = Program(0, "seed", None, None, None, None, None)
-    assert qualities(archive) == {1: 1, 2: 2.5 ** -1.5, 3: 2.5 ** -1.5, 4: 4 ** -1.5}
+    assert weights(archive, 1.0) == pytest.approx(
+        {1: 1, 2: math.exp(-2), 3: math.exp(-2), 4: math.exp(-9)}
+    )
     assert [p.id for p in reference_pool(archive, 2)] == [1, 3]
     assert [p.id for p in reference_pool(archive, 4)] == [1, 2, 3]
 
@@ -54,7 +95,7 @@ def test_average_tied_ranks_and_median_reference_candidates():
 def test_operator_weights_and_reference_fallback(task, tmp_path):
     rng = random.Random(4)
     archive = {1: program(1, 2)}
-    parent, op = choose(archive, [], Config(), rng)
+    parent, op = choose(archive, Config(), rng)
     assert parent.id == 1 and op in {"Refine", "Explore", "Crossover"}
     assert reference_pool(archive, 1) == []
 
@@ -142,18 +183,3 @@ def test_timeout_text_states_a_limit_only_in_repair(task):
     assert "did not finish within the allowed time" not in prompt and "160" not in prompt
     repair = builder.repair_program(failed)
     assert "10 seconds per problem instance" in repair and "160" not in repair
-
-
-def test_initialization_and_repair_preserve_original_shared_prompts(task):
-    from traceaad_v21.frozen_base_prompts import PromptBuilder as OriginalPrompts
-
-    archive = {p.id: p for p in [program(1, 5), program(2, None, status="error"),
-                                program(3, None, status="timeout")]}
-    archive[0] = Program(0, "def solve(x): return x", "seed", None, None, None, None)
-    archive[3].evaluation = Evaluation("timeout", failure="Evaluation exceeded 3 seconds.")
-    current, original = PromptBuilder(task, Config()), OriginalPrompts(task, Config())
-    for inputs in ({}, archive):
-        assert current.initialization(inputs) == original.initialization(inputs)
-    for failed in (archive[2], archive[3]):
-        assert current.repair_program(failed) == original.repair_program(failed)
-    assert current.repair_format("{}", "missing") == original.repair_format("{}", "missing")
