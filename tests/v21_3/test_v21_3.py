@@ -20,9 +20,10 @@ TRACEBACK = """Traceback (most recent call last):
 IndexError: list index out of range"""
 
 
-def test_instructions_differ_from_v21_2_only_where_decisions_and_formation_records_were_named():
+def test_instructions_differ_from_v21_2_in_the_material_note_and_formation_records():
     assert (REFINE, EXPLORE) == (v21_2.REFINE, v21_2.EXPLORE)
-    assert COMMON == v21_2.COMMON.replace("Designs and decisions are", "Designs are")
+    assert COMMON == ("Code differences and evaluation results are observed facts. Designs describe implementations "
+                      "but may be inaccurate. A score change alone does not establish why the result changed.")
     assert CROSSOVER == v21_2.CROSSOVER.replace(" and the formation records of its computations", "")
 
 
@@ -41,7 +42,7 @@ def test_step_card_gives_design_change_and_result():
     archive[3] = program(3, 90., 2)
     rows = card(archive, archive[3]).splitlines()
     assert rows[:4] == ["Algorithm 3", "Parent: Algorithm 2", "Operator: Refine", "Design: design_3"]
-    assert rows.index("Changed computation:") == 4
+    assert rows.index("Code change:") == 4
     assert rows[-1] == "Result relative to Algorithm 2: 98.0 -> 90.0; improved"
 
 
@@ -51,7 +52,7 @@ def test_a_change_has_three_lines_of_context_and_a_rewrite_its_full_diff():
                2: program(2, 9., 1, source=before.replace("c = 3", "c = 30")),
                3: program(3, 8., 1, source=REWRITE, operator="Explore")}
     rows = card(archive, archive[2]).splitlines()
-    start = rows.index("Changed computation:")
+    start = rows.index("Code change:")
     assert rows[start + 1:start + 9] == [" def solve(x):", "     a = 1", "     b = 2", "-    c = 3", "+    c = 30",
                                          "     d = 4", "     e = 5", "     return a + b + c + d + e"]
     text = card(archive, archive[3])
@@ -61,7 +62,7 @@ def test_a_change_has_three_lines_of_context_and_a_rewrite_its_full_diff():
 def test_identical_and_unparsable_code_are_stated():
     archive = chain(2)
     archive[3] = program(3, 98., 2, source=archive[2].code + "\n# comment\n")
-    assert "Changed computation: none; the code is identical to Algorithm 2." in card(archive, archive[3])
+    assert "Code change: none; the code is identical to Algorithm 2." in card(archive, archive[3])
     archive[4] = program(4, None, 2, source="def solve(x:\n    return x\n", failure="SyntaxError: bad")
     text = card(archive, archive[4])
     assert "the code of Algorithm 4 could not be parsed; the raw source texts are compared." in text
@@ -94,7 +95,7 @@ def test_nearest_three_ancestors_show_changes_and_farther_ones_only_designs():
     assert view["ancestor_changes"] == [9, 10, 11]
     for row in cards:
         number = int(row.split("\n")[0])
-        assert ("Changed computation:" in row) == (number in (9, 10, 11))
+        assert ("Code change:" in row) == (number in (9, 10, 11))
         assert f"Design: design_{number}" in row
     assert "Decision" not in history
 

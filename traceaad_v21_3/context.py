@@ -15,8 +15,8 @@ from traceaad_v21_2.context import EXPLORE, REFINE, explorations, receiver_attem
 from traceaad_v21_1.representation import bare
 from .representation import changes, failure
 
-COMMON = ("Results and changed computations are measured facts. Designs are descriptions, "
-          "and do not establish why a result occurred.")
+COMMON = ("Code differences and evaluation results are observed facts. Designs describe implementations but may be "
+          "inaccurate. A score change alone does not establish why the result changed.")
 CROSSOVER = ("Improve the current algorithm with decision information from the reference algorithm. "
              "Use the reference algorithm to judge which computation supplies information the current algorithm "
              "lacks and what that computation depends on. "
@@ -91,7 +91,8 @@ def context(archive, parent, operator, chosen, config):
                             + (f"\nOmitted intermediate nodes before this record: {omitted}" if omitted else ""))
                 previous = index
             blocks.append(f"[Ancestor History]\nAncestors of the current algorithm, ordered from earlier to later; "
-                          f"the nearest {RECENT_ANCESTORS} show their changed computation.\n\n" + "\n\n".join(rows))
+                          f"the nearest {RECENT_ANCESTORS} show their code change; farther ones show only their design, as "
+                          f"background to how the code formed, not as evidence of what changed.\n\n" + "\n\n".join(rows))
         view.update(ancestor_path=[p.id for p in path], ancestors=[p.id for p in formation],
                     ancestor_changes=[p.id for p in formation if p.id in near and p.operator != "Init"]
                     if formation else [])

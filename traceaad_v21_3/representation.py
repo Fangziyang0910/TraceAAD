@@ -18,13 +18,13 @@ def _normalized(code):
 def changes(parent, program):
     """The changed lines with three lines of context, whatever the size of the change."""
     if identity(parent.code) == identity(program.code):
-        return f"Changed computation: none; the code is identical to Algorithm {parent.id}."
+        return f"Code change: none; the code is identical to Algorithm {parent.id}."
     try:
         old, new = _normalized(parent.code), _normalized(program.code)
-        header = "Changed computation:"
+        header = "Code change:"
     except (SyntaxError, ValueError):
         old, new = parent.code.splitlines(), program.code.splitlines()
-        header = (f"Changed computation: the code of Algorithm {program.id} could not be parsed; "
+        header = (f"Code change: the code of Algorithm {program.id} could not be parsed; "
                   f"the raw source texts are compared.")
     rows = ["..." if line.startswith("@@") else line
             for line in list(unified_diff(old, new, lineterm="", n=CONTEXT_LINES))[2:]]
