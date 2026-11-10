@@ -220,3 +220,11 @@ TraceAAD 使用原入口、原目录和相同参数加 `--resume` 续跑。操�
 `20261109_base_static_co6` 于北京时间11月9日15:52启动18路，各1000次评价，结果入口为 `experiments_result/traceaad_base_static_20261109`。它与新V23.1直接共用 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261109_traceaad_v23_1_static`，恢复使用该快照内批次清单记录的原入口命令；当前仓库的入口重命名不改变冻结运行。六任务预览及18路实际配置逐项核对，含任务、预算、评价、模型及源码路径均一致；只由选择实现区分机制1。
 
 V24批次 `20261109_v24_co6` 的18路已停止，结果保留。从活动同步/检查名单移出V24，保留其历史展示；新Base加入主名单并成为默认比较参照。V22.1和新V23.1继续运行。15:57复查Base18路均有真实评价，共169次，模型请求错误0。见[启动记录](../../docs/记录/2026-11-09-Base正式对照启动与V24停止.md)与[证据](../../experiments_result/traceaad_base_static_20261109/launch_20261109_static/README.md)。
+
+## V21.2 四任务批次与 V21.1 停止（11月10日）
+
+`20261110_v21_2_co4` 于北京时间11月10日15:31在server4入队，任务为TSP、CVRP、FSSP、OP，每个任务3个种子，共12路，每路1000次评价，训练后自动做独立主测试。源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261110_traceaad_v21_2`（提交6bec61d9），453份文件按SHA-256核验，远端58项测试通过。结果入口为 `experiments_result/traceaad_v21_2`（server4主仓库中的符号链接）。批次配置与 `20261109_v21_1_co4` 逐字段比对，只有方法名与生成协议（`trajectory_design_reasoning_v1`）不同。
+
+补位控制器为tmux会话 `20261110_v21_2_queue`。它只管理V21.2，同时观察原四任务队列与Base/V23.2的5份清单，共用36路上限；原控制器 `20261109_co4_queue` 未改动。状态文件为快照内的 `experiments_result/traceaad_v21_2/launch_logs/20261110_v21_2_co4_queue.json`。
+
+15:50停止V21.1仍在运行的5路（CVRP种子0/2，FSSP种子0/1/2）。结果保留，summary状态为 `stopped`；原控制器将它们记为 `blocked`，不会重启。V21.1其余7路已完成。V21.1已移出活动同步/检查名单，历史展示保留。腾出的预算交给V21.2和固定状态回放。回放位于同一快照的 `experiments_result/replay_v21_2/`，tmux会话为 `20261110_v21_2_replay`。
