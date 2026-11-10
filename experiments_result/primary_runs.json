@@ -620,20 +620,6 @@
       "op_aco/20261109_v23_2_co6_op_traceaad_v23_2_rep2",
       "op_aco/20261109_v23_2_co6_op_traceaad_v23_2_rep3"
     ],
-    "traceaad_v21_1": [
-      "tsp_construct/20261109_v21_1_co4_tsp_traceaad_v21_1_rep1",
-      "tsp_construct/20261109_v21_1_co4_tsp_traceaad_v21_1_rep2",
-      "tsp_construct/20261109_v21_1_co4_tsp_traceaad_v21_1_rep3",
-      "cvrp_aco/20261109_v21_1_co4_cvrp_traceaad_v21_1_rep1",
-      "cvrp_aco/20261109_v21_1_co4_cvrp_traceaad_v21_1_rep2",
-      "cvrp_aco/20261109_v21_1_co4_cvrp_traceaad_v21_1_rep3",
-      "fssp_gls/20261109_v21_1_co4_fssp_traceaad_v21_1_rep1",
-      "fssp_gls/20261109_v21_1_co4_fssp_traceaad_v21_1_rep2",
-      "fssp_gls/20261109_v21_1_co4_fssp_traceaad_v21_1_rep3",
-      "op_aco/20261109_v21_1_co4_op_traceaad_v21_1_rep1",
-      "op_aco/20261109_v21_1_co4_op_traceaad_v21_1_rep2",
-      "op_aco/20261109_v21_1_co4_op_traceaad_v21_1_rep3"
-    ],
     "traceaad_v22_2": [
       "tsp_construct/20261109_v22_2_co4_tsp_traceaad_v22_2_rep1",
       "tsp_construct/20261109_v22_2_co4_tsp_traceaad_v22_2_rep2",
@@ -822,7 +808,11 @@
       2
     ],
     "runs_per_method": 12,
-    "controller_session": "20261109_co4_queue",
-    "capacity": 36
+    "controller_session": [
+      "20261109_co4_queue",
+      "20261110_v21_2_queue"
+    ],
+    "capacity": 36,
+    "note": "V21.1 co4 stopped 2026-11-10 (5 routes); V21.2 co4 takes its budget"
   }
 }
