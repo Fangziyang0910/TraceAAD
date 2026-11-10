@@ -7,7 +7,7 @@
 | `base` | 当前 Base 基础演化对照。 |
 | `v21.1` | 当前Base加机制2，选择与参考规则完全继承Base。 |
 | `v21.2` | 当前Base加V21.2版机制2（轨迹引导的设计推理）；`--reference-code`为参考另给完整源码的对照。 |
-| `v21.3` | 当前Base加当前机制2：只在Refine中读同父代Refine差分与结果；Crossover读静态参考Design，Explore不读历史；`--reference-code`独立比较参考源码。 |
+| `v21.3` | 当前Base加当前机制2：Refine读紧凑形成路径与各类同父代尝试的差分、结果；Crossover读静态参考Design，Explore不读历史；`--reference-code`独立比较参考源码。 |
 | `v22.2` | V21.1加完整新版机制1。 |
 | `v23.2` | 当前 Base 加机制一。 |
 | `v24.1` | V21.1加当前机制3：条件经验、展示与跨分支修订。 |

@@ -1,4 +1,4 @@
-"""Layer 2 of a step: its actual change, one unified diff of the normalized parent and child source;
+"""A step's actual change, one unified diff of the normalized parent and child source;
 and where a failed program stopped, as the candidate's own source line."""
 
 import ast
@@ -18,13 +18,13 @@ def _normalized(code):
 def changes(parent, program):
     """The changed lines with three lines of context, whatever the size of the change."""
     if identity(parent.code) == identity(program.code):
-        return f"Code change: none; the code is identical to Algorithm {parent.id}."
+        return "Code change: none; the normalized source is unchanged."
     try:
         old, new = _normalized(parent.code), _normalized(program.code)
         header = "Code change:"
     except (SyntaxError, ValueError):
         old, new = parent.code.splitlines(), program.code.splitlines()
-        header = (f"Code change: the code of Algorithm {program.id} could not be parsed; "
+        header = ("Code change: the candidate code could not be parsed; "
                   f"the raw source texts are compared.")
     rows = ["..." if line.startswith("@@") else line
             for line in list(unified_diff(old, new, lineterm="", n=CONTEXT_LINES))[2:]]

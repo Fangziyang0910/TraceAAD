@@ -1,4 +1,4 @@
-"""TraceAAD V21.3: local Refine evidence, static Crossover and free Explore."""
+"""TraceAAD V21.3: evolution paths and prior attempts for Refine, static Crossover and free Explore."""
 
 from traceaad_base import Config
 
