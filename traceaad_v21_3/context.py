@@ -6,12 +6,13 @@ from its parent (a diff, measured), and its full code. A material's role decides
   offspring, valid or failed         design + change (+ where a failure was raised)
   nearest three ancestors            design + change
   farther ancestors                  design
+  earlier Crossovers with the reference design + change (+ where a failure was raised)
   earlier explorations               design + scores + later development (V21.2)
-Each record also states its parent, operator and measured result. Nothing derived from `analysis` is shown.
+Each record first states its parent, operator and measured result. Nothing derived from `analysis` is shown.
 """
 
 from traceaad_v21_1.context import FAILURES, RECENT_ANCESTORS, ancestors
-from traceaad_v21_2.context import EXPLORE, REFINE, explorations, receiver_attempts, refine_attempts
+from traceaad_v21_2.context import EXPLORE, REFINE, explorations, refine_attempts
 from traceaad_v21_1.representation import bare
 from .representation import changes, failure
 
@@ -20,17 +21,19 @@ COMMON = ("Code differences and evaluation results are observed facts. Designs d
 CROSSOVER = ("Improve the current algorithm with decision information from the reference algorithm. "
              "Use the reference algorithm to judge which computation supplies information the current algorithm "
              "lacks and what that computation depends on. "
-             "When earlier attempts from the current algorithm are shown, use their changes and results. "
+             "When earlier Crossover attempts with the reference algorithm are shown, use their actual changes and "
+             "results to judge how its computations were connected to other decision mechanisms and what problems "
+             "those integrations exposed. "
              "Redesign the chosen computation for the current algorithm as needed, for example as a cheaper "
              "approximation of the same information. Align input representations and numerical scales, and combine "
              "its result with the current decision mechanism so that both contribute to the returned result. "
              "If no computation of the reference fits the current algorithm, say so in analysis and implement the "
              "most coherent adaptation you can. "
-             "In analysis, state what you take, what decision information it adds, and how you integrate it; "
+             "In analysis, state what you take, what decision information it adds, how you integrate it, and, when "
+             "such attempts are shown, what they show about the integration; "
              "end with one sentence that states the change you make.")
-OPERATORS = {"Refine": REFINE, "Explore": EXPLORE, "Crossover": CROSSOVER}
 
-__all__ = ["COMMON", "CROSSOVER", "EXPLORE", "REFINE", "FAILURES", "card", "context", "program_card"]
+__all__ = ["COMMON", "CROSSOVER", "EXPLORE", "REFINE", "FAILURES", "card", "context", "integrations", "program_card"]
 
 
 def _result(parent, program):
@@ -44,15 +47,14 @@ def _result(parent, program):
 
 
 def card(archive, program, *, change=True):
-    """A step: parent and operator, its design, its actual change (an initial program has none), its result."""
+    """A step: parent, operator and result first, then its design and its actual change (an initial program has none)."""
     parent = archive.get(program.parent_id)
     lines = [f"Algorithm {program.id}", f"Parent: Algorithm {program.parent_id}", f"Operator: {program.operator}"]
     if program.reference_id is not None:
         lines.append(f"Reference: Algorithm {program.reference_id}")
-    lines.append(f"Design: {program.design}")
+    lines += [_result(parent, program), f"Design: {program.design}"]
     if change and program.operator != "Init":
         lines.append(changes(parent, program))
-    lines.append(_result(parent, program))
     return "\n".join(lines)
 
 
@@ -62,10 +64,20 @@ def program_card(program, *, score=True):
     return "\n".join(lines + [f"Design: {program.design}", f"```python\n{bare(program.code)}\n```"])
 
 
+def integrations(archive, parent, reference, config):
+    """Earlier Crossover attempts that used this reference: from the current algorithm first, then the most recent."""
+    records = [p for p in archive.values()
+               if p.operator == "Crossover" and p.reference_id == reference.id and p.evaluation is not None]
+    first = lambda p: (p.parent_id != parent.id, -p.id)
+    valid = sorted((p for p in records if p.valid), key=first)[:config.offspring_count]
+    failed = sorted((p for p in records if not p.valid), key=first)[:config.failure_count]
+    return sorted(valid + failed, key=lambda p: p.id), len(records)
+
+
 def context(archive, parent, operator, chosen, config):
     """Return the [Context] text, the [Instruction] text, whether scores are shown, and a record of what was shown."""
     view = {"ancestor_path": [], "ancestors": [], "ancestor_changes": [], "children": [], "failed": [],
-            "explorations": []}
+            "integrations": [], "explorations": []}
     if operator == "Explore":
         rows, total, shown = explorations(archive, parent)
         blocks = []
@@ -77,42 +89,46 @@ def context(archive, parent, operator, chosen, config):
         view["explorations"] = shown
         return "\n\n".join(blocks), EXPLORE, bool(rows), view
     blocks = []
-    if operator == "Refine":
-        formation, path = ancestors(archive, parent, config.ancestor_count)
-        children, failures = refine_attempts(archive, parent, config)
-        if formation:
-            near = {p.id for p in path[-RECENT_ANCESTORS:]}
-            order = [p.id for p in path]
-            rows, previous = [], -1
-            for program in formation:
-                index = order.index(program.id)
-                omitted = index - previous - 1
-                rows.append(card(archive, program, change=program.id in near)
-                            + (f"\nOmitted intermediate nodes before this record: {omitted}" if omitted else ""))
-                previous = index
-            blocks.append(f"[Ancestor History]\nAncestors of the current algorithm, ordered from earlier to later; "
-                          f"the nearest {RECENT_ANCESTORS} show their code change; farther ones show only their design, as "
-                          f"background to how the code formed, not as evidence of what changed.\n\n" + "\n\n".join(rows))
-        view.update(ancestor_path=[p.id for p in path], ancestors=[p.id for p in formation],
-                    ancestor_changes=[p.id for p in formation if p.id in near and p.operator != "Init"]
-                    if formation else [])
-    else:
-        children, failures = receiver_attempts(archive, parent, config)
+    if operator == "Crossover":
+        shown, total = integrations(archive, parent, chosen, config)
+        if shown:
+            blocks.append(f"[Earlier Crossovers with the Reference]\nEarlier Crossover attempts that used Algorithm "
+                          f"{chosen.id} as reference: {total}; showing {len(shown)}, those from Algorithm {parent.id} "
+                          f"first, then the most recent, ordered by creation.\n\n"
+                          + "\n\n".join(card(archive, p) for p in shown))
+        blocks.append("[Reference Algorithm]\n" + program_card(chosen))
+        blocks.append("[Current Algorithm]\n" + program_card(parent))
+        failed = any(not p.valid for p in shown)
+        view["integrations"] = [p.id for p in shown]
+        return "\n\n".join(blocks), "\n".join([COMMON, CROSSOVER] + ([FAILURES] if failed else [])), True, view
+    formation, path = ancestors(archive, parent, config.ancestor_count)
+    children, failures = refine_attempts(archive, parent, config)
+    if formation:
+        near = {p.id for p in path[-RECENT_ANCESTORS:]}
+        order = [p.id for p in path]
+        rows, previous = [], -1
+        for program in formation:
+            index = order.index(program.id)
+            omitted = index - previous - 1
+            rows.append(card(archive, program, change=program.id in near)
+                        + (f"\nOmitted intermediate nodes before this record: {omitted}" if omitted else ""))
+            previous = index
+        blocks.append(f"[Ancestor History]\nAncestors of the current algorithm, ordered from earlier to later; "
+                      f"the nearest {RECENT_ANCESTORS} show their code change; farther ones show only their design, as "
+                      f"background to how the code formed, not as evidence of what changed.\n\n" + "\n\n".join(rows))
+    view.update(ancestor_path=[p.id for p in path], ancestors=[p.id for p in formation],
+                ancestor_changes=[p.id for p in formation if p.id in near and p.operator != "Init"]
+                if formation else [])
     direct = [p for p in archive.values() if p.parent_id == parent.id and p.evaluation is not None]
     if children:
         total = sum(p.valid for p in direct)
-        shown = ("the best improvement, if any, and the most recent" if operator == "Refine"
-                 else "earlier Crossover attempts first, then the most recent")
         blocks.append(f"[Evaluated Offspring]\nDirect attempts from Algorithm {parent.id}: {total} valid; "
-                      f"showing {len(children)}, {shown}, ordered by creation.\n\n"
-                      + "\n\n".join(card(archive, p) for p in children))
+                      f"showing {len(children)}, the best improvement, if any, and the most recent, ordered by "
+                      f"creation.\n\n" + "\n\n".join(card(archive, p) for p in children))
     if failures:
         total = sum(not p.valid for p in direct)
         blocks.append(f"[Failed Offspring]\nFailed direct attempts from Algorithm {parent.id}: {total}; "
                       f"showing {len(failures)}.\n\n" + "\n\n".join(card(archive, p) for p in failures))
-    if chosen is not None:
-        blocks.append("[Reference Algorithm]\n" + program_card(chosen))
     blocks.append("[Current Algorithm]\n" + program_card(parent))
-    parts = [COMMON, OPERATORS[operator]] + ([FAILURES] if failures else [])
     view.update(children=[p.id for p in children], failed=[p.id for p in failures])
-    return "\n\n".join(blocks), "\n".join(parts), True, view
+    return "\n\n".join(blocks), "\n".join([COMMON, REFINE] + ([FAILURES] if failures else [])), True, view

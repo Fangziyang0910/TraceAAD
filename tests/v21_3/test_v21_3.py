@@ -6,7 +6,7 @@ import traceaad_v21_3
 from traceaad_base import Evaluation
 from traceaad_v21_1.context import FAILURES
 from traceaad_v21_2 import context as v21_2
-from traceaad_v21_3.context import COMMON, CROSSOVER, EXPLORE, REFINE, card, context
+from traceaad_v21_3.context import COMMON, CROSSOVER, EXPLORE, REFINE, card, context, integrations
 from traceaad_v21_3.representation import failure
 from tests.v21_2.test_v21_2 import CONFIG, Reply, chain, code, program, reference_archive, task
 
@@ -20,11 +20,14 @@ TRACEBACK = """Traceback (most recent call last):
 IndexError: list index out of range"""
 
 
-def test_instructions_differ_from_v21_2_in_the_material_note_and_formation_records():
+def test_instructions_differ_from_v21_2_in_the_material_note_and_crossover_history():
     assert (REFINE, EXPLORE) == (v21_2.REFINE, v21_2.EXPLORE)
     assert COMMON == ("Code differences and evaluation results are observed facts. Designs describe implementations "
                       "but may be inaccurate. A score change alone does not establish why the result changed.")
-    assert CROSSOVER == v21_2.CROSSOVER.replace(" and the formation records of its computations", "")
+    assert "formation records" not in CROSSOVER and "earlier attempts from the current algorithm" not in CROSSOVER
+    assert "earlier Crossover attempts with the reference algorithm" in CROSSOVER
+    assert "what problems those integrations exposed" in CROSSOVER
+    assert "end with one sentence that states the change you make" in CROSSOVER
 
 
 def test_no_card_shows_text_derived_from_analysis():
@@ -37,13 +40,17 @@ def test_no_card_shows_text_derived_from_analysis():
         assert "Decision" not in text and "Final" not in text and "Reasoning" not in text and "reasoning" not in text
 
 
-def test_step_card_gives_design_change_and_result():
+def test_step_card_gives_the_result_before_design_and_change():
     archive = chain(2)
     archive[3] = program(3, 90., 2)
     rows = card(archive, archive[3]).splitlines()
-    assert rows[:4] == ["Algorithm 3", "Parent: Algorithm 2", "Operator: Refine", "Design: design_3"]
-    assert rows.index("Code change:") == 4
-    assert rows[-1] == "Result relative to Algorithm 2: 98.0 -> 90.0; improved"
+    assert rows[:5] == ["Algorithm 3", "Parent: Algorithm 2", "Operator: Refine",
+                        "Result relative to Algorithm 2: 98.0 -> 90.0; improved", "Design: design_3"]
+    assert rows.index("Code change:") == 5
+    failed = program(4, None, 2, source=code(4, "x[0]"), failure=TRACEBACK)
+    rows = card({**archive, 4: failed}, failed).splitlines()
+    assert rows[3:6] == ["Result: error; IndexError: list index out of range",
+                         "Raised in get_dist: return float(distance_matrix[tour[i]][tour[j]])", "Design: design_4"]
 
 
 def test_a_change_has_three_lines_of_context_and_a_rewrite_its_full_diff():
@@ -110,6 +117,34 @@ def test_current_and_reference_algorithms_show_design_and_full_code():
     current = text[text.index("[Current Algorithm]"):]
     assert "Design: design_9" in current and "Score: 60.0" in current and "```python" in current
     assert instruction == "\n".join([COMMON, CROSSOVER]) and "reference_steps" not in view
+    assert "[Earlier Crossovers" not in text and "[Evaluated Offspring]" not in text and view["integrations"] == []
+
+
+def crossover_archive():
+    archive = reference_archive()
+    archive[10] = program(10, 55., 9, operator="Crossover", reference=4)            # current with this reference
+    archive[11] = program(11, 58., 9, operator="Crossover", reference=2)            # current with another reference
+    archive[12] = program(12, 50., 9, operator="Refine")                            # current, not a Crossover
+    archive[13] = program(13, 35., 3, operator="Crossover", reference=4)            # another receiver, this reference
+    archive[14] = program(14, None, 2, operator="Crossover", reference=4, failure=TRACEBACK)
+    archive[15] = program(15, 42., 2, operator="Crossover", reference=4)
+    archive[16] = program(16, 41., 1, operator="Crossover", reference=4)
+    return archive
+
+
+def test_crossover_shows_only_earlier_crossovers_with_the_reference_current_algorithm_first():
+    archive = crossover_archive()
+    shown, total = integrations(archive, archive[9], archive[4], CONFIG)
+    assert total == 5 and [p.id for p in shown] == [10, 14, 15, 16]  # 3 valid (10 first, then latest), 1 failed
+    text, instruction, _, view = context(archive, archive[9], "Crossover", archive[4], CONFIG)
+    block = text[text.index("[Earlier Crossovers with the Reference]"):text.index("[Reference Algorithm]")]
+    assert "used Algorithm 4 as reference: 5; showing 4, those from Algorithm 9 first" in block
+    assert "Algorithm 11\n" not in block and "Algorithm 12\n" not in block and "Algorithm 13\n" not in block
+    assert "Parent: Algorithm 2\nOperator: Crossover\nReference: Algorithm 4\nResult: error" in block
+    assert "Raised in get_dist:" in block and "Code change:" in block
+    assert "[Evaluated Offspring]" not in text and "[Failed Offspring]" not in text
+    assert view["integrations"] == [10, 14, 15, 16] and view["children"] == [] and view["failed"] == []
+    assert instruction == "\n".join([COMMON, CROSSOVER, FAILURES])
 
 
 def test_explore_current_algorithm_has_design_and_code_but_no_score():
