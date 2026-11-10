@@ -25,6 +25,8 @@ CROSSOVER = ("Improve the current algorithm with decision information from the r
              "Redesign the chosen computation for the current algorithm as needed, for example as a cheaper "
              "approximation of the same information. Align input representations and numerical scales, and combine "
              "its result with the current decision mechanism so that both contribute to the returned result. "
+             "If no computation of the reference fits the current algorithm, say so in analysis and implement the "
+             "most coherent adaptation you can. "
              "In analysis, state what you take, what decision information it adds, and how you integrate it; "
              "end with one sentence that states the change you make.")
 EXPLORE = ("Develop an algorithm that reaches its result through a computation the current code does not perform. "
@@ -93,7 +95,7 @@ def _lines(code):
 
 
 def reference_steps(archive, reference):
-    """Formation steps whose introduced lines the reference still executes, most surviving lines first."""
+    """Formation steps whose added lines remain in the reference, most remaining lines first."""
     path, current = [], reference
     while current is not None and current.operator not in (None, "Init"):
         parent = archive.get(current.parent_id)
@@ -127,11 +129,12 @@ def reference_card(archive, reference, *, code):
             if "most of the code was replaced" in text:
                 still = surviving(program)
                 ordered = [line for line in _lines(reference.code) if line in still]
-                text += (f"\nIntroduced lines that Algorithm {reference.id} still executes:\n"
+                text += (f"\nAdded lines that remain in Algorithm {reference.id}:\n"
                          + "\n".join(dict.fromkeys(ordered)))
             rows.append(text)
-        blocks.append(f"Formation records of computations that Algorithm {reference.id} still executes, "
-                      f"ordered from earlier to later:\n\n" + "\n\n".join(rows))
+        blocks.append(f"Formation steps of Algorithm {reference.id} whose added lines remain in its code, most such lines "
+                      f"first, ordered from earlier to later. A remaining line shows where code came from, not that "
+                      f"it drives the result.\n\n" + "\n\n".join(rows))
     return "\n\n".join(blocks), [p.id for p in steps]
 
 
@@ -224,7 +227,7 @@ def context(archive, parent, operator, chosen, config, *, reference_code=False):
             for program in formation:
                 index = order.index(program.id)
                 omitted = index - previous - 1
-                rows.append(card(archive, program)
+                rows.append(card(archive, program, change=True)
                             + (f"\nOmitted intermediate nodes before this record: {omitted}" if omitted else ""))
                 previous = index
             blocks.append("[Ancestor History]\nAncestors of the current algorithm, ordered from earlier to later.\n\n"

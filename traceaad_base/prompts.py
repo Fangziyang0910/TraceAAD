@@ -111,8 +111,8 @@ class PromptBuilder:
         self.task = task
         self.config = config
 
-    def _render(self, context: str, instruction: str, *, has_scores=False) -> str:
-        template = self.common_template
+    def _render(self, context: str, instruction: str, *, has_scores=False, template: str | None = None) -> str:
+        template = template or self.common_template
         if not context:
             template = template.replace("[Context]\n{context}\n\n", "")
         elif has_scores and self.task.score_definition not in self.task.task_description:

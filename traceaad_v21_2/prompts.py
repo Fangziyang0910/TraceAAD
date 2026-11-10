@@ -1,8 +1,8 @@
-"""V21.2 output protocol: design reasoning set by the operator instruction, then code, then a description of that code."""
+"""V21.2 evolution protocol: design reasoning set by the operator instruction, then code, then a description of that code."""
 
 from traceaad_v21_1.prompts import CANDIDATE_RESPONSE_FORMAT, PromptBuilder as V21PromptBuilder
 
-COMMON_TEMPLATE = """{task_description}
+EVOLUTION_TEMPLATE = """{task_description}
 
 Implement the following Python function:
 ```python
@@ -23,10 +23,11 @@ Return exactly one valid JSON object with three string fields, in this order:
 Preserve the required function signature and satisfy the task constraints and input/output requirements.
 Return only the JSON object, without Markdown fences or additional text."""
 
-__all__ = ["CANDIDATE_RESPONSE_FORMAT", "COMMON_TEMPLATE", "PromptBuilder"]
+__all__ = ["CANDIDATE_RESPONSE_FORMAT", "EVOLUTION_TEMPLATE", "PromptBuilder"]
 
 
 class PromptBuilder(V21PromptBuilder):
-    """Initialization and repair as in V21.1; only the analysis field changes."""
+    """Initialization and repair keep V21.1's prompts; only evolution uses the design-reasoning protocol."""
 
-    common_template = COMMON_TEMPLATE
+    def evolution_render(self, context, instruction, *, has_scores):
+        return self._render(context, instruction, has_scores=has_scores, template=EVOLUTION_TEMPLATE)

@@ -27,4 +27,4 @@ class TraceAAD(Base):
         text, instruction, scores, view = context(self.archive, parent, attempt.operator, reference, self.config,
                                                   reference_code=self.reference_code)
         attempt.record["context"] = view
-        return self.prompts._render(text, instruction, has_scores=scores)
+        return self.prompts.evolution_render(text, instruction, has_scores=scores)

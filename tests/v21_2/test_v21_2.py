@@ -9,7 +9,8 @@ import traceaad_v21_2
 from traceaad_v21_1.context import FAILURES
 from traceaad_v21_2.context import (COMMON, CROSSOVER, EXPLORE, REFINE, card, context, decision, explorations,
                                     reference_steps)
-from traceaad_v21_2.prompts import CANDIDATE_RESPONSE_FORMAT, COMMON_TEMPLATE
+from traceaad_v21_1.prompts import COMMON_TEMPLATE as V21_1_TEMPLATE
+from traceaad_v21_2.prompts import CANDIDATE_RESPONSE_FORMAT, EVOLUTION_TEMPLATE, PromptBuilder
 
 CONFIG = traceaad_base.Config()
 
@@ -51,9 +52,9 @@ class Reply:
 
 def test_analysis_task_is_set_by_the_instruction():
     assert list(CANDIDATE_RESPONSE_FORMAT["json_schema"]["schema"]["properties"]) == ["analysis", "code", "design"]
-    line = next(l for l in COMMON_TEMPLATE.splitlines() if l.startswith('- "analysis"'))
+    line = next(l for l in EVOLUTION_TEMPLATE.splitlines() if l.startswith('- "analysis"'))
     assert "according to [Instruction]" in line and "2–4 sentences" in line and "120 words" in line
-    assert "approach you will implement" not in COMMON_TEMPLATE
+    assert "approach you will implement" not in EVOLUTION_TEMPLATE
     for text in (REFINE, CROSSOVER, EXPLORE):
         assert "end with one sentence that states the change you make" in text
         for word in ("TSP", "route", "tour", "2-opt", "schedule", "colour", "pheromone", "time limit", "efficient"):
@@ -134,7 +135,7 @@ def test_a_rewrite_step_lists_the_introduced_lines_the_reference_keeps():
     text, _, _, view = context({**archive, 3: program(3, 70., operator="Init", source=code(3))},
                                program(3, 70., operator="Init", source=code(3)), "Crossover", archive[2], CONFIG)
     assert view["reference_steps"] == [2]
-    assert "most of the code was replaced" in text and "Introduced lines that Algorithm 2 still executes" in text
+    assert "most of the code was replaced" in text and "Added lines that remain in Algorithm 2" in text
     assert "s += i * x" in text
 
 
@@ -204,3 +205,21 @@ def test_refine_singles_out_the_best_attempt_only_when_it_improved():
     archive[3].evaluation = Evaluation("success", 90.)
     text, _, _, view = context(archive, archive[2], "Refine", None, CONFIG)
     assert view["children"] == [3, 5, 6] and "the best improvement, if any, and the most recent" in text
+
+
+def test_initialization_and_repair_keep_the_v21_1_prompts():
+    archive = {1: program(1, 5., operator="Init")}
+    builder = PromptBuilder(task(), CONFIG)
+    assert "approach you will implement" in builder.initialization(archive)
+    failed = program(2, None, 1, failure="ValueError: bad")
+    repair = builder.repair_program(failed)
+    assert "approach you will implement" in repair and "according to [Instruction]" not in repair
+    assert builder.common_template == V21_1_TEMPLATE
+
+
+def test_ancestors_show_their_actual_change_and_crossover_may_report_no_fit():
+    archive = chain(4)
+    text, _, _, _ = context(archive, archive[4], "Refine", None, CONFIG)
+    ancestors = text[text.index("[Ancestor History]"):text.index("[Current Algorithm]")]
+    assert "Changed computation:" in ancestors and "+    a = 3" in ancestors
+    assert "If no computation of the reference fits the current algorithm, say so in analysis" in CROSSOVER
