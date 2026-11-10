@@ -150,16 +150,13 @@ def test_disabled_crossover_does_not_request_embeddings(tmp_path):
     assert search.attempts[-1].record["selection"]["reference_selection"]["rule"] == RULE
 
 
-def test_missing_reference_redirects_actual_crossover_to_explore(tmp_path):
+def test_missing_reference_is_an_error(tmp_path):
     config = Config(evaluation_budget=2, initial_size=1,
                     refine_weight=0.0, explore_weight=0.0, crossover_weight=1.0)
     embedding = Embedding()
     search = TraceAAD(task(), Generator(), config=config, run_dir=tmp_path, reference_embedding=embedding)
-    search.run()
-    assert search.attempts[-1].operator == "Explore"
-    assert search.attempts[-1].reference_id is None
-    assert search.attempts[-1].record["selection"]["base_probability"] == 1.0
-    assert embedding.calls == []
+    with pytest.raises(RuntimeError, match="No reference"):
+        search.run()
 
 
 @pytest.mark.parametrize("change", ["disable", "model"])

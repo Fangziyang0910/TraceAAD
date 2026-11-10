@@ -287,13 +287,13 @@ def test_scale_and_shift_invariance_when_temperature_uses_the_same_units():
         assert original[key] == pytest.approx(transformed[key], rel=1e-12, abs=1e-12)
 
 
-def test_no_reference_redirects_crossover_mass_to_explore():
+def test_missing_reference_is_an_error():
     selector = roots((100.0,))
-    actions, beta, estimates, probs, _ = allocation(selector)
+    with pytest.raises(RuntimeError, match="No reference"):
+        allocation(selector)
+    actions, beta, _, _, _ = allocation(selector, Config(crossover_weight=0.0))
     assert [a.operator for a in actions] == ["Refine", "Explore"]
-    assert beta == pytest.approx([0.45, 0.55])
-    assert probs == pytest.approx(beta)
-    assert all(estimate.eta == 0.0 for estimate in estimates)
+    assert beta == pytest.approx([0.45 / 0.75, 0.30 / 0.75])
 
 
 def test_first_view_ignores_repair_breakthrough():
@@ -332,10 +332,10 @@ def test_multiplier_cap_bounds_single_positive_dominance():
 
 
 def test_zero_evaluation_record_keeps_cost_without_penalizing_base_probability():
-    selector = roots((100.0, 110.0))
+    selector = roots((100.0, 110.0, 120.0))
     _, before, _, _, _ = allocation(selector)
     record = record_for(selector, Action(1, "Refine"))
-    selector.observe(3, record, None, evaluations=0, model_calls=2)
+    selector.observe(4, record, None, evaluations=0, model_calls=2)
     assert len(selector.history) == 1
     assert selector.history[0].evaluations == 0
     estimate = selector.estimate_action(Action(1, "Refine"))
@@ -360,7 +360,7 @@ def test_mechanism_and_base_share_boltzmann_quality_prior():
     assert all(estimate.eta == 0.0 for estimate in estimates)
 
 
-@pytest.mark.parametrize("fitness", [(1.0, 2.0), (1.0, 2.0, 3.0, 4.0), (1.0, 1.0, 2.0)])
+@pytest.mark.parametrize("fitness", [(1.0, 2.0, 3.0), (1.0, 2.0, 3.0, 4.0), (1.0, 1.0, 2.0)])
 def test_random_reference_prior_matches_base_full_joint_distribution(fitness):
     selector = roots(fitness)
     config = Config()
@@ -369,7 +369,7 @@ def test_random_reference_prior_matches_base_full_joint_distribution(fitness):
     normalizer = sum(quality.values())
     ids = sorted(archive)
     pools = {pid: [p.id for p in reference_pool(archive, pid)] for pid in ids}
-    options = [pools[pid] or [None] for pid in ids]
+    options = [pools[pid] for pid in ids]
     count = prod(len(pool) for pool in options)
     actual = {}
     for references in product(*options):
@@ -383,9 +383,7 @@ def test_random_reference_prior_matches_base_full_joint_distribution(fitness):
     for pid in ids:
         parent_probability = quality[pid] / normalizer
         expected[Action(pid, "Refine")] = parent_probability * config.refine_weight
-        expected[Action(pid, "Explore")] = parent_probability * (
-            config.explore_weight + (config.crossover_weight if not pools[pid] else 0.0)
-        )
+        expected[Action(pid, "Explore")] = parent_probability * config.explore_weight
         for reference in pools[pid]:
             expected[Action(pid, "Crossover", reference)] = (
                 parent_probability * config.crossover_weight / len(pools[pid])

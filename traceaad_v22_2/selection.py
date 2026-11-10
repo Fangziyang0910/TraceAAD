@@ -342,6 +342,11 @@ class Selector:
         config = config or Config()
         if not self.nodes:
             raise ValueError("No valid parent candidates")
+        if config.crossover_weight > 0:
+            # Initialization leaves distinct valid programs, so every parent has a reference in the quality pool.
+            missing = sorted(pid for pid in self.nodes if reference_ids.get(pid) is None)
+            if missing:
+                raise RuntimeError(f"No reference for Crossover from Algorithms {missing}")
         actions = self.actions(reference_ids)
         quality = boltzmann_weights(
             {node.id: node.fitness for node in self.nodes.values()}, config.selection_temperature
@@ -352,11 +357,7 @@ class Selector:
             "Crossover": config.crossover_weight,
         }
         base_weights = [
-            quality[action.parent_id] * (
-                operator_weights[action.operator]
-                + (config.crossover_weight if action.operator == "Explore"
-                   and reference_ids[action.parent_id] is None else 0.0)
-            )
+            quality[action.parent_id] * operator_weights[action.operator]
             for action in actions
         ]
         base_sum = sum(base_weights)

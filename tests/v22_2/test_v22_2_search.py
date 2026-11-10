@@ -67,7 +67,7 @@ def test_resumed_search_matches_uninterrupted_actions_and_history(tmp_path, sear
     class Model(Replies):
         request_options = {"response_format": BASE_RESPONSE_FORMAT}
 
-    config = Config(evaluation_budget=9, initial_size=2, seed=7)
+    config = Config(evaluation_budget=9, initial_size=3, seed=7)
     full = search_type(task(), Model(), config=config, run_dir=tmp_path / "full")
     result = full.run()
     split = search_type(task(), Model(), config=config, run_dir=tmp_path / "split")
@@ -97,7 +97,7 @@ def test_resumed_search_matches_uninterrupted_actions_and_history(tmp_path, sear
 def test_format_repair_before_first_evaluation_counts_as_first_result(tmp_path):
     # Init: 100.0, 110.0. Evolution attempt 3: format error -> format repair -> 95.0 (first actual evaluation!)
     values = [100.0, 110.0, "format", 95.0]
-    search = V22_2(task(), Replies(values=values), config=Config(evaluation_budget=3, initial_size=2), run_dir=tmp_path)
+    search = V22_2(task(), Replies(values=values), config=Config(evaluation_budget=3, initial_size=2, crossover_weight=0.0), run_dir=tmp_path)
     search.run()
     last = search.attempts[-1]
     assert search.evaluations_used == 3 and search.model_calls == 4
@@ -113,7 +113,7 @@ def test_format_repair_before_first_evaluation_counts_as_first_result(tmp_path):
 def test_evaluation_error_then_repair_sets_zero_first_gain_and_positive_final_gain(tmp_path):
     # Init: 100.0, 110.0. Attempt 3: first eval error -> program repair -> second eval 92.0
     values = [100.0, 110.0, "error", 92.0]
-    search = V22_2(task(), Replies(values=values), config=Config(evaluation_budget=4, initial_size=2), run_dir=tmp_path)
+    search = V22_2(task(), Replies(values=values), config=Config(evaluation_budget=4, initial_size=2, crossover_weight=0.0), run_dir=tmp_path)
     search.run()
     last = search.attempts[-1]
     sel = last.record["selection"]
@@ -126,13 +126,13 @@ def test_evaluation_error_then_repair_sets_zero_first_gain_and_positive_final_ga
     assert sel["champion_gain"] == 8.0
 
     # Resuming from saved logs preserves both first_result and final_result
-    restored = V22_2(task(), Replies(values=values), config=Config(evaluation_budget=4, initial_size=2), run_dir=tmp_path, resume=True)
+    restored = V22_2(task(), Replies(values=values), config=Config(evaluation_budget=4, initial_size=2, crossover_weight=0.0), run_dir=tmp_path, resume=True)
     assert_same_selectors(search.selector, restored.selector)
 
 
 def test_duplicate_source_at_first_evaluation_has_zero_gain_and_not_added_to_pool(tmp_path):
     values = [100.0, 110.0, "dup100"]
-    search = V22_2(task(), Replies(values=values), config=Config(evaluation_budget=3, initial_size=2), run_dir=tmp_path)
+    search = V22_2(task(), Replies(values=values), config=Config(evaluation_budget=3, initial_size=2, crossover_weight=0.0), run_dir=tmp_path)
     search.run()
     last = search.attempts[-1]
     sel = last.record["selection"]
@@ -150,7 +150,7 @@ def test_no_evaluation_attempt_records_zero_evaluations_and_no_yield(tmp_path):
                 raise ConnectionError("No reply")
             return super().complete(prompt, **options)
 
-    config = Config(evaluation_budget=8, initial_size=2, max_unevaluated=2)
+    config = Config(evaluation_budget=8, initial_size=2, max_unevaluated=2, crossover_weight=0.0)
     search = V22_2(task(), Failing(), config=config, run_dir=tmp_path)
     result = search.run()
     assert result.stop_reason == "consecutive_unevaluated_limit"
@@ -172,7 +172,7 @@ def test_v22_2_and_v23_2_share_allocation_and_use_respective_prompts(tmp_path, t
         def __call__(self, text):
             return [1.0, float(len(text) % 17 + 1)]
 
-    config = Config(evaluation_budget=8, initial_size=2, seed=11,
+    config = Config(evaluation_budget=8, initial_size=3, seed=11,
                     refine_weight=0.0, explore_weight=0.0, crossover_weight=1.0)
     v22_2 = V22_2(task(), Replies(), config=config, run_dir=tmp_path / "v22_2",
                   reference_embedding=Encoder() if trajectory_references else None)
@@ -185,13 +185,11 @@ def test_v22_2_and_v23_2_share_allocation_and_use_respective_prompts(tmp_path, t
         assert a.record.get("selection") == b.record.get("selection")
     assert_same_selectors(v22_2.selector, v23_2.selector)
     assert v22_2.model.prompts != v23_2.model.prompts
-    assert all("context" in a.record for a in v22_2.attempts[2:])
-    assert all("context" not in a.record for a in v23_2.attempts[2:])
+    assert all("context" in a.record for a in v22_2.attempts[3:])
+    assert all("context" not in a.record for a in v23_2.attempts[3:])
     expected = "trajectory_embedding_diverse_v1" if trajectory_references else "quality_pool_uniform_v1"
-    assert any(a.operator == "Crossover" for a in v22_2.attempts[2:])
-    assert all(a.operator == ("Crossover" if a.reference_id is not None else "Explore")
-               for a in v22_2.attempts[2:])
-    assert all(a.record["selection"]["reference_selection"]["rule"] == expected for a in v22_2.attempts[2:])
+    assert all(a.operator == "Crossover" and a.reference_id is not None for a in v22_2.attempts[3:])
+    assert all(a.record["selection"]["reference_selection"]["rule"] == expected for a in v22_2.attempts[3:])
 
 
 def test_registry_and_launcher_support_dot_and_underscore_names():
