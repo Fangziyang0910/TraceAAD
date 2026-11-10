@@ -22,6 +22,7 @@ from experiments.infra.storage import seal_calls
 from traceaad_base.storage import write_json
 import traceaad_v21_1
 import traceaad_v21_2
+import traceaad_v21_3
 import traceaad_v22_2
 import traceaad_v23_2
 import traceaad_v24_1
@@ -34,6 +35,7 @@ MEMORY_BYTES = 2 << 30
 METHODS = {"base": ("traceaad_base", traceaad_base),
            "v21.1": ("traceaad_v21_1", traceaad_v21_1), "v21_1": ("traceaad_v21_1", traceaad_v21_1),
            "v21.2": ("traceaad_v21_2", traceaad_v21_2), "v21_2": ("traceaad_v21_2", traceaad_v21_2),
+           "v21.3": ("traceaad_v21_3", traceaad_v21_3), "v21_3": ("traceaad_v21_3", traceaad_v21_3),
            "v22.2": ("traceaad_v22_2", traceaad_v22_2), "v22_2": ("traceaad_v22_2", traceaad_v22_2),
            "v23.2": ("traceaad_v23_2", traceaad_v23_2), "v23_2": ("traceaad_v23_2", traceaad_v23_2),
            "v24.1": ("traceaad_v24_1", traceaad_v24_1), "v24_1": ("traceaad_v24_1", traceaad_v24_1)}
@@ -160,7 +162,7 @@ def main(argv=None):
     parser.add_argument("--trajectory-reference-embedding", action=argparse.BooleanOptionalAction,
                         default=None, help="Mechanism 1 uses trajectory references by default; --no-... ablates them")
     parser.add_argument("--reference-code", action="store_true",
-                        help="V21.2 control: Crossover also shows the reference's full source")
+                        help="V21.2 and V21.3 control: Crossover also shows the reference's full source")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
                         help="Time allowance per instance; their sum is the whole-task deadline")
     parser.add_argument("--scheduler-socket", default=os.getenv("TRACEAAD_SCHEDULER_SOCKET"))
@@ -174,8 +176,8 @@ def main(argv=None):
         args.trajectory_reference_embedding = reference_embedding_enabled(args.method, args.trajectory_reference_embedding)
     except ValueError as error:
         parser.error(str(error))
-    if args.reference_code and METHODS[args.method][0] != "traceaad_v21_2":
-        parser.error("--reference-code applies to v21.2 only")
+    if args.reference_code and METHODS[args.method][0] not in ("traceaad_v21_2", "traceaad_v21_3"):
+        parser.error("--reference-code applies to v21.2 and v21.3 only")
     if not args.scheduler_socket and args.backend == "scheduled":
         parser.error("A resource scheduler socket is required")
     if not math.isfinite(args.seconds_per_instance) or args.seconds_per_instance <= 0:

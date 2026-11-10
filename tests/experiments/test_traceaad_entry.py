@@ -31,7 +31,7 @@ def entry_environment(monkeypatch):
 
 
 def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_environment, capsys):
-    combinations = {"base": [], "v21.1": [2], "v21.2": [2], "v22.2": [1, 2], "v23.2": [1], "v24.1": [2, 3]}
+    combinations = {"base": [], "v21.1": [2], "v21.2": [2], "v21.3": [2], "v22.2": [1, 2], "v23.2": [1], "v24.1": [2, 3]}
     assert set(run.METHODS) == set(combinations) | {m.replace(".", "_") for m in combinations}
     arguments = ["--task", "tsp_construct", "--run-name", "test", "--batch", "test",
                  "--scheduler-socket", "/fake", "--dry-run", "--selection-temperature", "0.1"]

@@ -18,7 +18,7 @@ class TraceAAD(Base):
         """`reference_code` also shows the reference's full source; it is the control for the default."""
         self.reference_code = reference_code
         if reference_code:
-            self.generation_protocol = PROTOCOL + "+reference_code"
+            self.generation_protocol = type(self).generation_protocol + "+reference_code"
         if hasattr(model, "request_options"):
             model.request_options = {**model.request_options, "response_format": CANDIDATE_RESPONSE_FORMAT}
         super().__init__(task, model, **options)
