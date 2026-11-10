@@ -21,6 +21,7 @@ from traceaad_base.selection import SELECTION_RULE
 from experiments.infra.storage import seal_calls
 from traceaad_base.storage import write_json
 import traceaad_v21_1
+import traceaad_v21_2
 import traceaad_v22_2
 import traceaad_v23_2
 import traceaad_v24_1
@@ -32,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MEMORY_BYTES = 2 << 30
 METHODS = {"base": ("traceaad_base", traceaad_base),
            "v21.1": ("traceaad_v21_1", traceaad_v21_1), "v21_1": ("traceaad_v21_1", traceaad_v21_1),
+           "v21.2": ("traceaad_v21_2", traceaad_v21_2), "v21_2": ("traceaad_v21_2", traceaad_v21_2),
            "v22.2": ("traceaad_v22_2", traceaad_v22_2), "v22_2": ("traceaad_v22_2", traceaad_v22_2),
            "v23.2": ("traceaad_v23_2", traceaad_v23_2), "v23_2": ("traceaad_v23_2", traceaad_v23_2),
            "v24.1": ("traceaad_v24_1", traceaad_v24_1), "v24_1": ("traceaad_v24_1", traceaad_v24_1)}
@@ -76,8 +78,10 @@ def metadata_for(args, task, config, model):
         "method_params": asdict(config), "final_selection": "training", "eval_workers": 1,
         "selection_rule": SELECTION_RULE,
         "mechanisms": list(METHODS[args.method][1].TraceAAD.mechanisms),
-        "generation_protocol": METHODS[args.method][1].TraceAAD.generation_protocol,
+        "generation_protocol": METHODS[args.method][1].TraceAAD.generation_protocol
+                               + ("+reference_code" if args.reference_code else ""),
         "trajectory_reference_embedding": args.trajectory_reference_embedding,
+        "reference_code": args.reference_code,
         "started_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
         "source_snapshot": str(ROOT), "task_definition": task.description(),
         "task_eval": task.metadata["settings"],
@@ -155,6 +159,8 @@ def main(argv=None):
                         help="Boltzmann parent temperature in fitness units")
     parser.add_argument("--trajectory-reference-embedding", action=argparse.BooleanOptionalAction,
                         default=None, help="Mechanism 1 uses trajectory references by default; --no-... ablates them")
+    parser.add_argument("--reference-code", action="store_true",
+                        help="V21.2 control: Crossover also shows the reference's full source")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
                         help="Time allowance per instance; their sum is the whole-task deadline")
     parser.add_argument("--scheduler-socket", default=os.getenv("TRACEAAD_SCHEDULER_SOCKET"))
@@ -168,6 +174,8 @@ def main(argv=None):
         args.trajectory_reference_embedding = reference_embedding_enabled(args.method, args.trajectory_reference_embedding)
     except ValueError as error:
         parser.error(str(error))
+    if args.reference_code and METHODS[args.method][0] != "traceaad_v21_2":
+        parser.error("--reference-code applies to v21.2 only")
     if not args.scheduler_socket and args.backend == "scheduled":
         parser.error("A resource scheduler socket is required")
     if not math.isfinite(args.seconds_per_instance) or args.seconds_per_instance <= 0:
@@ -215,7 +223,8 @@ def main(argv=None):
     search = package.TraceAAD(task, model, config=config,
                               run_dir=directory / "native", resume=args.resume,
                               **({"reference_embedding": reference_embedding}
-                                 if reference_embedding is not None else {}))
+                                 if reference_embedding is not None else {}),
+                              **({"reference_code": True} if args.reference_code else {}))
     search.evaluator = ScheduledEvaluator(task, args.scheduler_socket, args.run_name + ":search")
     reporter = Reporter(directory, metadata)
     reporter.publish(search)
