@@ -92,13 +92,14 @@ class TraceAAD:
     def select(self, attempt_id: int):
         parent, operator = choose(self.archive, self.config, self.rng)
         reference = self.reference(parent) if operator == "Crossover" else None
-        if operator == "Crossover" and reference is None:
-            operator = "Explore"
         return parent, operator, reference, {}
 
-    def reference(self, parent: Program) -> Program | None:
+    def reference(self, parent: Program) -> Program:
+        """Initialization leaves distinct valid programs, so the quality pool always has a reference."""
         pool = reference_pool(self.archive, parent.id)
-        return self.rng.choice(pool) if pool else None
+        if not pool:
+            raise RuntimeError(f"No reference for Crossover from Algorithm {parent.id}")
+        return self.rng.choice(pool)
 
     def evolution_prompt(self, attempt: Attempt, parent: Program, reference: Program | None) -> str:
         return self.prompts.evolution(self.archive, parent, attempt.operator, reference)

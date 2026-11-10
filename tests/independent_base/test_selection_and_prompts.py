@@ -92,7 +92,7 @@ def test_tied_scores_get_equal_weights_and_median_references_stay_unchanged():
     assert [p.id for p in reference_pool(archive, 4)] == [1, 2, 3]
 
 
-def test_operator_weights_and_reference_fallback(task, tmp_path):
+def test_operator_weights_and_a_missing_reference_is_an_error(task, tmp_path):
     rng = random.Random(4)
     archive = {1: program(1, 2)}
     parent, op = choose(archive, Config(), rng)
@@ -105,7 +105,8 @@ def test_operator_weights_and_reference_fallback(task, tmp_path):
 
     search = TraceAAD(task, None, config=Config(), run_dir=tmp_path)
     search.archive, search.rng = archive, Always(1)
-    assert search.select(1)[:3] == (archive[1], "Explore", None)
+    with pytest.raises(RuntimeError, match="No reference"):
+        search.select(1)
     archive[2] = program(2, 3)
     _, op, reference, _ = search.select(2)
     assert op == "Crossover" and reference.id in {1, 2}

@@ -1,18 +1,25 @@
-"""V21.3: V21.2 with every evolution step shown through its full actual code change."""
+"""V21.3: current Base selection with V21.2's design reasoning, shown through layered evidence."""
 
-from traceaad_v21_2.search import TraceAAD as V21_2
+from traceaad_base.search import TraceAAD as Base
+from traceaad_v21_2.prompts import CANDIDATE_RESPONSE_FORMAT, PromptBuilder
 
 from .context import context
 
-PROTOCOL = "trajectory_design_reasoning_full_diff_v1"
+PROTOCOL = "trajectory_design_reasoning_layered_v1"
 
 
-class TraceAAD(V21_2):
+class TraceAAD(Base):
     method = "traceaad_v21_3"
+    prompt_type = PromptBuilder
     generation_protocol = PROTOCOL
+    mechanisms = (2,)
+
+    def __init__(self, task, model, **options):
+        if hasattr(model, "request_options"):
+            model.request_options = {**model.request_options, "response_format": CANDIDATE_RESPONSE_FORMAT}
+        super().__init__(task, model, **options)
 
     def evolution_prompt(self, attempt, parent, reference):
-        text, instruction, scores, view = context(self.archive, parent, attempt.operator, reference, self.config,
-                                                  reference_code=self.reference_code)
+        text, instruction, scores, view = context(self.archive, parent, attempt.operator, reference, self.config)
         attempt.record["context"] = view
         return self.prompts.evolution_render(text, instruction, has_scores=scores)

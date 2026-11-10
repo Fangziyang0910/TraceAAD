@@ -1,105 +1,133 @@
-"""V21.3: every evolution step shows its full actual code change; everything else is V21.2."""
+"""V21.3: layered evidence (design, actual change, full code) chosen by each material's role."""
 import pytest
 
 import traceaad_base
 import traceaad_v21_3
+from traceaad_base import Evaluation
 from traceaad_v21_1.context import FAILURES
 from traceaad_v21_2 import context as v21_2
 from traceaad_v21_3.context import COMMON, CROSSOVER, EXPLORE, REFINE, card, context
+from traceaad_v21_3.representation import failure
 from tests.v21_2.test_v21_2 import CONFIG, Reply, chain, code, program, reference_archive, task
 
 REWRITE = "def solve(x):\n    s = 0\n    for i in range(3):\n        s += i * x\n    t = sorted([s, x])\n    return t[0]\n"
+TRACEBACK = """Traceback (most recent call last):
+  File "/evaluator/run.py", line 40, in evaluate
+    value = fn(x)
+  File "<candidate>", line 14, in get_dist
+    return float(distance_matrix[tour[i]][tour[j]])
+                                          ~~~~^^^
+IndexError: list index out of range"""
 
 
-def test_instructions_and_selection_are_those_of_v21_2():
-    assert (COMMON, REFINE, CROSSOVER, EXPLORE) == (v21_2.COMMON, v21_2.REFINE, v21_2.CROSSOVER, v21_2.EXPLORE)
-    archive = chain(12)
-    for i in range(13, 18):
-        archive[i] = program(i, 90. - i, 12)
-    archive[18] = program(18, None, 12, failure="ValueError: bad")
-    for operator, reference in (("Refine", None), ("Crossover", archive[3]), ("Explore", None)):
-        new = context(archive, archive[12], operator, reference, CONFIG)
-        old = v21_2.context(archive, archive[12], operator, reference, CONFIG)
-        assert new[1:] == old[1:]  # Instruction, score flag and the shown records are unchanged.
+def test_instructions_differ_from_v21_2_only_where_decisions_and_formation_records_were_named():
+    assert (REFINE, EXPLORE) == (v21_2.REFINE, v21_2.EXPLORE)
+    assert COMMON == v21_2.COMMON.replace("Designs and decisions are", "Designs are")
+    assert CROSSOVER == v21_2.CROSSOVER.replace(" and the formation records of its computations", "")
 
 
-def test_small_change_has_three_lines_of_context():
+def test_no_card_shows_text_derived_from_analysis():
+    archive = chain(6)
+    for i in range(7, 10):
+        archive[i] = program(i, 90. - i, 6, analysis=f"Long reasoning {i}. Final sentence {i}.")
+    archive[10] = program(10, None, 6, failure="ValueError: bad", analysis="Plan ten. Final ten.")
+    for operator, reference in (("Refine", None), ("Crossover", archive[3])):
+        text, _, _, _ = context(archive, archive[6], operator, reference, CONFIG)
+        assert "Decision" not in text and "Final" not in text and "Reasoning" not in text and "reasoning" not in text
+
+
+def test_step_card_gives_design_change_and_result():
+    archive = chain(2)
+    archive[3] = program(3, 90., 2)
+    rows = card(archive, archive[3]).splitlines()
+    assert rows[:4] == ["Algorithm 3", "Parent: Algorithm 2", "Operator: Refine", "Design: design_3"]
+    assert rows.index("Changed computation:") == 4
+    assert rows[-1] == "Result relative to Algorithm 2: 98.0 -> 90.0; improved"
+
+
+def test_a_change_has_three_lines_of_context_and_a_rewrite_its_full_diff():
     before = "def solve(x):\n    a = 1\n    b = 2\n    c = 3\n    d = 4\n    e = 5\n    return a + b + c + d + e\n"
-    after = before.replace("c = 3", "c = 30")
-    archive = {1: program(1, 10., operator="Init", source=before), 2: program(2, 9., 1, source=after)}
+    archive = {1: program(1, 10., operator="Init", source=before),
+               2: program(2, 9., 1, source=before.replace("c = 3", "c = 30")),
+               3: program(3, 8., 1, source=REWRITE, operator="Explore")}
     rows = card(archive, archive[2]).splitlines()
     start = rows.index("Changed computation:")
     assert rows[start + 1:start + 9] == [" def solve(x):", "     a = 1", "     b = 2", "-    c = 3", "+    c = 30",
                                          "     d = 4", "     e = 5", "     return a + b + c + d + e"]
-
-
-def test_a_rewrite_shows_its_full_diff_not_a_summary():
-    archive = {1: program(1, 50., operator="Init", source=code(1)), 2: program(2, 20., 1, source=REWRITE,
-                                                                                 operator="Explore")}
-    text = card(archive, archive[2])
-    assert "most of the code was replaced" not in text
-    assert "+        s += i * x" in text and "-    a = 1" in text
-    assert text.splitlines()[-1] == "Result relative to Algorithm 1: 50.0 -> 20.0; improved"
-
-
-def test_failed_offspring_show_their_change_and_error():
-    archive = chain(2)
-    archive[3] = program(3, None, 2, source=code(3, "x[0]"), failure="IndexError: invalid index")
-    text, instruction, _, view = context(archive, archive[2], "Refine", None, CONFIG)
-    failed = text[text.index("[Failed Offspring]"):text.index("[Current Algorithm]")]
-    assert "+    return x[0] + a" in failed and "Result: error; IndexError: invalid index" in failed
-    assert view["failed"] == [3] and instruction.endswith(FAILURES)
-
-
-def test_unparsable_code_is_compared_as_raw_text_and_says_so():
-    archive = chain(2)
-    archive[3] = program(3, None, 2, source="def solve(x:\n    return x\n", failure="SyntaxError: bad")
     text = card(archive, archive[3])
-    assert "the code of Algorithm 3 could not be parsed; the raw source texts are compared." in text
-    assert "+def solve(x:" in text
+    assert "most of the code was replaced" not in text and "+        s += i * x" in text and "-    c = 3" in text
 
 
-def test_identical_code_says_none():
+def test_identical_and_unparsable_code_are_stated():
     archive = chain(2)
     archive[3] = program(3, 98., 2, source=archive[2].code + "\n# comment\n")
     assert "Changed computation: none; the code is identical to Algorithm 2." in card(archive, archive[3])
+    archive[4] = program(4, None, 2, source="def solve(x:\n    return x\n", failure="SyntaxError: bad")
+    text = card(archive, archive[4])
+    assert "the code of Algorithm 4 could not be parsed; the raw source texts are compared." in text
+    assert "+def solve(x:" in text
 
 
-def test_reference_formation_uses_the_same_step_cards():
-    archive = {1: program(1, 50., operator="Init", source=code(1)), 2: program(2, 20., 1, source=REWRITE,
-                                                                                 operator="Explore")}
-    archive[3] = program(3, 70., operator="Init", source=code(3))
-    text, _, _, view = context(archive, archive[3], "Crossover", archive[2], CONFIG)
-    part = text[text.index("[Reference Algorithm]"):text.index("[Current Algorithm]")]
-    assert view["reference_steps"] == [2] and "```python" not in part
-    assert "Added lines that remain" not in part and "most of the code was replaced" not in part
-    assert card(archive, archive[2]) in part
-    archive = reference_archive()
-    text, _, _, _ = context(archive, archive[9], "Crossover", archive[4], CONFIG, reference_code=True)
-    part = text[text.index("[Reference Algorithm]"):text.index("[Current Algorithm]")]
-    assert "```python" in part and "+    b = x * 3" in part
+def test_failure_gives_the_candidate_line_where_it_was_raised():
+    assert failure(Evaluation("error", None, TRACEBACK)).splitlines() == [
+        "Result: error; IndexError: list index out of range",
+        "Raised in get_dist: return float(distance_matrix[tour[i]][tour[j]])"]
+    assert failure(Evaluation("error", None, "ValueError: shape 3 mismatch")) == "Result: error; ValueError: shape N mismatch"
+    assert failure(Evaluation("timeout", None, "Evaluation exceeded 10 seconds")) == \
+        "Result: timeout; the evaluation did not finish within the allowed time."
 
 
-def test_ancestors_show_changes_and_the_initial_algorithm_its_design():
-    archive = chain(4)
-    text, _, _, _ = context(archive, archive[4], "Refine", None, CONFIG)
+def test_failed_offspring_show_design_change_and_where_they_failed():
+    archive = chain(2)
+    archive[3] = program(3, None, 2, source=code(3, "x[0]"), failure=TRACEBACK)
+    text, instruction, _, view = context(archive, archive[2], "Refine", None, CONFIG)
+    failed = text[text.index("[Failed Offspring]"):text.index("[Current Algorithm]")]
+    assert "Design: design_3" in failed and "+    return x[0] + a" in failed
+    assert "Raised in get_dist:" in failed and view["failed"] == [3] and instruction.endswith(FAILURES)
+
+
+def test_nearest_three_ancestors_show_changes_and_farther_ones_only_designs():
+    archive = chain(12)
+    text, _, _, view = context(archive, archive[12], "Refine", None, CONFIG)
     history = text[text.index("[Ancestor History]"):text.index("[Current Algorithm]")]
-    assert "design_1" in history and history.count("Changed computation:") == 2
-    assert "Decision 1." not in history
+    cards = history.split("\n\nAlgorithm ")[1:]
+    assert view["ancestor_changes"] == [9, 10, 11]
+    for row in cards:
+        number = int(row.split("\n")[0])
+        assert ("Changed computation:" in row) == (number in (9, 10, 11))
+        assert f"Design: design_{number}" in row
+    assert "Decision" not in history
 
 
-def test_search_records_its_protocol_and_rejects_other_resumes(tmp_path):
+def test_current_and_reference_algorithms_show_design_and_full_code():
+    archive = reference_archive()
+    text, instruction, _, view = context(archive, archive[9], "Crossover", archive[4], CONFIG)
+    reference = text[text.index("[Reference Algorithm]"):text.index("[Current Algorithm]")]
+    assert reference.splitlines()[1:4] == ["Algorithm 4", "Score: 30.0", "Design: design_4"]
+    assert "```python" in reference and "return x + a + b - 1" in reference
+    assert "Formation" not in reference and "Parent:" not in reference
+    current = text[text.index("[Current Algorithm]"):]
+    assert "Design: design_9" in current and "Score: 60.0" in current and "```python" in current
+    assert instruction == "\n".join([COMMON, CROSSOVER]) and "reference_steps" not in view
+
+
+def test_explore_current_algorithm_has_design_and_code_but_no_score():
+    archive = chain(3)
+    archive[4] = program(4, 120., 2, operator="Explore")
+    text, instruction, scores, view = context(archive, archive[4], "Explore", None, CONFIG)
+    current = text[text.index("[Current Algorithm]"):]
+    assert "Design: design_4" in current and "Score" not in current and instruction == EXPLORE
+    assert view["explorations"] == [1]
+
+
+def test_search_records_its_protocol_and_rejects_reference_code(tmp_path):
     config = traceaad_base.Config(evaluation_budget=20, initial_size=3, seed=5)
     model = Reply()
     run = traceaad_v21_3.TraceAAD(task(), model, config=config, run_dir=tmp_path / "a")
     assert run.run().evaluations == 20
-    assert run.store.read("run_config.json")["generation_protocol"] == "trajectory_design_reasoning_full_diff_v1"
-    assert all("most of the code was replaced" not in p for p in model.prompts)
+    assert run.store.read("run_config.json")["generation_protocol"] == "trajectory_design_reasoning_layered_v1"
+    assert all("Decision:" not in p and "most of the code was replaced" not in p for p in model.prompts)
     assert traceaad_v21_3.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path / "a",
                                    resume=True).evaluations_used == 20
-    with pytest.raises(ValueError, match="generation_protocol"):
-        traceaad_v21_3.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path / "a", resume=True,
-                                reference_code=True)
-    control = traceaad_v21_3.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path / "b", reference_code=True)
-    assert control.store.read("run_config.json")["generation_protocol"] == \
-        "trajectory_design_reasoning_full_diff_v1+reference_code"
+    with pytest.raises(TypeError):
+        traceaad_v21_3.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path / "b", reference_code=True)

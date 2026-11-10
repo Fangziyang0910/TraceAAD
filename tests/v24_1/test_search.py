@@ -105,8 +105,11 @@ def test_repeated_unchanged_computations_stay_archived_without_forcing_a_knowled
     class Unchanged(Generator):
         def complete(self, prompt, **settings):
             self.n += 1
-            return json.dumps({"analysis": "Keep the computation.", "code": "def solve(x):\n    return x + 1\n",
-                               "design": "Add one."})
+            if "[Current Algorithm]" not in prompt:  # Initialization: distinct programs, so Crossover has references.
+                source = f"def solve(x):\n    return x + {self.n}\n"
+            else:  # Evolution returns the current algorithm unchanged.
+                source = prompt.split("[Current Algorithm]")[1].split("```python\n")[1].split("```")[0]
+            return json.dumps({"analysis": "Keep the computation.", "code": source, "design": "Add one."})
     reflector = Reflector()
     run = search(tmp_path, generator=Unchanged(), reflector=reflector,
                  config=Config(evaluation_budget=26, initial_size=3))
