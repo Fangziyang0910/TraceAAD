@@ -1,4 +1,4 @@
-"""TraceAAD V21.3: V21.2 design reasoning with layered trajectory evidence: design, actual change, full code."""
+"""TraceAAD V21.3: local Refine evidence, static Crossover and free Explore."""
 
 from traceaad_base import Config
 

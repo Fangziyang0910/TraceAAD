@@ -124,6 +124,22 @@ def test_reference_ablation_is_explicit_and_recorded(entry_environment, capsys, 
     assert 1 in metadata["mechanisms"]
 
 
+@pytest.mark.parametrize("method", ["v21.2", "v21_2", "v21.3", "v21_3"])
+def test_reference_source_control_is_recorded_for_supported_methods(entry_environment, capsys, method):
+    run.main(["--method", method, "--task", "tsp_construct", "--run-name", "source_control",
+              "--batch", "source_control", "--scheduler-socket", "/fake", "--dry-run", "--reference-code"])
+    metadata = json.loads(capsys.readouterr().out)
+    assert metadata["reference_code"] is True
+    assert metadata["generation_protocol"] == run.METHODS[method][1].TraceAAD.generation_protocol + "+reference_code"
+
+
+def test_reference_source_control_rejects_base_before_runtime_setup():
+    with pytest.raises(SystemExit) as error:
+        run.main(["--method", "base", "--task", "tsp_construct", "--run-name", "test",
+                  "--batch", "test", "--reference-code"])
+    assert error.value.code == 2
+
+
 def test_four_task_plan_has_exactly_twelve_routes():
     from argparse import Namespace
     from experiments.traceaad.launch_host import build_plan

@@ -1,134 +1,82 @@
-"""V21.3 trajectory views: layered evidence on V21.2's operator material.
+"""Only Refine reads history: actual changes and outcomes from the same parent and operator."""
 
-Every node has three layers: its design (what the program computes, written after its code), its actual change
-from its parent (a diff, measured), and its full code. A material's role decides how far it is shown:
-  current and reference algorithms   design + full code
-  offspring, valid or failed         design + change (+ where a failure was raised)
-  nearest three ancestors            design + change
-  farther ancestors                  design
-  earlier Crossovers with the reference design + change (+ where a failure was raised)
-  earlier explorations               design + scores + later development (V21.2)
-Each record first states its parent, operator and measured result. Nothing derived from `analysis` is shown.
-"""
-
-from traceaad_v21_1.context import FAILURES, RECENT_ANCESTORS, ancestors
-from traceaad_v21_2.context import EXPLORE, REFINE, explorations, refine_attempts
+from traceaad_base.prompts import EXPLORE, REFINE, failure_summary
+from traceaad_base.selection import identity
 from traceaad_v21_1.representation import bare
+
 from .representation import changes, failure
 
-COMMON = ("Code differences and evaluation results are observed facts. Designs describe implementations but may be "
-          "inaccurate. A score change alone does not establish why the result changed.")
-CROSSOVER = ("Improve the current algorithm with decision information from the reference algorithm. "
-             "Use the reference algorithm to judge which computation supplies information the current algorithm "
-             "lacks and what that computation depends on. "
-             "When earlier Crossover attempts with the reference algorithm are shown, use their actual changes and "
-             "results to judge how its computations were connected to other decision mechanisms and what problems "
-             "those integrations exposed. "
-             "Redesign the chosen computation for the current algorithm as needed, for example as a cheaper "
-             "approximation of the same information. Align input representations and numerical scales, and combine "
-             "its result with the current decision mechanism so that both contribute to the returned result. "
-             "If no computation of the reference fits the current algorithm, say so in analysis and implement the "
-             "most coherent adaptation you can. "
-             "In analysis, state what you take, what decision information it adds, how you integrate it, and, when "
-             "such attempts are shown, what they show about the integration; "
-             "end with one sentence that states the change you make.")
-
-__all__ = ["COMMON", "CROSSOVER", "EXPLORE", "REFINE", "FAILURES", "card", "context", "integrations", "program_card"]
+CROSSOVER = ("Consider whether the reference offers a useful computation that complements the current algorithm. "
+             "When appropriate, adapt and integrate that computation into the current decision procedure, aligning "
+             "its inputs and numerical scales as needed. Otherwise, improve the current algorithm directly.")
 
 
-def _result(parent, program):
-    if not program.valid:
-        return failure(program.evaluation)
-    if parent is not None and parent.valid:
+def card(parent, program):
+    """A same-parent Refine attempt: measured result and complete code difference, without model descriptions."""
+    lines = [f"Algorithm {program.id}", f"Parent: Algorithm {parent.id}", "Operator: Refine"]
+    if program.valid:
         a, b = parent.evaluation.fitness, program.evaluation.fitness
         outcome = "improved" if b < a else "tied" if b == a else "regressed"
-        return f"Result relative to Algorithm {parent.id}: {a} -> {b}; {outcome}"
-    return f"Score: {program.evaluation.fitness}"
-
-
-def card(archive, program, *, change=True):
-    """A step: parent, operator and result first, then its design and its actual change (an initial program has none)."""
-    parent = archive.get(program.parent_id)
-    lines = [f"Algorithm {program.id}", f"Parent: Algorithm {program.parent_id}", f"Operator: {program.operator}"]
-    if program.reference_id is not None:
-        lines.append(f"Reference: Algorithm {program.reference_id}")
-    lines += [_result(parent, program), f"Design: {program.design}"]
-    if change and program.operator != "Init":
-        lines.append(changes(parent, program))
+        lines.append(f"Result relative to Algorithm {parent.id}: {a} -> {b}; {outcome}")
+    else:
+        lines.append(failure(program.evaluation))
+    lines.append(changes(parent, program))
     return "\n".join(lines)
 
 
-def program_card(program, *, score=True):
-    """A program shown in full: its design and normalized code."""
-    lines = [f"Algorithm {program.id}"] + ([f"Score: {program.evaluation.fitness}"] if score else [])
-    return "\n".join(lines + [f"Design: {program.design}", f"```python\n{bare(program.code)}\n```"])
-
-
-def integrations(archive, parent, reference, config):
-    """Earlier Crossover attempts that used this reference: from the current algorithm first, then the most recent."""
+def refine_attempts(archive, parent, config):
+    """Keep distinct same-parent Refine results; prefer an improvement, then the latest attempts."""
     records = [p for p in archive.values()
-               if p.operator == "Crossover" and p.reference_id == reference.id and p.evaluation is not None]
-    first = lambda p: (p.parent_id != parent.id, -p.id)
-    valid = sorted((p for p in records if p.valid), key=first)[:config.offspring_count]
-    failed = sorted((p for p in records if not p.valid), key=first)[:config.failure_count]
-    return sorted(valid + failed, key=lambda p: p.id), len(records)
+               if p.parent_id == parent.id and p.operator == "Refine" and p.evaluation is not None]
+    unique = {}
+    for program in sorted(records, key=lambda p: p.id):
+        evaluation = program.evaluation
+        key = (identity(program.code), evaluation.status, evaluation.fitness,
+               failure_summary(evaluation.failure or ""))
+        unique[key] = program
+    valid = [p for p in unique.values() if p.valid]
+    best = min(valid, key=lambda p: (p.evaluation.fitness, -p.id), default=None)
+    first = [best] if best is not None and best.evaluation.fitness < parent.evaluation.fitness else []
+    latest = sorted((p for p in valid if p not in first), key=lambda p: -p.id)
+    children = sorted((first + latest)[:config.offspring_count], key=lambda p: p.id)
+    failed = sorted((p for p in unique.values() if not p.valid), key=lambda p: -p.id)[:config.failure_count]
+    return children, sorted(failed, key=lambda p: p.id), len(records)
 
 
-def context(archive, parent, operator, chosen, config):
-    """Return the [Context] text, the [Instruction] text, whether scores are shown, and a record of what was shown."""
-    view = {"ancestor_path": [], "ancestors": [], "ancestor_changes": [], "children": [], "failed": [],
-            "integrations": [], "explorations": []}
-    if operator == "Explore":
-        rows, total, shown = explorations(archive, parent)
-        blocks = []
-        if rows:
-            blocks.append(f"[Earlier Explorations]\nDistinct initial and Explore algorithms in this search: {total}; "
-                          f"showing {len(rows)}, the most developed and the most recent, ordered by creation.\n\n"
-                          + "\n\n".join(rows))
-        blocks.append("[Current Algorithm]\n" + program_card(parent, score=False))
-        view["explorations"] = shown
-        return "\n\n".join(blocks), EXPLORE, bool(rows), view
-    blocks = []
-    if operator == "Crossover":
-        shown, total = integrations(archive, parent, chosen, config)
+def current_card(program, *, score=True):
+    lines = [f"Algorithm {program.id}"]
+    if score:
+        lines.append(f"Score: {program.evaluation.fitness}")
+    lines.append(f"```python\n{bare(program.code)}\n```")
+    return "\n".join(lines)
+
+
+def context(archive, parent, operator, chosen, config, *, reference_code=False):
+    """Return rendered material, instruction, score visibility and the actual selected records."""
+    blocks, view = [], {}
+    if operator == "Refine":
+        children, failed, total = refine_attempts(archive, parent, config)
+        shown = sorted(children + failed, key=lambda p: p.id)
         if shown:
-            blocks.append(f"[Earlier Crossovers with the Reference]\nEarlier Crossover attempts that used Algorithm "
-                          f"{chosen.id} as reference: {total}; showing {len(shown)}, those from Algorithm {parent.id} "
-                          f"first, then the most recent, ordered by creation.\n\n"
-                          + "\n\n".join(card(archive, p) for p in shown))
-        blocks.append("[Reference Algorithm]\n" + program_card(chosen))
-        blocks.append("[Current Algorithm]\n" + program_card(parent))
-        failed = any(not p.valid for p in shown)
-        view["integrations"] = [p.id for p in shown]
-        return "\n\n".join(blocks), "\n".join([COMMON, CROSSOVER] + ([FAILURES] if failed else [])), True, view
-    formation, path = ancestors(archive, parent, config.ancestor_count)
-    children, failures = refine_attempts(archive, parent, config)
-    if formation:
-        near = {p.id for p in path[-RECENT_ANCESTORS:]}
-        order = [p.id for p in path]
-        rows, previous = [], -1
-        for program in formation:
-            index = order.index(program.id)
-            omitted = index - previous - 1
-            rows.append(card(archive, program, change=program.id in near)
-                        + (f"\nOmitted intermediate nodes before this record: {omitted}" if omitted else ""))
-            previous = index
-        blocks.append(f"[Ancestor History]\nAncestors of the current algorithm, ordered from earlier to later; "
-                      f"the nearest {RECENT_ANCESTORS} show their code change; farther ones show only their design, as "
-                      f"background to how the code formed, not as evidence of what changed.\n\n" + "\n\n".join(rows))
-    view.update(ancestor_path=[p.id for p in path], ancestors=[p.id for p in formation],
-                ancestor_changes=[p.id for p in formation if p.id in near and p.operator != "Init"]
-                if formation else [])
-    direct = [p for p in archive.values() if p.parent_id == parent.id and p.evaluation is not None]
-    if children:
-        total = sum(p.valid for p in direct)
-        blocks.append(f"[Evaluated Offspring]\nDirect attempts from Algorithm {parent.id}: {total} valid; "
-                      f"showing {len(children)}, the best improvement, if any, and the most recent, ordered by "
-                      f"creation.\n\n" + "\n\n".join(card(archive, p) for p in children))
-    if failures:
-        total = sum(not p.valid for p in direct)
-        blocks.append(f"[Failed Offspring]\nFailed direct attempts from Algorithm {parent.id}: {total}; "
-                      f"showing {len(failures)}.\n\n" + "\n\n".join(card(archive, p) for p in failures))
-    blocks.append("[Current Algorithm]\n" + program_card(parent))
-    view.update(children=[p.id for p in children], failed=[p.id for p in failures])
-    return "\n\n".join(blocks), "\n".join([COMMON, REFINE] + ([FAILURES] if failures else [])), True, view
+            blocks.append(f"[Earlier Refine Attempts]\nEvaluated Refine attempts from Algorithm {parent.id}: "
+                          f"{total}; showing {len(children)} valid and {len(failed)} failed attempts, ordered by creation. "
+                          "An improvement, when available, and the most recent distinct results are shown.\n\n"
+                          + "\n\n".join(card(parent, p) for p in shown))
+        view = {"children": [p.id for p in children], "failed": [p.id for p in failed]}
+        instruction = REFINE
+    elif operator == "Crossover":
+        if chosen is None:
+            raise ValueError("Crossover requires a reference")
+        reference = [f"Algorithm {chosen.id}", f"Score: {chosen.evaluation.fitness}", f"Design: {chosen.design}"]
+        if reference_code:
+            reference.append(f"```python\n{bare(chosen.code)}\n```")
+        blocks.append("[Reference Algorithm]\n" + "\n".join(reference))
+        view = {"reference_code": reference_code}
+        instruction = CROSSOVER
+    elif operator == "Explore":
+        instruction = EXPLORE
+    else:
+        raise ValueError(f"Unknown evolution operator: {operator}")
+    scores = operator != "Explore"
+    blocks.append("[Current Algorithm]\n" + current_card(parent, score=scores))
+    return "\n\n".join(blocks), instruction, scores, view
