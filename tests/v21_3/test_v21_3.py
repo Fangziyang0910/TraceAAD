@@ -1,4 +1,4 @@
-"""V21.3: compact formation history and same-parent attempts, static fusion and free exploration."""
+"""V21.3: compact modification, integration and exploration histories for the three operators."""
 from dataclasses import replace
 import json
 
@@ -9,7 +9,7 @@ import traceaad_v21_3
 from traceaad_base import Evaluation
 from traceaad_base.models import Attempt
 from traceaad_v21_2.prompts import PromptBuilder as PreviousPrompts
-from traceaad_v21_3.context import REFINE, attempts, card, context, formation
+from traceaad_v21_3.context import EXPLORATIONS, EXPLORE, REFINE, attempts, card, context, explorations, formation, integrations
 from traceaad_v21_3.prompts import CANDIDATE_RESPONSE_FORMAT, PromptBuilder
 from traceaad_v21_3.representation import failure
 from traceaad_v21_3.search import PROTOCOL
@@ -49,6 +49,14 @@ def test_refine_without_improvement_keeps_recent_attempts_not_a_least_bad_exempl
     assert [p.id for p in valid] == [4, 5, 6] and failed == []
 
 
+def test_old_improvement_does_not_override_the_recent_attempt_window():
+    archive = chain(2)
+    archive[3] = program(3, 1., 2)
+    archive.update({i: program(i, 100. + i, 2) for i in range(4, 7)})
+    valid, _, _ = attempts(archive, archive[2], CONFIG)
+    assert [p.id for p in valid] == [4, 5, 6]
+
+
 def test_refine_shows_formation_and_all_types_of_local_attempts_without_model_descriptions():
     archive = chain(12)
     archive[13] = program(13, 70., 12, analysis="Invented historical cause.")
@@ -58,7 +66,7 @@ def test_refine_shows_formation_and_all_types_of_local_attempts_without_model_de
     archive[17] = program(17, 1., 11)
     text, instruction, scores, view = context(archive, archive[12], "Refine", None, CONFIG)
     assert view["formation_path"] == list(range(1, 13))
-    assert view["formation_steps"] == [2, 6, 7, 8, 9, 10, 11, 12]
+    assert view["formation_steps"] == [5, 6, 7, 8, 9, 10, 11, 12]
     assert view["children"] == [13, 15] and view["failed"] == [14, 16]
     assert "Evaluated attempts: 4; showing 2 valid and 2 failed" in text
     assert "+    a = 13" in text and "+    return x[0] + a" in text and "Raised in get_dist:" in text
@@ -82,18 +90,18 @@ def test_refine_without_local_attempts_keeps_formation_and_ignores_other_branche
     assert view["children"] == view["failed"] == []
 
 
-def test_formation_selects_large_earlier_changes_and_the_last_three_including_current():
+def test_formation_keeps_recent_changes_instead_of_selecting_by_score_movement():
     archive = chain(12)
     archive[3].evaluation = Evaluation("success", 200.)
     selected, path = formation(archive, archive[12], 4)
     assert [p.id for p in path] == list(range(1, 13))
-    assert [p.id for p in selected] == [4, 10, 11, 12]
+    assert [p.id for p in selected] == [9, 10, 11, 12]
     config = replace(CONFIG, ancestor_count=4)
     text, _, _, view = context(archive, archive[12], "Refine", None, config)
     assert "Initial: fitness = 100.0" in text
-    assert "... 2 intermediate steps omitted." in text and "... 5 intermediate steps omitted." in text
-    assert "Step 3: 200.0 -> 96.0; improved" in text
-    assert "-    a = 3\n+    a = 4" in text
+    assert "... 7 intermediate steps omitted." in text
+    assert "Step 8: 92.0 -> 91.0; improved" in text
+    assert "-    a = 8\n+    a = 9" in text
     assert "Step 11: 89.0 -> 88.0; improved" in text
     assert view["formation_steps"][-1] == archive[12].id
 
@@ -164,23 +172,39 @@ def test_failure_gives_the_candidate_line_where_it_was_raised():
         "Result: timeout; the evaluation did not finish within the allowed time."
 
 
+def integration_archive():
+    return {1: program(1, 100., operator="Init"), 2: program(2, 90., operator="Init"),
+            3: program(3, 80., 2), 4: program(4, 95., 1),
+            5: program(5, 94., 4, operator="Crossover", reference=1),
+            6: program(6, 85., 2, operator="Crossover", reference=3),
+            7: program(7, 99., 1, operator="Crossover", reference=2),
+            8: program(8, 70., 4),
+            9: program(9, None, 4, operator="Crossover", reference=1, failure=TRACEBACK)}
+
+
 @pytest.mark.parametrize("reference_code", [False, True])
-def test_crossover_uses_only_current_program_and_reference_even_with_matching_history(reference_code):
-    archive = reference_archive()
-    archive[10] = program(10, 55., 9, operator="Crossover", reference=4)
-    archive[11] = program(11, None, 2, operator="Crossover", reference=4, failure=TRACEBACK)
-    archive[12] = program(12, 1., 9)
-    actual = context(archive, archive[9], "Crossover", archive[4], CONFIG, reference_code=reference_code)
-    assert actual == context({9: archive[9], 4: archive[4]}, archive[9], "Crossover", archive[4], CONFIG,
-                             reference_code=reference_code)
-    text, instruction, scores, view = actual
-    reference, current = text.split("[Current Algorithm]")
-    assert "Design: design_4" in reference and "Score: 30.0" in reference
-    assert ("```python" in reference) == reference_code
-    assert "return x + a + b - 1" in reference if reference_code else "return x + a + b - 1" not in reference
-    assert "Design:" not in current and "Score: 60.0" in current and "```python" in current
-    assert "Earlier" not in text and scores and view == {"reference_code": reference_code}
-    assert "Otherwise, improve the current algorithm directly." in instruction
+def test_crossover_shows_formation_and_receiver_and_reference_integrations(reference_code):
+    archive = integration_archive()
+    text, instruction, scores, view = context(archive, archive[4], "Crossover", archive[3], CONFIG,
+                                             reference_code=reference_code)
+    assert view == {"reference_path": [2, 3], "reference_steps": [3], "integrations": [5, 6, 9],
+                    "reference_code": reference_code}
+    assert "[Reference Evolution Path]" in text and "Step 1: 90.0 -> 80.0; improved" in text
+    assert "Integration 1 from Algorithm 4 (Crossover with reference Algorithm 1): 95.0 -> 94.0; improved" in text
+    assert "Integration 2 from Algorithm 2 (Crossover with reference Algorithm 3): 90.0 -> 85.0; improved" in text
+    assert "Reference design: design_1" in text and "Receiver design: design_2" in text
+    assert "Raised in get_dist:" in text
+    reference = text.split("[Reference Algorithm]")[1].split("[Current Algorithm]")[0]
+    assert "Design: design_3" in reference and ("```python" in reference) == reference_code
+    assert "Program" not in text and "Parent:" not in text and scores
+    assert "otherwise improve the current algorithm directly" in instruction
+
+
+def test_crossover_preserves_equal_outcomes_from_different_receivers():
+    archive = integration_archive()
+    archive[10] = program(10, 85., 1, source=archive[6].code, operator="Crossover", reference=3)
+    valid, failed, total = integrations(archive, archive[4], archive[3], CONFIG)
+    assert [p.id for p in valid] == [5, 6, 10] and [p.id for p in failed] == [9] and total == 4
 
 
 def test_crossover_without_reference_is_an_error():
@@ -189,16 +213,51 @@ def test_crossover_without_reference_is_an_error():
         context(archive, archive[2], "Crossover", None, CONFIG)
 
 
-def test_explore_uses_only_current_code_regardless_of_explorations_or_descendant_scores():
-    archive = chain(12)
-    archive[13] = program(13, 150., 12, operator="Explore")
-    archive[14] = program(14, 1., 13)
-    actual = context(archive, archive[12], "Explore", None, CONFIG)
-    assert actual == context({12: archive[12]}, archive[12], "Explore", None, CONFIG)
-    text, instruction, scores, view = actual
-    assert "Design:" not in text and "Score" not in text and "Earlier" not in text
-    assert "```python" in text and not scores and view == {}
-    assert instruction == traceaad_base.prompts.EXPLORE
+def test_explore_shows_directions_best_implementations_and_paths_without_crediting_later_explore():
+    archive = {1: program(1, 20., operator="Init"), 2: program(2, 25., operator="Init"),
+               3: program(3, 18., 1), 4: program(4, 12., 3, operator="Crossover", reference=2),
+               5: program(5, 30., 4, operator="Explore"), 6: program(6, 10., 5),
+               7: program(7, None, 1, failure=TRACEBACK), 8: program(8, 27., 2, operator="Explore"),
+               9: program(9, 25., source=code(2), operator="Init")}
+    archive[4].analysis = "Invented historical cause."
+    rows, total, shown = explorations(archive)
+    assert total == 4 and [r["origin"] for r in shown] == [1, 5, 8, 9]
+    assert shown[0] == {"origin": 1, "development_count": 3, "best": 4, "best_path": [1, 3, 4]}
+    assert shown[1] == {"origin": 5, "development_count": 1, "best": 6, "best_path": [5, 6]}
+    assert "Best later design: design_4" in rows[0]
+    assert "Refine -> Crossover with reference Algorithm 2" in rows[0]
+    assert "including the origin = 12.0" in rows[0] and "including the origin = 10.0" not in rows[0]
+    assert "Best later design:" not in rows[-1]
+    text, instruction, scores, view = context(archive, archive[8], "Explore", None, CONFIG)
+    assert view == {"explorations": shown} and scores and instruction == EXPLORE
+    assert text.count("```python") == 1 and "Invented historical cause" not in text
+    current = text.split("[Current Algorithm]")[1]
+    assert "Score:" not in current and "Design:" not in current
+
+
+def test_exploration_window_follows_recent_development_as_well_as_recent_birth():
+    archive = {i: program(i, 100. + i, operator="Init") for i in range(1, EXPLORATIONS + 3)}
+    child = EXPLORATIONS + 3
+    archive[child] = program(child, 200., 1)
+    rows, total, shown = explorations(archive)
+    assert total == EXPLORATIONS + 2 and len(rows) == EXPLORATIONS
+    assert [r["origin"] for r in shown] == [1, 4, 5, 6, 7, 8]
+    assert shown[0]["best"] == 1 and shown[0]["best_path"] == [1]
+
+
+def test_equal_origins_keep_the_branch_with_recent_development():
+    archive = {1: program(1, 20., operator="Init"), 2: program(2, 20., source=code(1), operator="Init"),
+               3: program(3, 10., 1)}
+    _, total, shown = explorations(archive)
+    assert total == 1
+    assert shown == [{"origin": 1, "development_count": 1, "best": 3, "best_path": [1, 3]}]
+
+
+def test_explore_without_prior_directions_has_only_current_code():
+    parent = program(1, 10.)
+    text, instruction, scores, view = context({1: parent}, parent, "Explore", None, CONFIG)
+    assert "[Earlier Explorations]" not in text and not scores
+    assert view == {"explorations": []} and instruction == EXPLORE
 
 
 def test_initialization_and_all_repair_prompts_remain_identical():
@@ -214,7 +273,8 @@ def test_initialization_and_all_repair_prompts_remain_identical():
     assert list(CANDIDATE_RESPONSE_FORMAT["json_schema"]["schema"]["properties"]) == ["analysis", "code", "design"]
 
 
-@pytest.mark.parametrize("old_protocol", ["refine_local_evidence_v1", "trajectory_design_reasoning_layered_v1"])
+@pytest.mark.parametrize("old_protocol", ["refine_evolution_history_v1", "refine_local_evidence_v1",
+                                         "trajectory_design_reasoning_layered_v1"])
 def test_search_persists_selected_records_and_resumes_only_the_same_protocol(tmp_path, old_protocol):
     config = traceaad_base.Config(evaluation_budget=20, initial_size=3, seed=5)
     run = traceaad_v21_3.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path)
@@ -229,9 +289,16 @@ def test_search_persists_selected_records_and_resumes_only_the_same_protocol(tmp
             assert path[-1] == attempt.parent_id
             assert all(run.archive[b].parent_id == a for a, b in zip(path, path[1:]))
         elif attempt.operator == "Explore":
-            assert view == {}
+            for direction in view["explorations"]:
+                path = direction["best_path"]
+                assert path[0] == direction["origin"] and path[-1] == direction["best"]
+                assert all(run.archive[b].parent_id == a for a, b in zip(path, path[1:]))
+                assert all(run.archive[i].operator != "Explore" for i in path[1:])
         elif attempt.operator == "Crossover":
-            assert view == {"reference_code": False}
+            assert view["reference_code"] is False and view["reference_path"][-1] == attempt.reference_id
+            assert all(run.archive[i].operator == "Crossover" and
+                       (run.archive[i].parent_id == attempt.parent_id or run.archive[i].reference_id == attempt.reference_id)
+                       for i in view["integrations"])
     assert traceaad_v21_3.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path, resume=True).evaluations_used == 20
     with pytest.raises(ValueError, match="generation_protocol"):
         traceaad_v21_3.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path, resume=True, reference_code=True)
@@ -248,7 +315,8 @@ def test_reference_source_control_is_persisted_and_reproduced_on_resume(tmp_path
     run.archive = archive
     attempt = Attempt(10, 9, "Crossover", 4)
     prompt = run.evolution_prompt(attempt, archive[9], archive[4])
-    assert attempt.record["context"] == {"reference_code": True}
+    assert attempt.record["context"]["reference_code"] is True
+    assert attempt.record["context"]["reference_steps"] == [2, 3, 4]
     assert run.store.read("run_config.json")["generation_protocol"] == PROTOCOL + "+reference_code"
     resumed = traceaad_v21_3.TraceAAD(task(), Reply(), config=CONFIG, run_dir=tmp_path, resume=True, reference_code=True)
     resumed.archive = archive

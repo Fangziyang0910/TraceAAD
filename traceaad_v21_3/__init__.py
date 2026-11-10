@@ -1,4 +1,4 @@
-"""TraceAAD V21.3: evolution paths and prior attempts for Refine, static Crossover and free Explore."""
+"""TraceAAD V21.3: operator-specific trajectory evidence for Refine, Crossover and Explore."""
 
 from traceaad_base import Config
 

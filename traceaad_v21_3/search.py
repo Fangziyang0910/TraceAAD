@@ -1,10 +1,10 @@
-"""V21.3: compact evolution paths and same-parent attempts for Refine; static Crossover/Explore."""
+"""V21.3: compact operator-specific evolution, integration and exploration records."""
 
 from traceaad_base.search import TraceAAD as Base
 from .context import context
 from .prompts import CANDIDATE_RESPONSE_FORMAT, PromptBuilder
 
-PROTOCOL = "refine_evolution_history_v1"
+PROTOCOL = "operator_trajectory_context_v1"
 
 
 class TraceAAD(Base):
