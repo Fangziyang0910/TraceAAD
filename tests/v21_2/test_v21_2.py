@@ -65,6 +65,8 @@ def test_decision_is_the_last_sentence_before_any_repair():
     assert decision(p) == "I replace the score with a rollout."
     p.analysis = "First idea. Final change!\nRepair: fixed an index error."
     assert decision(p) == "Final change!"
+    p.analysis = "Use a cheaper estimate, e.g. a partial rollout. Replace the scan with i.e. a heap."
+    assert decision(p) == "Replace the scan with i.e. a heap."
     p.analysis = None
     assert decision(p) == ""
 
@@ -84,8 +86,9 @@ def test_refine_without_offspring_reads_formation_and_code_only():
     text, instruction, scores, view = context(archive, archive[4], "Refine", None, CONFIG)
     assert "[Evaluated Offspring]" not in text and "[Ancestor History]" in text
     assert "design_2" not in text and "Decision 2." in text
+    assert "design_1" in text and "Decision 1." not in text  # The initial algorithm shows its design, not a decision.
     assert instruction == "\n".join([COMMON, REFINE]) and scores
-    assert "otherwise reason from the current computation and the task" in REFINE
+    assert "otherwise, reason from the current computation and the task" in REFINE
     archive[5] = program(5, 90., 4)
     archive[6] = program(6, None, 4, failure="ValueError: bad")
     text, instruction, _, view = context(archive, archive[4], "Refine", None, CONFIG)
@@ -155,7 +158,7 @@ def test_explore_reads_earlier_explorations_as_facts():
     assert total == 2 and shown == [1, 4]
     four = rows[1]
     assert "Score at creation: 120.0 (best in the search then: 97.0)" in four
-    assert "Later Refine and Crossover attempts from it and their descendants: 2; best score among them: 70.0" in four
+    assert "Development: 2 later Refine or Crossover attempts from it and its descendants; best score among them: 70.0" in four
     assert "design_4" in four
     text, instruction, scores, view = context(archive, archive[8], "Explore", None, CONFIG)
     assert text.index("[Earlier Explorations]") < text.index("[Current Algorithm]") and scores
@@ -189,3 +192,15 @@ def test_search_runs_resumes_and_records_the_reference_condition(tmp_path):
                                 reference_code=True)
     control = traceaad_v21_2.TraceAAD(task(), Reply(), config=config, run_dir=tmp_path / "b", reference_code=True)
     assert control.store.read("run_config.json")["generation_protocol"].endswith("+reference_code")
+
+
+def test_refine_singles_out_the_best_attempt_only_when_it_improved():
+    archive = chain(2)
+    archive[3] = program(3, 99., 2)  # Least-bad regression from 98.
+    for i in range(4, 7):
+        archive[i] = program(i, 120. + i, 2)
+    _, _, _, view = context(archive, archive[2], "Refine", None, CONFIG)
+    assert view["children"] == [4, 5, 6]
+    archive[3].evaluation = Evaluation("success", 90.)
+    text, _, _, view = context(archive, archive[2], "Refine", None, CONFIG)
+    assert view["children"] == [3, 5, 6] and "the best improvement, if any, and the most recent" in text
