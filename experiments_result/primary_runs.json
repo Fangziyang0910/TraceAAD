@@ -661,6 +661,20 @@
       "op_aco/20261109_v24_1_co4_op_traceaad_v24_1_rep1",
       "op_aco/20261109_v24_1_co4_op_traceaad_v24_1_rep2",
       "op_aco/20261109_v24_1_co4_op_traceaad_v24_1_rep3"
+    ],
+    "traceaad_v21_2": [
+      "tsp_construct/20261110_v21_2_co4_tsp_traceaad_v21_2_rep1",
+      "tsp_construct/20261110_v21_2_co4_tsp_traceaad_v21_2_rep2",
+      "tsp_construct/20261110_v21_2_co4_tsp_traceaad_v21_2_rep3",
+      "cvrp_aco/20261110_v21_2_co4_cvrp_traceaad_v21_2_rep1",
+      "cvrp_aco/20261110_v21_2_co4_cvrp_traceaad_v21_2_rep2",
+      "cvrp_aco/20261110_v21_2_co4_cvrp_traceaad_v21_2_rep3",
+      "fssp_gls/20261110_v21_2_co4_fssp_traceaad_v21_2_rep1",
+      "fssp_gls/20261110_v21_2_co4_fssp_traceaad_v21_2_rep2",
+      "fssp_gls/20261110_v21_2_co4_fssp_traceaad_v21_2_rep3",
+      "op_aco/20261110_v21_2_co4_op_traceaad_v21_2_rep1",
+      "op_aco/20261110_v21_2_co4_op_traceaad_v21_2_rep2",
+      "op_aco/20261110_v21_2_co4_op_traceaad_v21_2_rep3"
     ]
   },
   "default_experiment": "traceaad_v21_1",
@@ -704,7 +718,8 @@
     "traceaad_v23_2": "V23.2",
     "traceaad_v21_1": "V21.1",
     "traceaad_v22_2": "V22.2",
-    "traceaad_v24_1": "V24.1"
+    "traceaad_v24_1": "V24.1",
+    "traceaad_v21_2": "V21.2"
   },
   "visualization_batches": {
     "traceaad_v12_0": "20261013_qwen_co6",
@@ -730,11 +745,13 @@
     "traceaad_v23_2": "20261109_v23_2_co6",
     "traceaad_v21_1": "20261109_v21_1_co4",
     "traceaad_v22_2": "20261109_v22_2_co4",
-    "traceaad_v24_1": "20261109_v24_1_co4"
+    "traceaad_v24_1": "20261109_v24_1_co4",
+    "traceaad_v21_2": "20261110_v21_2_co4"
   },
   "visualization_methods": [
     "traceaad_base_boltzmann_20261109",
     "traceaad_v21_1",
+    "traceaad_v21_2",
     "traceaad_v22_2",
     "traceaad_v23_2",
     "traceaad_v24_1",
