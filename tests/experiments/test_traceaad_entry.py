@@ -31,7 +31,7 @@ def entry_environment(monkeypatch):
 
 
 def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_environment, capsys):
-    combinations = {"base": [], "v21.1": [2], "v21.2": [2], "v21.3": [2], "v22.2": [1, 2], "v23.2": [1], "v24.1": [2, 3]}
+    combinations = {"base": [], "v21.3": [2], "v22.2": [1, 2], "v23.2": [1], "v24.1": [2, 3]}
     assert set(run.METHODS) == set(combinations) | {m.replace(".", "_") for m in combinations}
     arguments = ["--task", "tsp_construct", "--run-name", "test", "--batch", "test",
                  "--scheduler-socket", "/fake", "--dry-run", "--selection-temperature", "0.1"]
@@ -57,7 +57,7 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         assert metadata["llm"]["sampling"]["chat_template_kwargs"] == {"enable_thinking": False}
 
 
-@pytest.mark.parametrize("method", ["v20", "v21", "v22", "v22.1", "v22_1", "v23", "v23.1", "v23_1", "v24"])
+@pytest.mark.parametrize("method", ["v20", "v21", "v21.1", "v21_1", "v21.2", "v21_2", "v22", "v22.1", "v22_1", "v23", "v23.1", "v23_1", "v24"])
 def test_removed_methods_are_rejected_before_runtime_setup(method):
     with pytest.raises(SystemExit) as error:
         run.main(["--method", method])
@@ -124,7 +124,7 @@ def test_reference_ablation_is_explicit_and_recorded(entry_environment, capsys, 
     assert 1 in metadata["mechanisms"]
 
 
-@pytest.mark.parametrize("method", ["v21.2", "v21_2", "v21.3", "v21_3"])
+@pytest.mark.parametrize("method", ["v21.3", "v21_3"])
 def test_reference_source_control_is_recorded_for_supported_methods(entry_environment, capsys, method):
     run.main(["--method", method, "--task", "tsp_construct", "--run-name", "source_control",
               "--batch", "source_control", "--scheduler-socket", "/fake", "--dry-run", "--reference-code"])
@@ -145,7 +145,7 @@ def test_four_task_plan_has_exactly_twelve_routes():
     from experiments.traceaad.launch_host import build_plan
 
     tasks = ["tsp_construct", "cvrp_aco", "fssp_gls", "op_aco"]
-    args = Namespace(tasks=tasks, method="v21.1", batch="four", experiment="traceaad_v21_1", repeats=3,
+    args = Namespace(tasks=tasks, method="v21.3", batch="four", experiment="traceaad_v21_3", repeats=3,
                      backend="scheduled", budget=1000, initial_size=5, max_tokens=16384,
                      model_timeout=600, selection_temperature=1.0, trajectory_reference_embedding=None,
                      scheduler_socket="/fake", seconds_per_instance=10.0, env_file=None, skip_heldout=False)
@@ -164,11 +164,11 @@ def test_enqueue_saves_the_subset_without_starting_workers(tmp_path, monkeypatch
     monkeypatch.setattr(launch_host, "scheduler_status", lambda _path: {"instance_id": "test"})
     monkeypatch.setattr(launch_host, "is_session_alive", lambda _name: False)
     monkeypatch.setattr(launch_host, "launch_run", lambda _row: pytest.fail("enqueue must not start workers"))
-    launch_host.main(["--method", "v21.1", "--batch", "four", "--scheduler-socket", "/fake",
+    launch_host.main(["--method", "v21.3", "--batch", "four", "--scheduler-socket", "/fake",
                       "--tasks", "tsp_construct", "cvrp_aco", "fssp_gls", "op_aco", "--enqueue"])
     result = json.loads(capsys.readouterr().out)
     assert result["runs"] == 12 and result["status"] == "queued"
-    manifest = json.loads((tmp_path / "experiments_result/traceaad_v21_1/batch_four.json").read_text())
+    manifest = json.loads((tmp_path / "experiments_result/traceaad_v21_3/batch_four.json").read_text())
     assert len(manifest["tasks"]) == 4
     assert all(row["status"] == "queued" for row in manifest["plan"])
     assert not any(Path(row["run_dir"]).exists() for row in manifest["plan"])

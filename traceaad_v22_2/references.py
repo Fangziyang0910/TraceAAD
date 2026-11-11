@@ -8,7 +8,7 @@ import time
 import numpy as np
 
 from traceaad_base.selection import reference_candidates, sources
-from traceaad_v21_1.representation import bare
+from traceaad_v21_3.representation import bare
 
 
 RULE = "trajectory_embedding_diverse_v1"

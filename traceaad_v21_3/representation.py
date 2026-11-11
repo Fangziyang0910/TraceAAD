@@ -1,14 +1,33 @@
-"""A step's actual change, one unified diff of the normalized parent and child source;
-and where a failed program stopped, as the candidate's own source line."""
+"""Normalized source for display; a step's actual change as one unified diff of the normalized parent
+and child source; and where a failed program stopped, as the candidate's own source line."""
 
 import ast
 from difflib import unified_diff
+from functools import lru_cache
 
 from traceaad_base.prompts import TIMEOUT_PREFIX, _parse_failure
 from traceaad_base.selection import identity
-from traceaad_v21_1.representation import _tree
 
 CONTEXT_LINES = 3
+
+
+def _tree(code):
+    tree = ast.parse(code)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+                node.body = node.body[1:] or [ast.Pass()]
+    return tree
+
+
+@lru_cache(maxsize=None)
+def bare(code):
+    """The source without comments or docstrings; the record keeps the raw text."""
+    try:
+        return ast.unparse(_tree(code))
+    except (SyntaxError, ValueError):
+        return code
 
 
 def _normalized(code):

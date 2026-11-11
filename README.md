@@ -8,15 +8,12 @@
 
 | 你想做什么 | 阅读入口 |
 | --- | --- |
-| 理解本工作针对的问题 | [WWH](docs/WWH.md) |
-| 理解三个机制的设计问题、定义与作用过程 | [机制设计文档](docs/机制设计/README.md) |
-| 了解 Base 的个体表示、上下文与提示 | [TraceAAD Base 基础方法说明](docs/TraceAAD-Base.md) |
-| 了解Base加机制1的V23.2 | [V23.2机制](docs/机制设计/V23.2.md) |
-| 了解V21.1加机制1的V22.2 | [V22.2机制](docs/机制设计/V22.2.md) |
-| 运行 Base 的独立实现 | [traceaad_base](traceaad_base/README.md) |
-| 了解只含上下文机制的 V21.1 | [V21.1 机制](docs/机制设计/V21.1.md) |
-| 了解带计算条件的经验机制 V24.1 | [V24.1 机制](docs/机制设计/V24.1.md) |
-| 运行 Base、V21.1、V22.2、V23.2 或 V24.1 | [实验入口](experiments/traceaad/README.md) |
+| 理解本工作针对的问题与当前叙事 | [WWH](docs/WWH.md) |
+| 阅读论文摘要与引言草稿 | [草稿](docs/paper-摘要与引言-草稿.md) |
+| 理解树状种群与反思简化的设计 | [机制设计](docs/机制设计/树状种群与反思简化.md) |
+| 查阅留档的三个轨迹机制 | [机制设计索引](docs/机制设计/README.md) |
+| 了解 Base 的个体表示、上下文与提示 | [Base 说明](docs/TraceAAD-Base.md) |
+| 运行 Base、V21.3、V22.2、V23.2 或 V24.1 | [统一入口](experiments/traceaad/README.md) |
 | 设计、运行或复查实验 | [实验入口](experiments/README.md) |
 | 查阅第三方提示的来源版本 | [来源记录](baselines/UPSTREAM.md) |
 
@@ -24,11 +21,11 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `traceaad_v24_1/` | V21.1加最新机制3：持续条件经验、展示选取与跨分支修订。 |
-| `traceaad_v23_2/` | 当前Base加机制1，与V22.2共用轨迹经验分配。 |
-| `traceaad_v22_2/` | V21.1加最新机制1：真实冠军改善与近期质量匹配的预算分配。 |
-| `traceaad_v21_1/` | 只含轨迹上下文与算子的方法。 |
 | `traceaad_base/` | 不利用轨迹经验的 Base 对照与独立运行入口。 |
+| `traceaad_v21_3/` | Base 加机制2：三种算子各自的轨迹上下文。 |
+| `traceaad_v22_2/` | V21.3 加机制1：轨迹收益修正的预算分配与轨迹嵌入参考。 |
+| `traceaad_v23_2/` | Base 加机制1，与 V22.2 共用实现。 |
+| `traceaad_v24_1/` | V21.3 加机制3：条件经验、展示选取与跨分支修订。 |
 | `baselines/` | 比较方法。 |
 | `benchmarks/` | 任务、数据与评价。 |
 | `experiments/` | 启动、查询、同步与分析工具。 |
@@ -40,6 +37,4 @@ uv sync --frozen
 uv run python -m pytest -q tests
 ```
 
-旧文档已在本机封存于 `archive/documents_20261016_144049/` 与 `archive/documents_20261104_0900/`。归档不进入新提交；已有 Git 历史保留。
-
-当前机制2实现在V21.3：Refine利用修改经历，Crossover利用参考的形成与接入经历，Explore利用方向及其后续发展。保留组合为Base、V21.1/V21.2/V21.3（各版机制2）、V22.2（机制1＋V21.1版机制2）、V23.2（机制1）、V24.1（V21.1版机制2＋机制3）。各组合共享当前Base公共流程；机制1默认包含轨迹收益修正和轨迹嵌入参考，机制2不再额外筛选参考。旧V21、V22.1、V23.1与V24的结果和冻结源码保留，当前入口不再启动这些历史实现。对照关系见[版本索引](docs/机制设计/README.md)。
+本机 `archive/` 与 `experiments_result/` 保存封存文档和实验结果，不进入提交。

@@ -20,21 +20,17 @@ from traceaad_base.cli import load_task
 from traceaad_base.selection import SELECTION_RULE
 from experiments.infra.storage import seal_calls
 from traceaad_base.storage import write_json
-import traceaad_v21_1
-import traceaad_v21_2
 import traceaad_v21_3
 import traceaad_v22_2
 import traceaad_v23_2
 import traceaad_v24_1
-from traceaad_v21_1.prompts import CANDIDATE_RESPONSE_FORMAT as V21_RESPONSE_FORMAT
+from traceaad_v21_3.prompts import CANDIDATE_RESPONSE_FORMAT as V21_RESPONSE_FORMAT
 from .scheduling import REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, load_environment
 
 
 ROOT = Path(__file__).resolve().parents[2]
 MEMORY_BYTES = 2 << 30
 METHODS = {"base": ("traceaad_base", traceaad_base),
-           "v21.1": ("traceaad_v21_1", traceaad_v21_1), "v21_1": ("traceaad_v21_1", traceaad_v21_1),
-           "v21.2": ("traceaad_v21_2", traceaad_v21_2), "v21_2": ("traceaad_v21_2", traceaad_v21_2),
            "v21.3": ("traceaad_v21_3", traceaad_v21_3), "v21_3": ("traceaad_v21_3", traceaad_v21_3),
            "v22.2": ("traceaad_v22_2", traceaad_v22_2), "v22_2": ("traceaad_v22_2", traceaad_v22_2),
            "v23.2": ("traceaad_v23_2", traceaad_v23_2), "v23_2": ("traceaad_v23_2", traceaad_v23_2),
@@ -176,8 +172,8 @@ def main(argv=None):
         args.trajectory_reference_embedding = reference_embedding_enabled(args.method, args.trajectory_reference_embedding)
     except ValueError as error:
         parser.error(str(error))
-    if args.reference_code and METHODS[args.method][0] not in {"traceaad_v21_2", "traceaad_v21_3"}:
-        parser.error("--reference-code applies to v21.2 and v21.3 only")
+    if args.reference_code and METHODS[args.method][0] != "traceaad_v21_3":
+        parser.error("--reference-code applies to v21.3 only")
     if not args.scheduler_socket and args.backend == "scheduled":
         parser.error("A resource scheduler socket is required")
     if not math.isfinite(args.seconds_per_instance) or args.seconds_per_instance <= 0:

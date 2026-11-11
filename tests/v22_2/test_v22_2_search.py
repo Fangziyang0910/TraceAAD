@@ -12,8 +12,8 @@ from traceaad_base import Config, Evaluation, Program, Task
 from traceaad_base.models import Attempt
 from traceaad_base.llm import CANDIDATE_RESPONSE_FORMAT as BASE_RESPONSE_FORMAT
 from traceaad_base.search import TraceAAD as Base
-from traceaad_v21_1.context import context
-from traceaad_v21_1.prompts import CANDIDATE_RESPONSE_FORMAT as V21_RESPONSE_FORMAT
+from traceaad_v21_3.context import context
+from traceaad_v21_3.prompts import CANDIDATE_RESPONSE_FORMAT as V21_RESPONSE_FORMAT
 from traceaad_v22_2 import TraceAAD as V22_2
 from traceaad_v23_2 import TraceAAD as V23_2
 

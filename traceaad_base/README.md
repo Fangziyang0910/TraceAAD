@@ -99,10 +99,4 @@ python -m traceaad_base run --task-factory my_tasks:make_task \
 uv run pytest -q tests/independent_base
 ```
 
-保留的 V21、V22.1、V24、V24.1 版本共用的旧 Base 提示固定在 `traceaad_v21/frozen_base_prompts.py`，保留其原有行为。11月5日正式 Base 批次使用旧轨迹上下文，不能视为本版的实验结果。
-
-V23.2 为当前 Base 加新版机制1：生成侧沿用本版提示，选择侧复用 V22.2 的机制1。其历史批次保留原有条件。
-
-先前静态生成批次 `20261109_base_static_co6` 已于11月9日15:52在server4启动，与新V23.1共用冻结源码。条件与恢复位置见[启动记录](../docs/记录/2026-11-09-Base正式对照启动与V24停止.md)。
-
-纯Boltzmann的新Base批次为`20261109_base_boltzmann_co6`，于11月9日22:48启动，与V23.2共用新冻结源码；旧静态生成批次已停止，仍属于旧选择条件。
+V23.2 为 Base 加机制1：生成侧沿用本版提示，选择侧复用 V22.2 的机制1。

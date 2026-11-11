@@ -1,4 +1,4 @@
-"""V24.1: V21 with revisable experience from focused computational trajectories."""
+"""V24.1: V21.3 with revisable experience from focused computational trajectories."""
 
 from traceaad_base import Config
 

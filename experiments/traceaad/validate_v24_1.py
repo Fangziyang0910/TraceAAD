@@ -208,7 +208,7 @@ def main():
     result = {"started_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
               "tokenizer": counter.settings, "packing": [], "reflection": [],
               "source_hashes": {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
-                                for folder in ("traceaad_base", "traceaad_v21_1", "traceaad_v24_1") for p in Path(folder).glob("*.py")}}
+                                for folder in ("traceaad_base", "traceaad_v21_3", "traceaad_v24_1") for p in Path(folder).glob("*.py")}}
     try:
         if args.pack_root:
             for task in ("tsp_construct", "cvrp_aco", "fssp_gls", "graph_colouring", "jssp_construct", "op_aco"):

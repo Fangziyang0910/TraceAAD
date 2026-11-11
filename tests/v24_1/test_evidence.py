@@ -3,7 +3,7 @@
 import pytest
 
 from traceaad_base import Evaluation, Program
-from traceaad_v21_1.representation import bare
+from traceaad_v21_3.representation import bare
 from traceaad_v24_1.evidence import Event, build, questions, render
 
 

@@ -2,9 +2,8 @@
 
 from traceaad_base.prompts import failure_summary
 from traceaad_base.selection import identity
-from traceaad_v21_1.representation import bare
 
-from .representation import changes, failure
+from .representation import bare, changes, failure
 
 REFINE = ("Improve the current algorithm while retaining its useful computations. "
           "Use its evolution history and previous attempts, when available, to inform what to change next. "

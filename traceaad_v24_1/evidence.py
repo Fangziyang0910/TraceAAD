@@ -7,7 +7,7 @@ from functools import lru_cache
 from traceaad_base.models import Program
 from traceaad_base.prompts import failure_feedback, failure_summary
 from traceaad_base.selection import identity
-from traceaad_v21_1.representation import bare
+from traceaad_v21_3.representation import bare
 
 from .notes import DISPLAY_LIMIT, program_query, ranked_notes
 

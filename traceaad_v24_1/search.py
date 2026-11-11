@@ -7,7 +7,7 @@ from pathlib import Path
 
 from traceaad_base import Config
 from traceaad_base.selection import identity
-from traceaad_v21_1.search import TraceAAD as V21_1
+from traceaad_v21_3.search import TraceAAD as V21_3
 
 from .context import PromptBuilder, context
 from .evidence import build, observe
@@ -33,7 +33,7 @@ class ReflectionRequest:
         return self.model.complete(prompt, **{**settings, "max_tokens": self.max_tokens})
 
 
-class TraceAAD(V21_1):
+class TraceAAD(V21_3):
     method = "traceaad_v24_1"
     prompt_type = PromptBuilder
     generation_protocol = "conditional_experience_context_v1"
@@ -104,11 +104,11 @@ class TraceAAD(V21_1):
                 query += "\n" + program_query(reference)
             cursor = sum(bool(a.record.get("experience_ids")) for a in self.attempts)
             notes = select_notes(self.experience.active, query, cursor=cursor)
-        text, instruction, view = context(self.archive, parent, attempt.operator, reference, self.config, notes)
+        text, instruction, scores, view = context(self.archive, parent, attempt.operator, reference, self.config, notes)
         attempt.record["context"] = view
         attempt.record["experience_from"] = self.experience_from if notes else None
         attempt.record["experience_ids"] = [n["id"] for n in notes]
-        return self.prompts._render(text, instruction, has_scores=attempt.operator != "Explore")
+        return self.prompts._render(text, instruction, has_scores=scores)
 
     def _observe(self, attempt):
         event = observe(attempt, self.archive)

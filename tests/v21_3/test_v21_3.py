@@ -6,14 +6,59 @@ import pytest
 
 import traceaad_base
 import traceaad_v21_3
-from traceaad_base import Evaluation
+from traceaad_base import Evaluation, Program, Task
 from traceaad_base.models import Attempt
-from traceaad_v21_2.prompts import PromptBuilder as PreviousPrompts
 from traceaad_v21_3.context import EXPLORATIONS, EXPLORE, REFINE, attempts, card, context, explorations, formation, integrations
 from traceaad_v21_3.prompts import CANDIDATE_RESPONSE_FORMAT, PromptBuilder
 from traceaad_v21_3.representation import failure
 from traceaad_v21_3.search import PROTOCOL
-from tests.v21_2.test_v21_2 import CONFIG, Reply, chain, code, program, reference_archive, task
+
+CONFIG = traceaad_base.Config()
+
+
+def code(k, body="x"):
+    return f"def solve(x):\n    a = {k}\n    return {body} + a\n"
+
+
+def program(i, score, parent=0, *, source=None, operator="Refine", failure=None, analysis=None, reference=None):
+    evaluation = Evaluation("error", None, failure) if failure else Evaluation("success", score)
+    return Program(i, source or code(i), f"design_{i}", operator, parent, reference, evaluation,
+                   analysis=analysis or f"Reasoning {i}. Decision {i}.")
+
+
+def chain(n):
+    archive = {1: program(1, 100., operator="Init")}
+    for i in range(2, n + 1):
+        archive[i] = program(i, 100. - i, i - 1)
+    return archive
+
+
+def task():
+    return Task("Return a finite score; lower is better.", "def solve(x):\n    return 1\n",
+                lambda _, fn: float(fn(0)), score_definition="lower is better",
+                entrypoint="solve", time_limit=5., evaluation_seed=1)
+
+
+class Reply:
+    def __init__(self):
+        self.prompts = []
+
+    def complete(self, prompt, **_):
+        self.prompts.append(prompt)
+        k = len(self.prompts)
+        lines = "\n    ".join(f"v{i} = x + {i}" for i in range(k % 5 + 1))
+        return json.dumps({"analysis": f"Why {k}. Change {k}.",
+                           "code": f"def solve(x):\n    {lines}\n    return {k % 7} + x\n", "design": f"d{k}"})
+
+
+def reference_archive():
+    archive = {1: program(1, 50., operator="Init", source="def solve(x):\n    a = 1\n    return x + a\n")}
+    archive[2] = program(2, 40., 1, source="def solve(x):\n    a = 1\n    b = x * 3\n    return x + a + b\n")
+    archive[3] = program(3, 45., 2, source="def solve(x):\n    a = 1\n    b = x * 3\n    c = 0\n    return x + a + b\n")
+    archive[4] = program(4, 30., 3, source="def solve(x):\n    a = 1\n    b = x * 3\n    return x + a + b - 1\n")
+    archive[9] = program(9, 60., operator="Init", source="def solve(x):\n    return 2 * x\n")
+    return archive
+
 
 REWRITE = "def solve(x):\n    s = 0\n    for i in range(3):\n        s += i * x\n    t = sorted([s, x])\n    return t[0]\n"
 TRACEBACK = """Traceback (most recent call last):
@@ -260,16 +305,15 @@ def test_explore_without_prior_directions_has_only_current_code():
     assert view == {"explorations": []} and instruction == EXPLORE
 
 
-def test_initialization_and_all_repair_prompts_remain_identical():
-    current, previous = PromptBuilder(task(), CONFIG), PreviousPrompts(task(), CONFIG)
+def test_initialization_and_repair_keep_the_common_template():
+    prompts = PromptBuilder(task(), CONFIG)
     archive = chain(2)
-    assert current.initialization(archive) == previous.initialization(archive)
-    assert current.repair_format("{bad", "missing code") == previous.repair_format("{bad", "missing code")
-    for evaluation in (Evaluation("error", None, TRACEBACK),
-                       Evaluation("timeout", None, "Evaluation exceeded 10 seconds")):
-        child = program(3, None, 2, failure=TRACEBACK)
-        child.evaluation = evaluation
-        assert current.repair_program(child) == previous.repair_program(child)
+    child = program(3, None, 2, failure=TRACEBACK)
+    for text in (prompts.initialization(archive), prompts.repair_format("{bad", "missing code"),
+                 prompts.repair_program(child)):
+        assert "explain the approach you will implement" in text
+        assert "Available evolution records" not in text
+    assert "Available evolution records" in prompts.evolution_render("ctx", "do", has_scores=False)
     assert list(CANDIDATE_RESPONSE_FORMAT["json_schema"]["schema"]["properties"]) == ["analysis", "code", "design"]
 
 

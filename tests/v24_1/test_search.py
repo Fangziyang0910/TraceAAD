@@ -9,8 +9,8 @@ import pytest
 
 from traceaad_base import Config, Evaluation, Task
 from traceaad_base.models import Attempt
-from traceaad_v21_1.context import context as v21_context
-from traceaad_v21_1.search import TraceAAD as V21
+from traceaad_v21_3.context import context as v21_context
+from traceaad_v21_3.search import TraceAAD as V21
 from traceaad_v24_1 import TraceAAD
 from traceaad_v24_1.context import EXPLORE
 from traceaad_v24_1.evidence import build
@@ -235,7 +235,7 @@ def test_no_experience_keeps_v21_material_with_positive_operator_guidance(tmp_pa
     parent = run.archive[1]
     reference = run.archive[2] if operator == "Crossover" else None
     attempt = Attempt(4, parent.id, operator, reference.id if reference else None)
-    expected, _, view = v21_context(run.archive, parent, operator, reference, run.config)
+    expected, _, _, view = v21_context(run.archive, parent, operator, reference, run.config)
     prompt = run.evolution_prompt(attempt, parent, reference)
     assert expected in prompt and attempt.record["context"] == view
     assert "[Design Experience]" not in prompt and attempt.record["experience_ids"] == []
@@ -262,10 +262,10 @@ def test_operator_uses_conditions_without_changing_v21_material_or_exposing_sour
     parent, reference = run.archive[1], run.archive[2] if operator == "Crossover" else None
     attempt = Attempt(4, parent.id, operator, reference.id if reference else None)
     prompt = run.evolution_prompt(attempt, parent, reference)
-    text, instruction, view = v21_context(run.archive, parent, operator, reference, run.config)
+    text, instruction, scores, view = v21_context(run.archive, parent, operator, reference, run.config)
     assert attempt.record["context"] == view
     if operator == "Explore":
-        assert prompt == run.prompts._render(text, EXPLORE, has_scores=False)
+        assert prompt == run.prompts._render(text, EXPLORE, has_scores=scores)
         assert attempt.record["experience_ids"] == []
     else:
         assert experience_block(run.experience.active) + "\n\n" + text in prompt

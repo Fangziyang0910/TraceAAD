@@ -1,7 +1,7 @@
-"""V21 material selection, with conditional experience used within the operator's task."""
+"""V21.3 material selection, with conditional experience used within the operator's task."""
 
-from traceaad_v21_1.context import context as v21_context
-from traceaad_v21_1.prompts import PromptBuilder as V21PromptBuilder
+from traceaad_v21_3.context import context as v21_context
+from traceaad_v21_3.prompts import PromptBuilder as V21PromptBuilder
 
 from .notes import experience_block
 
@@ -62,13 +62,14 @@ Return the JSON object directly."""
 
 
 def context(archive, parent, operator, reference, config, notes):
-    text, _, view = v21_context(archive, parent, operator, reference, config)
+    """V21.3 selects the trajectory material; the instructions and experience are V24.1's own."""
+    text, _, scores, view = v21_context(archive, parent, operator, reference, config)
     if operator == "Explore":
-        return text, EXPLORE, view
+        return text, EXPLORE, scores, view
     parts = [COMMON, OPERATORS[operator]]
-    if view["failed"]:
+    if view.get("failed"):
         parts.append(FAILURES)
     if notes:
         parts.append(EXPERIENCE)
         text = experience_block(notes) + "\n\n" + text
-    return text, "\n".join(parts), view
+    return text, "\n".join(parts), scores, view
