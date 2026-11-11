@@ -8,11 +8,10 @@
 
 | 你想做什么 | 阅读入口 |
 | --- | --- |
-| 理解本工作针对的问题与当前叙事 | [WWH](docs/WWH.md) |
-| 阅读论文摘要与引言草稿 | [草稿](docs/paper-摘要与引言-草稿.md) |
-| 理解树状种群与反思简化的设计 | [机制设计](docs/机制设计/树状种群与反思简化.md) |
-| 查阅留档的三个轨迹机制 | [机制设计索引](docs/机制设计/README.md) |
-| 了解 Base 的个体表示、上下文与提示 | [Base 说明](docs/TraceAAD-Base.md) |
+| 理解本工作针对的问题与当前叙事 | [树状种群与反思简化](docs/树状种群与反思简化.md) |
+| 阅读论文摘要与引言 | [摘要与引言](docs/paper-摘要与引言.md) |
+| 查阅演化轨迹叙事与旧版方法 | [演化轨迹叙事](docs/演化轨迹叙事/README.md) |
+| 了解 Base 的个体表示、上下文与提示 | [Base 说明](docs/演化轨迹叙事/TraceAAD-Base.md) |
 | 运行 Base、V21.3、V22.2、V23.2 或 V24.1 | [统一入口](experiments/traceaad/README.md) |
 | 设计、运行或复查实验 | [实验入口](experiments/README.md) |
 | 查阅第三方提示的来源版本 | [来源记录](baselines/UPSTREAM.md) |

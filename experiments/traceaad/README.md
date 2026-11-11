@@ -12,7 +12,7 @@
 
 默认后端为 `scheduled`，Qwen3.8-27B 经 server4 公共调度器分配。采样为温度1.0、top_p=0.8、top_k=20、min_p=0、presence_penalty=1.5，关闭思考，默认输出上限16384。完整设置见[scheduling.py](scheduling.py)与运行元数据。
 
-V22.2与V23.2默认开启机制1的轨迹嵌入交叉参考；`--no-trajectory-reference-embedding`在同池随机选参考，作为参考部分消融。Base始终在合格池随机选参考。嵌入服务复用 `SHINKA_EMBEDDING_*` 配置，向量和用量保存在native目录。设计见[机制1](../../docs/机制设计/机制1-轨迹节点价值评估与预算分配.md)。
+V22.2与V23.2默认开启机制1的轨迹嵌入交叉参考；`--no-trajectory-reference-embedding`在同池随机选参考，作为参考部分消融。Base始终在合格池随机选参考。嵌入服务复用 `SHINKA_EMBEDDING_*` 配置，向量和用量保存在native目录。设计见[机制1](../../docs/演化轨迹叙事/机制设计/机制1-轨迹节点价值评估与预算分配.md)。
 
 默认初始化5个有效程序，每路1000次评价。初始化、失败与修复重评按实际评价计费，辅助模型调用与token单列。训练16例共享160秒、内存2 GiB；训练最好程序固定后，再执行独立测试。条件见[实验协议](../PROTOCOL.md)。
 
@@ -39,7 +39,7 @@ source .env.server4
   --env-file .env.server4 --launch
 ```
 
-V22.2与V23.2需要轨迹参考嵌入服务，不需要反思服务。V24.1不需要嵌入服务；反思独立使用4096 tokens输出，输入按服务端聊天tokenizer计数，默认上限44544 tokens。规格见[V21.3](../../docs/机制设计/V21.3.md)、[V22.2](../../docs/机制设计/V22.2.md)、[V23.2](../../docs/机制设计/V23.2.md)与[V24.1](../../docs/机制设计/V24.1.md)。
+V22.2与V23.2需要轨迹参考嵌入服务，不需要反思服务。V24.1不需要嵌入服务；反思独立使用4096 tokens输出，输入按服务端聊天tokenizer计数，默认上限44544 tokens。代码见[V21.3实现](../../traceaad_v21_3)、[V22.2实现](../../traceaad_v22_2)、[V23.2实现](../../traceaad_v23_2)与[V24.1实现](../../traceaad_v24_1)。
 
 `validate_v24_1`复查V24.1的材料组织与反思：
 
