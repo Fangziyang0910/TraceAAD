@@ -1,10 +1,12 @@
 # TraceAAD 统一实验入口
 
-保留Base、V21.3、V22.2、V23.2与V24.1。使用 `--method` 选择方法；默认 `base`，未指定 `--experiment` 时使用所选方法的结果目录名。点号与下划线写法均支持，例如 `v22.2` 与 `v22_2`。
+保留Base、EvoTrace-V1、EvoTrace-V2、V21.3、V22.2、V23.2与V24.1。使用 `--method` 选择方法；默认 `base`，未指定 `--experiment` 时使用所选方法的结果目录名。点号与下划线写法均支持，例如 `evotrace.v1` 与 `evotrace_v1`、`v22.2` 与 `v22_2`。
 
 | 方法 | 搜索实现 |
 | --- | --- |
 | `base` | Base 基础演化对照。 |
+| `evotrace.v2` | 独立EvoTrace v2：按最近使用与质量差异一次选择，补齐必要分叉后联合剪枝和路径收缩；[设计与用法](../../evotrace_v2/README.md)。 |
+| `evotrace.v1` | 独立EvoTrace v1：自有搜索、任务、模型与评价实现，使用树状种群、反思简化、加权分配与三尺度上下文。 |
 | `v21.3` | Base加机制2：Refine读形成与修改记录，Crossover读参考形成与接入，Explore读方向及后续发展；`--reference-code`额外给出参考完整源码。 |
 | `v22.2` | V21.3加机制1。 |
 | `v23.2` | Base加机制1。 |
@@ -13,6 +15,8 @@
 默认后端为 `scheduled`，Qwen3.8-27B 经 server4 公共调度器分配。采样为温度1.0、top_p=0.8、top_k=20、min_p=0、presence_penalty=1.5，关闭思考，默认输出上限16384。完整设置见[scheduling.py](scheduling.py)与运行元数据。
 
 V22.2与V23.2默认开启机制1的轨迹嵌入交叉参考；`--no-trajectory-reference-embedding`在同池随机选参考，作为参考部分消融。Base始终在合格池随机选参考。嵌入服务复用 `SHINKA_EMBEDDING_*` 配置，向量和用量保存在native目录。设计见[机制1](../../docs/演化轨迹叙事/机制设计/机制1-轨迹节点价值评估与预算分配.md)。
+
+EvoTrace的独立入口、配置与恢复约定见[模块说明](../../evotrace_v1/README.md#记录与恢复)。不同协议分别建立批次。
 
 默认初始化5个有效程序，每路1000次评价。初始化、失败与修复重评按实际评价计费，辅助模型调用与token单列。训练16例共享160秒、内存2 GiB；训练最好程序固定后，再执行独立测试。条件见[实验协议](../PROTOCOL.md)。
 

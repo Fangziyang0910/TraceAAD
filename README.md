@@ -8,8 +8,12 @@
 
 | 你想做什么 | 阅读入口 |
 | --- | --- |
+| 完整阅读并确认V1、V2机制 | [V1正式设计](docs/EvoTrace-v1设计.md)、[V2正式设计](docs/EvoTrace-v2设计.md) |
 | 理解本工作针对的问题与当前叙事 | [树状种群与反思简化](docs/树状种群与反思简化.md) |
-| 阅读论文摘要与引言 | [摘要与引言](docs/paper-摘要与引言.md) |
+| 查看树状种群的统一选择与结构重构 | [树状种群管理](docs/树状种群管理.md) |
+| 查看反思简化的区域归属、提示词与递归合并 | [反思简化设计](docs/反思简化设计.md) |
+| 阅读论文摘要、引言、相关工作与方法初稿 | [英文主稿](docs/paper.md)、[中文对照](docs/paper-中文.md) |
+| 独立使用 EvoTrace 或接入任务与模型 | [V2动态简化](evotrace_v2/README.md)、[V1](evotrace_v1/README.md) |
 | 查阅演化轨迹叙事与旧版方法 | [演化轨迹叙事](docs/演化轨迹叙事/README.md) |
 | 了解 Base 的个体表示、上下文与提示 | [Base 说明](docs/演化轨迹叙事/TraceAAD-Base.md) |
 | 运行 Base、V21.3、V22.2、V23.2 或 V24.1 | [统一入口](experiments/traceaad/README.md) |
@@ -20,6 +24,8 @@
 
 | 目录 | 内容 |
 | --- | --- |
+| `evotrace_v2/` | 独立EvoTrace v2：局部状态触发的动态反思简化，保留发展起点并凝练路径与旁支经历。 |
+| `evotrace_v1/` | 独立EvoTrace v1：搜索循环、树状种群、反思简化、预算分配与三尺度生成，自带模型、评价和记录恢复。 |
 | `traceaad_base/` | 不利用轨迹经验的 Base 对照与独立运行入口。 |
 | `traceaad_v21_3/` | Base 加机制2：三种算子各自的轨迹上下文。 |
 | `traceaad_v22_2/` | V21.3 加机制1：轨迹收益修正的预算分配与轨迹嵌入参考。 |

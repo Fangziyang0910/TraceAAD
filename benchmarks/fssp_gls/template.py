@@ -24,7 +24,8 @@ The fixed solver starts with NEH. Each round performs improving swap/insertion
 moves on original times, then calls get_matrix_and_jobs once. It takes the best improving swap or
 insertion involving the returned job IDs under perturbed_times, retaining the original sequence
 when there is no improving perturbed move. It retains the best TRUE solution throughout all rounds.
-Evolve this perturbation function. Perturbed processing times guide move selection; physical job
+Design the job selection and perturbed matrix together: the IDs select which moves are considered,
+and the matrix changes their relative attractiveness during this perturbation. Physical job
 durations and the reported objective use the original times. Each returned ID identifies a matrix row.'''
 
 function_name = 'get_matrix_and_jobs'

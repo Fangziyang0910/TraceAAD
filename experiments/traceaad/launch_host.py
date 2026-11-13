@@ -15,7 +15,7 @@ from benchmarks.tasks import CO_TASKS, TASK_SHORT
 from experiments.infra.launcher import is_session_alive
 from traceaad_base.storage import write_json
 from traceaad_base.selection import SELECTION_RULE
-from .run import METHODS, reference_embedding_enabled, request_options
+from .run import METHODS, reference_embedding_enabled, request_options, selection_rule_for
 from .scheduling import scheduler_status
 
 
@@ -34,8 +34,9 @@ def build_plan(args):
     if not tasks or len(set(tasks)) != len(tasks) or any(task not in CO_TASKS for task in tasks):
         raise ValueError("tasks must be distinct members of co6")
     for task in tasks:
+        method_id = METHODS[args.method][0]
         for seed in range(args.repeats):
-            name = f"{args.batch}_{TASK_SHORT[task]}_traceaad_{slug}_rep{seed + 1}"
+            name = f"{args.batch}_{TASK_SHORT[task]}_{method_id}_rep{seed + 1}"
             session = f"{args.batch}_{TASK_SHORT[task]}_{slug}_r{seed + 1}"
             directory = ROOT / "experiments_result" / args.experiment / task / name
             command = [sys.executable, "-u", "-m", "experiments.traceaad.run",
@@ -43,8 +44,9 @@ def build_plan(args):
                        "--experiment", args.experiment, "--seed", str(seed),
                        "--budget", str(args.budget),
                        "--initial-size", str(args.initial_size), "--max-tokens", str(args.max_tokens),
-                       "--model-timeout", str(args.model_timeout),
-                       "--selection-temperature", str(args.selection_temperature)]
+                       "--model-timeout", str(args.model_timeout)]
+            if method_id not in {"evotrace_v1", "evotrace_v2"}:
+                command += ["--selection-temperature", str(args.selection_temperature)]
             command += ["--trajectory-reference-embedding" if embedding else "--no-trajectory-reference-embedding"]
             if args.scheduler_socket:
                 command += ["--scheduler-socket", args.scheduler_socket]
@@ -127,15 +129,15 @@ def main(argv=None):
         parser.error("scheduled backend requires --scheduler-socket")
     path = ROOT / "experiments_result" / args.experiment / f"batch_{args.batch}.json"
     manifest = {
-        "batch": args.batch, "method": f"traceaad_{_slug(args.method)}", "experiment": args.experiment,
+        "batch": args.batch, "method": METHODS[args.method][0], "experiment": args.experiment,
         "created_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(), "suite": "co6", "repeats": args.repeats,
         "tasks": list(args.tasks if args.tasks is not None else CO_TASKS),
         "budget_per_run": args.budget, "budget_axis": "评价次数", "budget_basis": "evaluate_calls",
         "output_tokens": args.max_tokens, "temperature": 1., "initial_size": args.initial_size,
-        "selection_rule": SELECTION_RULE, "selection_temperature": args.selection_temperature,
+        "selection_rule": selection_rule_for(args.method), "selection_temperature": args.selection_temperature,
         "trajectory_reference_embedding": args.trajectory_reference_embedding,
-        "mechanisms": list(METHODS[args.method][1].TraceAAD.mechanisms),
-        "generation_protocol": METHODS[args.method][1].TraceAAD.generation_protocol,
+        "mechanisms": list(METHODS[args.method][1].mechanisms),
+        "generation_protocol": METHODS[args.method][1].generation_protocol,
         "sampling": request_options(args.method), "final_selection": "training", "eval_workers": 1,
         "evaluation_scope": "whole_task", "resource_scheduler": scheduler,
         "seconds_per_instance": args.seconds_per_instance,
@@ -143,6 +145,8 @@ def main(argv=None):
         "pipeline": "search -> freeze training best -> independent held-out evaluation",
         "status": "planned", "plan": plan,
     }
+    if METHODS[args.method][0] in {"evotrace_v1", "evotrace_v2"}:
+        manifest.pop("selection_temperature")
     if not args.launch and not args.enqueue:
         print(json.dumps({"manifest": str(path), **manifest}, ensure_ascii=False, indent=2))
         return

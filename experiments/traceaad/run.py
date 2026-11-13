@@ -14,8 +14,14 @@ import signal
 import time
 
 from benchmarks.tasks import ALL_TASKS, PRIMARY_SPLITS, heldout_task, scale_of_split
+import evotrace_v1
+import evotrace_v2
+from evotrace_v2.cli import load_task as load_evotrace_v2_task
+from evotrace_v2.evaluation import Evaluator as EvoTraceV2Evaluator
+from evotrace_v1.cli import load_task as load_evotrace_task
+from evotrace_v1.evaluation import Evaluator as EvoTraceEvaluator
 import traceaad_base
-from traceaad_base import Evaluator, Task
+from traceaad_base import Config, Evaluator, Task
 from traceaad_base.cli import load_task
 from traceaad_base.selection import SELECTION_RULE
 from experiments.infra.storage import seal_calls
@@ -30,11 +36,13 @@ from .scheduling import REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, loa
 
 ROOT = Path(__file__).resolve().parents[2]
 MEMORY_BYTES = 2 << 30
-METHODS = {"base": ("traceaad_base", traceaad_base),
-           "v21.3": ("traceaad_v21_3", traceaad_v21_3), "v21_3": ("traceaad_v21_3", traceaad_v21_3),
-           "v22.2": ("traceaad_v22_2", traceaad_v22_2), "v22_2": ("traceaad_v22_2", traceaad_v22_2),
-           "v23.2": ("traceaad_v23_2", traceaad_v23_2), "v23_2": ("traceaad_v23_2", traceaad_v23_2),
-           "v24.1": ("traceaad_v24_1", traceaad_v24_1), "v24_1": ("traceaad_v24_1", traceaad_v24_1)}
+METHODS = {"base": ("traceaad_base", traceaad_base.TraceAAD),
+           "evotrace.v1": ("evotrace_v1", evotrace_v1.EvoTrace), "evotrace_v1": ("evotrace_v1", evotrace_v1.EvoTrace),
+           "evotrace.v2": ("evotrace_v2", evotrace_v2.EvoTrace), "evotrace_v2": ("evotrace_v2", evotrace_v2.EvoTrace),
+           "v21.3": ("traceaad_v21_3", traceaad_v21_3.TraceAAD), "v21_3": ("traceaad_v21_3", traceaad_v21_3.TraceAAD),
+           "v22.2": ("traceaad_v22_2", traceaad_v22_2.TraceAAD), "v22_2": ("traceaad_v22_2", traceaad_v22_2.TraceAAD),
+           "v23.2": ("traceaad_v23_2", traceaad_v23_2.TraceAAD), "v23_2": ("traceaad_v23_2", traceaad_v23_2.TraceAAD),
+           "v24.1": ("traceaad_v24_1", traceaad_v24_1.TraceAAD), "v24_1": ("traceaad_v24_1", traceaad_v24_1.TraceAAD)}
 
 
 def configure_time_budget(task, seconds_per_instance):
@@ -52,15 +60,20 @@ def configure_time_budget(task, seconds_per_instance):
                                      "timeout_seconds": task.time_limit}
 
 
+def selection_rule_for(method):
+    return getattr(METHODS[method][1], "selection_rule", SELECTION_RULE)
+
+
 def request_options(method):
-    if 2 in METHODS[method][1].TraceAAD.mechanisms:
+    mechs = METHODS[method][1].mechanisms
+    if 2 in mechs or "multiscale_context" in mechs:
         return {**REQUEST_OPTIONS, "response_format": V21_RESPONSE_FORMAT}
     return REQUEST_OPTIONS
 
 
 def reference_embedding_enabled(method, requested):
     """Mechanism 1 includes trajectory references unless explicitly ablated."""
-    has_allocation = 1 in METHODS[method][1].TraceAAD.mechanisms
+    has_allocation = 1 in METHODS[method][1].mechanisms
     enabled = has_allocation if requested is None else requested
     if enabled and not has_allocation:
         raise ValueError("trajectory-reference-embedding requires a method with mechanism 1")
@@ -74,10 +87,10 @@ def metadata_for(args, task, config, model):
         "seed": args.seed, "repeat": args.seed + 1,
         "budget": config.evaluation_budget, "budget_axis": "评价次数", "budget_basis": "evaluate_calls",
         "method_params": asdict(config), "final_selection": "training", "eval_workers": 1,
-        "selection_rule": SELECTION_RULE,
-        "mechanisms": list(METHODS[args.method][1].TraceAAD.mechanisms),
-        "generation_protocol": METHODS[args.method][1].TraceAAD.generation_protocol
-                               + ("+reference_code" if args.reference_code else ""),
+        "selection_rule": selection_rule_for(args.method),
+        "mechanisms": list(METHODS[args.method][1].mechanisms),
+        "generation_protocol": METHODS[args.method][1].generation_protocol
+                               + ("+reference_code" if args.reference_code and METHODS[args.method][0] not in {"evotrace_v1", "evotrace_v2"} else ""),
         "trajectory_reference_embedding": args.trajectory_reference_embedding,
         "reference_code": args.reference_code,
         "started_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
@@ -108,11 +121,15 @@ def evaluate_heldout(directory, name, best, scheduler, *, evaluation_seed,
     results = []
     for split in PRIMARY_SPLITS[name]:
         external = heldout_task(name, split, workers=1)
-        task = Task.from_evaluator(external, use_template_example=False)
+        task_type = {"evotrace_v1": evotrace_v1.Task, "evotrace_v2": evotrace_v2.Task}.get(condition, Task)
+        task = task_type.from_evaluator(external, use_template_example=False)
         configure_time_budget(task, seconds_per_instance)
         task.evaluation_seed = evaluation_seed
         task.memory_limit_bytes = MEMORY_BYTES
-        evaluator = ScheduledEvaluator(task, scheduler, directory.name + ":heldout") if scheduler else Evaluator(task)
+        evaluator_type = {"evotrace_v1": EvoTraceEvaluator, "evotrace_v2": EvoTraceV2Evaluator}.get(condition, Evaluator)
+        evaluator = (ScheduledEvaluator(task, scheduler, directory.name + ":heldout",
+                                        evaluator_factory=evaluator_type)
+                     if scheduler else evaluator_type(task))
         with getattr(evaluator, "evaluation_context", nullcontext)():
             started = time.monotonic()
             evaluation = evaluator.evaluate(best.code)
@@ -158,7 +175,7 @@ def main(argv=None):
     parser.add_argument("--trajectory-reference-embedding", action=argparse.BooleanOptionalAction,
                         default=None, help="Mechanism 1 uses trajectory references by default; --no-... ablates them")
     parser.add_argument("--reference-code", action="store_true",
-                        help="V21.2/V21.3 control: Crossover also shows the reference's full source")
+                        help="Crossover also shows the reference algorithm source")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
                         help="Time allowance per instance; their sum is the whole-task deadline")
     parser.add_argument("--scheduler-socket", default=os.getenv("TRACEAAD_SCHEDULER_SOCKET"))
@@ -172,8 +189,8 @@ def main(argv=None):
         args.trajectory_reference_embedding = reference_embedding_enabled(args.method, args.trajectory_reference_embedding)
     except ValueError as error:
         parser.error(str(error))
-    if args.reference_code and METHODS[args.method][0] != "traceaad_v21_3":
-        parser.error("--reference-code applies to v21.3 only")
+    if args.reference_code and METHODS[args.method][0] not in {"traceaad_v21_3", "evotrace_v1", "evotrace_v2"}:
+        parser.error("--reference-code applies to v21.3 or EvoTrace only")
     if not args.scheduler_socket and args.backend == "scheduled":
         parser.error("A resource scheduler socket is required")
     if not math.isfinite(args.seconds_per_instance) or args.seconds_per_instance <= 0:
@@ -185,14 +202,20 @@ def main(argv=None):
             parser.error("Use alphanumeric names with underscores or hyphens")
     load_environment(ROOT / ".env")
     load_environment(args.env_file)
-    package = METHODS[args.method][1]
-    config = package.Config(evaluation_budget=args.budget, initial_size=args.initial_size,
-                            seed=args.seed, max_tokens=args.max_tokens, model_timeout=args.model_timeout,
-                            selection_temperature=args.selection_temperature)
-    task = load_task(name=args.task)
+    method_id = METHODS[args.method][0]
+    evotrace = {"evotrace_v1": evotrace_v1, "evotrace_v2": evotrace_v2}.get(method_id)
+    is_evotrace = evotrace is not None
+    config_type = evotrace.Config if is_evotrace else Config
+    config = config_type(evaluation_budget=args.budget, initial_size=args.initial_size,
+                         seed=args.seed, max_tokens=args.max_tokens, model_timeout=args.model_timeout,
+                         **({} if is_evotrace else {"selection_temperature": args.selection_temperature}))
+    task_loader = {"evotrace_v1": load_evotrace_task, "evotrace_v2": load_evotrace_v2_task}.get(method_id, load_task)
+    task = task_loader(name=args.task)
     configure_time_budget(task, args.seconds_per_instance)
     task.memory_limit_bytes = MEMORY_BYTES
     model = ScheduledModel(args.scheduler_socket, args.run_name)
+    if is_evotrace:
+        model.factory = evotrace.OpenAIClient
     metadata = metadata_for(args, task, config, model)
     reference_embedding = None
     if args.trajectory_reference_embedding:
@@ -218,12 +241,16 @@ def main(argv=None):
     signal.signal(signal.SIGHUP, stop)  # Closing the tmux session.
     from .reporting import Reporter
 
-    search = package.TraceAAD(task, model, config=config,
+    search = METHODS[args.method][1](task, model, config=config,
                               run_dir=directory / "native", resume=args.resume,
                               **({"reference_embedding": reference_embedding}
                                  if reference_embedding is not None else {}),
                               **({"reference_code": True} if args.reference_code else {}))
-    search.evaluator = ScheduledEvaluator(task, args.scheduler_socket, args.run_name + ":search")
+    search.evaluator = ScheduledEvaluator(
+        task, args.scheduler_socket, args.run_name + ":search",
+        **({"evaluator_factory": EvoTraceV2Evaluator if method_id == "evotrace_v2" else EvoTraceEvaluator}
+           if is_evotrace else {}),
+    )
     reporter = Reporter(directory, metadata)
     reporter.publish(search)
 
@@ -252,7 +279,7 @@ def main(argv=None):
                          evaluation_seed=task.evaluation_seed,
                          seconds_per_instance=args.seconds_per_instance,
                          condition=search.method)
-    print(json.dumps({"run_dir": str(directory), **result.to_dict()}, ensure_ascii=False), flush=True)
+    print(json.dumps({"run_dir": str(directory), **asdict(result)}, ensure_ascii=False), flush=True)
 
 
 if __name__ == "__main__":

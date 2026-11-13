@@ -1,0 +1,36 @@
+{
+  "reviewed_at": "2026-11-13T13:35:34.936472+08:00",
+  "selected_composition": "tree-centered",
+  "generated_source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-e30548de-aff0-438f-a4b8-0547fe856857.png",
+  "asset": "docs/figures/evotrace/01-main-framework.png",
+  "width": 1663,
+  "height": 946,
+  "sha256": "65e73593dbe79f60e328dda3d7d807da6b42425000ddb87bb32d0a58e744b593",
+  "mode": "built-in image_gen",
+  "visual_review": "accepted",
+  "selection_basis": [
+    "一棵连通的种群树作为主视觉，发展与经验位于同一结构",
+    "局部放大解释程序细节到节点/边经验的转换",
+    "三算子以树的输入视图出现，单次生成受评后接回父代"
+  ],
+  "checked_semantics": [
+    "P是已有子代的内部父代，新算法连接P",
+    "R作为辅助来源输入R代码卡，不接成第二条主父代边",
+    "Refine路径、Crossover共同祖先分叉、Explore方向概览均为输入视图",
+    "V_AD位于重连边，S_A位于保留节点",
+    "B/C及旧S_B进入V_AD，X进入S_A",
+    "橙色经验进入生成，蓝色返回曲线明确标注evaluated program"
+  ],
+  "candidates": [
+    {
+      "id": "tree-centered",
+      "source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-26feb950-12f1-4e77-877e-b455b36a21c4.png",
+      "selected_for_refinement": true
+    },
+    {
+      "id": "evolutionary-landscape",
+      "source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-5857f48d-e6bb-48af-ba6a-bfad817be3f7.png",
+      "selected_for_refinement": false
+    }
+  ]
+}

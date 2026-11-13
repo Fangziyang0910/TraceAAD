@@ -23,5 +23,6 @@ task_description = (
     "The graph is Euclidean, with pairwise distances derived from node coordinates. "
     "At each step it receives the current node id, the destination/start node id, an array of unvisited candidate "
     "node ids, and the pairwise distance matrix, and must return the id of the next node to visit. "
-    "Help me design a novel algorithm to select the next node in each step."
+    "The fixed outer solver repeatedly calls this function to construct the tour. "
+    "The returned node commits the next move; design this computation to improve the length of the completed tour."
 )

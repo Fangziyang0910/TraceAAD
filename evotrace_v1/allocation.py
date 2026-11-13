@@ -1,0 +1,195 @@
+"""预算分配与参考选择：直接采用 ShinkaEvolve 加权父代采样，配合质量池内最不相似 AST 参考选择。"""
+
+from dataclasses import dataclass
+import math
+import random
+from statistics import median
+
+from .models import Operator, TreePopulation
+from .topology import code_distance, identity
+
+
+def _stable_sigmoid(x: float) -> float:
+    if x >= 0.0:
+        z = math.exp(-x)
+        return 1.0 / (1.0 + z)
+    z = math.exp(x)
+    return z / (1.0 + z)
+
+
+@dataclass(frozen=True)
+class AllocationConfig:
+    """Shinka 加权父代采样、固定算子先验与交叉参考池配置。"""
+
+    parent_selection_lambda: float = 10.0
+    refine_weight: float = 0.45
+    explore_weight: float = 0.30
+    crossover_weight: float = 0.25
+    reference_quality_floor: float = 0.30
+    full_pool_threshold: int = 12
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.parent_selection_lambda) or self.parent_selection_lambda < 0:
+            raise ValueError("parent_selection_lambda must be finite and nonnegative")
+        weights = (self.refine_weight, self.explore_weight, self.crossover_weight)
+        if any(not math.isfinite(w) or w < 0 for w in weights) or sum(weights) <= 0:
+            raise ValueError("Operator weights must be nonnegative and sum to a positive value")
+        if not 0.0 <= self.reference_quality_floor <= 1.0:
+            raise ValueError("reference_quality_floor must be in [0, 1]")
+        if self.full_pool_threshold < 0:
+            raise ValueError("full_pool_threshold must be nonnegative")
+
+
+@dataclass(frozen=True)
+class AllocationDecision:
+    """单步预算分配结果：主父代、生成算子、可选交叉参考及父代抽样概率。"""
+
+    parent_id: int
+    operator: Operator
+    reference_id: int | None
+    parent_probability: float
+    reference_distance: float | None = None
+
+
+def parent_probabilities(
+    tree: TreePopulation,
+    config: AllocationConfig = AllocationConfig(),
+) -> dict[int, float]:
+    """按 ShinkaEvolve §3.1 `weighted` 规则计算可行节点的父代抽样概率。
+
+    最小化目标下，以可行节点适应度中位数 m 与 MAD 归一化分差：
+    ``s_u = sigmoid(lambda * (m - f_u) / max(MAD, 1e-6))``，
+    乘以跨重构持久保留的累计子代数惩罚 ``h_u = 1 / (1 + children_count_u)``。
+    """
+    feasible = sorted(
+        (nid for nid, node in tree.nodes.items() if node.fitness is not None),
+        key=lambda nid: nid,
+    )
+    if not feasible:
+        return {}
+
+    scores = sorted(float(tree.nodes[nid].fitness) for nid in feasible)  # type: ignore[arg-type]
+    med = float(median(scores))
+    mad = float(median([abs(s - med) for s in scores]))
+    if mad <= 1e-9:
+        nonzero_devs = [abs(s - med) for s in scores if abs(s - med) > 1e-9]
+        scale = max(float(median(nonzero_devs)) if nonzero_devs else 0.0, 1e-6)
+    else:
+        scale = max(mad, 1e-6)
+
+    raw_weights: dict[int, float] = {}
+    for nid in feasible:
+        node = tree.nodes[nid]
+        norm_diff = (med - float(node.fitness)) / scale  # type: ignore[arg-type]
+        perf = _stable_sigmoid(config.parent_selection_lambda * norm_diff)
+        novelty = 1.0 / (1.0 + max(0, node.children_count))
+        raw_weights[nid] = perf * novelty
+
+    total = sum(raw_weights.values())
+    if total <= 0.0:
+        uniform = 1.0 / len(feasible)
+        return {nid: uniform for nid in feasible}
+    return {nid: w / total for nid, w in raw_weights.items()}
+
+
+def eligible_reference_pool(
+    tree: TreePopulation,
+    parent_id: int,
+    config: AllocationConfig = AllocationConfig(),
+) -> list[int]:
+    """返回候选交叉参考编号列表（按适应度从优到劣排序）。
+
+    可行节点数不超过 ``full_pool_threshold``（默认 12）时全池可选；
+    超过时保留秩质量 ``q(v) >= reference_quality_floor``（默认前 70%）的节点，
+    以过滤生长阶段刚接入但尚未淘汰的末尾劣质尝试。排除主父代自身。
+    """
+    if parent_id not in tree.nodes or tree.nodes[parent_id].fitness is None:
+        raise ValueError("Crossover parent must be a retained feasible node")
+
+    ordered = sorted(
+        (nid for nid, node in tree.nodes.items() if node.fitness is not None),
+        key=lambda nid: (tree.nodes[nid].fitness, nid),  # type: ignore[arg-type]
+    )
+    if len(ordered) <= config.full_pool_threshold:
+        pool = ordered
+    else:
+        denom = max(1, len(ordered) - 1)
+        pool = [
+            nid
+            for rank, nid in enumerate(ordered)
+            if (1.0 - rank / denom) >= config.reference_quality_floor
+        ]
+    return [nid for nid in pool if nid != parent_id]
+
+
+def select_crossover_reference(
+    tree: TreePopulation,
+    parent_id: int,
+    config: AllocationConfig = AllocationConfig(),
+) -> tuple[int | None, float | None]:
+    """在合格参考池中选择与主父代 AST 结构最不相似（距离最大）的参考节点。
+
+    资格判定使用标准化源码等价性 ``identity(code)``（避免忽略变量身份的 AST 指纹误拒不同计算，如 ``x/y`` 与 ``y/x``）；
+    排序偏好使用 ``code_distance`` 最大。优先选取尚未与 ``parent_id`` 配对过的候选；全部已配对时允许复用。
+    """
+    pool = eligible_reference_pool(tree, parent_id, config)
+    if not pool:
+        return None, None
+
+    parent_code = tree.nodes[parent_id].code
+    parent_ident = identity(parent_code)
+    used = set(tree.used_crossover_pairs)
+
+    scored: list[tuple[float, int, bool]] = []
+    for cand_id in pool:
+        cand_code = tree.nodes[cand_id].code
+        if identity(cand_code) == parent_ident:
+            continue
+        dist = code_distance(parent_code, cand_code)
+        is_unused = (parent_id, cand_id) not in used
+        scored.append((dist, cand_id, is_unused))
+
+    if not scored:
+        return None, None
+
+    unused_candidates = [(dist, cid) for dist, cid, is_unused in scored if is_unused]
+    active = unused_candidates if unused_candidates else [(dist, cid) for dist, cid, _ in scored]
+    # 距离最大优先；距离相同时适应度更优、编号更早者优先
+    best_dist, best_id = max(
+        active,
+        key=lambda item: (item[0], -float(tree.nodes[item[1]].fitness), -item[1]),  # type: ignore[arg-type]
+    )
+    return best_id, best_dist
+
+
+def allocate_step(
+    tree: TreePopulation,
+    rng: random.Random,
+    config: AllocationConfig = AllocationConfig(),
+) -> AllocationDecision:
+    """执行一步预算分配：抽样主父代与生成算子，若为 Crossover 则匹配最不相似参考（无可用异构参考时回退为 Refine）。"""
+    probs = parent_probabilities(tree, config)
+    if not probs:
+        raise ValueError("TreePopulation has no feasible algorithms to select from")
+
+    ids = list(probs.keys())
+    weights = [probs[nid] for nid in ids]
+    parent_id = rng.choices(ids, weights=weights, k=1)[0]
+
+    operators: list[Operator] = ["Refine", "Explore", "Crossover"]
+    op_weights = [config.refine_weight, config.explore_weight, config.crossover_weight]
+    operator: Operator = rng.choices(operators, weights=op_weights, k=1)[0]
+
+    ref_id, ref_dist = None, None
+    if operator == "Crossover":
+        ref_id, ref_dist = select_crossover_reference(tree, parent_id, config)
+        if ref_id is None:
+            operator = "Refine"
+
+    return AllocationDecision(
+        parent_id=parent_id,
+        operator=operator,
+        reference_id=ref_id,
+        parent_probability=probs[parent_id],
+        reference_distance=ref_dist,
+    )

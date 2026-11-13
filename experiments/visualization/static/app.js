@@ -115,8 +115,9 @@ async function loadBatches() {
   const {data} = await getJSON("/api/batches");
   const select = $("batch"), previous = S.batch;
   const groups = [
+    ["EvoTrace", data.batches.filter(b => b.id.startsWith("evotrace"))],
     ["TraceAAD", data.batches.filter(b => b.id.startsWith("traceaad"))],
-    ["相关方法", data.batches.filter(b => !b.id.startsWith("traceaad"))],
+    ["相关方法", data.batches.filter(b => !b.id.startsWith("traceaad") && !b.id.startsWith("evotrace"))],
   ].filter(([, items]) => items.length).map(([label, items]) => {
     const group = document.createElement("optgroup");
     group.label = label;

@@ -1,0 +1,142 @@
+{
+  "mode": "built-in image_gen",
+  "reviewed_at": "2026-11-13T13:35:34.936472+08:00",
+  "review": "manual visual inspection against evotrace_v1 and evotrace_v2 source",
+  "figures": [
+    {
+      "id": "01-main-framework",
+      "title": "以持续演化的树为主体的整体机制主图",
+      "path": "docs/figures/evotrace/01-main-framework.png",
+      "generated_source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-e30548de-aff0-438f-a4b8-0547fe856857.png",
+      "revision": 2,
+      "width": 1663,
+      "height": 946,
+      "sha256": "65e73593dbe79f60e328dda3d7d807da6b42425000ddb87bb32d0a58e744b593",
+      "visual_review": "accepted",
+      "role": "current main figure",
+      "checked_semantics": [
+        "P是已有子代的内部父代，新算法连接P",
+        "R作为辅助来源输入R代码卡，不接成第二条主父代边",
+        "Refine路径、Crossover共同祖先分叉、Explore方向概览均为输入视图",
+        "V_AD位于重连边，S_A位于保留节点",
+        "B/C及旧S_B进入V_AD，X进入S_A",
+        "橙色经验进入生成，蓝色返回曲线明确标注evaluated program"
+      ]
+    },
+    {
+      "id": "01-overview",
+      "title": "整体机制架构",
+      "path": "docs/figures/evotrace/01-overview.png",
+      "generated_source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-e77956c8-ce39-4ca2-8e59-d2516cee9d56.png",
+      "revision": 3,
+      "width": 1753,
+      "height": 897,
+      "sha256": "53e55c690721b9d7dafc4943bf647860399a991943683c144a6c5687b76ccbe1",
+      "visual_review": "accepted",
+      "checked_semantics": [
+        "生成—评价—入树—保留选择—联合简化—反思—更新树顺序正确",
+        "经验线路进入生成模块",
+        "右侧保留原候选并增加一个新蓝色节点"
+      ],
+      "role": "superseded process overview",
+      "superseded_by": "01-main-framework"
+    },
+    {
+      "id": "02-v1-selection",
+      "title": "V1容量选择与结构闭包",
+      "path": "docs/figures/evotrace/02-v1-selection.png",
+      "generated_source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-f2c1f970-efd3-4e68-a7c9-43b06d70e26c.png",
+      "revision": 2,
+      "width": 2172,
+      "height": 724,
+      "sha256": "1471aaac9e51e14580ca19b91cd794facd82c8ff2a4db2162d2292546dc97e08",
+      "visual_review": "accepted",
+      "checked_semantics": [
+        "64触发与32重构后上限正确",
+        "锚点计入容量并参与距离比较",
+        "0.30门槛明确用于常规候选"
+      ]
+    },
+    {
+      "id": "03-v2-selection",
+      "title": "V2一次选择与LCA补全",
+      "path": "docs/figures/evotrace/03-v2-selection.png",
+      "generated_source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-47db5313-dd0f-4834-b467-fc4a301b6dda.png",
+      "revision": 2,
+      "width": 1920,
+      "height": 819,
+      "sha256": "72cbfc8ed1dac50a294d2f2653d3b928599ada50e8fe6ce717375ddbe5f649dd",
+      "visual_review": "accepted",
+      "checked_semantics": [
+        "原树与保留树父子关系逐条正确",
+        "近期集合D/H与代表A/F并集后补C",
+        "虚拟根独立编码；B/E/G移除编码一致"
+      ]
+    },
+    {
+      "id": "04-reflective-simplification",
+      "title": "联合剪枝与路径收缩的经验归属",
+      "path": "docs/figures/evotrace/04-reflective-simplification.png",
+      "generated_source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-d0541de4-6dac-4e95-9412-956dd15bd366.png",
+      "revision": 1,
+      "width": 2172,
+      "height": 724,
+      "sha256": "01b6f735f0c9b6ba69212136285c2f3f02991be4d38bf1ae820917dd6a475b85",
+      "visual_review": "accepted",
+      "checked_semantics": [
+        "B/C及旧S_B进入V_AD",
+        "X及旧S_A进入S_A",
+        "X原父代为B；新旧经验归属未混淆"
+      ]
+    },
+    {
+      "id": "05-operator-context",
+      "title": "V2三类算子的树上下文",
+      "path": "docs/figures/evotrace/05-operator-context.png",
+      "generated_source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-28b8c27c-1abd-44d3-b465-ce5231bdf0e4.png",
+      "revision": 2,
+      "width": 1774,
+      "height": 887,
+      "sha256": "05b7f463d5c90512a165369cac205e07a6ce097d0aadd41482635371f1589c84",
+      "visual_review": "accepted",
+      "checked_semantics": [
+        "V为路径经验、S为旁支经验",
+        "全树方向概览不画作主父代P的三个直接子代",
+        "内部路径经验的V2扩展单独标明"
+      ]
+    },
+    {
+      "id": "05-operator-context-v1",
+      "title": "V1三类算子的树上下文",
+      "path": "docs/figures/evotrace/05-operator-context-v1.png",
+      "generated_source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-11eb1b40-80c4-4dde-aa9e-a355fc5d0cca.png",
+      "revision": 3,
+      "width": 1774,
+      "height": 887,
+      "sha256": "6400d1314ced8eb2e22cc4b1da6d0edff7e70f50dcf303dc029d8905e859313b",
+      "visual_review": "accepted",
+      "checked_semantics": [
+        "保留Refine与Crossover路径和选择经验",
+        "Explore未包含V2内部边经验扩展",
+        "可见子尝试标为已评价尝试"
+      ]
+    },
+    {
+      "id": "06-v2-history",
+      "title": "V2评价时钟与历史统计",
+      "path": "docs/figures/evotrace/06-v2-history.png",
+      "generated_source": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-3156d4b3-f372-4673-9402-aaf1f6fcbb27.png",
+      "revision": 2,
+      "width": 1754,
+      "height": 897,
+      "sha256": "7fb5d16d17600f1b76d5fca9c393ceb90c470012d866f7b18a058a334818610e",
+      "visual_review": "accepted",
+      "checked_semantics": [
+        "冷却边界严格小于40",
+        "直接使用次数仅提供父代采样中的折扣因子",
+        "五项承接历史进入反思而不灌入当前直接子代数"
+      ]
+    }
+  ],
+  "active_main": "01-main-framework"
+}

@@ -26,12 +26,22 @@ def entry_environment(monkeypatch):
             self.scheduler = {"endpoints": []}
 
     monkeypatch.setattr(run, "load_task", task)
+    monkeypatch.setattr(run, "load_evotrace_task", task)
+    monkeypatch.setattr(run, "load_evotrace_v2_task", task)
     monkeypatch.setattr(run, "ScheduledModel", Scheduled)
     monkeypatch.setattr(run, "load_environment", lambda _path: None)
 
 
 def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_environment, capsys):
-    combinations = {"base": [], "v21.3": [2], "v22.2": [1, 2], "v23.2": [1], "v24.1": [2, 3]}
+    combinations = {
+        "base": [],
+        "evotrace.v1": ["tree_population", "reflective_simplification", "shinka_allocation", "multiscale_context"],
+        "evotrace.v2": ["tree_population", "dynamic_reflective_simplification", "shinka_allocation", "multiscale_context"],
+        "v21.3": [2],
+        "v22.2": [1, 2],
+        "v23.2": [1],
+        "v24.1": [2, 3],
+    }
     assert set(run.METHODS) == set(combinations) | {m.replace(".", "_") for m in combinations}
     arguments = ["--task", "tsp_construct", "--run-name", "test", "--batch", "test",
                  "--scheduler-socket", "/fake", "--dry-run", "--selection-temperature", "0.1"]
@@ -42,7 +52,7 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
     assert base["selection_rule"] == "boltzmann_fitness_v1"
     assert base["method_params"]["selection_temperature"] == 0.1
     assert base["llm"]["temperature"] == 1.0
-    for method, (directory, _package) in run.METHODS.items():
+    for method, (directory, _search_type) in run.METHODS.items():
         run.main([*arguments, "--method", method])
         metadata = json.loads(capsys.readouterr().out)
         assert metadata["method"] == metadata["experiment"] == directory
@@ -50,9 +60,17 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         assert metadata["mechanisms"] == mechanisms
         assert metadata["trajectory_reference_embedding"] == (1 in mechanisms)
         assert ("reference_settings" in metadata) == (1 in mechanisms)
-        for key in ("budget", "method_params", "evaluation_execution", "task_eval",
+        for key in ("budget", "evaluation_execution", "task_eval",
                     "model_routing", "final_selection"):
             assert metadata[key] == base[key]
+        if directory in {"evotrace_v1", "evotrace_v2"}:
+            from evotrace_v1 import Config
+            from dataclasses import asdict
+            expected = asdict(Config())
+            expected.update(evaluation_budget=1000, initial_size=5, seed=0, max_tokens=16384, model_timeout=600)
+            assert metadata["method_params"] == expected
+        else:
+            assert metadata["method_params"] == base["method_params"]
         assert metadata["llm"]["model"] == "Qwen3.8-27B"
         assert metadata["llm"]["sampling"]["chat_template_kwargs"] == {"enable_thinking": False}
 
@@ -124,13 +142,16 @@ def test_reference_ablation_is_explicit_and_recorded(entry_environment, capsys, 
     assert 1 in metadata["mechanisms"]
 
 
-@pytest.mark.parametrize("method", ["v21.3", "v21_3"])
+@pytest.mark.parametrize("method", ["v21.3", "v21_3", "evotrace.v1", "evotrace_v1"])
 def test_reference_source_control_is_recorded_for_supported_methods(entry_environment, capsys, method):
     run.main(["--method", method, "--task", "tsp_construct", "--run-name", "source_control",
               "--batch", "source_control", "--scheduler-socket", "/fake", "--dry-run", "--reference-code"])
     metadata = json.loads(capsys.readouterr().out)
     assert metadata["reference_code"] is True
-    assert metadata["generation_protocol"] == run.METHODS[method][1].TraceAAD.generation_protocol + "+reference_code"
+    expected_protocol = run.METHODS[method][1].generation_protocol
+    if run.METHODS[method][0] != "evotrace_v1":
+        expected_protocol += "+reference_code"
+    assert metadata["generation_protocol"] == expected_protocol
 
 
 def test_reference_source_control_rejects_base_before_runtime_setup():

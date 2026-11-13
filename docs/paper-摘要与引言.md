@@ -1,47 +1,12 @@
-# EvoTrace：摘要与引言
+# EvoTrace：论文初稿入口
 
-方法设计见[树状种群与反思简化](树状种群与反思简化.md)。本页阐述方法主张；实验结果与正式文献编号待补充。
+原摘要与引言已扩展为完整的前四部分，并整合到[英文主稿](paper.md)与[中文对照](paper-中文.md)。机制依据为[当前改版V2](EvoTrace-v2设计.md)。
 
-## 摘要
+| 部分 | 英文 | 中文 |
+| --- | --- | --- |
+| 摘要 | [Abstract](paper.md#abstract) | [摘要](paper-中文.md#摘要) |
+| 引言 | [Introduction](paper.md#1-introduction) | [引言](paper-中文.md#1-引言) |
+| 相关工作 | [Related Work](paper.md#2-related-work) | [相关工作](paper-中文.md#2-相关工作) |
+| 方法 | [Method](paper.md#3-method) | [方法](paper-中文.md#3-方法) |
 
-大语言模型驱动的自动算法设计通过反复修改和评价程序来搜索高性能算法。在有限评价预算下，高效搜索既需要优胜劣汰以聚焦优质多样的候选算法，也需要保留演化轨迹以指导后续选择与修改。然而，现有方法难以兼顾这两点。基于种群的方法在淘汰个体时丢弃了算法的形成过程与失败尝试；基于树的方法保留全部已生成算法，不断累积的中间版本与无效尝试既分散了评价预算，也给生成上下文带来大量冗余。为此，本文提出EvoTrace，将候选算法组织为一棵持续优胜劣汰的树状种群。树中节点为当前保留的候选算法，边记录算法之间的演化关系。每轮演化后，EvoTrace结合性能与计算差异淘汰个体，并通过反思简化维护树结构，在重连保留算法的同时将被移除节点的修改与评价结果凝练为树上的经验。在此基础上，EvoTrace综合算法性能与演化趋势分配评价预算，并从树中提取局部路径、分支对比与全局方向信息，指导改进、融合与探索算子生成新算法。【实验结果待补充】
-
-## Abstract
-
-Large language model (LLM)-driven automated algorithm design (AAD) searches for high-performing algorithms by iteratively modifying and evaluating programs. Under a limited evaluation budget, effective search requires both selective pressure to focus on strong, diverse algorithms and evolutionary trajectories to guide subsequent selection and modification. However, existing methods struggle to achieve both. Population-based methods discard inferior individuals along with the development paths and failed attempts behind surviving algorithms, whereas tree-based methods retain all generated algorithms, accumulating outdated intermediate versions and unproductive edits that disperse the evaluation budget and clutter generation prompts. To address this limitation, we propose EvoTrace, which organizes candidate algorithms into a tree-structured population subject to continuous selection. Nodes represent retained candidate algorithms, and edges record their evolutionary relationships. After each generation, EvoTrace eliminates weak or redundant individuals based on performance and computational differences, and applies reflective simplification to reconnect surviving algorithms while summarizing the modifications and outcomes of removed nodes onto the tree. Built on this structure, EvoTrace combines algorithm performance with trajectory trends to allocate evaluation budgets, and extracts local paths, branch comparisons, and global direction overviews from the tree to guide refinement, crossover, and exploration. [Experimental results to be added.]
-
-## 引言
-
-组合优化、科学计算与工程调度等问题广泛依赖启发式算法，而人工设计高性能算法往往耗时且依赖专家经验。借助大语言模型（LLM）的代码生成能力，自动算法设计（Automated Algorithm Design, AAD）能够通过反复生成、运行和修改程序来自动搜索算法。由于程序评价代价高昂，搜索通常受限于严格的评价预算，每轮迭代都需要决定继续开发哪些候选算法，以及对它们作出何种修改。要做好这两项决策，搜索既需要通过优胜劣汰聚焦优质且多样的候选算法，也需要保留记录过往修改与评价反馈的演化轨迹。
-
-现有LLM驱动的AAD方法主要通过种群或搜索树来组织候选算法。以FunSearch、EoH、ReEvo、HSEvo和PartEvo为代表的种群方法维护固定规模的候选集合，在迭代变异与选择中筛除低分个体，将评价资源集中于优质或多样的算法。以MCTS-AHD、Clade-AHD和A2DEPT为代表的树搜索方法则将已生成算法按派生关系连接成树，为暂时落后的分支保留继续改进的机会，并利用树上的演化路径辅助程序生成。
-
-然而，这两类搜索结构难以同时兼顾种群的优胜劣汰与树的演化轨迹。基于种群的方法在淘汰个体时一并丢弃了派生历史。生成模型只能看到孤立的存活代码，既不知道当前算法经由哪些修改逐步形成，也不知道从它出发已经试过哪些失败方案，容易陷入重复试错。相反，基于树的方法通过保留全部生成节点来维持完整谱系。随着评价推进，树中不断累积失败尝试、细微调参与已被后代超越的中间版本，既分散了后续评价预算，也在生成上下文中混入大量冗余步骤。这一两难源于树结构与个体淘汰之间的矛盾。在演化树中，低分或过时的节点往往位于通向优质后代的路径中间，或记录了某一方向上的失败尝试。若像种群那样直接删除这些节点，就会打断演化路径并丢失试错记录；若为保持路径完整而保留全部节点，搜索又会失去优胜劣汰的选择压力。
-
-解决这一矛盾的关键，是在淘汰树中个体的同时重连演化路径并凝练历史经验。本文据此提出EvoTrace，将候选算法组织为一棵持续演化的树状种群。树中的节点构成当前候选种群，有向边记录亲代到后代的演化关系。每代新算法完成评价并接入树后，EvoTrace综合性能与计算差异筛选保留个体，并通过反思简化整理树结构。当路径中间的节点被淘汰时，EvoTrace直接连接保留的祖先与后代，将该阶段的修改与评价结果凝练为边上的变异经验；当分叉处的旁支被淘汰时，EvoTrace将其移除，并把相关尝试及结果凝练为父节点上的选择经验。由此，树状种群在持续优胜劣汰的同时，保留了清晰的演化脉络与试错经验。
-
-基于这一树状种群，EvoTrace统一指导评价预算分配与新算法生成。在预算分配上，EvoTrace综合算法的当前性能、路径上的改进趋势与节点处的历史尝试，将评价机会优先投向持续进步的分支，避免在已停滞的高分个体上反复消耗预算。在算法生成上，改进、融合与探索三类算子在有限上下文内按需读取树上的轨迹信息。改进算子读取当前算法的形成路径与既有尝试，在延续有效设计的同时避开已失败的改法；融合算子读取两个算法自共同祖先分出的演化路径，对比双方差异以结合互补设计；探索算子读取树上现有分支的整体分布与分叉经验，提出尚未覆盖的设计方向。新生成的算法经评价后再次接入树中，形成持续生长、淘汰简化与轨迹引导搜索的演化闭环。
-
-本文的主要贡献总结如下：
-
-- **树状种群及其演化维护机制。** 本文提出兼顾优胜劣汰与演化轨迹的树状种群，并设计结合个体淘汰与反思简化的更新机制，在保持种群精简多样的同时重连演化路径、凝练历史经验。
-- **基于树状种群的预算分配与生成策略。** 本文利用树状种群综合算法性能与演化趋势分配评价预算，并为改进、融合与探索算子按需提取局部路径、分支对比与全局方向信息，提升有限预算下的搜索效率。
-- 【实验贡献待补充：在多个自动算法设计基准任务上系统评估EvoTrace，验证其在相同评价预算下的算法发现质量、搜索效率以及各核心机制的有效性。】
-
-## Introduction
-
-Solving complex problems in combinatorial optimization, scientific computing, and scheduling relies heavily on heuristics, yet designing high-performing algorithms by hand is labor-intensive and requires substantial domain expertise. Leveraging the code generation capabilities of large language models (LLMs), automated algorithm design (AAD) automates this process by iteratively generating, executing, and modifying programs. Because program evaluation is costly, search operates under a strict evaluation budget and must repeatedly decide which candidate algorithms to develop further and how to modify them. Making both decisions well requires selective pressure to focus on strong, diverse algorithms, together with evolutionary trajectories that record prior modifications and evaluation outcomes.
-
-Existing LLM-driven AAD methods organize candidate algorithms primarily through populations or search trees. Population-based methods such as FunSearch, EoH, ReEvo, HSEvo, and PartEvo maintain a fixed-size set of candidates, iteratively mutating and selecting individuals to concentrate evaluations on high-performing or diverse algorithms. Tree-based methods such as MCTS-AHD, Clade-AHD, and A2DEPT connect generated algorithms according to parent-to-offspring derivations, preserving opportunities to develop temporarily underperforming branches and using tree paths to assist program generation.
-
-However, neither structure alone provides both population selection and evolutionary trajectories. Population-based methods discard derivation histories whenever individuals are eliminated. Observing only isolated surviving programs, the LLM knows neither which edits produced the current algorithm nor which modifications from it have already failed, leading to repeated trial-and-error. Conversely, tree-based methods preserve full lineages by retaining all generated nodes. As evaluations proceed, failed attempts, minor parameter tweaks, and intermediate versions superseded by stronger descendants accumulate in the tree, dispersing the evaluation budget and cluttering generation prompts with redundant steps. This dilemma arises from a conflict between tree structure and individual elimination. In an evolutionary tree, low-scoring or outdated nodes often lie on the path to stronger descendants or record failed attempts at a branching point. Deleting these nodes directly, as in a standard population, breaks evolutionary paths and erases records of failed trials; keeping every node to preserve the tree removes selective pressure.
-
-The key to resolving this conflict is to reconnect evolutionary paths and summarize historical attempts whenever individuals are eliminated from the tree. Based on this idea, we propose EvoTrace, which organizes candidate algorithms into a continuously evolving tree-structured population. Nodes constitute the current population of candidate algorithms, and directed edges record parent-to-offspring evolution. After new offspring are evaluated and attached to the tree in each generation, EvoTrace selects competitive and diverse algorithms to retain and applies reflective simplification to reorganize the tree. When intermediate nodes along a path are eliminated, EvoTrace directly connects the surviving ancestor and descendant, summarizing the intervening modifications and evaluation outcomes into variation experience on the edge. When uncompetitive side branches are eliminated, EvoTrace removes them and summarizes those attempts into selection experience on the parent node. In this way, the tree-structured population continuously eliminates weak and redundant candidates while preserving clear evolutionary paths and trial experiences.
-
-Built on this tree-structured population, EvoTrace guides both evaluation budget allocation and algorithm generation. For budget allocation, EvoTrace considers each algorithm's current performance together with its improvement trend along the path and prior attempts at its node, directing evaluations toward steadily improving branches rather than stagnating high-scoring individuals. For algorithm generation under a limited context budget, refinement, crossover, and exploration extract task-relevant trajectory information from the tree. Refinement reads the target algorithm's formation path and prior attempts, extending effective edits while avoiding failed ones. Crossover reads the evolution paths of two algorithms from their lowest common ancestor to combine complementary designs. Exploration reads the overall distribution of existing branches and branching experiences across the tree to propose unexplored algorithmic directions. Newly evaluated algorithms re-enter the tree for the next round of selection and simplification, forming a closed evolutionary loop.
-
-Our main contributions are summarized as follows:
-
-- **Tree-structured population and evolutionary maintenance.** We propose a tree-structured population that combines population selection with evolutionary trajectories, maintained through individual elimination and reflective simplification to keep the population compact and diverse while reconnecting paths and summarizing historical attempts.
-- **Budget allocation and generation strategies on the tree-structured population.** We develop search strategies that combine algorithm performance with trajectory trends for evaluation budget allocation, and extract local paths, branch comparisons, and global direction overviews from the tree to guide refinement, crossover, and exploration.
-- [Experimental contribution to be added: We systematically evaluate EvoTrace across multiple AAD benchmarks, examining discovered algorithm quality, search efficiency, and the effectiveness of each core mechanism under matched evaluation budgets.]
+另见[参考文献](paper-references.bib)与[写作核对依据](记录/2026-11-13-EvoTrace论文初稿依据.md)。

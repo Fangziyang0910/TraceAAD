@@ -11,7 +11,7 @@ in ``native/attempts.jsonl``; ``programs.jsonl`` holds only the example program.
 
 from collections import Counter
 from copy import deepcopy
-from dataclasses import fields
+from dataclasses import asdict, fields
 from datetime import datetime
 import json
 import os
@@ -62,7 +62,7 @@ def _jsonl(records):
 
 
 def _program(program):
-    record = program.to_dict()
+    record = asdict(program)
     record.pop("code")
     record.pop("design")
     evaluation = record["evaluation"] or {}
@@ -190,7 +190,7 @@ class Reporter:
                 "attempt": {**{field.name: getattr(attempt, field.name) for field in fields(attempt)
                                if field.name not in NATIVE_ONLY},
                             "action": attempt.operator, "reason": reason,
-                            "model_calls": attempt.model_calls},
+                            "model_calls": len(attempt.calls)},
                 "ts": last_at,
                 "progress": self._progress(
                     used, count, "initialization" if attempt.operator == "Init" else "evolution"),

@@ -168,11 +168,15 @@ class ScheduledModel:
         return replace(reply, metadata=dict(self.last_metadata))
 
 
-class ScheduledEvaluator(Evaluator):
-    def __init__(self, task, path, label):
-        super().__init__(task)
+class ScheduledEvaluator:
+    def __init__(self, task, path, label, *, evaluator_factory=Evaluator):
+        self.task = task
+        self.evaluator = evaluator_factory(task)
         self.path, self.label = str(path), label
         self.last_dispatch = {}
+
+    def evaluate(self, code):
+        return self.evaluator.evaluate(code)
 
     @contextmanager
     def evaluation_context(self):

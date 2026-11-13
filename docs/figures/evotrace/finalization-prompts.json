@@ -1,0 +1,12 @@
+[
+  {
+    "id": "01-overview",
+    "path": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-1fd1854c-3bf6-4307-8b0c-ae6391a4d58f.png",
+    "prompt": "Make one local correction in this otherwise final architecture figure. In the top-right \"Attach evaluated version\" tree, show an actual newly ADDED blue leaf rather than recoloring a pre-existing leaf. Keep the top-right root and its three teal children. Keep two teal grandchildren under the left child, one teal grandchild under the middle child, and TWO teal grandchildren plus ONE additional BLUE grandchild under the right child, for six grandchildren total. Thus the right tree has all the earlier teal candidates plus one new blue leaf. Draw the new leaf's parent edge clearly. Preserve EVERYTHING ELSE exactly: all four stage labels, the corrected right-to-left lower feedback sequence, the experience route into Code, the orange S/V notes, both V1/V2 badges, and typography/palette. Do not change any other arrows or labels."
+  },
+  {
+    "id": "05-operator-context-v1",
+    "path": "/home/fang/.codex/generated_images/01a1d2cc-9180-7372-a125-84ee5a8308c7/exec-28b8c27c-1abd-44d3-b465-ce5231bdf0e4.png",
+    "prompt": "Create the V1-specific variant of this already-correct three-panel operator-context schematic. Change ONLY panel (c) Explore: remove the orange internal-edge V capsule between I_2 and D_2 and remove its blue \"V2 only\" tag. Keep the ordinary I_2 -> D_2 connection clearly visible. Preserve every other element unchanged: all three direction groups, S_D1/S_D2/S_D3, Population-wide ideas, the Refine and Crossover panels and their V/S memories, the evaluated-trials label, the two code cards, actions, outputs, common legend and footer. Do not add any new notes or move the existing edge experiences in panels (a) and (b). This variant intentionally omits V2's internal-path-experience extension from the Explore view."
+  }
+]

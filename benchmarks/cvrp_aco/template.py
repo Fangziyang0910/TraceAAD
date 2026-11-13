@@ -36,7 +36,8 @@ best total route length found across all ants and iterations.
 The function receives the pairwise distance matrix, node coordinates, customer
 demands, and vehicle capacity. It must return a finite matrix with the same
 shape as the distance matrix. Larger entries indicate more promising directed
-edges. The function is called once per instance, before the ant colony starts.
+edges. Design how instance information is converted into relative edge weights that guide route construction.
+The function is called once per instance, before the ant colony starts; its matrix is reused during search.
 ACO samples a move in proportion to pheromone times the returned prior,
 after masking visited customers and customers exceeding remaining capacity.
 The distance matrix diagonal is 1.0. The solver adds 1e-9 to each prior value
