@@ -1,0 +1,12 @@
+build/
+*-build.log
+*-build.md
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.xdv
+*.synctex.gz

@@ -1,0 +1,2 @@
+pypandoc-binary==1.17
+matplotlib==3.11.2
