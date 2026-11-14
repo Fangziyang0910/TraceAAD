@@ -61,12 +61,12 @@ python -m evotrace_v1 \
 ## 配置与恢复
 
 - `Config`：评价预算、初始化数量、模型采样、随机种子、初始化失败展示与连续未评价上限。
-- `TopologyConfig`：容量、质量与差异阈值、新方向保护，见[树状种群管理](../docs/树状种群管理.md)。
+- `TopologyConfig`：容量、质量与差异阈值、新方向保护，见[V1种群选择](../docs/EvoTrace-v1设计.md)。
 - `AllocationConfig`：父代质量系数、算子比例与参考池。
 - `ContextConfig`：展示窗口、经验展示和参考源码开关。
 - `reflection_model`：默认复用生成模型；`None` 使用确定性摘要。经验展示与反思调用分别控制。
 
-辅助接口直接从所属模块导入，例如 `evotrace_v1.reflection.reflective_simplify`。反思输入输出见[反思简化设计](../docs/反思简化设计.md)。
+辅助接口直接从所属模块导入，例如 `evotrace_v1.reflection.reflective_simplify`。反思输入输出见[V1反思简化](../docs/EvoTrace-v1设计.md)。
 
 `run_config.json` 统一记录搜索、种群、分配、上下文与反思配置。`attempts.jsonl` 保存已完成尝试、反思材料和对应的重构快照，是恢复的唯一状态记录；`calls.jsonl` 保存生成请求与响应。`tree_latest.json` 是最近一次已提交重构的便捷视图，不参与恢复。
 
