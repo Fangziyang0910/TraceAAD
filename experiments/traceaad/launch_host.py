@@ -45,7 +45,7 @@ def build_plan(args):
                        "--budget", str(args.budget),
                        "--initial-size", str(args.initial_size), "--max-tokens", str(args.max_tokens),
                        "--model-timeout", str(args.model_timeout)]
-            if method_id not in {"evotrace_v1", "evotrace_v2"}:
+            if method_id not in {"evotrace_v1", "evotrace_v2", "evotrace_v3"}:
                 command += ["--selection-temperature", str(args.selection_temperature)]
             command += ["--trajectory-reference-embedding" if embedding else "--no-trajectory-reference-embedding"]
             if args.scheduler_socket:
@@ -145,7 +145,7 @@ def main(argv=None):
         "pipeline": "search -> freeze training best -> independent held-out evaluation",
         "status": "planned", "plan": plan,
     }
-    if METHODS[args.method][0] in {"evotrace_v1", "evotrace_v2"}:
+    if METHODS[args.method][0] in {"evotrace_v1", "evotrace_v2", "evotrace_v3"}:
         manifest.pop("selection_temperature")
     if not args.launch and not args.enqueue:
         print(json.dumps({"manifest": str(path), **manifest}, ensure_ascii=False, indent=2))

@@ -682,36 +682,42 @@
       "fssp_gls/20261112_165634_evotrace_v1_deepseek_none_co4_fssp_gls_rep1",
       "op_aco/20261112_165634_evotrace_v1_deepseek_none_co4_op_aco_rep1"
     ],
-    "evotrace_v2": [
-      "tsp_construct/20261112_234114_evotrace_v2_co4_tsp_evotrace_v2_rep1",
-      "tsp_construct/20261112_234114_evotrace_v2_co4_tsp_evotrace_v2_rep2",
-      "tsp_construct/20261112_234114_evotrace_v2_co4_tsp_evotrace_v2_rep3",
-      "cvrp_aco/20261112_234114_evotrace_v2_co4_cvrp_evotrace_v2_rep1",
-      "cvrp_aco/20261112_234114_evotrace_v2_co4_cvrp_evotrace_v2_rep2",
-      "cvrp_aco/20261112_234114_evotrace_v2_co4_cvrp_evotrace_v2_rep3",
-      "fssp_gls/20261112_234114_evotrace_v2_co4_fssp_evotrace_v2_rep1",
-      "fssp_gls/20261112_234114_evotrace_v2_co4_fssp_evotrace_v2_rep2",
-      "fssp_gls/20261112_234114_evotrace_v2_co4_fssp_evotrace_v2_rep3",
-      "op_aco/20261112_234114_evotrace_v2_co4_op_evotrace_v2_rep1",
-      "op_aco/20261112_234114_evotrace_v2_co4_op_evotrace_v2_rep2",
-      "op_aco/20261112_234114_evotrace_v2_co4_op_evotrace_v2_rep3"
+    "evotrace_v2_full": [
+      "tsp_construct/20261113_233010_evotrace_v2_full_co4_tsp_evotrace_v2_rep1",
+      "tsp_construct/20261113_233010_evotrace_v2_full_co4_tsp_evotrace_v2_rep2",
+      "tsp_construct/20261113_233010_evotrace_v2_full_co4_tsp_evotrace_v2_rep3",
+      "cvrp_aco/20261113_233010_evotrace_v2_full_co4_cvrp_evotrace_v2_rep1",
+      "cvrp_aco/20261113_233010_evotrace_v2_full_co4_cvrp_evotrace_v2_rep2",
+      "cvrp_aco/20261113_233010_evotrace_v2_full_co4_cvrp_evotrace_v2_rep3",
+      "fssp_gls/20261113_233010_evotrace_v2_full_co4_fssp_evotrace_v2_rep1",
+      "fssp_gls/20261113_233010_evotrace_v2_full_co4_fssp_evotrace_v2_rep2",
+      "fssp_gls/20261113_233010_evotrace_v2_full_co4_fssp_evotrace_v2_rep3",
+      "op_aco/20261113_233010_evotrace_v2_full_co4_op_evotrace_v2_rep1",
+      "op_aco/20261113_233010_evotrace_v2_full_co4_op_evotrace_v2_rep2",
+      "op_aco/20261113_233010_evotrace_v2_full_co4_op_evotrace_v2_rep3"
     ],
-    "evotrace_v2_dynamic": [
-      "tsp_construct/20261113_114716_evotrace_v2_dynamic_co4_tsp_evotrace_v2_rep1",
-      "tsp_construct/20261113_114716_evotrace_v2_dynamic_co4_tsp_evotrace_v2_rep2",
-      "tsp_construct/20261113_114716_evotrace_v2_dynamic_co4_tsp_evotrace_v2_rep3",
-      "cvrp_aco/20261113_114716_evotrace_v2_dynamic_co4_cvrp_evotrace_v2_rep1",
-      "cvrp_aco/20261113_114716_evotrace_v2_dynamic_co4_cvrp_evotrace_v2_rep2",
-      "cvrp_aco/20261113_114716_evotrace_v2_dynamic_co4_cvrp_evotrace_v2_rep3",
-      "fssp_gls/20261113_114716_evotrace_v2_dynamic_co4_fssp_evotrace_v2_rep1",
-      "fssp_gls/20261113_114716_evotrace_v2_dynamic_co4_fssp_evotrace_v2_rep2",
-      "fssp_gls/20261113_114716_evotrace_v2_dynamic_co4_fssp_evotrace_v2_rep3",
-      "op_aco/20261113_114716_evotrace_v2_dynamic_co4_op_evotrace_v2_rep1",
-      "op_aco/20261113_114716_evotrace_v2_dynamic_co4_op_evotrace_v2_rep2",
-      "op_aco/20261113_114716_evotrace_v2_dynamic_co4_op_evotrace_v2_rep3"
+    "evotrace_v2_repaired": [
+      "tsp_construct/20261114_103407_evotrace_v2_repaired_co4_tsp_evotrace_v2_rep1",
+      "tsp_construct/20261114_103407_evotrace_v2_repaired_co4_tsp_evotrace_v2_rep2",
+      "tsp_construct/20261114_103407_evotrace_v2_repaired_co4_tsp_evotrace_v2_rep3",
+      "cvrp_aco/20261114_103407_evotrace_v2_repaired_co4_cvrp_evotrace_v2_rep1",
+      "cvrp_aco/20261114_103407_evotrace_v2_repaired_co4_cvrp_evotrace_v2_rep2",
+      "cvrp_aco/20261114_103407_evotrace_v2_repaired_co4_cvrp_evotrace_v2_rep3",
+      "fssp_gls/20261114_103407_evotrace_v2_repaired_co4_fssp_evotrace_v2_rep1",
+      "fssp_gls/20261114_103407_evotrace_v2_repaired_co4_fssp_evotrace_v2_rep2",
+      "fssp_gls/20261114_103407_evotrace_v2_repaired_co4_fssp_evotrace_v2_rep3",
+      "op_aco/20261114_103407_evotrace_v2_repaired_co4_op_evotrace_v2_rep1",
+      "op_aco/20261114_103407_evotrace_v2_repaired_co4_op_evotrace_v2_rep2",
+      "op_aco/20261114_103407_evotrace_v2_repaired_co4_op_evotrace_v2_rep3",
+      "graph_colouring/20261114_140147_evotrace_v2_repaired_extra2_gcol_evotrace_v2_rep1",
+      "graph_colouring/20261114_140147_evotrace_v2_repaired_extra2_gcol_evotrace_v2_rep2",
+      "graph_colouring/20261114_140147_evotrace_v2_repaired_extra2_gcol_evotrace_v2_rep3",
+      "jssp_construct/20261114_140147_evotrace_v2_repaired_extra2_jssp_evotrace_v2_rep1",
+      "jssp_construct/20261114_140147_evotrace_v2_repaired_extra2_jssp_evotrace_v2_rep2",
+      "jssp_construct/20261114_140147_evotrace_v2_repaired_extra2_jssp_evotrace_v2_rep3"
     ]
   },
-  "default_experiment": "evotrace_v2_dynamic",
+  "default_experiment": "evotrace_v2_repaired",
   "labels": {
     "traceaad_v12_0": "TraceAAD V12.0",
     "traceaad_v12_1": "TraceAAD V12.1",
@@ -757,7 +763,10 @@
     "evotrace_v1": "EvoTrace V1",
     "evotrace_v1_deepseek": "EvoTrace V1 · DeepSeek（无思考）",
     "evotrace_v2": "EvoTrace V2 · 旧版",
-    "evotrace_v2_dynamic": "EvoTrace V2 · 动态简化"
+    "evotrace_v2_dynamic": "EvoTrace V2 · 动态简化",
+    "evotrace_v2_subtree": "EvoTrace V2 · 子树视角",
+    "evotrace_v2_full": "EvoTrace V2 · 完整版",
+    "evotrace_v2_repaired": "EvoTrace V2 · 完整版修复后"
   },
   "visualization_batches": {
     "traceaad_v12_0": "20261013_qwen_co6",
@@ -788,9 +797,15 @@
     "evotrace_v1": "20261112_165634_evotrace_v1_co4",
     "evotrace_v1_deepseek": "20261112_165634_evotrace_v1_deepseek_none_co4",
     "evotrace_v2": "20261112_234114_evotrace_v2_co4",
-    "evotrace_v2_dynamic": "20261113_114716_evotrace_v2_dynamic_co4"
+    "evotrace_v2_dynamic": "20261113_114716_evotrace_v2_dynamic_co4",
+    "evotrace_v2_subtree": "20261113_162932_evotrace_v2_subtree_co4",
+    "evotrace_v2_full": "20261113_233010_evotrace_v2_full_co4",
+    "evotrace_v2_repaired": "20261114_103407_evotrace_v2_repaired_co4"
   },
   "visualization_methods": [
+    "evotrace_v2_repaired",
+    "evotrace_v2_full",
+    "evotrace_v2_subtree",
     "evotrace_v2_dynamic",
     "evotrace_v2",
     "evotrace_v1",
@@ -870,6 +885,26 @@
       "cvrp_aco",
       "fssp_gls",
       "op_aco"
+    ],
+    "evotrace_v2_subtree": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco"
+    ],
+    "evotrace_v2_full": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco"
+    ],
+    "evotrace_v2_repaired": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco",
+      "graph_colouring",
+      "jssp_construct"
     ]
   },
   "active_campaign": {
@@ -877,16 +912,21 @@
       "tsp_construct",
       "cvrp_aco",
       "fssp_gls",
-      "op_aco"
+      "op_aco",
+      "graph_colouring",
+      "jssp_construct"
     ],
     "seeds": [
       0,
       1,
       2
     ],
-    "runs_per_method": 12,
-    "batch": "20261113_114716_evotrace_v2_dynamic_co4",
+    "runs_per_method": 18,
+    "batch": "20261114_103407_evotrace_v2_repaired_co4",
     "controller_session": [],
-    "note": "Revised EvoTrace V2, 12 Qwen runs from a separate frozen snapshot; old V2 and V1 continue unchanged. DeepSeek is left as-is."
+    "note": "Frozen repaired full V2: quality-representative normalization, route-aware context, actual-parent reflection with program-computed outcome labels. Previous full V2 continues unchanged as comparison. V1 unchanged. Added graph coloring and JSSP (three seeds each) using exactly the existing repaired frozen source.",
+    "additional_batches": [
+      "20261114_140147_evotrace_v2_repaired_extra2"
+    ]
   }
 }

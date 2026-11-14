@@ -1,10 +1,11 @@
 # TraceAAD 统一实验入口
 
-保留Base、EvoTrace-V1、EvoTrace-V2、V21.3、V22.2、V23.2与V24.1。使用 `--method` 选择方法；默认 `base`，未指定 `--experiment` 时使用所选方法的结果目录名。点号与下划线写法均支持，例如 `evotrace.v1` 与 `evotrace_v1`、`v22.2` 与 `v22_2`。
+保留Base、EvoTrace-V1、EvoTrace-V2、EvoTrace-V3、V21.3、V22.2、V23.2与V24.1。使用 `--method` 选择方法；默认 `base`，未指定 `--experiment` 时使用所选方法的结果目录名。点号与下划线写法均支持，例如 `evotrace.v1` 与 `evotrace_v1`、`v22.2` 与 `v22_2`。
 
 | 方法 | 搜索实现 |
 | --- | --- |
 | `base` | Base 基础演化对照。 |
+| `evotrace.v3` | 独立EvoTrace v3：在真实树上比较直接开发和进入子树，简化交接经验与历史预算；[设计与用法](../../evotrace_v3/README.md)。 |
 | `evotrace.v2` | 独立EvoTrace v2：按最近使用与质量差异一次选择，补齐必要分叉后联合剪枝和路径收缩；[设计与用法](../../evotrace_v2/README.md)。 |
 | `evotrace.v1` | 独立EvoTrace v1：自有搜索、任务、模型与评价实现，使用树状种群、反思简化、加权分配与三尺度上下文。 |
 | `v21.3` | Base加机制2：Refine读形成与修改记录，Crossover读参考形成与接入，Explore读方向及后续发展；`--reference-code`额外给出参考完整源码。 |
@@ -16,7 +17,7 @@
 
 V22.2与V23.2默认开启机制1的轨迹嵌入交叉参考；`--no-trajectory-reference-embedding`在同池随机选参考，作为参考部分消融。Base始终在合格池随机选参考。嵌入服务复用 `SHINKA_EMBEDDING_*` 配置，向量和用量保存在native目录。设计见[机制1](../../docs/演化轨迹叙事/机制设计/机制1-轨迹节点价值评估与预算分配.md)。
 
-EvoTrace的独立入口、配置与恢复约定见[模块说明](../../evotrace_v1/README.md#记录与恢复)。不同协议分别建立批次。
+EvoTrace的独立入口、配置与恢复约定见[V3](../../evotrace_v3/README.md)、[V2](../../evotrace_v2/README.md)、[V1](../../evotrace_v1/README.md#记录与恢复)。不同版本分别建立批次。V3已经接入统一入口并通过本地功能检查，本轮未启动完整搜索批次。下方真实轨迹harness仍面向V2冻结记录，不能用其V2树快照直接恢复V3。
 
 默认初始化5个有效程序，每路1000次评价。初始化、失败与修复重评按实际评价计费，辅助模型调用与token单列。训练16例共享160秒、内存2 GiB；训练最好程序固定后，再执行独立测试。条件见[实验协议](../PROTOCOL.md)。
 
@@ -74,3 +75,56 @@ V22.2与V23.2需要轨迹参考嵌入服务，不需要反思服务。V24.1不�
 `python -m experiments.traceaad.queue`读取`--manifests`中的等待清单，用`--observe`纳入已运行的批次，`--capacity 36`限制整个活动队列的路数。第一个等待版本优先启动，后续版本交替补位。运行进程包含搜索和主测试；训练结束不提前释放位置。错误退出保留记录并标为blocked，不自动重跑，也不阻塞其他等待任务。
 
 队列从进程、tmux和持久清单恢复状态，锁文件阻止重复控制器；重启控制器不重复启动已有运行。队列放在server4的独立tmux会话，SSH断开后继续运行。监控区分queued、deferred和异常退出，等待期间也检查控制会话是否存在。
+
+## EvoTrace V2 真实轨迹 harness
+
+`harness`捕获实际请求、响应、代码、评价、树状态和简化分区。案例按阶段与材料可用性选择，不按成绩挑选，覆盖初始化、三算子、两类反思及格式、执行失败和超时修复。只读取已提交的完整日志行，损坏的已提交记录直接报错。
+
+在仓库根目录执行，将`PACK`替换为新的结果目录，`FROZEN_SOURCE`和`CANDIDATE_SOURCE`指向包含`evotrace_v2/`的源码根目录：
+
+```bash
+.venv/bin/python -m experiments.traceaad.harness capture \
+  --out PACK --source FROZEN_SOURCE
+.venv/bin/python -m experiments.traceaad.harness render \
+  --out PACK --source FROZEN_SOURCE --arm before --require-original
+.venv/bin/python -m experiments.traceaad.harness render \
+  --out PACK --source CANDIDATE_SOURCE --arm after
+```
+
+`--require-original`逐字核对重建提示与历史实际请求。已有`PACK`固定案例集合；日志继续增长也不重新选择。`prefixes/`封存对应运行的日志，支持以后从同一历史状态恢复。分析其他批次或增加案例时用新`PACK`，并指定`--runs`与`--batch`。`--match`接受案例名正则。
+
+模型调用与评价在接入公共调度器的server4环境执行。两臂分别运行：
+
+```bash
+.venv/bin/python -m experiments.traceaad.harness run \
+  --out PACK --source CANDIDATE_SOURCE --arm after \
+  --workers 2 --repeats 1 --env-file .env --env-file .env.server4
+.venv/bin/python -m experiments.traceaad.harness evaluate \
+  --out PACK --source CANDIDATE_SOURCE --arm after --workers 2
+```
+
+生成与修复沿用四任务实际条件，不自动重选程序或追加修复。接口、解析、源码校验和执行结果分别留存。既有响应只有提示哈希一致时才能复用；改提示使用新arm。失败原件保留，增加`--repeats`会生成新的重复样本。收集会完成所有已选案例，遇到缺失结果、解析/校验失败、执行报错或超时则以非零状态退出；执行子集时`run`与`evaluate`使用相同的`--match`。
+
+`handoff`通过真实`reflect_and_apply`把新反思写回该次历史简化，其他区域沿用同一份历史响应，再渲染读取该经验的Refine或Explore：
+
+```bash
+.venv/bin/python -m experiments.traceaad.harness handoff \
+  --out PACK --source CANDIDATE_SOURCE --arm after --match reflect_variation
+.venv/bin/python -m experiments.traceaad.harness run \
+  --out PACK --source CANDIDATE_SOURCE --arm after_handoff \
+  --workers 2 --env-file .env --env-file .env.server4
+.venv/bin/python -m experiments.traceaad.harness evaluate \
+  --out PACK --source CANDIDATE_SOURCE --arm after_handoff --workers 2
+```
+
+它会检查新经验是否真正进入后续输入。完整提示、响应与任务评价供逐案例审阅；不按术语、AST距离或关键词给算法思想打分，也不把固定状态的单次胜出解释为完整搜索收益。
+
+需要检查真实的生成—评价—失败修复—重评—入树—反思链路时，使用`step`。它恢复案例之前的尝试、档案和树状态，复用已经获得的生成响应，随后运行真正的`EvoTrace.step()`，实际调用修复和反思模型；新的原始调用、实际评价预算及更新后的树保存在`steps/`：
+
+```bash
+.venv/bin/python -m experiments.traceaad.harness step \
+  --out PACK --source CANDIDATE_SOURCE --arm after --match developed_Explore \
+  --workers 2 --env-file .env --env-file .env.server4
+```
+
+`step`校验真实步骤重建的生成提示与已获响应一致。重复执行只复用源码、任务和提示均匹配的已完成步骤；新样本先增加`run --repeats`，再运行相应重复编号。历史回放在原批次的冻结基准仓库内执行，`--source`只切换方法包。

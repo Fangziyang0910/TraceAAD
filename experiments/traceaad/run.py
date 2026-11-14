@@ -16,6 +16,9 @@ import time
 from benchmarks.tasks import ALL_TASKS, PRIMARY_SPLITS, heldout_task, scale_of_split
 import evotrace_v1
 import evotrace_v2
+import evotrace_v3
+from evotrace_v3.cli import load_task as load_evotrace_v3_task
+from evotrace_v3.evaluation import Evaluator as EvoTraceV3Evaluator
 from evotrace_v2.cli import load_task as load_evotrace_v2_task
 from evotrace_v2.evaluation import Evaluator as EvoTraceV2Evaluator
 from evotrace_v1.cli import load_task as load_evotrace_task
@@ -39,6 +42,7 @@ MEMORY_BYTES = 2 << 30
 METHODS = {"base": ("traceaad_base", traceaad_base.TraceAAD),
            "evotrace.v1": ("evotrace_v1", evotrace_v1.EvoTrace), "evotrace_v1": ("evotrace_v1", evotrace_v1.EvoTrace),
            "evotrace.v2": ("evotrace_v2", evotrace_v2.EvoTrace), "evotrace_v2": ("evotrace_v2", evotrace_v2.EvoTrace),
+           "evotrace.v3": ("evotrace_v3", evotrace_v3.EvoTrace), "evotrace_v3": ("evotrace_v3", evotrace_v3.EvoTrace),
            "v21.3": ("traceaad_v21_3", traceaad_v21_3.TraceAAD), "v21_3": ("traceaad_v21_3", traceaad_v21_3.TraceAAD),
            "v22.2": ("traceaad_v22_2", traceaad_v22_2.TraceAAD), "v22_2": ("traceaad_v22_2", traceaad_v22_2.TraceAAD),
            "v23.2": ("traceaad_v23_2", traceaad_v23_2.TraceAAD), "v23_2": ("traceaad_v23_2", traceaad_v23_2.TraceAAD),
@@ -90,9 +94,9 @@ def metadata_for(args, task, config, model):
         "selection_rule": selection_rule_for(args.method),
         "mechanisms": list(METHODS[args.method][1].mechanisms),
         "generation_protocol": METHODS[args.method][1].generation_protocol
-                               + ("+reference_code" if args.reference_code and METHODS[args.method][0] not in {"evotrace_v1", "evotrace_v2"} else ""),
+                               + ("+reference_code" if args.reference_code and METHODS[args.method][0] not in {"evotrace_v1", "evotrace_v2", "evotrace_v3"} else ""),
         "trajectory_reference_embedding": args.trajectory_reference_embedding,
-        "reference_code": args.reference_code,
+        "reference_code": args.reference_code or METHODS[args.method][0] == "evotrace_v3",
         "started_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
         "source_snapshot": str(ROOT), "task_definition": task.description(),
         "task_eval": task.metadata["settings"],
@@ -121,12 +125,12 @@ def evaluate_heldout(directory, name, best, scheduler, *, evaluation_seed,
     results = []
     for split in PRIMARY_SPLITS[name]:
         external = heldout_task(name, split, workers=1)
-        task_type = {"evotrace_v1": evotrace_v1.Task, "evotrace_v2": evotrace_v2.Task}.get(condition, Task)
+        task_type = {"evotrace_v1": evotrace_v1.Task, "evotrace_v2": evotrace_v2.Task, "evotrace_v3": evotrace_v3.Task}.get(condition, Task)
         task = task_type.from_evaluator(external, use_template_example=False)
         configure_time_budget(task, seconds_per_instance)
         task.evaluation_seed = evaluation_seed
         task.memory_limit_bytes = MEMORY_BYTES
-        evaluator_type = {"evotrace_v1": EvoTraceEvaluator, "evotrace_v2": EvoTraceV2Evaluator}.get(condition, Evaluator)
+        evaluator_type = {"evotrace_v1": EvoTraceEvaluator, "evotrace_v2": EvoTraceV2Evaluator, "evotrace_v3": EvoTraceV3Evaluator}.get(condition, Evaluator)
         evaluator = (ScheduledEvaluator(task, scheduler, directory.name + ":heldout",
                                         evaluator_factory=evaluator_type)
                      if scheduler else evaluator_type(task))
@@ -189,7 +193,7 @@ def main(argv=None):
         args.trajectory_reference_embedding = reference_embedding_enabled(args.method, args.trajectory_reference_embedding)
     except ValueError as error:
         parser.error(str(error))
-    if args.reference_code and METHODS[args.method][0] not in {"traceaad_v21_3", "evotrace_v1", "evotrace_v2"}:
+    if args.reference_code and METHODS[args.method][0] not in {"traceaad_v21_3", "evotrace_v1", "evotrace_v2", "evotrace_v3"}:
         parser.error("--reference-code applies to v21.3 or EvoTrace only")
     if not args.scheduler_socket and args.backend == "scheduled":
         parser.error("A resource scheduler socket is required")
@@ -203,13 +207,13 @@ def main(argv=None):
     load_environment(ROOT / ".env")
     load_environment(args.env_file)
     method_id = METHODS[args.method][0]
-    evotrace = {"evotrace_v1": evotrace_v1, "evotrace_v2": evotrace_v2}.get(method_id)
+    evotrace = {"evotrace_v1": evotrace_v1, "evotrace_v2": evotrace_v2, "evotrace_v3": evotrace_v3}.get(method_id)
     is_evotrace = evotrace is not None
     config_type = evotrace.Config if is_evotrace else Config
     config = config_type(evaluation_budget=args.budget, initial_size=args.initial_size,
                          seed=args.seed, max_tokens=args.max_tokens, model_timeout=args.model_timeout,
                          **({} if is_evotrace else {"selection_temperature": args.selection_temperature}))
-    task_loader = {"evotrace_v1": load_evotrace_task, "evotrace_v2": load_evotrace_v2_task}.get(method_id, load_task)
+    task_loader = {"evotrace_v1": load_evotrace_task, "evotrace_v2": load_evotrace_v2_task, "evotrace_v3": load_evotrace_v3_task}.get(method_id, load_task)
     task = task_loader(name=args.task)
     configure_time_budget(task, args.seconds_per_instance)
     task.memory_limit_bytes = MEMORY_BYTES
@@ -248,7 +252,8 @@ def main(argv=None):
                               **({"reference_code": True} if args.reference_code else {}))
     search.evaluator = ScheduledEvaluator(
         task, args.scheduler_socket, args.run_name + ":search",
-        **({"evaluator_factory": EvoTraceV2Evaluator if method_id == "evotrace_v2" else EvoTraceEvaluator}
+        **({"evaluator_factory": {"evotrace_v1": EvoTraceEvaluator, "evotrace_v2": EvoTraceV2Evaluator,
+                                "evotrace_v3": EvoTraceV3Evaluator}[method_id]}
            if is_evotrace else {}),
     )
     reporter = Reporter(directory, metadata)

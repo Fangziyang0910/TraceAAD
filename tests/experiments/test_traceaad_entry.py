@@ -28,6 +28,7 @@ def entry_environment(monkeypatch):
     monkeypatch.setattr(run, "load_task", task)
     monkeypatch.setattr(run, "load_evotrace_task", task)
     monkeypatch.setattr(run, "load_evotrace_v2_task", task)
+    monkeypatch.setattr(run, "load_evotrace_v3_task", task)
     monkeypatch.setattr(run, "ScheduledModel", Scheduled)
     monkeypatch.setattr(run, "load_environment", lambda _path: None)
 
@@ -37,6 +38,7 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         "base": [],
         "evotrace.v1": ["tree_population", "reflective_simplification", "shinka_allocation", "multiscale_context"],
         "evotrace.v2": ["tree_population", "dynamic_reflective_simplification", "shinka_allocation", "multiscale_context"],
+        "evotrace.v3": ["tree_population", "dynamic_reflective_simplification", "individual_tree_allocation", "multiscale_context"],
         "v21.3": [2],
         "v22.2": [1, 2],
         "v23.2": [1],
@@ -63,7 +65,7 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         for key in ("budget", "evaluation_execution", "task_eval",
                     "model_routing", "final_selection"):
             assert metadata[key] == base[key]
-        if directory in {"evotrace_v1", "evotrace_v2"}:
+        if directory in {"evotrace_v1", "evotrace_v2", "evotrace_v3"}:
             from evotrace_v1 import Config
             from dataclasses import asdict
             expected = asdict(Config())

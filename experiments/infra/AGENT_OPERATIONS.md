@@ -2,9 +2,15 @@
 
 运行前核对[实验条件](../PROTOCOL.md)。本页的主机与服务位置用于查找；实时状态需要检查进程、日志和健康接口。
 
-改版V2的Qwen批次为 `20261113_114716_evotrace_v2_dynamic_co4`，结果目录为 `evotrace_v2_dynamic`，四任务各seed0/1/2、每路1000评价。冻结源码为server4的 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261113_114716_evotrace_v2_dynamic_co4`，使用冷却40次评价、一次质量与差异选择、LCA闭包后的联合剪枝与路径收缩。任务、评价器、生成采样与公共调度器沿用旧V2条件；新旧批次并行，结果分别保存。自动同步与看板已纳入新批次。[启动记录](../../experiments_result/evotrace_v2_dynamic/launch_20261113_114716_evotrace_v2_dynamic_co4/README.md)。
+当前V2的Qwen批次为 `20261114_103407_evotrace_v2_repaired_co4`，结果目录为 `evotrace_v2_repaired`，四任务TSP、CVRP、FSSP、OP各seed0/1/2、每路1000次评价。冻结源码位于server4的 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261114_103407_evotrace_v2_repaired_co4`。使用11月14日修复：采样前在当前树重算质量代表以提供中位数/MAD、按路线读取局部上下文、Explore去除重复设计描述、选择反思删除独立冠军并使用程序计算的比较标签。反思、经验和交叉参考源码均开启；训练赢家固定后执行独立测试。模型、评价条件与上一批一致。[启动核验](../../experiments_result/evotrace_v2_repaired/launch_20261114_103407_evotrace_v2_repaired_co4/README.md)。
 
-旧V2批次 `20261112_234114_evotrace_v2_co4` 继续运行，结果目录仍为 `evotrace_v2`，使用其原冻结源码 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_234114_evotrace_v2_co4`：局部宽度8、路径4，无全局容量；上下文按30000输入tokens适配，交叉参考统一候选规则。更早的22:44 V2已停止并保留。[旧V2启动记录](../../experiments_result/evotrace_v2/launch_20261112_234114_evotrace_v2_co4/README.md)。
+北京时间11月14日14:02，另启动图着色与JSSP补充批次`20261114_140147_evotrace_v2_repaired_extra2`，每任务三种子、每路1000次评价，沿用上面同一冻结源码与模型评价条件；两项均为完整求解器接口。修复后V2共六任务18路，新增批次已纳入自动同步、看板和健康检查。[启动核验](../../experiments_result/evotrace_v2_repaired/launch_20261114_140147_evotrace_v2_repaired_extra2/README.md)。
+
+上一批 `20261113_233010_evotrace_v2_full_co4` 保持原冻结源码继续运行，作为修复前对照，仍在自动同步与看板中。V1四任务12路已完成搜索和独立测试；本次没有重启或停止它们。
+
+按用户要求，11:47批次 `20261113_114716_evotrace_v2_dynamic_co4` 和16:30批次 `20261113_162932_evotrace_v2_subtree_co4` 已于北京时间11月13日23:30停止，共24路驱动，结果已保留并同步。两批移出活动同步名单，但保留历史看板入口。V1保持原进程继续完成。此前的[11:47启动记录](../../experiments_result/evotrace_v2_dynamic/launch_20261113_114716_evotrace_v2_dynamic_co4/README.md)与[16:30启动记录](../../experiments_result/evotrace_v2_subtree/launch_20261113_162932_evotrace_v2_subtree_co4/README.md)仍描述各自当时的冻结条件。
+
+旧V2批次 `20261112_234114_evotrace_v2_co4` 已于11月13日16:33按用户要求停止，12个驱动收到SIGTERM后退出，结果保留在 `evotrace_v2`（[停止记录](../../experiments_result/evotrace_v2/launch_20261112_234114_evotrace_v2_co4/stop_20261113.json)）。它使用冻结源码 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_234114_evotrace_v2_co4`：局部宽度8、路径4，无全局容量；上下文按30000输入tokens适配，交叉参考统一候选规则。更早的22:44 V2已停止并保留。[旧V2启动记录](../../experiments_result/evotrace_v2/launch_20261112_234114_evotrace_v2_co4/README.md)。
 
 保留的V1 Qwen批次为 `20261112_165634_evotrace_v1_co4`（四任务12路），DeepSeek为 `20261112_165634_evotrace_v1_deepseek_none_co4`（四任务各seed0）。两者使用server4快照 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_165634_evotrace_v1_co4`，包含通用AAD任务说明、上下文顺序与单字段experience反思。DeepSeek使用旧接口及reasoning_effort=none，生成/反思输出额度16384/1536。14:58 Qwen和15:17 DeepSeek已停止并保留；结果符号链接及主实验名单已切换。[启动核验](../../experiments_result/evotrace_v1/launch_20261112_165634_evotrace_v1_co4/latest_verification.json)确认16路进程、配置及首批调用。
 
@@ -39,7 +45,7 @@ uv run python -m experiments.visualization --host 0.0.0.0 --port 8765
 
 看板地址为 `http://10.150.68.218:8765/`，本机也可访问 `http://127.0.0.1:8765/`。本地数据只反映已同步的状态。生成预算读取事件与恢复点，不用有效程序数代替。文件说明见[结果格式](SEARCH_FORMAT.md)。
 
-看板展示由主实验名单中的`visualization_methods`单独控制；当前默认展示“EvoTrace V2 · 动态简化”，同时保留“EvoTrace V2 · 旧版”和EvoTrace V1，各展示四任务、三个种子的12路实验。`visualization_reference`指定Base为默认比较参照。展示范围不删除历史运行，也不改变同步/检查使用的`methods`清单。浏览器时间统一为北京时间，刷新提示表示读取本地同步副本。
+看板展示由主实验名单中的`visualization_methods`单独控制；当前默认展示“EvoTrace V2 · 完整版”，同时保留“EvoTrace V2 · 子树视角”“EvoTrace V2 · 动态简化”“EvoTrace V2 · 旧版”和EvoTrace V1，各展示四任务、三个种子的12路实验。`visualization_reference`指定Base为默认比较参照。展示范围不删除历史运行，也不改变同步/检查使用的`methods`清单。浏览器时间统一为北京时间，刷新提示表示读取本地同步副本。
 
 本机看板由 systemd 用户服务 `traceaad-dashboard.service` 启动；结果同步由 `traceaad-results-sync.service` 按[主实验名单](../../experiments_result/primary_runs.json)每60秒从server4拉取。两个服务开机后自动启动。
 
