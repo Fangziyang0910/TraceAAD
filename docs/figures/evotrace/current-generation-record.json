@@ -1,0 +1,32 @@
+{
+  "date": "2026-11-14",
+  "generator": "built-in image_gen",
+  "figures": [
+    {
+      "file": "07-framework.png",
+      "source": "/home/fang/.codex/generated_images/01a1d551-8597-7311-992d-d7035868de2b/exec-d22033d9-8be2-48d6-a008-b837a80d7997.png",
+      "size": [
+        1752,
+        897
+      ],
+      "sha256": "974e99f1345e1ca504c5f478f6e143999e70f045beb899159e855e540a4c6097"
+    },
+    {
+      "file": "08-reflective-simplification.png",
+      "source": "/home/fang/.codex/generated_images/01a1d551-8597-7311-992d-d7035868de2b/exec-ddd65a6e-1b60-476c-bac2-0a6e0e3f1f6d.png",
+      "size": [
+        1752,
+        897
+      ],
+      "sha256": "59d50b7bac7cb293a94ef5f69787a597ffc8fb4a5474639421faed59ee1eb474"
+    }
+  ],
+  "verified_semantics": [
+    "single primary parent; crossover reference is information only",
+    "retained A and D outside removed path region",
+    "B C X go to V_AD; Y goes to S_A",
+    "old S_B goes to V_AD; old S_A merges with Y",
+    "experience feeds task-specific context; evaluated candidate returns to tree"
+  ],
+  "adopted_framework_revision": 2
+}
