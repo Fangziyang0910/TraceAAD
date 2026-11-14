@@ -53,6 +53,8 @@ def test_resume_matches_uninterrupted_search_and_rejects_old_policy(tmp_path, fi
     assert restored.tree == search.tree and model.state == before
     restored.run()
     assert restored.tree == full.tree
+    assert [a.record.get('allocation') for a in restored.attempts] == [
+        a.record.get('allocation') for a in full.attempts]
     assert [(a.parent_id, a.reference_id, a.operator) for a in restored.attempts] == [(a.parent_id, a.reference_id, a.operator) for a in full.attempts]
     settings = tmp_path/'resumed'/'run_config.json'
     data = json.loads(settings.read_text())

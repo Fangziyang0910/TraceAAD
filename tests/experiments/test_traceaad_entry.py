@@ -58,6 +58,8 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         run.main([*arguments, "--method", method])
         metadata = json.loads(capsys.readouterr().out)
         assert metadata["method"] == metadata["experiment"] == directory
+        if directory == "evotrace_v3":
+            assert metadata["selection_rule"] == "rank_subtree_sampling"
         mechanisms = combinations[method.replace("_", ".")]
         assert metadata["mechanisms"] == mechanisms
         assert metadata["trajectory_reference_embedding"] == (1 in mechanisms)

@@ -5,7 +5,7 @@
 | 方法 | 搜索实现 |
 | --- | --- |
 | `base` | Base 基础演化对照。 |
-| `evotrace.v3` | 独立EvoTrace v3：在真实树上比较直接开发和进入子树，简化交接经验与历史预算；[设计与用法](../../evotrace_v3/README.md)。 |
+| `evotrace.v3` | 独立EvoTrace v3：按个体质量与历史子树投入全局抽样，简化交接经验并保留存活个体的投入；[设计与用法](../../evotrace_v3/README.md)。 |
 | `evotrace.v2` | 独立EvoTrace v2：按最近使用与质量差异一次选择，补齐必要分叉后联合剪枝和路径收缩；[设计与用法](../../evotrace_v2/README.md)。 |
 | `evotrace.v1` | 独立EvoTrace v1：自有搜索、任务、模型与评价实现，使用树状种群、反思简化、加权分配与三尺度上下文。 |
 | `v21.3` | Base加机制2：Refine读形成与修改记录，Crossover读参考形成与接入，Explore读方向及后续发展；`--reference-code`额外给出参考完整源码。 |

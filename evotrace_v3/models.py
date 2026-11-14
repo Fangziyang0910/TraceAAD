@@ -71,8 +71,9 @@ class TreePopulation:
 
         Creating the child is a direct development of its parent. Developing the
         child later increments its own direct count and the historical subtree
-        count of itself and every retained ancestor. Read-only references consume neither direct budget nor
-        recency. A child's birth is not development from that child.
+        count of itself and every retained ancestor. Read-only references consume
+        neither direct budget nor recency. A child's birth is not development from
+        that child.
         """
         if node.id == self.root_id or node.id <= self.latest_node_id or node.id != edge.child_id:
             raise ValueError("New node IDs must increase and match edge.child_id")

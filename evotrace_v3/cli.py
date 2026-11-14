@@ -57,6 +57,8 @@ def main(argv=None):
     parser.add_argument("--temperature", type=float)
     parser.add_argument("--max-tokens", type=int)
     parser.add_argument("--model-timeout", type=float)
+    parser.add_argument("--quality-ratio", type=float,
+                        help="Best/worst sampling weight ratio at equal effort (default: 10)")
     parser.add_argument("--no-example", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -78,6 +80,8 @@ def main(argv=None):
         if args.resume:
             if saved.get("method") != "evotrace_v3":
                 raise ValueError("This is not a V3 run; resume it with its original frozen source")
+            if saved.get("selection_rule") != EvoTrace.selection_rule:
+                raise ValueError("Incompatible selection_rule; resume with its original frozen source")
             settings = {
                 "topology_config": TopologyConfig(**saved["topology"]),
                 "allocation_config": AllocationConfig(**saved["allocation"]),
@@ -87,6 +91,10 @@ def main(argv=None):
             }
             if not saved["reflection_enabled"]:
                 settings["reflection_model"] = None
+        if args.quality_ratio is not None:
+            allocation = dict(saved["allocation"]) if args.resume else {}
+            allocation["quality_ratio"] = args.quality_ratio
+            settings["allocation_config"] = AllocationConfig(**allocation)
         task = load_task(name=args.task, factory=args.task_factory, options=options)
         if args.no_example:
             task.example_code = task.example_design = None

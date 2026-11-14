@@ -121,7 +121,7 @@ def make_task():
     try:
         command = [sys.executable, "-S", "-m", "evotrace_v3", "--task-factory", "sample_task:make_task",
                    "--run-dir", "run", "--budget", "2", "--base-url", f"http://127.0.0.1:{server.server_port}/v1",
-                   "--model", "local-test"]
+                   "--model", "local-test", "--quality-ratio", "7"]
         for extra in ([], ["--resume"]):
             completed = subprocess.run(command + extra, cwd=tmp_path, env=env,
                                        text=True, capture_output=True, timeout=30)
@@ -133,6 +133,15 @@ def make_task():
         server.server_close()
     saved_path = tmp_path / "run" / "run_config.json"
     saved = json.loads(saved_path.read_text())
+    assert saved["allocation"]["quality_ratio"] == 7
+    incompatible = subprocess.run(command + ["--resume", "--quality-ratio", "9"],
+                                  cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
+    assert incompatible.returncode != 0 and "allocation" in incompatible.stderr
+    saved["selection_rule"] = "individual_tree_allocation"
+    saved_path.write_text(json.dumps(saved))
+    incompatible = subprocess.run(command + ["--resume"], cwd=tmp_path, env=env,
+                                  text=True, capture_output=True, timeout=30)
+    assert incompatible.returncode != 0 and "selection_rule" in incompatible.stderr
     saved["method"] = "evotrace_v2"
     saved_path.write_text(json.dumps(saved))
     incompatible = subprocess.run(command + ["--resume"], cwd=tmp_path, env=env,
