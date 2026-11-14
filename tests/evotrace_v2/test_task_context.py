@@ -39,6 +39,61 @@ def test_explore_reads_internal_condensed_experience_and_all_distinct_entries():
     assert 'INTERNAL_DEVELOPMENT' in text
 
 
+def test_descendant_reads_branch_experience_at_each_shown_path_stage_once():
+    tree=chain(4)
+    tree.nodes[1].selection_experience='ENTRY_TRIED_A_ROLLOUT'
+    tree.nodes[2].selection_experience='INTERMEDIATE_TRIED_AN_INSERTION'
+    tree.nodes[4].selection_experience='CURRENT_TRIED_A_PARAMETER_CHANGE'
+    text,_,_,_=build_evolution_context(tree,4,'Refine')
+    for note in ['ENTRY_TRIED_A_ROLLOUT','INTERMEDIATE_TRIED_AN_INSERTION',
+                 'CURRENT_TRIED_A_PARAMETER_CHANGE']:
+        assert text.count(note)==1
+    without,_,_,_=build_evolution_context(tree,4,'Refine',config=ContextConfig(include_experiences=False))
+    assert 'ENTRY_TRIED_A_ROLLOUT' not in without
+    assert 'INTERMEDIATE_TRIED_AN_INSERTION' not in without
+
+
+def test_crossover_reads_experience_along_both_developments():
+    tree=chain(3)
+    tree.add(Node(4,'def solve(x):\n    return x * 2\n','Other branch',2.),Edge(1,4,'Explore'),evaluations=1)
+    tree.nodes[1].selection_experience='SHARED_EXPERIMENTS'
+    tree.nodes[2].selection_experience='CURRENT_LINE_EXPERIMENTS'
+    tree.nodes[3].selection_experience='CURRENT_ENDPOINT_EXPERIMENTS'
+    tree.nodes[4].selection_experience='REFERENCE_EXPERIMENTS'
+    text,_,_,_=build_evolution_context(tree,3,'Crossover',4)
+    for note in ['SHARED_EXPERIMENTS','CURRENT_LINE_EXPERIMENTS',
+                 'CURRENT_ENDPOINT_EXPERIMENTS','REFERENCE_EXPERIMENTS']:
+        assert text.count(note)==1
+
+
+def test_origin_reflection_does_not_turn_an_independent_champion_into_a_parent():
+    from evotrace_v2.reflection import build_selection_prompt
+    from evotrace_v2.topology import BranchConsolidation
+    tree=chain(1)
+    tree.nodes[1].fitness=-9.5
+    tree.add(Node(2,'def solve(x):\n    return x * 2\n','Independent idea',-14.4),
+             Edge(0,2,None),evaluations=1)
+    text=build_selection_prompt(tree,BranchConsolidation(0,(1,)),task_description='Minimize')
+    assert 'no shared parent implementation' in text
+    assert 'return x * 2' not in text
+    assert '-14.4' not in text
+    assert 'Removed Trial 1 [Init] from initial origin' in text
+    assert 'evaluated (no algorithm parent)' in text
+
+
+def test_path_reflection_states_net_tie_when_an_intermediate_regresses():
+    from evotrace_v2.reflection import build_variation_prompt
+    from evotrace_v2.topology import PathContraction
+    tree=chain(3)
+    tree.nodes[1].fitness=7.
+    tree.nodes[2].fitness=8.
+    tree.nodes[3].fitness=7.
+    text=build_variation_prompt(tree,PathContraction(1,3,(2,),'Refine',None),task_description='Minimize')
+    assert 'Overall measured outcome: tied' in text
+    assert 'Step 1 [Refine] (Removed Intermediate): regressed' in text
+    assert 'Step 2 [Refine] (Retained Endpoint): improved' in text
+
+
 def test_actual_input_budget_is_the_only_default_reduction_trigger():
     tree=chain(24)
     task=Task('Minimize','def solve(x):\n    pass\n',lambda s,f:f(1),2)

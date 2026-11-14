@@ -86,6 +86,30 @@ def _lowest_common_ancestor(tree: TreePopulation, u_id: int, v_id: int) -> tuple
     return lca, path_u[k:], path_v[k:]
 
 
+def _route_path(tree: TreePopulation, node_id: int) -> list[int]:
+    """Current route only; the incoming entry edge retains the shift's evidence."""
+    route = tree.direction_of(node_id)
+    path = [node_id]
+    parent = tree.edges[node_id].parent_id
+    while parent != tree.root_id and tree.direction_of(parent) == route:
+        path.append(parent)
+        parent = tree.edges[parent].parent_id
+    return list(reversed(path))
+
+
+def _origin_summary(tree, entry_id, expanded_ids, include_experiences):
+    parent_id = tree.edges[entry_id].parent_id
+    if parent_id == tree.root_id or parent_id in expanded_ids:
+        return ""
+    parent = tree.nodes[parent_id]
+    lines = [f"Route entry {entry_id} originated from Algorithm {parent_id}: "
+             f"{clean_prompt_text(parent.design)}",
+             "This is the source of an Explore shift, not another local step in the current route."]
+    if include_experiences and parent.selection_experience:
+        lines.append(f"Experiments at that source: {clean_prompt_text(parent.selection_experience)}")
+    return "[Route Origin]\n" + "\n".join(lines)
+
+
 def _operator_label(tree: TreePopulation, edge: Edge) -> str:
     """生成干净的算子标签：仅当算子本身是 Crossover 时标记，且仅当参考节点仍在树上时展示参考编号。"""
     op_str = edge.operator or "Init"
@@ -139,6 +163,7 @@ def _render_subpath(
     *,
     max_steps: int | None,
     include_experiences: bool,
+    selection_exclude: int | None = None,
 ) -> tuple[str, list[int]]:
     """渲染从 start_id 沿 step_nodes 前进的一段路径。
 
@@ -166,6 +191,8 @@ def _render_subpath(
         )
         if include_experiences and first_edge.variation_experience:
             init_line += f"\nStage experience: {clean_prompt_text(first_edge.variation_experience)}"
+        if include_experiences and first_node.id != selection_exclude and first_node.selection_experience:
+            init_line += f"\nExperiments from this stage: {clean_prompt_text(first_node.selection_experience)}"
         rows.append(init_line)
         tail_steps = all_step_indices[1:]
         keep_tail = max(0, max_steps - 1)
@@ -192,6 +219,9 @@ def _render_subpath(
             rows.append(f"Implementation after the summarized stage:\n```python\n{_bare_code(tree.nodes[p_id].code)}\n```")
         disp_num = idx - 1 if start_id == tree.root_id else idx
         rows.append(_step_card(tree, p_id, c_id, f"Step {disp_num}", include_experiences=include_experiences))
+        node = tree.nodes[c_id]
+        if include_experiences and c_id != selection_exclude and node.selection_experience:
+            rows.append(f"Experiments from this stage: {clean_prompt_text(node.selection_experience)}")
         shown_ids.append(c_id)
 
     body = "\n\n".join(rows)
@@ -340,7 +370,7 @@ def _directions_overview_block(
                 if sel_exp and sel_exp not in seen_experiences:
                     seen_experiences.add(sel_exp)
                     source = "the entry approach" if m == r_id else (
-                        "the recent development" if m == latest else clean_prompt_text(tree.nodes[m].design)
+                        "the recent development" if m == latest else f"retained variant {m}"
                     )
                     experiences.append(f"Experiments around {source}: {sel_exp}")
                 edge = tree.edges[m]
@@ -348,7 +378,7 @@ def _directions_overview_block(
                     note = clean_prompt_text(edge.variation_experience)
                     if note not in seen_experiences:
                         seen_experiences.add(note)
-                        experiences.append(f"Development toward {clean_prompt_text(tree.nodes[m].design)}: {note}")
+                        experiences.append(f"Development toward retained variant {m}: {note}")
             if experiences:
                 if config.max_experiences is not None:
                     experiences = experiences[-config.max_experiences:] if config.max_experiences else []
@@ -395,7 +425,10 @@ def build_evolution_context(
     view: dict[str, Any] = {"operator": operator, "parent_id": parent_id}
 
     if operator == "Refine":
-        path = _path_from_root(tree, parent_id)
+        path = _route_path(tree, parent_id)
+        origin = _origin_summary(tree, path[0], set(path), config.include_experiences)
+        if origin:
+            blocks.append(origin)
         path_text, shown_steps = _render_subpath(
             tree,
             tree.root_id,
@@ -403,10 +436,12 @@ def build_evolution_context(
             "Evolution Path",
             max_steps=config.max_path_steps,
             include_experiences=config.include_experiences,
+            selection_exclude=parent_id,
         )
         if path_text:
             blocks.append(path_text)
-        view.update({"path": path, "shown_steps": shown_steps})
+        view.update({"path": path, "shown_steps": shown_steps,
+                     "route_entry": path[0], "origin_id": tree.edges[path[0]].parent_id})
         instruction = (
             "Improve the current algorithm by examining how it makes decisions and where its computation can be improved. "
             "Use the implementation, outcomes, and development experience to choose a meaningful modification. "
@@ -419,8 +454,23 @@ def build_evolution_context(
             raise ValueError("Crossover requires a valid retained reference_id")
         ref_node = tree.nodes[reference_id]
         lca_id, branch_to_parent, branch_to_ref = _lowest_common_ancestor(tree, parent_id, reference_id)
+        same_route = tree.direction_of(parent_id) == tree.direction_of(reference_id)
+        branch_start = lca_id
+        if not same_route:
+            branch_to_parent = _route_path(tree, parent_id)
+            branch_to_ref = _route_path(tree, reference_id)
+            branch_start = tree.root_id
+            expanded = set(branch_to_parent + branch_to_ref)
+            if lca_id != tree.root_id:
+                blocks.append(f"[Shared Origin]\nAlgorithm {lca_id} is a historical source; "
+                              "their ancestry crosses an Explore boundary. Each route's local development is shown separately.")
+            for entry in (branch_to_parent[0], branch_to_ref[0]):
+                origin = _origin_summary(tree, entry, expanded, config.include_experiences)
+                if origin:
+                    blocks.append(origin)
+                    expanded.add(tree.edges[entry].parent_id)
 
-        if lca_id != tree.root_id:
+        if same_route and lca_id != tree.root_id:
             lca_node = tree.nodes[lca_id]
             lca_lines = [
                 f"[Common Ancestor]\nAlgorithm {lca_id}: fitness = {lca_node.fitness:.6g}",
@@ -431,29 +481,31 @@ def build_evolution_context(
                     f"Branch experience at ancestor: {clean_prompt_text(lca_node.selection_experience)}"
                 )
             blocks.append("\n".join(lca_lines))
-        elif config.include_experiences and tree.root_selection_experience:
+        elif lca_id == tree.root_id and config.include_experiences and tree.root_selection_experience:
             blocks.append(
                 f"[Origin Context]\nExperience from initial directions: {clean_prompt_text(tree.root_selection_experience)}"
             )
 
         cur_branch_text, shown_cur = _render_subpath(
             tree,
-            lca_id,
+            branch_start,
             branch_to_parent,
-            "Current Branch since Common Ancestor",
+            "Current Branch since Common Ancestor" if same_route else "Current Route Development",
             max_steps=config.max_path_steps,
             include_experiences=config.include_experiences,
+            selection_exclude=parent_id,
         )
         if cur_branch_text:
             blocks.append(cur_branch_text)
 
         ref_branch_text, shown_ref = _render_subpath(
             tree,
-            lca_id,
+            branch_start,
             branch_to_ref,
-            "Reference Branch since Common Ancestor",
+            "Reference Branch since Common Ancestor" if same_route else "Reference Route Development",
             max_steps=config.max_path_steps,
             include_experiences=config.include_experiences,
+            selection_exclude=parent_id,
         )
         if ref_branch_text:
             blocks.append(ref_branch_text)
@@ -470,6 +522,9 @@ def build_evolution_context(
         view.update({
             "reference_id": reference_id,
             "lca_id": lca_id,
+            "same_route": same_route,
+            "current_route_entry": _route_path(tree, parent_id)[0],
+            "reference_route_entry": _route_path(tree, reference_id)[0],
             "shown_current_branch": shown_cur,
             "shown_reference_branch": shown_ref,
             "include_reference_code": config.include_reference_code,

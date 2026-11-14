@@ -27,22 +27,6 @@ Operator = Literal["Init", "Refine", "Crossover", "Explore"]
 Status = Literal["success", "error", "timeout"]
 
 
-@dataclass(frozen=True)
-class History:
-    """Disjoint recorded effort carried by a node or edge; counts are not rewards."""
-
-    versions: int = 0
-    evaluations: int = 0
-    failures: int = 0
-    parent_uses: int = 0
-    reference_uses: int = 0
-
-    def __add__(self, other: "History") -> "History":
-        return History(self.versions + other.versions, self.evaluations + other.evaluations,
-                       self.failures + other.failures, self.parent_uses + other.parent_uses,
-                       self.reference_uses + other.reference_uses)
-
-
 @dataclass
 class Node:
     """已评价的算法版本，以及从它出发的选择经验。"""
@@ -53,17 +37,9 @@ class Node:
     fitness: float | None  # None 表示不可行个体。
     failure: str | None = None
     selection_experience: str = ""
-    children_count: int = 0
+    children_count: int = 0  # 同路线开发尝试数（Refine / Crossover 主父代受评尝试）。
     direction_id: int | None = None  # 入树时确定；原始方向起点被压缩后仍保持。
-    last_used: int = 0  # Evaluation clock at birth or actual parent/reference use.
-    evaluations: int = 0
-    failures: int = 0
-    reference_count: int = 0
-    selection_history: History = field(default_factory=History)
-
-    @property
-    def own_history(self) -> History:
-        return History(1, self.evaluations, self.failures, self.children_count, self.reference_count)
+    last_used: int = 0  # 出生或作为同路线主父代开发时的评价时钟。
 
 
 @dataclass
@@ -76,7 +52,6 @@ class Edge:
     reference_id: int | None = None
     variation_experience: str = ""
     contracted: bool = False
-    variation_history: History = field(default_factory=History)
 
 
 @dataclass
@@ -91,7 +66,6 @@ class TreePopulation:
     direction_evaluations: dict[int, int] = field(default_factory=dict)
     used_crossover_pairs: list[tuple[int, int]] = field(default_factory=list)
     evaluations_used: int = 0
-    root_selection_history: History = field(default_factory=History)
 
     def direction_of(self, node_id: int) -> int:
         """Return the original Init/Explore direction ID, including removed origins."""
@@ -100,7 +74,7 @@ class TreePopulation:
             raise ValueError("Use TreePopulation.add to assign a node's direction")
         return direction
 
-    def add(self, node: Node, edge: Edge, *, evaluations: int, failures: int | None = None) -> None:
+    def add(self, node: Node, edge: Edge, *, evaluations: int) -> None:
         """Attach one evaluated version, counting its actual evaluations including repairs.
 
         Node IDs increase across consolidations. Each new Explore starts its own
@@ -112,10 +86,6 @@ class TreePopulation:
             raise ValueError("evaluations must count at least one actual evaluation")
         if node.fitness is not None and not math.isfinite(node.fitness):
             raise ValueError("fitness must be finite or None")
-        if failures is None:
-            failures = int(node.fitness is None)
-        if type(failures) is not int or not 0 <= failures <= evaluations:
-            raise ValueError("failures must count failed evaluations, including repairs")
         reference = None
         if edge.operator == "Crossover" and edge.reference_id is not None:
             reference = self.nodes.get(edge.reference_id)
@@ -132,20 +102,18 @@ class TreePopulation:
                 raise ValueError("A new algorithm requires a retained feasible parent")
             if edge.operator not in ("Refine", "Crossover", "Explore"):
                 raise ValueError("An evolutionary edge requires an operator")
-            direction = node.id if edge.operator == "Explore" else self.direction_of(parent.id)
-            parent.children_count += 1
-            parent.last_used = clock
-            if reference is not None:
-                reference.reference_count += 1
-                reference.last_used = clock
+            if edge.operator == "Explore":
+                direction = node.id
+            else:
+                direction = self.direction_of(parent.id)
+                parent.children_count += 1
+                parent.last_used = clock
             if edge.operator == "Crossover" and edge.reference_id is not None:
                 pair = (parent.id, edge.reference_id)
                 if pair not in self.used_crossover_pairs:
                     self.used_crossover_pairs.append(pair)
         node.direction_id = direction
         node.last_used = clock
-        node.evaluations = evaluations
-        node.failures = failures
         self.evaluations_used = clock
         self.nodes[node.id] = node
         self.edges[node.id] = edge

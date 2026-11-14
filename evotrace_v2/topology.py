@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 import hashlib
 
-from .models import History, Operator, TreePopulation
+from .models import Operator, TreePopulation
 
 
 def _strip_docstrings(code: str) -> ast.AST:
@@ -113,6 +113,7 @@ class PathContraction:
     removed_ids: tuple[int, ...]
     merged_operator: Operator | None
     merged_reference_id: int | None
+    side_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -132,23 +133,22 @@ class ConsolidationPlan:
 def _select(tree, candidates, mandatory, config):
     """Select quality representatives before structural closure.
 
-    An untried node has the same eligibility as a developed node. Similarity is
-    a selection heuristic, not a claim that future development is equivalent.
+    A version stops representing its line once a better version developed from
+    it is ranked; a near copy is represented by a version that is no worse. An
+    untried node has the same eligibility as a developed node. Similarity is a
+    selection heuristic, not a claim that future development is equivalent.
     """
     feasible = sorted((i for i in candidates if tree.nodes[i].fitness is not None),
                       key=lambda i: (tree.nodes[i].fitness, i))
     kept = set(mandatory)
-    if feasible:
-        kept.add(feasible[0])
+    overtaken = set()
     for rank, i in enumerate(feasible):
         quality = 1 - rank / max(1, len(feasible) - 1)
         if quality < config.quality_floor:
             break
-        if i in kept:
-            continue
         node = tree.nodes[i]
-        represented = False
-        for j in sorted(kept):
+        represented = rank > 0 and i in overtaken  # the champion always stays
+        for j in () if rank == 0 or represented else sorted(kept):
             other = tree.nodes[j]
             if other.fitness is None or other.fitness > node.fitness:
                 continue
@@ -160,20 +160,39 @@ def _select(tree, candidates, mandatory, config):
                 break
         if not represented:
             kept.add(i)
+        route = tree.direction_of(i)
+        parent = tree.edges[i].parent_id
+        while parent != tree.root_id:
+            p_fit = tree.nodes[parent].fitness
+            if tree.direction_of(parent) == route and p_fit is not None and node.fitness < p_fit:
+                overtaken.add(parent)
+            parent = tree.edges[parent].parent_id
     return kept
+
+
+def quality_representatives(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> set[int]:
+    """Quality/difference selection on this tree, before recency or fork closure."""
+    return _select(tree, set(tree.nodes), set(), config)
 
 
 def plan_consolidation(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> ConsolidationPlan:
     """Select once on the pre-update tree, then close and partition that same tree.
 
-    Recent use is a reason to retain an algorithm, not evidence of its potential.
-    The quality representatives are fixed for this maintenance pass. Restoring
-    necessary forks never changes that selection or the comparison population.
+    A version stays while it, or its same-route tree parent, is still in local
+    development. Quality representatives are fixed once before fork closure;
+    side branches off contracted intermediates join that reconnected edge.
     """
     feasible = {i for i, node in tree.nodes.items() if node.fitness is not None}
-    protected = _select(tree, feasible, set(), config)
+    protected = quality_representatives(tree, config)
+    def last_activity(i):
+        parent = tree.edges[i].parent_id
+        own = tree.nodes[i].last_used
+        if parent == tree.root_id or tree.direction_of(parent) != tree.direction_of(i):
+            return own
+        return max(own, tree.nodes[parent].last_used)
+
     recent = {i for i in feasible
-              if tree.evaluations_used - tree.nodes[i].last_used < config.cold_evaluations}
+              if tree.evaluations_used - last_activity(i) < config.cold_evaluations}
     selected = protected | recent
     children = defaultdict(list)
     for i, edge in tree.edges.items():
@@ -185,58 +204,56 @@ def plan_consolidation(tree: TreePopulation, config: TopologyConfig = TopologyCo
     forks = {i for i in used if i != tree.root_id
              and sum(c in used for c in children[i]) >= 2}
     alive = selected | forks
-    removed = set(tree.nodes) - alive
+    removed_all = set(tree.nodes) - alive
     triggers = [{"kind": "inactive", "evaluations": tree.evaluations_used,
                  "protected_ids": sorted(protected), "recent_ids": sorted(recent),
-                 "connection_ids": sorted(alive-selected), "removed_ids": sorted(removed)}] if removed else []
-    # Partition on the original topology; a removed fork may carry old/new side experience.
-    contractions = []
-    contracted = set()
+                 "connection_ids": sorted(alive - selected), "removed_ids": sorted(removed_all)}] if removed_all else []
+    # Partition on the original topology: intermediate chains form path contractions;
+    # remaining side nodes join the first non-side ancestor (contracted edge or retained node/root).
+    raw_contractions = []
+    contracted_to_idx: dict[int, int] = {}
     for child in sorted(alive):
         parent = tree.edges[child].parent_id
-        removed = []
+        removed_chain = []
         edges = [tree.edges[child]]
         while parent != tree.root_id and parent not in alive:
-            removed.append(parent)
+            removed_chain.append(parent)
             edges.append(tree.edges[parent])
             parent = tree.edges[parent].parent_id
-        if not removed:
+        if not removed_chain:
             continue
-        removed.reverse()
+        removed_chain.reverse()
         edges.reverse()
         crosses = [e for e in edges if e.operator == "Crossover" or e.reference_id is not None]
         operator = (None if parent == tree.root_id else
                     "Explore" if tree.direction_of(parent) != tree.direction_of(child)
                     else "Crossover" if crosses else "Refine")
-        contractions.append(PathContraction(parent, child, tuple(removed), operator,
-                                            crosses[-1].reference_id if crosses else None))
-        contracted.update(removed)
-    sides = defaultdict(list)
-    for i in sorted(set(tree.nodes) - alive - contracted):
-        parent = tree.edges[i].parent_id
-        while parent != tree.root_id and parent not in alive:
-            parent = tree.edges[parent].parent_id
-        sides[parent].append(i)
-    return ConsolidationPlan(tuple(sorted(alive)), tuple(contractions),
+        idx = len(raw_contractions)
+        raw_contractions.append((parent, child, tuple(removed_chain), operator,
+                                 crosses[-1].reference_id if crosses else None))
+        for mid in removed_chain:
+            contracted_to_idx[mid] = idx
+    edge_sides: dict[int, list[int]] = defaultdict(list)
+    sides: dict[int, list[int]] = defaultdict(list)
+    for i in sorted(removed_all - set(contracted_to_idx)):
+        anc = tree.edges[i].parent_id
+        while anc != tree.root_id and anc not in alive and anc not in contracted_to_idx:
+            anc = tree.edges[anc].parent_id
+        if anc in contracted_to_idx:
+            edge_sides[contracted_to_idx[anc]].append(i)
+        else:
+            sides[anc].append(i)
+    contractions = tuple(
+        PathContraction(p, c, rem, op, ref, tuple(edge_sides.get(idx, ())))
+        for idx, (p, c, rem, op, ref) in enumerate(raw_contractions)
+    )
+    return ConsolidationPlan(tuple(sorted(alive)), contractions,
                              tuple(BranchConsolidation(p, tuple(ids)) for p, ids in sorted(sides.items())),
                              tuple(triggers))
 
 
-def region_history(tree: TreePopulation, region: PathContraction | BranchConsolidation) -> History:
-    """Exact effort of a region, including the historical blocks it absorbs."""
-    if isinstance(region, PathContraction):
-        history = tree.edges[region.child_id].variation_history
-    else:
-        history = (tree.root_selection_history if region.parent_id == tree.root_id
-                   else tree.nodes[region.parent_id].selection_history)
-    for i in region.removed_ids:
-        node = tree.nodes[i]
-        history = history + node.own_history + node.selection_history + tree.edges[i].variation_history
-    return history
-
-
 def apply_consolidation(tree: TreePopulation, plan: ConsolidationPlan) -> TreePopulation:
-    """Reconnect versions and transfer each disjoint history block exactly once."""
+    """Reconnect the retained versions."""
     kept = set(plan.kept_ids)
     contractions = {c.child_id: c for c in plan.path_contractions}
     nodes = {i: replace(tree.nodes[i]) for i in plan.kept_ids}
@@ -246,22 +263,14 @@ def apply_consolidation(tree: TreePopulation, plan: ConsolidationPlan) -> TreePo
         if i in contractions:
             c = contractions[i]
             edges[i] = replace(edge, parent_id=c.parent_id, operator=c.merged_operator,
-                               reference_id=c.merged_reference_id, contracted=True,
-                               variation_history=region_history(tree, c))
+                               reference_id=c.merged_reference_id, contracted=True)
         else:
             edges[i] = replace(edge)
-    root_history = tree.root_selection_history
-    for region in plan.branch_consolidations:
-        history = region_history(tree, region)
-        if region.parent_id == tree.root_id:
-            root_history = history
-        else:
-            nodes[region.parent_id].selection_history = history
     return TreePopulation(
         root_id=tree.root_id, root_selection_experience=tree.root_selection_experience,
         nodes=nodes, edges=edges, latest_node_id=tree.latest_node_id,
         direction_evaluations=dict(tree.direction_evaluations),
         used_crossover_pairs=[pair for pair in tree.used_crossover_pairs
                               if pair[0] in kept and pair[1] in kept],
-        evaluations_used=tree.evaluations_used, root_selection_history=root_history,
+        evaluations_used=tree.evaluations_used,
     )

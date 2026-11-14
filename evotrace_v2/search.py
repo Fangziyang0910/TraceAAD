@@ -17,7 +17,7 @@ from .models import Attempt, Candidate, FormatError, ModelReply, Program, Search
 
 from .allocation import AllocationConfig, allocate_step
 from .context import ContextConfig, EvoTracePromptBuilder
-from .models import CANDIDATE_RESPONSE_FORMAT, Edge, History, Node, TreePopulation
+from .models import CANDIDATE_RESPONSE_FORMAT, Edge, Node, TreePopulation
 from .reflection import reflect_and_apply
 from .topology import TopologyConfig, plan_consolidation
 
@@ -25,11 +25,8 @@ def deserialize_tree(data: dict[str, Any]) -> TreePopulation:
     return TreePopulation(
         **{
             **data,
-            "nodes": {int(i): Node(**{**node, "selection_history": History(**node["selection_history"])})
-                      for i, node in data["nodes"].items()},
-            "edges": {int(i): Edge(**{**edge, "variation_history": History(**edge["variation_history"])})
-                      for i, edge in data["edges"].items()},
-            "root_selection_history": History(**data["root_selection_history"]),
+            "nodes": {int(i): Node(**node) for i, node in data["nodes"].items()},
+            "edges": {int(i): Edge(**edge) for i, edge in data["edges"].items()},
             "direction_evaluations": {int(i): count for i, count in data["direction_evaluations"].items()},
             "used_crossover_pairs": [(parent, reference) for parent, reference in data["used_crossover_pairs"]],
         }
@@ -40,7 +37,7 @@ class EvoTrace:
     """基于树状种群与反思简化的完整自动算法设计框架。"""
 
     method = "evotrace_v2"
-    selection_rule = "shinka_weighted"
+    selection_rule = "quality_representative_route_max"
     generation_protocol = "tree_population_multiscale"
     reference_rule = "quality_pool_max_ast_distance"
     mechanisms = ("tree_population", "dynamic_reflective_simplification", "shinka_allocation", "multiscale_context")
@@ -163,8 +160,7 @@ class EvoTrace:
             operator=op,  # type: ignore[arg-type]
             reference_id=attempt.reference_id if op == "Crossover" else None,
         )
-        self.tree.add(node, edge, evaluations=len(attempt.evaluations),
-                      failures=sum(e["status"] != "success" for e in attempt.evaluations))
+        self.tree.add(node, edge, evaluations=len(attempt.evaluations))
 
     def _restore_tree(self, attempt: Attempt, snapshot: dict | None) -> None:
         self._attach_evaluated_attempt(attempt)
@@ -323,7 +319,7 @@ class EvoTrace:
             attempt = Attempt(attempt_id, 0, "Init")
             prompt = self.prompts.initialization(self.archive)
         else:
-            decision = allocate_step(self.tree, rng, self.allocation_config)
+            decision = allocate_step(self.tree, rng, self.allocation_config, self.topology_config)
             attempt = Attempt(attempt_id, decision.parent_id, decision.operator, decision.reference_id)
             attempt.record["allocation"] = {
                 "rule": self.selection_rule,

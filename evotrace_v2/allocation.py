@@ -1,12 +1,13 @@
 """预算分配与参考选择：直接采用 ShinkaEvolve 加权父代采样，配合质量池内最不相似 AST 参考选择。"""
 
+from collections import defaultdict
 from dataclasses import dataclass
 import math
 import random
 from statistics import median
 
 from .models import Operator, TreePopulation
-from .topology import code_distance, identity
+from .topology import TopologyConfig, code_distance, identity, quality_representatives
 
 
 def _stable_sigmoid(x: float) -> float:
@@ -51,12 +52,13 @@ class AllocationDecision:
 def parent_probabilities(
     tree: TreePopulation,
     config: AllocationConfig = AllocationConfig(),
+    topology_config: TopologyConfig = TopologyConfig(),
 ) -> dict[int, float]:
-    """按 ShinkaEvolve §3.1 `weighted` 规则计算可行节点的父代抽样概率。
+    """按路线最大节点权重与路线内同一权重分配可行节点的父代采样概率。
 
-    最小化目标下，以可行节点适应度中位数 m 与 MAD 归一化分差：
-    ``s_u = sigmoid(lambda * (m - f_u) / max(MAD, 1e-6))``，
-    乘以跨重构持久保留的累计子代数惩罚 ``h_u = 1 / (1 + children_count_u)``。
+    最小化目标下，在采样前的当前树上重算质量代表，以其适应度中位数 m 与稳健偏差 s 归一化分差：
+    ``w_v = sigmoid(lambda * (m - f_v) / s) / (1 + children_count_v)``，
+    路线按 ``max_{u in D} w_u`` 竞争，内部按 ``w_v / sum_{u in D} w_u`` 分配。
     """
     feasible = sorted(
         (nid for nid, node in tree.nodes.items() if node.fitness is not None),
@@ -65,7 +67,8 @@ def parent_probabilities(
     if not feasible:
         return {}
 
-    scores = sorted(float(tree.nodes[nid].fitness) for nid in feasible)  # type: ignore[arg-type]
+    representatives = quality_representatives(tree, topology_config)
+    scores = sorted(float(tree.nodes[nid].fitness) for nid in representatives)  # type: ignore[arg-type]
     med = float(median(scores))
     mad = float(median([abs(s - med) for s in scores]))
     if mad <= 1e-9:
@@ -74,19 +77,42 @@ def parent_probabilities(
     else:
         scale = max(mad, 1e-6)
 
-    raw_weights: dict[int, float] = {}
+    log_weights: dict[int, float] = {}
+    routes: dict[int, list[int]] = defaultdict(list)
     for nid in feasible:
         node = tree.nodes[nid]
-        norm_diff = (med - float(node.fitness)) / scale  # type: ignore[arg-type]
-        perf = _stable_sigmoid(config.parent_selection_lambda * norm_diff)
-        novelty = 1.0 / (1.0 + max(0, node.children_count))
-        raw_weights[nid] = perf * novelty
+        x = config.parent_selection_lambda * (med - float(node.fitness)) / scale  # type: ignore[arg-type]
+        if x >= 0.0:
+            log_sig = -math.log1p(math.exp(-x)) if x < 40.0 else 0.0
+        else:
+            log_sig = x - math.log1p(math.exp(x)) if x > -40.0 else x
+        log_weights[nid] = log_sig - math.log(1.0 + max(0, node.children_count))
+        routes[tree.direction_of(nid)].append(nid)
 
-    total = sum(raw_weights.values())
-    if total <= 0.0:
+    route_max_logs = {did: max(log_weights[nid] for nid in members) for did, members in routes.items()}
+    top_route_log = max(route_max_logs.values())
+    route_raw = {did: math.exp(lw - top_route_log) for did, lw in route_max_logs.items()}
+    total_route = sum(route_raw.values())
+    if total_route <= 0.0:
         uniform = 1.0 / len(feasible)
         return {nid: uniform for nid in feasible}
-    return {nid: w / total for nid, w in raw_weights.items()}
+
+    probs: dict[int, float] = {}
+    for did, members in routes.items():
+        p_route = route_raw[did] / total_route
+        m_log = route_max_logs[did]
+        inner_raw = {nid: math.exp(log_weights[nid] - m_log) for nid in members}
+        inner_sum = sum(inner_raw.values())
+        if inner_sum <= 0.0:
+            share = p_route / len(members)
+            for nid in members:
+                probs[nid] = share
+        else:
+            for nid in members:
+                # Avoid a numerical zero for an eligible node when the quality
+                # scale collapses. This is machine precision, not a budget floor.
+                probs[nid] = max(math.ulp(0.0), p_route * (inner_raw[nid] / inner_sum))
+    return probs
 
 
 def eligible_reference_pool(
@@ -157,9 +183,10 @@ def allocate_step(
     tree: TreePopulation,
     rng: random.Random,
     config: AllocationConfig = AllocationConfig(),
+    topology_config: TopologyConfig = TopologyConfig(),
 ) -> AllocationDecision:
     """执行一步预算分配：抽样主父代与生成算子，若为 Crossover 则匹配最不相似参考（无可用异构参考时回退为 Refine）。"""
-    probs = parent_probabilities(tree, config)
+    probs = parent_probabilities(tree, config, topology_config)
     if not probs:
         raise ValueError("TreePopulation has no feasible algorithms to select from")
 
