@@ -1,8 +1,10 @@
 # EvoTrace机制图
 
-## 当前V2
+本目录保留历史版本图示与生成来源。当前工作集与成批阈值机制见[V3设计](../../EvoTrace-v3设计.md)；旧图未表示区域规模阈值，不再作为当前论文的方法图。
 
-两张图由内置`image_gen`生成，按11月14日实现核对结构边、经验归属和读取关系，已接入中英文论文与V2正式设计。
+## 11月14日V2图示
+
+两张图按11月14日实现绘制，供对应V2规则与历史记录复查。
 
 | 图 | 作用 |
 | --- | --- |
@@ -13,7 +15,7 @@
 
 ## 历史版本
 
-以下文件保留11月13日的设计与生成记录，V1仍引用对应机制图。当前规则见[V2正式设计](../../EvoTrace-v2设计.md)。
+以下文件保留11月13日的设计与生成记录，V1仍引用对应机制图；V2历史规则见[V2设计](../../EvoTrace-v2设计.md)。
 
 | 文件 | 适用范围 |
 | --- | --- |
@@ -26,6 +28,6 @@
 | [05-operator-context-v1.png](05-operator-context-v1.png) | V1上下文视图 |
 | [06-v2-history.png](06-v2-history.png) | 早期V2使用与历史统计，包含已撤回的统计口径 |
 
-[历史图浏览](gallery.html)保留原稿供版本追溯。V1图仍由[V1设计](../../EvoTrace-v1设计.md)引用；当前V2采用上方两张新图。
+[历史图浏览](gallery.html)保留原稿供版本追溯。V1图仍由[V1设计](../../EvoTrace-v1设计.md)引用；V2采用上方两张图。
 
 生成依据见[generation-prompts.json](generation-prompts.json)、[refinement-prompts.json](refinement-prompts.json)、[finalization-prompts.json](finalization-prompts.json)与[generation-record.json](generation-record.json)。原总览的提示与核对见[main-framework-prompts.json](main-framework-prompts.json)、[main-framework-refinement.json](main-framework-refinement.json)及[main-framework-review.json](main-framework-review.json)。这些核对记录只对应生成当时的版本。

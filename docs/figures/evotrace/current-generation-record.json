@@ -1,15 +1,14 @@
 {
-  "date": "2026-11-14",
+  "date": "2026-11-15",
   "generator": "built-in image_gen",
   "figures": [
     {
-      "file": "07-framework.png",
-      "source": "/home/fang/.codex/generated_images/01a1d551-8597-7311-992d-d7035868de2b/exec-d22033d9-8be2-48d6-a008-b837a80d7997.png",
+      "file": "09-v3-framework.png",
       "size": [
-        1752,
-        897
+        1376,
+        768
       ],
-      "sha256": "974e99f1345e1ca504c5f478f6e143999e70f045beb899159e855e540a4c6097"
+      "sha256": "726aede98aa65686b5cb5cb0fd1fd3adf85113802e7c1eb7f782f49560343f91"
     },
     {
       "file": "08-reflective-simplification.png",
@@ -19,14 +18,25 @@
         897
       ],
       "sha256": "59d50b7bac7cb293a94ef5f69787a597ffc8fb4a5474639421faed59ee1eb474"
+    },
+    {
+      "file": "07-framework.png",
+      "source": "/home/fang/.codex/generated_images/01a1d551-8597-7311-992d-d7035868de2b/exec-d22033d9-8be2-48d6-a008-b837a80d7997.png",
+      "size": [
+        1752,
+        897
+      ],
+      "sha256": "974e99f1345e1ca504c5f478f6e143999e70f045beb899159e855e540a4c6097",
+      "note": "Historical V2 framework diagram retained for archival reference"
     }
   ],
   "verified_semantics": [
     "single primary parent; crossover reference is information only",
+    "top-K quality + recency window + LCA closure survival on one snapshot",
     "retained A and D outside removed path region",
     "B C X go to V_AD; Y goes to S_A",
     "old S_B goes to V_AD; old S_A merges with Y",
-    "experience feeds task-specific context; evaluated candidate returns to tree"
+    "global rank-half-life and direct-effort parent sampling; path/branch/population views"
   ],
-  "adopted_framework_revision": 2
+  "adopted_framework_revision": 3
 }
