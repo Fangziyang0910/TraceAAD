@@ -1,3 +1,4 @@
+import re
 from copy import deepcopy
 from dataclasses import asdict
 import json
@@ -6,14 +7,15 @@ import random
 import pytest
 
 from evotrace_v3.allocation import (
-    AllocationConfig, allocate_step, eligible_reference_pool, parent_probabilities, select_parent,
+    AllocationConfig, allocate_step, eligible_reference_pool, lineage_peaks, parent_probabilities, select_parent,
 )
 from evotrace_v3.context import build_evolution_context
 from evotrace_v3.models import Edge, Node, TreePopulation
 from evotrace_v3.reflection import reflect_and_apply
 from evotrace_v3.search import deserialize_tree
 from evotrace_v3.topology import (
-    TopologyConfig, apply_consolidation, plan_consolidation, quality_representatives, quality_scores,
+    BranchConsolidation, PathContraction, TopologyConfig, apply_consolidation, champion,
+    plan_consolidation, quality_scores,
 )
 
 
@@ -53,24 +55,38 @@ def test_new_best_competes_without_an_ancestor_gate_and_old_parent_remains_eligi
     after = parent_probabilities(tree)
     assert after[best] / after[other] == pytest.approx(before[best] / before[other])
     assert after[best] > after[other] > after[ancestor] > 0
-    assert after[best] / after[ancestor] == pytest.approx(10 * 102)
+    assert after[best] / after[ancestor] == pytest.approx(2 ** (2/10) * 102)
 
 
 def test_quality_pressure_and_effort_balance_have_explicit_odds():
     tree = TreePopulation()
-    best = add(tree, 0, 1)
-    weak = add(tree, 0, 10)
+    for fit in range(21):
+        add(tree, 0, fit)
     probabilities = parent_probabilities(tree)
-    assert probabilities[best] / probabilities[weak] == pytest.approx(10)
-    # Nine actual evaluations offset the default tenfold quality advantage.
-    add(tree, best, None, evaluations=9)
-    assert parent_probabilities(tree) == pytest.approx({best: .5, weak: .5})
-    # A new improvement retains its own zero effort; no ancestry debt is inherited.
-    improved = add(tree, best, 0)
+    assert probabilities[1] / probabilities[11] == pytest.approx(2)
+    assert probabilities[1] / probabilities[21] == pytest.approx(4)
+    # One evaluation offsets a ten-position quality advantage, regardless of size.
+    add(tree, 1, None)
+    probabilities = parent_probabilities(tree)
+    assert probabilities[1] == pytest.approx(probabilities[11])
+    improved = add(tree, 1, -1)
     assert tree.nodes[improved].subtree_evaluations == 0
     probabilities = parent_probabilities(tree)
-    assert probabilities[improved] > probabilities[best] > 0
-    assert probabilities[weak] > 0
+    assert probabilities[improved] > probabilities[1] > 0
+    assert probabilities[21] > 0
+
+
+def test_adding_worse_individuals_preserves_existing_pairwise_quality_odds():
+    tree = TreePopulation()
+    for fit in range(20):
+        add(tree, 0, fit)
+    before = parent_probabilities(tree)
+    for fit in range(20, 160):
+        add(tree, 0, fit)
+    after = parent_probabilities(tree)
+    assert after[1] / after[11] == pytest.approx(before[1] / before[11])
+    # Total probability can still change; rank invariance is not clone immunity.
+    assert after[1] < before[1]
 
 
 def test_ties_singleton_empty_and_logged_sampling_probability():
@@ -93,14 +109,18 @@ def test_ties_singleton_empty_and_logged_sampling_probability():
     assert decision.parent_probability == parent_probabilities(tree)[decision.parent_id]
 
 
-def test_quality_ratio_one_removes_quality_preference_and_extreme_ratio_stays_finite():
+@pytest.mark.parametrize('span', [1e-300, 1e300])
+def test_extreme_rank_span_and_ties_stay_finite(span):
     tree = TreePopulation()
-    for fit in range(3):
+    for fit in [0, 0, 1]:
         add(tree, 0, fit)
-    assert list(parent_probabilities(tree, AllocationConfig(quality_ratio=1)).values()) == [1/3]*3
-    probabilities = parent_probabilities(tree, AllocationConfig(quality_ratio=1e300))
+    probabilities = parent_probabilities(tree, AllocationConfig(rank_half_life=span))
     assert sum(probabilities.values()) == pytest.approx(1)
     assert all(0 < probability <= 1 for probability in probabilities.values())
+    assert probabilities[1] == probabilities[2]
+    for node in tree.nodes.values():
+        node.fitness = 1
+    assert list(parent_probabilities(tree, AllocationConfig(rank_half_life=span)).values()) == [1/3]*3
 
 
 def test_old_internal_individual_is_revisited_and_operator_labels_do_not_partition_tree():
@@ -116,12 +136,11 @@ def test_old_internal_individual_is_revisited_and_operator_labels_do_not_partiti
         parent, _ = select_parent(tree, random.Random(seed))
         selected.add(parent)
         add(tree, parent, None)
-        tree = apply_consolidation(tree, plan_consolidation(
-            tree, TopologyConfig(quality_floor=0, clone_distance=0)))
+        tree = apply_consolidation(tree, plan_consolidation(tree))
     assert {a, b, c} <= selected
 
 
-def test_actual_evaluations_include_explore_failures_and_repairs_but_not_reference_reads():
+def test_actual_evaluations_include_explore_failures_and_repairs_while_reference_refreshes_working_set():
     tree = TreePopulation()
     a = add(tree, 0, 1)
     reference = add(tree, 0, 2)
@@ -135,20 +154,81 @@ def test_actual_evaluations_include_explore_failures_and_repairs_but_not_referen
     assert tree.nodes[a].subtree_evaluations == 4
     assert tree.nodes[b].development_evaluations == tree.nodes[b].subtree_evaluations == 2
     assert tree.nodes[reference].development_evaluations == tree.nodes[reference].subtree_evaluations == 0
-    assert tree.nodes[reference].last_used == 2
+    assert tree.nodes[reference].last_used == 6
 
 
-def test_retention_uses_individual_quality_difference_and_own_activity():
+def test_working_set_retains_unimproved_offspring_surpassed_ancestors_crossover_references_and_champion():
     tree = TreePopulation()
-    a = add(tree, 0, 5, code='def solve(x): return sum(x)')
-    add(tree, a, 1, code='def solve(x): return x[0]')
-    child = add(tree, a, 9)
-    add(tree, 0, 10)
+    champ = add(tree, 0, 1)
+    ref_source = add(tree, 0, 5)
+    # Within the active window, unimproved trials and surpassed stepping stones stay alive even at region_size=1.
+    stepping_stone = add(tree, champ, 2, op='Explore')
+    surpassed_mid = add(tree, 0, 10)
+    improved_tip = add(tree, surpassed_mid, 3)
+    cfg_immediate = TopologyConfig(active_evaluations=40, region_size=1)
+    plan = plan_consolidation(tree, cfg_immediate)
+    assert set(plan.kept_ids) == {champ, ref_source, stepping_stone, surpassed_mid, improved_tip}
+    assert not plan.path_contractions and not plan.branch_consolidations
+
+    # Advance clock past the active window, then refresh ref_source via Crossover without charging effort.
     tree.evaluations_used += 40
-    tree.nodes[a].last_used = tree.evaluations_used
-    cfg = TopologyConfig(clone_distance=0)
-    assert a in quality_representatives(tree, cfg)  # A better child does not erase a distinct parent.
-    assert child not in plan_consolidation(tree, cfg).kept_ids  # Parent activity does not refresh siblings.
+    cross_child = add(tree, champ, 4, op='Crossover', reference=ref_source)
+    plan = plan_consolidation(tree, cfg_immediate)
+    # champ (champion + parent), ref_source (crossover reference), and cross_child stay active;
+    # stepping_stone, surpassed_mid, and improved_tip have aged out of the working set.
+    assert set(plan.kept_ids) == {champ, ref_source, cross_child}
+    assert tree.nodes[ref_source].development_evaluations == 0
+
+
+def test_region_size_defers_small_regions_without_extra_states_and_condenses_at_threshold():
+    cfg = TopologyConfig(active_evaluations=10, region_size=4)
+    tree = TreePopulation()
+    fork = add(tree, 0, 10)
+    m1 = add(tree, fork, 9)
+    m2 = add(tree, m1, 8)
+    side_on_m1 = add(tree, m1, None)
+    tip = add(tree, m2, 1)  # global champion
+    other = add(tree, fork, 2)
+    cold_leaf = add(tree, other, 20)
+    tree.evaluations_used += 10
+    tree.nodes[other].last_used = tree.nodes[tip].last_used = tree.evaluations_used
+
+    # Path region (m1, m2, side_on_m1) has 3 nodes (< 4) and side region (cold_leaf,) has 1 node (< 4).
+    plan = plan_consolidation(tree, cfg)
+    assert not plan.path_contractions and not plan.branch_consolidations and not plan.triggers
+    assert set(plan.kept_ids) == set(tree.nodes)
+    # A deferred feasible leaf stays in the population and can wake up if selected as parent.
+    assert cold_leaf in parent_probabilities(tree)
+    woke = deepcopy(tree)
+    add(woke, cold_leaf, None)
+    assert cold_leaf in plan_consolidation(woke, TopologyConfig(active_evaluations=10, region_size=1)).kept_ids
+
+    # Adding a 4th retired node to the intermediate path region crosses region_size=4; cold_leaf (< 4) stays deferred.
+    side_on_m2 = add(tree, m2, None)
+    tree.nodes[m2].last_used = 0  # simulate an earlier failed attempt off m2 that is now cold
+    plan = plan_consolidation(tree, cfg)
+    assert plan.path_contractions == (PathContraction(fork, tip, (m1, m2), (side_on_m1, side_on_m2)),)
+    assert not plan.branch_consolidations
+    assert cold_leaf in plan.kept_ids
+    assert plan.triggers == ({
+        'kind': 'reflective_tree_simplification',
+        'evaluations': tree.evaluations_used,
+        'active_ids': sorted([tip, other]),
+        'fork_ids': [fork],
+        'deferred_ids': [cold_leaf],
+        'removed_ids': sorted([m1, m2, side_on_m1, side_on_m2]),
+    },)
+    tree = apply_consolidation(tree, plan)
+    edge = tree.edges[tip]
+    assert edge.parent_id == fork and edge.contracted and edge.operator is None and edge.reference_id is None
+
+    # Three more runtime failures off `other` join `cold_leaf` to reach region_size=4 on the side region.
+    f1 = add(tree, other, None)
+    f2 = add(tree, other, None)
+    assert not plan_consolidation(tree, cfg).branch_consolidations
+    f3 = add(tree, other, None)
+    plan = plan_consolidation(tree, cfg)
+    assert plan.branch_consolidations == (BranchConsolidation(other, (cold_leaf, f1, f2, f3)),)
 
 
 def test_experience_moves_but_descendant_does_not_inherit_ancestor_effort():
@@ -164,7 +244,7 @@ def test_experience_moves_but_descendant_does_not_inherit_ancestor_effort():
     tree.evaluations_used += 40
     tree.nodes[other].last_used = tree.nodes[d].last_used = tree.evaluations_used
     before = deepcopy(tree)
-    plan = plan_consolidation(tree, TopologyConfig(quality_floor=1))
+    plan = plan_consolidation(tree, TopologyConfig(active_evaluations=40, region_size=3))
     assert plan.kept_ids == (a, d, other)
     contraction, = plan.path_contractions
     assert contraction.removed_ids == (b, c) and contraction.side_ids == (side,)
@@ -183,27 +263,66 @@ def test_experience_moves_but_descendant_does_not_inherit_ancestor_effort():
     assert new.nodes[a].subtree_evaluations == 8
 
 
-@pytest.mark.parametrize('seed', range(5))
-def test_budget_survives_repeated_simplification_against_original_event_history(seed):
+@pytest.mark.parametrize('cfg', [
+    TopologyConfig(active_evaluations=4, region_size=2),
+    TopologyConfig(active_evaluations=6, region_size=4),
+])
+@pytest.mark.parametrize('seed', range(8))
+def test_budget_and_idempotence_survive_repeated_simplification_against_original_event_history(cfg, seed):
     rng = random.Random(seed)
     tree = TreePopulation()
     original_parents, events = {}, []
     saw_path = saw_side = False
-    for _ in range(100):
-        parent = rng.choice(list(tree.nodes)) if tree.nodes else 0
+    for _ in range(120):
+        feasible = [i for i, node in tree.nodes.items() if node.fitness is not None]
+        parent = rng.choice(feasible) if feasible else 0
         evaluations = rng.choice([1, 2])
-        fit = None if parent and rng.random() < .15 else rng.random()
-        i = add(tree, parent, fit, op=rng.choice(['Refine', 'Explore']), evaluations=evaluations)
+        op = 'Refine'
+        reference = None
+        code = None
+        if not parent:
+            fit = rng.random()
+        else:
+            roll = rng.random()
+            if roll < .15:
+                fit = None
+            elif roll < .25:
+                # Exact normalized-source + score copy to stress duplicate deferral and idempotence.
+                donor = tree.nodes[rng.choice(feasible)]
+                fit = donor.fitness
+                code = f'# copy\n{donor.code}\n'
+            elif roll < .35:
+                fit = tree.nodes[parent].fitness
+            else:
+                fit = rng.random()
+            other_feasible = [i for i in feasible if i != parent]
+            if other_feasible and rng.random() < .25:
+                op = 'Crossover'
+                reference = rng.choice(other_feasible)
+            else:
+                op = rng.choice(['Refine', 'Explore'])
+        i = add(tree, parent, fit, op=op, reference=reference, evaluations=evaluations, code=code)
         original_parents[i] = parent
         events.append((parent, evaluations))
-        plan = plan_consolidation(tree, TopologyConfig(cold_evaluations=4))
+        plan = plan_consolidation(tree, cfg)
         saw_path |= bool(plan.path_contractions)
         saw_side |= bool(plan.branch_consolidations)
+        for c in plan.path_contractions:
+            assert len(c.removed_ids) + len(c.side_ids) >= cfg.region_size
+        for b in plan.branch_consolidations:
+            assert len(b.removed_ids) >= cfg.region_size
         removed = [i for c in plan.path_contractions for i in (*c.removed_ids, *c.side_ids)]
         removed += [i for b in plan.branch_consolidations for i in b.removed_ids]
         assert len(removed) == len(set(removed))
         assert set(removed) == set(tree.nodes) - set(plan.kept_ids)
+        best = champion(tree)
+        if best is not None:
+            assert best in plan.kept_ids
         tree = apply_consolidation(tree, plan)
+        # Simplification must be unconditionally idempotent on the resulting tree.
+        again = plan_consolidation(tree, cfg)
+        assert not again.path_contractions and not again.branch_consolidations and not again.triggers
+        assert again.kept_ids == tuple(sorted(tree.nodes))
         assert tree.evaluations_used == sum(cost for _, cost in events)
         for i, node in tree.nodes.items():
             expected = 0
@@ -215,6 +334,7 @@ def test_budget_survives_repeated_simplification_against_original_event_history(
                     expected += cost
             assert tree.nodes[i].subtree_evaluations == expected
             assert tree.edges[i].parent_id == 0 or tree.edges[i].parent_id in tree.nodes
+        assert all(a in tree.nodes and b in tree.nodes for a, b in tree.used_crossover_pairs)
         assert deserialize_tree(json.loads(json.dumps(asdict(tree)))) == tree
     assert saw_path and saw_side
 
@@ -230,10 +350,10 @@ def test_reference_quality_uses_equal_ranks_for_ties_and_excludes_parent_first()
     assert eligible_reference_pool(tree, 1) == [2]
 
 
-@pytest.mark.parametrize('ratio', [0, .5, -1, float('nan'), float('inf')])
-def test_quality_ratio_is_finite_and_at_least_one(ratio):
+@pytest.mark.parametrize('span', [0, -1, float('nan'), float('inf')])
+def test_rank_span_is_finite_and_positive(span):
     with pytest.raises(ValueError):
-        AllocationConfig(quality_ratio=ratio)
+        AllocationConfig(rank_half_life=span)
 
 
 def test_three_round_reflection_reuses_old_notes_and_reaches_all_operators():
@@ -254,7 +374,7 @@ def test_three_round_reflection_reuses_old_notes_and_reaches_all_operators():
         add(t, a, None)    # side off retained `a` joins `a.selection_experience`
         t.evaluations_used += 40
         t.nodes[other].last_used = t.nodes[tip].last_used = t.evaluations_used
-        plan = plan_consolidation(t, TopologyConfig(quality_floor=1))
+        plan = plan_consolidation(t, TopologyConfig(active_evaluations=40, region_size=1))
         assert plan.path_contractions and plan.branch_consolidations
         prompt_start = len(prompts)
         t, _ = reflect_and_apply(t, plan, model=Notes())
@@ -267,4 +387,151 @@ def test_three_round_reflection_reuses_old_notes_and_reaches_all_operators():
             assert f'PATH_NOTE_{round_number}' in context
             assert f'SIDE_NOTE_{round_number}' in context
         t = deserialize_tree(json.loads(json.dumps(asdict(t))))
+
+
+def test_no_population_cap_and_no_structural_distance(monkeypatch):
+    from evotrace_v3 import topology
+    def no_distance(*args):
+        pytest.fail('Structural distance must not decide survival')
+    monkeypatch.setattr(topology, 'code_distance', no_distance)
+    tree = TreePopulation()
+    lines = [add(tree, 0, 100 + i) for i in range(5)]
+    for step in range(60):
+        lines.append(add(tree, lines[step % 5], 99 - step))  # Every line keeps improving.
+    plan = plan_consolidation(tree, TopologyConfig(active_evaluations=100, region_size=4))
+    assert not plan.path_contractions and not plan.branch_consolidations
+    assert len(plan.kept_ids) == 65
+
+
+@pytest.mark.parametrize('operator,copy_parent', [('Refine', 'original'), ('Crossover', 'other')])
+def test_duplicate_program_does_not_create_a_fresh_sampling_weight(operator, copy_parent, monkeypatch):
+    from evotrace_v3 import topology
+    def no_distance(*args):
+        pytest.fail('Structural distance must not decide survival')
+    monkeypatch.setattr(topology, 'code_distance', no_distance)
+    tree = TreePopulation()
+    original = add(tree, 0, 1, code='def solve(x): return x + 1')
+    other = add(tree, 0, 2, code='def solve(x): return x * 2')
+    add(tree, original, None, evaluations=7)
+    parent = original if copy_parent == 'original' else other
+    copy_id = add(tree, parent, 1, op=operator,
+                  reference=original if operator == 'Crossover' else None,
+                  code='# same source\ndef solve(x):\n    return x + 1\n')
+    # Even while deferred under default region_size=4, the exact copy gets zero sampling/reference eligibility.
+    assert set(parent_probabilities(tree)) == {original, other}
+    assert copy_id not in eligible_reference_pool(tree, other)
+    deferred_plan = plan_consolidation(tree)
+    assert not deferred_plan.branch_consolidations and copy_id in deferred_plan.kept_ids
+
+    # At region_size=1 (or once its region reaches region_size), the copy condenses into parent's S cleanly.
+    before = deepcopy(tree)
+    plan = plan_consolidation(tree, TopologyConfig(active_evaluations=40, region_size=1))
+    assert copy_id not in plan.kept_ids
+    new, _ = reflect_and_apply(tree, plan, model=None)
+    assert set(parent_probabilities(new)) == {original, other}
+    assert new.evaluations_used == before.evaluations_used
+    for i in (original, other):
+        assert new.nodes[i].subtree_evaluations == before.nodes[i].subtree_evaluations
+        assert new.nodes[i].last_used == before.nodes[i].last_used
+    assert new.nodes[parent].selection_experience
+    # A different observed result is not silently overwritten or discarded.
+    changed = add(new, parent, .5, code='def solve(x): return x + 1')
+    assert changed in parent_probabilities(new)
+    assert changed in plan_consolidation(new, TopologyConfig(active_evaluations=40, region_size=1)).kept_ids
+
+
+def test_virtual_tree_retains_lca_forks_and_simplification_is_idempotent():
+    tree = TreePopulation()
+    fork = add(tree, 0, 100)
+    m1 = add(tree, fork, 90)
+    m2 = add(tree, m1, 80)
+    m3 = add(tree, m2, 70)
+    left = add(tree, m3, 1)
+    right = add(tree, fork, 2)
+    discarded = add(tree, m2, 200)
+    tree.evaluations_used += 40
+    tree.nodes[right].last_used = tree.evaluations_used
+    plan = plan_consolidation(tree)
+    assert set(plan.kept_ids) == {fork, left, right}
+    assert plan.triggers[0]['kind'] == 'reflective_tree_simplification'
+    assert plan.triggers[0]['fork_ids'] == [fork]
+    assert plan.triggers[0]['removed_ids'] == [m1, m2, m3, discarded]
+    contraction, = plan.path_contractions
+    assert (contraction.parent_id, contraction.child_id, contraction.removed_ids, contraction.side_ids) == (
+        fork, left, (m1, m2, m3), (discarded,))
+    new = apply_consolidation(tree, plan)
+    again = plan_consolidation(new)
+    assert again.kept_ids == plan.kept_ids
+    assert not again.path_contractions and not again.branch_consolidations
+    assert set(parent_probabilities(new)) == {fork, left, right}
+
+
+@pytest.mark.parametrize('field', ['active_evaluations', 'region_size'])
+@pytest.mark.parametrize('value', [0, -1, 1.5, True])
+def test_trigger_parameters_are_positive_integer_counts(field, value):
+    with pytest.raises(ValueError, match=field):
+        TopologyConfig(**{field: value})
+
+
+def test_regressed_and_tied_descendants_share_lineage_peak_and_never_invert_parent():
+    tree = TreePopulation()
+    peak = add(tree, 0, 5.70)
+    step1 = add(tree, peak, 5.72)
+    # Spend extra effort on step1 before spawning a worse grandchild and a partial rebound.
+    for _ in range(5):
+        add(tree, step1, None)
+    step2 = add(tree, step1, 5.73)
+    rebound = add(tree, step2, 5.71)
+    tied_rewrite = add(tree, peak, 5.70, code='def solve(x): return x * 1 + 1')
+    peaks = lineage_peaks(tree)
+    for nid in (peak, step1, step2, rebound, tied_rewrite):
+        assert peaks[nid] == peak
+    probs = parent_probabilities(tree)
+    assert probs[peak] == pytest.approx(probs[tied_rewrite])
+    assert probs[peak] > probs[rebound] > probs[step1] > probs[step2] > 0
+
+
+def test_non_improving_family_total_weight_is_bounded_by_peak_base_weight():
+    cfg = AllocationConfig(rank_half_life=10.0)
+    for k in (1, 5, 25):
+        tree = TreePopulation()
+        peak = add(tree, 0, 10.0)
+        rival = add(tree, 0, 10.5)
+        family = [peak]
+        for idx in range(k):
+            family.append(add(tree, peak, 10.01 + 0.001 * idx))
+        probs = parent_probabilities(tree, cfg)
+        quality = quality_scores(tree)
+        best_q = max(quality.values())
+        n = len(quality)
+        peak_rank = (best_q - quality[peak]) * (n - 1)
+        rival_rank = (best_q - quality[rival]) * (n - 1)
+        # Since subtree_evaluations >= k and rival has subtree_evaluations == 0,
+        # sum_{j in family} w_j <= 2**(-peak_rank / H), while w_rival == 2**(-rival_rank / H).
+        family_sum = sum(probs[nid] for nid in family)
+        max_ratio = 2.0 ** ((rival_rank - peak_rank) / cfg.rank_half_life)
+        assert family_sum / probs[rival] <= max_ratio + 1e-12
+
+
+def test_deep_breakthrough_resets_lineage_effort_and_lighter_branch_beats_heavier_branch():
+    tree = TreePopulation()
+    heavy = add(tree, 0, 2.0)
+    light = add(tree, 0, 2.0, code='def solve(x): return 2 * 1')
+    for _ in range(20):
+        add(tree, heavy, None)
+    for _ in range(2):
+        add(tree, light, None)
+    probs = parent_probabilities(tree)
+    assert probs[light] / probs[heavy] == pytest.approx((1 + 20) / (1 + 2))
+
+    # Build an 8-hop chain ending in a new global breakthrough.
+    cur = heavy
+    for depth in range(1, 8):
+        cur = add(tree, cur, 2.0 + depth)
+    breakthrough = add(tree, cur, 1.0)
+    assert lineage_peaks(tree)[breakthrough] == breakthrough
+    assert tree.nodes[breakthrough].subtree_evaluations == 0
+    probs_after = parent_probabilities(tree)
+    assert probs_after[breakthrough] > probs_after[light] > probs_after[heavy]
+
 

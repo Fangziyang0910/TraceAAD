@@ -39,7 +39,8 @@ class Node:
     selection_experience: str = ""
     development_evaluations: int = 0  # 以此个体为主父代实际使用的评价次数，包含失败与修复。
     subtree_evaluations: int = 0  # 从此个体及其后代开发的历史评价数；删除/收缩不改写保留个体的计数。
-    last_used: int = 0  # 出生或作为主父代开发时的评价时钟；参考读取不刷新。
+    last_used: int = 0  # 出生、作为主父代开发或被选作交叉参考时的评价时钟。
+    selection_observations: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -48,10 +49,11 @@ class Edge:
 
     parent_id: int
     child_id: int
-    operator: Operator | None  # 虚拟根连接初始算法时为 None。
+    operator: Operator | None  # 初始算法的入边与收缩后的阶段边为 None。
     reference_id: int | None = None
     variation_experience: str = ""
     contracted: bool = False
+    variation_observations: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -65,15 +67,16 @@ class TreePopulation:
     latest_node_id: int = 0
     used_crossover_pairs: list[tuple[int, int]] = field(default_factory=list)
     evaluations_used: int = 0
+    root_selection_observations: list[dict] = field(default_factory=list)
 
     def add(self, node: Node, edge: Edge, *, evaluations: int) -> None:
         """Attach one evaluated version, counting its actual evaluations including repairs.
 
         Creating the child is a direct development of its parent. Developing the
         child later increments its own direct count and the historical subtree
-        count of itself and every retained ancestor. Read-only references consume
-        neither direct budget nor recency. A child's birth is not development from
-        that child.
+        count of itself and every retained ancestor. Selecting a crossover
+        reference refreshes its working-set timestamp without charging direct
+        development effort. A child's birth is not development from that child.
         """
         if node.id == self.root_id or node.id <= self.latest_node_id or node.id != edge.child_id:
             raise ValueError("New node IDs must increase and match edge.child_id")
@@ -102,7 +105,8 @@ class TreePopulation:
             while ancestor != self.root_id:
                 self.nodes[ancestor].subtree_evaluations += evaluations
                 ancestor = self.edges[ancestor].parent_id
-            if edge.operator == "Crossover" and edge.reference_id is not None:
+            if edge.operator == "Crossover" and reference is not None:
+                reference.last_used = clock
                 pair = (parent.id, edge.reference_id)
                 if pair not in self.used_crossover_pairs:
                     self.used_crossover_pairs.append(pair)

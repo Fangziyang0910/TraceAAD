@@ -28,7 +28,7 @@ def test_paths_and_lca_follow_actual_ancestry_across_explore():
     assert view['path'] == [a, b, c, current]
     for evidence in ['EARLY_EVIDENCE', 'FORK_EVIDENCE', 'SHIFT_EVIDENCE', 'INITIAL_EVIDENCE']:
         assert evidence in text
-    assert 'initial alternative computation' in instruction
+    assert 'Explore' not in instruction  # Edges are development relations; operators need no explanation.
     text, _, _, view = build_evolution_context(tree, current, 'Crossover', reference)
     assert view['lca_id'] == b
     assert view['shown_current_branch'] == [c, current]

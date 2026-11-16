@@ -1,24 +1,24 @@
-"""Global individual sampling using quality and historical subtree effort."""
+"""Global individual sampling using rank quality and lineage subtree effort."""
 
 from dataclasses import dataclass
 import math
 import random
 
 from .models import Operator, TreePopulation
-from .topology import code_distance, identity, quality_scores
+from .topology import code_distance, distinct_individuals, identity, quality_scores
 
 
 @dataclass(frozen=True)
 class AllocationConfig:
-    quality_ratio: float = 10.0  # Best/worst quality weight ratio at equal effort.
+    rank_half_life: float = 10.0  # Rank positions over which quality weight halves.
     refine_weight: float = 0.45
     explore_weight: float = 0.30
     crossover_weight: float = 0.25
     reference_quality_floor: float = 0.30
 
     def __post_init__(self) -> None:
-        if not math.isfinite(self.quality_ratio) or self.quality_ratio < 1:
-            raise ValueError("quality_ratio must be finite and at least 1")
+        if not math.isfinite(self.rank_half_life) or self.rank_half_life <= 0:
+            raise ValueError("rank_half_life must be finite and positive")
         weights = (self.refine_weight, self.explore_weight, self.crossover_weight)
         if any(not math.isfinite(w) or w < 0 for w in weights) or sum(weights) <= 0:
             raise ValueError("Operator weights must be nonnegative and sum to a positive value")
@@ -35,19 +35,58 @@ class AllocationDecision:
     reference_distance: float | None = None
 
 
+def lineage_peaks(tree: TreePopulation) -> dict[int, int]:
+    """Map each retained feasible node to the best feasible node on its path from the root.
+
+    Smaller fitness wins; ties prefer the earlier node ID. Every feasible node lies on its
+    own path, so its lineage peak always exists.
+    """
+    best_on_path: dict[int, int | None] = {tree.root_id: None}
+    for node_id in tree.nodes:
+        path: list[int] = []
+        cur = node_id
+        while cur not in best_on_path:
+            path.append(cur)
+            cur = tree.edges[cur].parent_id
+        peak = best_on_path[cur]
+        for uid in reversed(path):
+            fit = tree.nodes[uid].fitness
+            if fit is not None and (
+                peak is None or (fit, uid) < (tree.nodes[peak].fitness, peak)  # type: ignore[operator]
+            ):
+                peak = uid
+            best_on_path[uid] = peak
+    return {
+        nid: pid
+        for nid, pid in best_on_path.items()
+        if nid != tree.root_id and pid is not None and tree.nodes[nid].fitness is not None
+    }
+
+
 def parent_probabilities(tree: TreePopulation,
                          config: AllocationConfig = AllocationConfig()) -> dict[int, float]:
-    """Normalize quality_ratio**rank / (1 + historical subtree evaluations).
+    """Normalize 2**(-average_rank / rank_half_life) / (1 + lineage_peak_subtree_evaluations).
 
-    Every retained feasible individual competes directly. An ancestor's effort
-    discounts only that ancestor; it is never an entry gate for its descendants.
-    Counts express a budget preference, not evidence of exhausted potential.
+    Every distinct retained feasible individual competes globally by measured rank quality,
+    discounted by the cumulative subtree evaluations of the best feasible ancestor on its
+    path from the root:
+    - Non-improving descendants share their lineage peak's effort, preventing zero-count
+      inversion and bounding total family weight by the peak's base quality weight.
+    - Path-record breakthroughs compete immediately at zero subtree effort, while heavily
+      developed lineages and surpassed stepping stones cool down relative to lighter branches.
     """
-    quality = quality_scores(tree)
+    quality = quality_scores(tree, distinct_individuals(tree))
     if not quality:
         return {}
-    log_weights = {i: math.log(config.quality_ratio) * quality[i]
-                   - math.log1p(tree.nodes[i].subtree_evaluations) for i in sorted(quality)}
+    peaks = lineage_peaks(tree)
+    # Undo population-size normalization. Subtract the best tied rank before
+    # scaling: this common shift cancels and keeps all-tied/extreme inputs finite.
+    best_quality = max(quality.values())
+    log_weights = {
+        i: -math.log(2) * (best_quality - quality[i]) * (len(quality) - 1)
+           / config.rank_half_life - math.log1p(tree.nodes[peaks[i]].subtree_evaluations)
+        for i in sorted(quality)
+    }
     largest = max(log_weights.values())
     weights = {i: math.exp(value - largest) for i, value in log_weights.items()}
     total = math.fsum(weights.values())
@@ -79,8 +118,8 @@ def eligible_reference_pool(
 
     own = identity(tree.nodes[parent_id].code)
     ordered = sorted(
-        (nid for nid, node in tree.nodes.items()
-         if node.fitness is not None and nid != parent_id and identity(node.code) != own),
+        (nid for nid in distinct_individuals(tree)
+         if nid != parent_id and identity(tree.nodes[nid].code) != own),
         key=lambda nid: (tree.nodes[nid].fitness, nid),  # type: ignore[arg-type]
     )
     quality = quality_scores(tree, ordered)

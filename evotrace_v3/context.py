@@ -88,7 +88,7 @@ def _lowest_common_ancestor(tree: TreePopulation, u_id: int, v_id: int) -> tuple
 def _operator_label(tree: TreePopulation, edge: Edge) -> str:
     """生成干净的算子标签：仅当算子本身是 Crossover 时标记，且仅当参考节点仍在树上时展示参考编号。"""
     if edge.contracted:
-        return "Compressed development" + (" including Explore" if edge.operator == "Explore" else "")
+        return "Compressed development"
     op_str = edge.operator or "Init"
     if op_str == "Crossover" and edge.reference_id is not None and edge.reference_id in tree.nodes:
         op_str += f" with reference Algorithm {edge.reference_id}"
@@ -453,9 +453,6 @@ def build_evolution_context(
     has_scores = True
     if operator == "Explore":
         blocks.append("[One Existing Implementation]\n" + _current_algorithm_card(parent, show_score=True))
-    instruction += ("\nDevelopment edges record how implementations were produced. An Explore step is an initial "
-                    "alternative computation, not local tuning of its parent. Its score describes that implementation, "
-                    "not the limit of the underlying idea.")
     return "\n\n".join(blocks), instruction, has_scores, view
 
 

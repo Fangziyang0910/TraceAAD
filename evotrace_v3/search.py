@@ -15,7 +15,7 @@ from .evaluation import Evaluator
 from .storage import Store
 from .models import Attempt, Candidate, FormatError, ModelReply, Program, SearchResult
 
-from .allocation import AllocationConfig, allocate_step
+from .allocation import AllocationConfig, allocate_step, lineage_peaks
 from .context import ContextConfig, EvoTracePromptBuilder
 from .models import CANDIDATE_RESPONSE_FORMAT, Edge, Node, TreePopulation
 from .reflection import reflect_and_apply
@@ -36,10 +36,10 @@ class EvoTrace:
     """基于树状种群与反思简化的完整自动算法设计框架。"""
 
     method = "evotrace_v3"
-    selection_rule = "rank_subtree_sampling"
+    selection_rule = "rank_decay_lineage_sampling"
     generation_protocol = "tree_population_multiscale"
     reference_rule = "quality_pool_max_ast_distance"
-    mechanisms = ("tree_population", "dynamic_reflective_simplification", "individual_tree_allocation", "multiscale_context")
+    mechanisms = ("tree_population", "reflective_tree_simplification", "individual_tree_allocation", "multiscale_context")
 
     def __init__(
         self,
@@ -123,6 +123,7 @@ class EvoTrace:
             "allocation": asdict(self.allocation_config),
             "context": asdict(self.context_config),
             "reflection_enabled": self.reflection_model is not None,
+            "reflection_representation": "algorithm_design_experience",
             "reflection_temperature": self.reflection_temperature,
             "reflection_max_tokens": self.reflection_max_tokens,
         }
@@ -319,10 +320,13 @@ class EvoTrace:
             prompt = self.prompts.initialization(self.archive)
         else:
             decision = allocate_step(self.tree, rng, self.allocation_config)
+            peak_id = lineage_peaks(self.tree)[decision.parent_id]
             attempt = Attempt(attempt_id, decision.parent_id, decision.operator, decision.reference_id)
             attempt.record["allocation"] = {
                 "rule": self.selection_rule,
                 **asdict(decision),
+                "lineage_peak_id": peak_id,
+                "lineage_subtree_evaluations": self.tree.nodes[peak_id].subtree_evaluations,
                 "parent_development_evaluations": self.tree.nodes[decision.parent_id].development_evaluations,
             }
             prompt, view = self.prompts.evolution_from_tree(

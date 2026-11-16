@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -31,6 +32,7 @@ import importlib.abc
 import json
 from pathlib import Path
 import sys
+import re
 
 class NoRepositoryImports(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
@@ -49,10 +51,10 @@ class Model:
         schema = self.request_options["response_format"]["json_schema"]["name"]
         if schema == "evotrace_variation_experience":
             state["reflections"] += 1
-            payload = {"experience": "Adjusted the offset. Earlier offsets had higher scores"}
+            payload = {"experience": "Adjusted the offset."}
         elif schema == "evotrace_selection_experience":
             state["reflections"] += 1
-            payload = {"experience": "Earlier offsets had higher scores"}
+            payload = {"experience": "Changed the constant."}
         else:
             state["calls"] += 1
             n = state["calls"]
@@ -64,7 +66,7 @@ class Model:
 
 task = Task("Minimize a finite score", "def solve(x):\n    pass\n", lambda src, fn: fn(1), 2)
 config = Config(initial_size=3, evaluation_budget=12)
-topology = TopologyConfig(cold_evaluations=2)
+topology = TopologyConfig(active_evaluations=2, region_size=2)
 search = EvoTrace(task, Model(), config=config, topology_config=topology, run_dir="run")
 for _ in range(8):
     assert search.step() is not None
@@ -121,7 +123,8 @@ def make_task():
     try:
         command = [sys.executable, "-S", "-m", "evotrace_v3", "--task-factory", "sample_task:make_task",
                    "--run-dir", "run", "--budget", "2", "--base-url", f"http://127.0.0.1:{server.server_port}/v1",
-                   "--model", "local-test", "--quality-ratio", "7"]
+                   "--model", "local-test", "--rank-half-life", "7",
+                   "--active-evaluations", "8", "--region-size", "3"]
         for extra in ([], ["--resume"]):
             completed = subprocess.run(command + extra, cwd=tmp_path, env=env,
                                        text=True, capture_output=True, timeout=30)
@@ -133,8 +136,12 @@ def make_task():
         server.server_close()
     saved_path = tmp_path / "run" / "run_config.json"
     saved = json.loads(saved_path.read_text())
-    assert saved["allocation"]["quality_ratio"] == 7
-    incompatible = subprocess.run(command + ["--resume", "--quality-ratio", "9"],
+    assert saved["allocation"]["rank_half_life"] == 7
+    assert saved["topology"] == {'active_evaluations': 8, 'region_size': 3}
+    incompatible = subprocess.run(command + ["--resume", "--region-size", "4"],
+                                  cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
+    assert incompatible.returncode != 0 and "topology" in incompatible.stderr
+    incompatible = subprocess.run(command + ["--resume", "--rank-half-life", "9"],
                                   cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
     assert incompatible.returncode != 0 and "allocation" in incompatible.stderr
     saved["selection_rule"] = "individual_tree_allocation"
@@ -204,13 +211,29 @@ def test_experiment_adapter_uses_evotrace_owned_runtime(tmp_path, monkeypatch, c
     monkeypatch.setattr(run.signal, "signal", lambda *_: None)
     run.main(["--method", "evotrace.v3", "--task", "tsp_construct", "--run-name", "owned",
               "--batch", "owned", "--budget", "7", "--initial-size", "3",
-              "--scheduler-socket", "/fake", "--skip-heldout"])
+              "--scheduler-socket", "/fake", "--skip-heldout", "--rank-half-life", "6",
+              "--active-evaluations", "12", "--region-size", "3"])
     result = json.loads(capsys.readouterr().out.splitlines()[-1])
     assert result["evaluations"] == state["calls"] == 7
     directory = Path(result["run_dir"])
     saved = json.loads((directory / "native" / "run_config.json").read_text())
     assert "selection_temperature" not in saved["config"]
+    assert saved['allocation']['rank_half_life'] == 6
     public = json.loads((directory / "run_config.json").read_text())
+    assert public['allocation'] == saved['allocation']
+    assert public['topology'] == saved['topology'] == {'active_evaluations': 12, 'region_size': 3}
+    # Native committed records remain authoritative if the reporting copy is lost.
+    (directory / "run_config.json").unlink()
+    run.main(["--method", "evotrace.v3", "--task", "tsp_construct", "--run-name", "owned",
+              "--batch", "owned", "--budget", "7", "--initial-size", "3",
+              "--scheduler-socket", "/fake", "--skip-heldout", "--resume"])
+    assert state['calls'] == 7
+    assert json.loads((directory / "run_config.json").read_text())['allocation'] == saved['allocation']
+    assert json.loads((directory / "run_config.json").read_text())['topology'] == saved['topology']
+    with pytest.raises(ValueError, match='topology'):
+        run.main(["--method", "evotrace.v3", "--task", "tsp_construct", "--run-name", "owned",
+                  "--batch", "owned", "--budget", "7", "--initial-size", "3",
+                  "--scheduler-socket", "/fake", "--skip-heldout", "--resume", "--active-evaluations", "13"])
     assert public['reference_code'] == saved['context']['include_reference_code'] is True
     summary = json.loads((directory / "summary.json").read_text())
     assert summary["evaluation_calls"] == 7 and summary["status"] == "finished"

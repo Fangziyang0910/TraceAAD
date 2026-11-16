@@ -1,7 +1,7 @@
 """Run EvoTrace with an external task and an OpenAI-compatible endpoint."""
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, fields
 import importlib
 import json
 import os
@@ -57,8 +57,12 @@ def main(argv=None):
     parser.add_argument("--temperature", type=float)
     parser.add_argument("--max-tokens", type=int)
     parser.add_argument("--model-timeout", type=float)
-    parser.add_argument("--quality-ratio", type=float,
-                        help="Best/worst sampling weight ratio at equal effort (default: 10)")
+    parser.add_argument("--rank-half-life", type=float,
+                        help="Rank difference that halves quality weight (default: 10)")
+    parser.add_argument("--active-evaluations", type=int,
+                        help="Working-set window in evaluations since birth, development, or reference (default: 40)")
+    parser.add_argument("--region-size", type=int,
+                        help="Minimum retired nodes in a region before reflective simplification (default: 4)")
     parser.add_argument("--no-example", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -82,8 +86,12 @@ def main(argv=None):
                 raise ValueError("This is not a V3 run; resume it with its original frozen source")
             if saved.get("selection_rule") != EvoTrace.selection_rule:
                 raise ValueError("Incompatible selection_rule; resume with its original frozen source")
+            try:
+                topology = TopologyConfig(**saved["topology"])
+            except TypeError as exc:
+                raise ValueError("Incompatible topology; resume with its original frozen source") from exc
             settings = {
-                "topology_config": TopologyConfig(**saved["topology"]),
+                "topology_config": topology,
                 "allocation_config": AllocationConfig(**saved["allocation"]),
                 "context_config": ContextConfig(**saved["context"]),
                 "reflection_temperature": saved["reflection_temperature"],
@@ -91,10 +99,15 @@ def main(argv=None):
             }
             if not saved["reflection_enabled"]:
                 settings["reflection_model"] = None
-        if args.quality_ratio is not None:
+        if args.rank_half_life is not None:
             allocation = dict(saved["allocation"]) if args.resume else {}
-            allocation["quality_ratio"] = args.quality_ratio
+            allocation["rank_half_life"] = args.rank_half_life
             settings["allocation_config"] = AllocationConfig(**allocation)
+        topology_args = {f.name: getattr(args, f.name) for f in fields(TopologyConfig)
+                         if getattr(args, f.name) is not None}
+        if topology_args:
+            topology = dict(saved["topology"]) if args.resume else {}
+            settings["topology_config"] = TopologyConfig(**{**topology, **topology_args})
         task = load_task(name=args.task, factory=args.task_factory, options=options)
         if args.no_example:
             task.example_code = task.example_design = None
