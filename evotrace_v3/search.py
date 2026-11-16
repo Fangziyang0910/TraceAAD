@@ -1,4 +1,4 @@
-"""EvoTrace search: generate, evaluate, grow the tree, and consolidate experience."""
+"""EvoTrace search: generate, evaluate, grow the evolutionary tree, and simplify into experience."""
 
 from contextlib import nullcontext
 from copy import copy
@@ -19,7 +19,8 @@ from .allocation import AllocationConfig, allocate_step, lineage_peaks
 from .context import ContextConfig, EvoTracePromptBuilder
 from .models import CANDIDATE_RESPONSE_FORMAT, Edge, Node, TreePopulation
 from .reflection import reflect_and_apply
-from .topology import TopologyConfig, plan_consolidation
+from .topology import TopologyConfig, plan_simplification
+
 
 def deserialize_tree(data: dict[str, Any]) -> TreePopulation:
     return TreePopulation(
@@ -33,13 +34,18 @@ def deserialize_tree(data: dict[str, Any]) -> TreePopulation:
 
 
 class EvoTrace:
-    """基于树状种群与反思简化的完整自动算法设计框架。"""
+    """基于树状种群、反思简化与谱系投入分配的自动算法设计搜索。"""
 
     method = "evotrace_v3"
     selection_rule = "rank_decay_lineage_sampling"
-    generation_protocol = "tree_population_multiscale"
+    generation_protocol = "tree_population_context"
     reference_rule = "quality_pool_max_ast_distance"
-    mechanisms = ("tree_population", "reflective_tree_simplification", "individual_tree_allocation", "multiscale_context")
+    mechanisms = (
+        "tree_population",
+        "reflective_tree_simplification",
+        "lineage_effort_allocation",
+        "tree_context",
+    )
 
     def __init__(
         self,
@@ -53,7 +59,6 @@ class EvoTrace:
         reflection_model: Any = "same",
         reflection_temperature: float = 0.3,
         reflection_max_tokens: int = 1536,
-        reference_code: bool = False,
         run_dir: str | Path | None = None,
         resume: bool = False,
     ) -> None:
@@ -63,8 +68,6 @@ class EvoTrace:
         self.topology_config = topology_config or TopologyConfig()
         self.allocation_config = allocation_config or AllocationConfig()
         self.context_config = context_config or ContextConfig()
-        if reference_code:
-            self.context_config = replace(self.context_config, include_reference_code=True)
 
         self.reflection_temperature = reflection_temperature
         self.reflection_max_tokens = reflection_max_tokens
@@ -80,7 +83,7 @@ class EvoTrace:
         self.reflection_model = model if reflection_model == "same" else reflection_model
 
         self.tree = TreePopulation()
-        self.consolidations_count = 0
+        self.simplifications_count = 0
         self.reflection_calls_count = 0
 
         self.task = task
@@ -103,7 +106,7 @@ class EvoTrace:
                 if row["program"] is not None:
                     program = Program.from_dict(row["program"])
                     self.archive[program.id] = program
-                self._restore_tree(attempt, row["tree_after"] if "consolidation" in attempt.record else None)
+                self._restore_tree(attempt, row["tree_after"] if "simplification" in attempt.record else None)
         else:
             self.store.write("run_config.json", {
                 **self._run_settings(),
@@ -123,7 +126,7 @@ class EvoTrace:
             "allocation": asdict(self.allocation_config),
             "context": asdict(self.context_config),
             "reflection_enabled": self.reflection_model is not None,
-            "reflection_representation": "algorithm_design_experience",
+            "reflection_representation": "node_and_edge_experience",
             "reflection_temperature": self.reflection_temperature,
             "reflection_max_tokens": self.reflection_max_tokens,
         }
@@ -166,10 +169,10 @@ class EvoTrace:
         self._attach_evaluated_attempt(attempt)
         if snapshot is not None:
             self.tree = deserialize_tree(snapshot)
-            self.consolidations_count += 1
+            self.simplifications_count += 1
             self.reflection_calls_count += sum(
                 bool(record["prompt_chars"])
-                for record in attempt.record["consolidation"]["reflection_calls"]
+                for record in attempt.record["simplification"]["reflection_calls"]
             )
 
     def _update_population(self, attempt: Attempt) -> None:
@@ -179,11 +182,9 @@ class EvoTrace:
         initialized = sum(p.valid and p.operator == "Init" for p in self.archive.values())
         if initialized < self.config.initial_size:
             return
-        plan = plan_consolidation(self.tree, self.topology_config)
-        if not plan.path_contractions and not plan.branch_consolidations:
+        plan = plan_simplification(self.tree, self.topology_config)
+        if not plan.path_contractions and not plan.subtree_prunings:
             return
-        # Keep reflection behavior independent of context display so Experience-off ablation is clean;
-        # callers wanting zero reflection calls pass reflection_model=None explicitly.
         new_tree, records = reflect_and_apply(
             self.tree,
             plan,
@@ -196,11 +197,10 @@ class EvoTrace:
             timeout=min(self.config.model_timeout, 180.0),
         )
         self.tree = new_tree
-        self.consolidations_count += 1
+        self.simplifications_count += 1
         llm_reflections = sum(1 for r in records if r.prompt_chars > 0)
         self.reflection_calls_count += llm_reflections
 
-        # Record auxiliary reflection token usage for Reporter.publish!
         aux_entries = [
             {
                 "role": "reflection",
@@ -217,15 +217,15 @@ class EvoTrace:
         if aux_entries:
             attempt.record.setdefault("aux", []).extend(aux_entries)
 
-        consolidation_summary = {
-            "cycle": self.consolidations_count,
+        attempt.record["simplification"] = {
+            "cycle": self.simplifications_count,
             "kept_ids": list(plan.kept_ids),
             "triggers": list(plan.triggers),
             "path_contractions": [asdict(c) for c in plan.path_contractions],
-            "branch_consolidations": [asdict(b) for b in plan.branch_consolidations],
+            "subtree_prunings": [asdict(b) for b in plan.subtree_prunings],
             "reflection_calls": [asdict(r) for r in records],
         }
-        attempt.record["consolidation"] = consolidation_summary
+
     @property
     def evaluations_used(self) -> int:
         return sum(len(a.evaluations) for a in self.attempts)
@@ -259,12 +259,11 @@ class EvoTrace:
     def _call(self, attempt: Attempt, prompt: str, repair_kind=None) -> str | None:
         """Send and record one generation or repair request."""
         record = {"stage": "repair" if repair_kind else "generate", "repair_kind": repair_kind}
-        # The scheduler queue lies outside the request's own deadline.
         with getattr(self.model, "request_context", nullcontext)():
             started = time.monotonic()
             try:
                 reply = self.model.complete(prompt, temperature=self.config.temperature,
-                                       max_tokens=self.config.max_tokens,
+                                            max_tokens=self.config.max_tokens,
                                             timeout=self.config.model_timeout)
                 if isinstance(reply, str):
                     reply = ModelReply(reply)
@@ -312,7 +311,6 @@ class EvoTrace:
         if self.stop_reason is not None:
             return None
         attempt_id = len(self.attempts) + 1
-        # One random stream per attempt, so a resumed run draws as an uninterrupted one.
         rng = random.Random(f"{self.config.seed}:{attempt_id}")
         initialized = sum(p.valid and p.operator == "Init" for p in self.archive.values())
         if initialized < self.config.initial_size:
@@ -327,7 +325,7 @@ class EvoTrace:
                 **asdict(decision),
                 "lineage_peak_id": peak_id,
                 "lineage_subtree_evaluations": self.tree.nodes[peak_id].subtree_evaluations,
-                "parent_development_evaluations": self.tree.nodes[decision.parent_id].development_evaluations,
+                "parent_direct_evaluations": self.tree.nodes[decision.parent_id].direct_evaluations,
             }
             prompt, view = self.prompts.evolution_from_tree(
                 self.tree, decision.parent_id, decision.operator,
@@ -360,7 +358,7 @@ class EvoTrace:
         attempt.finished_at = time.time()
         program = self.archive.get(attempt.program_id)
         row = {"attempt": asdict(attempt), "program": asdict(program) if program else None}
-        if "consolidation" in attempt.record:
+        if "simplification" in attempt.record:
             row["tree_after"] = asdict(self.tree)
         self.store.append("attempts.jsonl", row)
         if "tree_after" in row:

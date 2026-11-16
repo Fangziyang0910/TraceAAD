@@ -181,8 +181,8 @@ def main(argv=None):
     parser.add_argument("--selection-temperature", type=float, default=1.0,
                         help="Boltzmann parent temperature in fitness units")
     parser.add_argument("--rank-half-life", type=float, help="V3 quality weight half-life in ranks")
-    parser.add_argument("--active-evaluations", type=int, help="V3 working-set retention window in evaluations")
-    parser.add_argument("--region-size", type=int, help="V3 minimum retired nodes per simplified region")
+    parser.add_argument("--active-evaluations", type=int, help="V3 active retention window in evaluations")
+    parser.add_argument("--region-size", type=int, help="V3 minimum nodes per simplified path or subtree region")
     parser.add_argument("--trajectory-reference-embedding", action=argparse.BooleanOptionalAction,
                         default=None, help="Mechanism 1 uses trajectory references by default; --no-... ablates them")
     parser.add_argument("--reference-code", action="store_true",
@@ -290,7 +290,8 @@ def main(argv=None):
                               **({"topology_config": topology_config} if topology_config is not None else {}),
                               **({"reference_embedding": reference_embedding}
                                  if reference_embedding is not None else {}),
-                              **({"reference_code": True} if args.reference_code else {}))
+                              **({"reference_code": True}
+                                 if args.reference_code and method_id != "evotrace_v3" else {}))
     search.evaluator = ScheduledEvaluator(
         task, args.scheduler_socket, args.run_name + ":search",
         **({"evaluator_factory": {"evotrace_v1": EvoTraceEvaluator, "evotrace_v2": EvoTraceV2Evaluator,

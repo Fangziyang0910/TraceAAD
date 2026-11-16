@@ -1,4 +1,4 @@
-"""反思树简化（Reflective Tree Simplification）：区域代码与评价记录的凝练及多轮整合。"""
+"""反思树简化（Reflective Tree Simplification）：路径收缩与子树剪枝的经验凝练。"""
 
 import ast
 from copy import copy
@@ -11,12 +11,12 @@ from typing import Any
 from .models import TreePopulation
 from .topology import (
     _strip_docstrings,
-    BranchConsolidation,
-    ConsolidationPlan,
     PathContraction,
+    SimplificationPlan,
+    SubtreePruning,
     TopologyConfig,
-    apply_consolidation,
-    plan_consolidation,
+    apply_simplification,
+    plan_simplification,
 )
 
 
@@ -140,10 +140,10 @@ def _reflection_schema(name: str) -> dict:
             "required": ["experience"]}}}
 
 
-VARIATION_SCHEMA = _reflection_schema("evotrace_variation_experience")
-SELECTION_SCHEMA = _reflection_schema("evotrace_selection_experience")
+EDGE_EXPERIENCE_SCHEMA = _reflection_schema("evotrace_edge_experience")
+NODE_EXPERIENCE_SCHEMA = _reflection_schema("evotrace_node_experience")
 
-VARIATION_PROMPT_TEMPLATE = """{task_header}
+EDGE_PROMPT_TEMPLATE = """{task_header}
 
 [Path Evidence]
 {slice_body}
@@ -155,32 +155,32 @@ Write a short research note preserving what is worth remembering from this devel
 [Output]
 Return one JSON object with an "experience" string: a concise paragraph, about 120 words, explaining how the computation developed and what is worth remembering from the intervening experiments. Include informative outcomes and earlier experience. The paragraph will accompany the surviving implementation in later design calls; name computations rather than trial numbers. The system supplies endpoint scores."""
 
-SELECTION_PROMPT_TEMPLATE = """{task_header}
+NODE_PROMPT_TEMPLATE = """{task_header}
 
-[Branch Experiments]
+[Explored Branches]
 {slice_body}
 
 [Task]
-Compress the algorithm-design experience from these experiments for a researcher continuing the search.
-Write a short research note preserving what is worth remembering from these experiments: the computational ideas, informative outcomes, and relevant earlier experience. A faithful account is enough; an explanation or general principle is optional. Keep any interpretation tentative and leave future design decisions open. These branches were removed to manage the population; their ideas are not thereby disproved.
+Compress the algorithm-design experience from these explored branches for a researcher continuing the search.
+Write a short research note preserving what is worth remembering from these experiments: the computational ideas, informative outcomes, and relevant earlier experience. A faithful account is enough; an explanation or general principle is optional. Keep any interpretation tentative and leave future design decisions open. These branches were simplified out of the active population; their ideas are not thereby disproved.
 
 [Output]
 Return one JSON object with an "experience" string: a concise paragraph, about 120 words, relating the computational ideas tried and their informative outcomes, including earlier experience. It will accompany an algorithm in later design calls, preserving experiences its code alone cannot convey. The paragraph must stand on its own without trial numbers."""
 
 
 def comparison_catalog(tree: TreePopulation, region) -> tuple[dict[str, dict], set[str], str | None]:
-    """Measured comparisons keep their original endpoints across experience transfers."""
+    """Build provenance observations, preserving original comparison endpoints across transfers."""
     catalog: dict[str, dict] = {}
     current: set[str] = set()
-    variation = isinstance(region, PathContraction)
-    ids = (*region.removed_ids, region.child_id, *region.side_ids) if variation else region.removed_ids
+    is_edge = isinstance(region, PathContraction)
+    ids = (*region.removed_ids, region.child_id, *region.branch_ids) if is_edge else region.removed_ids
     for i in ids:
-        node_notes = () if variation and i == region.child_id else tree.nodes[i].selection_observations
-        for observation in (*node_notes, *tree.edges[i].variation_observations):
+        node_notes = () if is_edge and i == region.child_id else tree.nodes[i].observations
+        for observation in (*node_notes, *tree.edges[i].observations):
             catalog[observation["comparison_id"]] = dict(observation)
-    if not variation:
-        prior = (tree.root_selection_observations if region.parent_id == tree.root_id
-                 else tree.nodes[region.parent_id].selection_observations)
+    if not is_edge:
+        prior = (tree.root_observations if region.parent_id == tree.root_id
+                 else tree.nodes[region.parent_id].observations)
         for observation in prior:
             catalog[observation["comparison_id"]] = dict(observation)
 
@@ -188,10 +188,15 @@ def comparison_catalog(tree: TreePopulation, region) -> tuple[dict[str, dict], s
         parent = tree.nodes.get(parent_id)
         child = tree.nodes[child_id]
         key = f"{parent_id}->{child_id}"
-        catalog[key] = dict(comparison_id=key, parent_id=parent_id, child_id=child_id,
-                            parent_fitness=parent.fitness if parent else None,
-                            fitness=child.fitness, operator=operator,
-                            failure=compact_failure(child.failure) if child.fitness is None else None)
+        catalog[key] = dict(
+            comparison_id=key,
+            parent_id=parent_id,
+            child_id=child_id,
+            parent_fitness=parent.fitness if parent else None,
+            fitness=child.fitness,
+            operator=operator,
+            failure=compact_failure(child.failure) if child.fitness is None else None,
+        )
         current.add(key)
         return key
 
@@ -199,16 +204,19 @@ def comparison_catalog(tree: TreePopulation, region) -> tuple[dict[str, dict], s
         edge = tree.edges[i]
         add(edge.parent_id, i, "development stage" if edge.contracted else edge.operator or "Init")
     net = (add(region.parent_id, region.child_id, "net development")
-           if variation and region.parent_id != tree.root_id else None)
+           if is_edge and region.parent_id != tree.root_id else None)
     return catalog, current, net
 
 
 def _catalog_block(tree: TreePopulation, region) -> str:
+    """Render only the current region's measured comparisons so reflection prompts stay bounded."""
     catalog, current, net = comparison_catalog(tree, region)
-    lines = ["[Comparison Catalog]", "Identifiers refer to the original compared implementations, not to the current experience owner."]
-    for key, item in catalog.items():
+    lines = ["[Comparison Catalog]"]
+    ordered_keys = [key for key in catalog if key in current]
+    for key in ordered_keys:
+        item = catalog[key]
         label = _outcome_word(item["parent_fitness"], item["fitness"])
-        source = "overall path" if key == net else "current" if key in current else "earlier observation"
+        source = "overall path" if key == net else "current"
         if item["parent_fitness"] is None:
             source += "; independent evaluation, no parent comparison"
         lines.append(f"{key} [{source}; {item['operator']}]: {label}")
@@ -223,9 +231,8 @@ def render_observations(observations: list[dict]) -> str:
         result = _outcome_word(item["parent_fitness"], item["fitness"])
         label = (f"Comparison {item['comparison_id']}" if item["parent_fitness"] is not None
                  else f"Evaluation {item['child_id']}; no parent comparison")
-        parts.append(f"[{label}: {result}] "
-                     + ("Execution error: " + item["failure"] + ". " if item.get("failure") else "") + item["changes"]
-                     + (" Possible explanation: " + item["interpretation"] if item.get("interpretation") else ""))
+        detail = f"Execution error: {item['failure']}." if item.get("failure") else f"Evaluated {item['operator']} computation."
+        parts.append(f"[{label}: {result}] {detail}")
     return "\n".join(parts)
 
 
@@ -234,18 +241,8 @@ def _bind_experience(parsed: dict, tree: TreePopulation, region) -> tuple[str, l
     if not isinstance(note, str) or not clean_prompt_text(note):
         raise ValueError("Reflection must contain nonempty algorithm-design experience")
     catalog, _, _ = comparison_catalog(tree, region)
-    # Region provenance is determined by the tree, not selected by the language model.
-    # These measurements do not certify the meaning of the generated experience.
-    observations = [{k: v for k, v in item.items() if k not in ("changes", "interpretation")}
-                    for item in catalog.values()]
+    observations = [dict(item) for item in catalog.values()]
     return clean_prompt_text(note), observations
-
-
-def _prior_note(note: str, observations: list[dict]) -> str:
-    """Keep a carried research note associated with its own original evidence."""
-    sources = ", ".join(item["comparison_id"] for item in observations)
-    provenance = f"[Supporting comparisons: {sources}] " if sources else ""
-    return provenance + clean_prompt_text(note)
 
 
 def _task_header(
@@ -259,7 +256,7 @@ def _task_header(
     return "\n".join(lines)
 
 
-def build_variation_prompt(
+def build_edge_reflection_prompt(
     tree: TreePopulation,
     contraction: PathContraction,
     *,
@@ -267,11 +264,7 @@ def build_variation_prompt(
     score_definition: str = "Lower fitness is better.",
     function_template: str = "",
 ) -> str:
-    """构造单条路径收缩（u -> removed_ids -> v）的区域反思提示词。
-
-    完整纳入：（1）两端保留节点代码与净 diff；（2）中间受评实现与逐步分数；
-    （3）中间被删边原有的 variation_experience 与中间被删节点原有的 selection_experience。
-    """
+    """构造单条路径收缩（u -> removed_ids -> v）的边经验反思提示词。"""
     u_id, v_id = contraction.parent_id, contraction.child_id
     v_node = tree.nodes[v_id]
     chain_ids = [u_id, *contraction.removed_ids, v_id]
@@ -303,48 +296,48 @@ def build_variation_prompt(
         )
         if cur_id != v_id:
             step_lines.append(f"  Evaluated implementation:\n```python\n{_bare_code(cur_node.code)}\n```")
-        if cur_edge.variation_experience:
-            earlier_notes.append(f"Development {prev_id}->{cur_id}: {_prior_note(cur_edge.variation_experience, cur_edge.variation_observations)}")
-        if cur_id != v_id and cur_node.selection_experience:
+        if cur_edge.experience:
+            earlier_notes.append(f"Development {prev_id}->{cur_id}: {clean_prompt_text(cur_edge.experience)}")
+        if cur_id != v_id and cur_node.experience:
             earlier_notes.append(
-                f"Side experiments at implementation {cur_id}: {_prior_note(cur_node.selection_experience, cur_node.selection_observations)}"
+                f"Explored branches at implementation {cur_id}: {clean_prompt_text(cur_node.experience)}"
             )
     parts.append("\n".join(step_lines))
 
-    if contraction.side_ids:
+    if contraction.branch_ids:
         chain_index = {cid: idx for idx, cid in enumerate(chain_ids[1:], 1)}
-        side_numbers = {nid: idx for idx, nid in enumerate(sorted(contraction.side_ids), 1)}
-        side_lines: list[str] = ["Side Attempts from Contracted Intermediates:"]
-        side_notes: list[str] = []
-        for nid, s_idx in side_numbers.items():
-            s_node, s_edge = tree.nodes[nid], tree.edges[nid]
-            actual_parent = tree.nodes.get(s_edge.parent_id)
-            s_op = "Compressed development" if s_edge.contracted else s_edge.operator or "Init"
-            if s_edge.parent_id in chain_index:
-                parent_desc = f"Step {chain_index[s_edge.parent_id]}"
-            elif s_edge.parent_id in side_numbers:
-                parent_desc = f"Side Trial {side_numbers[s_edge.parent_id]}"
+        branch_numbers = {nid: idx for idx, nid in enumerate(sorted(contraction.branch_ids), 1)}
+        branch_lines: list[str] = ["Pruned Branches Along Path:"]
+        branch_notes: list[str] = []
+        for nid, b_idx in branch_numbers.items():
+            b_node, b_edge = tree.nodes[nid], tree.edges[nid]
+            actual_parent = tree.nodes.get(b_edge.parent_id)
+            b_op = "Compressed development" if b_edge.contracted else b_edge.operator or "Init"
+            if b_edge.parent_id in chain_index:
+                parent_desc = f"Step {chain_index[b_edge.parent_id]}"
+            elif b_edge.parent_id in branch_numbers:
+                parent_desc = f"Branch Trial {branch_numbers[b_edge.parent_id]}"
             else:
                 parent_desc = "initial origin" if actual_parent is None else "parent"
-            side_lines.append(
-                f"- Side Trial {s_idx} [{s_op}] from {parent_desc}, comparison {s_edge.parent_id}->{nid}: "
-                f"{_outcome_word(actual_parent.fitness if actual_parent else None, s_node.fitness)}"
+            branch_lines.append(
+                f"- Branch Trial {b_idx} [{b_op}] from {parent_desc}, comparison {b_edge.parent_id}->{nid}: "
+                f"{_outcome_word(actual_parent.fitness if actual_parent else None, b_node.fitness)}"
             )
-            if s_node.fitness is None:
-                side_lines.append(f"  Execution error: {compact_failure(s_node.failure)}")
+            if b_node.fitness is None:
+                branch_lines.append(f"  Execution error: {compact_failure(b_node.failure)}")
             if actual_parent is None:
-                side_lines.append(f"  Evaluated implementation:\n```python\n{_bare_code(s_node.code)}\n```")
+                branch_lines.append(f"  Evaluated implementation:\n```python\n{_bare_code(b_node.code)}\n```")
             else:
-                side_lines.append(
-                    f"  Code change from its parent:\n```diff\n{compact_diff(actual_parent.code, s_node.code)}\n```"
+                branch_lines.append(
+                    f"  Code change from its parent:\n```diff\n{compact_diff(actual_parent.code, b_node.code)}\n```"
                 )
-            if s_edge.variation_experience:
-                side_notes.append(f"  Development leading to Side Trial {s_idx}: {_prior_note(s_edge.variation_experience, s_edge.variation_observations)}")
-            if s_node.selection_experience:
-                side_notes.append(f"  Earlier side experiments at Side Trial {s_idx}: {_prior_note(s_node.selection_experience, s_node.selection_observations)}")
-        if side_notes:
-            earlier_notes.extend(side_notes)
-        parts.append("\n".join(side_lines))
+            if b_edge.experience:
+                branch_notes.append(f"  Development leading to Branch Trial {b_idx}: {clean_prompt_text(b_edge.experience)}")
+            if b_node.experience:
+                branch_notes.append(f"  Earlier branches at Branch Trial {b_idx}: {clean_prompt_text(b_node.experience)}")
+        if branch_notes:
+            earlier_notes.extend(branch_notes)
+        parts.append("\n".join(branch_lines))
 
     parts.append(
         f"Ending Implementation {v_id}, {_outcome_word(None, v_node.fitness)}:\n"
@@ -356,13 +349,13 @@ def build_variation_prompt(
             f"{compact_diff(tree.nodes[u_id].code, v_node.code)}\n```"
         )
 
-    related = _related_results(tree, set(chain_ids[:-1]), set(chain_ids) | set(contraction.side_ids))
+    related = _related_results(tree, set(chain_ids[:-1]), set(chain_ids) | set(contraction.branch_ids))
     if related:
         parts.append(related)
     if earlier_notes:
         parts.append("[Earlier Algorithm-Design Experience]\n" + "\n\n".join(earlier_notes))
 
-    return VARIATION_PROMPT_TEMPLATE.format(
+    return EDGE_PROMPT_TEMPLATE.format(
         task_header=_task_header(task_description, score_definition, function_template),
         slice_body="\n\n".join(parts) + "\n\n" + _catalog_block(tree, contraction),
     )
@@ -385,44 +378,43 @@ def _related_results(tree: TreePopulation, parent_ids: set[int], excluded: set[i
             "provided as context for interpreting the experiments above:\n" + "\n".join(lines))
 
 
-def _get_node_selection_exp(tree: TreePopulation, node_id: int) -> str:
+def _get_node_experience(tree: TreePopulation, node_id: int) -> str:
     if node_id == tree.root_id:
-        return tree.root_selection_experience
-    return tree.nodes[node_id].selection_experience
+        return tree.root_experience
+    return tree.nodes[node_id].experience
 
 
-def _set_node_selection_exp(tree: TreePopulation, node_id: int, exp: str) -> None:
+def _set_node_experience(tree: TreePopulation, node_id: int, exp: str) -> None:
     if node_id == tree.root_id:
-        tree.root_selection_experience = exp
+        tree.root_experience = exp
     elif node_id in tree.nodes:
-        tree.nodes[node_id].selection_experience = exp
+        tree.nodes[node_id].experience = exp
 
 
-def build_selection_prompt(
+def build_node_reflection_prompt(
     tree: TreePopulation,
-    consolidation: BranchConsolidation,
+    pruning: SubtreePruning,
     *,
     task_description: str,
     score_definition: str = "Lower fitness is better.",
     function_template: str = "",
 ) -> str:
-    """提供承接基准、逐个尝试的真实父代差分、结果与完整旧经验。"""
-    p_id = consolidation.parent_id
+    """构造子树剪枝区域的节点经验反思提示词。"""
+    p_id = pruning.parent_id
     if p_id == tree.root_id:
-        parts = ["Anchor: Initial population origin (virtual root). These initial implementations have no shared parent implementation."]
+        parts = ["Baseline: Initial population origin (virtual root). These initial implementations have no shared parent implementation."]
     else:
-        anchor_node = tree.nodes[p_id]
+        parent_node = tree.nodes[p_id]
         parts = [
-            f"Parent Baseline {p_id}, fitness={anchor_node.fitness:.6g}:\n"
-            f"```python\n{_bare_code(anchor_node.code)}\n```"
+            f"Parent Baseline {p_id}, fitness={parent_node.fitness:.6g}:\n"
+            f"```python\n{_bare_code(parent_node.code)}\n```"
         ]
     earlier_notes = []
-    existing = _get_node_selection_exp(tree, p_id)
+    existing = _get_node_experience(tree, p_id)
     if existing:
-        facts = tree.root_selection_observations if p_id == tree.root_id else tree.nodes[p_id].selection_observations
-        earlier_notes.append(f"Earlier experiments at the anchor:\n{_prior_note(existing, facts)}")
+        earlier_notes.append(f"Earlier explored branches at this baseline:\n{clean_prompt_text(existing)}")
 
-    trial_numbers = {nid: idx for idx, nid in enumerate(sorted(consolidation.removed_ids), 1)}
+    trial_numbers = {nid: idx for idx, nid in enumerate(sorted(pruning.removed_ids), 1)}
     external_parents = {}
     for nid in trial_numbers:
         parent_id = tree.edges[nid].parent_id
@@ -437,7 +429,7 @@ def build_selection_prompt(
         actual_parent = tree.nodes.get(edge.parent_id)
         op = "Compressed development" if edge.contracted else edge.operator or "Init"
         parent_desc = "initial origin" if actual_parent is None else (
-            "anchor parent" if edge.parent_id == p_id else "intermediate parent"
+            "parent baseline" if edge.parent_id == p_id else "intermediate parent"
         )
         if edge.parent_id in trial_numbers:
             parent_desc = f"Trial {trial_numbers[edge.parent_id]}"
@@ -455,10 +447,10 @@ def build_selection_prompt(
             )
         else:
             rows.append(f"Evaluated Code:\n```python\n{_bare_code(node.code)}\n```")
-        if edge.variation_experience:
-            earlier_notes.append(f"Development leading to Trial {idx}: {_prior_note(edge.variation_experience, edge.variation_observations)}")
-        if node.selection_experience:
-            earlier_notes.append(f"Side experiments at Trial {idx}: {_prior_note(node.selection_experience, node.selection_observations)}")
+        if edge.experience:
+            earlier_notes.append(f"Development leading to Trial {idx}: {clean_prompt_text(edge.experience)}")
+        if node.experience:
+            earlier_notes.append(f"Explored branches at Trial {idx}: {clean_prompt_text(node.experience)}")
         parts.append("\n".join(rows))
     related = _related_results(tree, {p_id} | {tree.edges[i].parent_id for i in trial_numbers},
                                {p_id, *trial_numbers, *external_parents})
@@ -467,16 +459,16 @@ def build_selection_prompt(
     if earlier_notes:
         parts.append("[Earlier Algorithm-Design Experience]\n" + "\n\n".join(earlier_notes))
 
-    return SELECTION_PROMPT_TEMPLATE.format(
+    return NODE_PROMPT_TEMPLATE.format(
         task_header=_task_header(task_description, score_definition, function_template),
-        slice_body="\n\n".join(parts) + "\n\n" + _catalog_block(tree, consolidation),
+        slice_body="\n\n".join(parts) + "\n\n" + _catalog_block(tree, pruning),
     )
 
 
 @dataclass(frozen=True)
 class ReflectionCallRecord:
-    kind: str  # "variation" | "selection"
-    target_id: int  # edge child_id for variation, node_id (or root_id=0) for selection
+    kind: str  # "edge" | "node"
+    target_id: int  # edge child_id for edge experience, node_id (or root_id=0) for node experience
     prompt_chars: int
     experience: str
     used_fallback: bool
@@ -512,7 +504,7 @@ def _call_structured_model(
 
 def reflect_and_apply(
     tree: TreePopulation,
-    plan: ConsolidationPlan,
+    plan: SimplificationPlan,
     *,
     model: Any | None = None,
     task_description: str = "",
@@ -522,18 +514,17 @@ def reflect_and_apply(
     max_tokens: int = 1536,
     timeout: float = 180.0,
 ) -> tuple[TreePopulation, list[ReflectionCallRecord]]:
-    """对重构方案执行反思简化，写回重连边的 variation_experience 与保留节点（含虚拟根）的 selection_experience。"""
-    new_tree = apply_consolidation(tree, plan)
+    """执行树简化，并将凝练的经验写回收缩边（edge.experience）与保留节点（node.experience）。"""
+    new_tree = apply_simplification(tree, plan)
     records: list[ReflectionCallRecord] = []
 
-    # 路径与旁支各保留自己的证据和格式，共用调用、异常处理与记录。
-    branches = sorted(plan.branch_consolidations, key=lambda b: (-len(b.removed_ids), b.parent_id))
-    for region in (*plan.path_contractions, *branches):
-        variation = isinstance(region, PathContraction)
-        kind = "variation" if variation else "selection"
-        target_id = region.child_id if variation else region.parent_id
-        build_prompt = build_variation_prompt if variation else build_selection_prompt
-        schema = VARIATION_SCHEMA if variation else SELECTION_SCHEMA
+    prunings = sorted(plan.subtree_prunings, key=lambda b: (-len(b.removed_ids), b.parent_id))
+    for region in (*plan.path_contractions, *prunings):
+        is_edge = isinstance(region, PathContraction)
+        kind = "edge" if is_edge else "node"
+        target_id = region.child_id if is_edge else region.parent_id
+        build_prompt = build_edge_reflection_prompt if is_edge else build_node_reflection_prompt
+        schema = EDGE_EXPERIENCE_SCHEMA if is_edge else NODE_EXPERIENCE_SCHEMA
         prompt, response, usage, error = "", "", {}, None
         used_fallback = True
         observations = []
@@ -553,44 +544,38 @@ def reflect_and_apply(
                 error = f"{type(exc).__name__}: {exc}"
         if used_fallback:
             catalog, current, net = comparison_catalog(tree, region)
-            # Preserve selected measured facts even if the language call fails.
             ordered = ([net] if net else []) + [key for key in catalog if key in current and key != net]
             ordered += [key for key in catalog if key not in current]
             for key in ordered:
                 item = dict(catalog[key])
-                item.setdefault("changes", f"Evaluated {item['operator']} computation.")
-                item.setdefault("interpretation", "")
                 if observations and len(render_observations(observations + [item])) > MAX_EXPERIENCE_CHARS:
                     break
                 observations.append(item)
             exp = render_observations(observations)
-            # Retain all source facts on outage even when the displayed fallback is short.
             observations = [dict(item) for item in catalog.values()]
             legacy = []
-            ids = (*region.removed_ids, region.child_id, *region.side_ids) if variation else region.removed_ids
+            ids = (*region.removed_ids, region.child_id, *region.branch_ids) if is_edge else region.removed_ids
             for i in ids:
-                node_notes = () if variation and i == region.child_id else ((tree.nodes[i].selection_experience, tree.nodes[i].selection_observations),)
-                for text, facts in (*node_notes, (tree.edges[i].variation_experience, tree.edges[i].variation_observations)):
+                node_notes = () if is_edge and i == region.child_id else (tree.nodes[i].experience,)
+                for text in (*node_notes, tree.edges[i].experience):
                     if text:
-                        legacy.append(_prior_note(text, facts))
-            if not variation:
-                text = _get_node_selection_exp(tree, region.parent_id)
-                facts = (tree.root_selection_observations if region.parent_id == tree.root_id
-                         else tree.nodes[region.parent_id].selection_observations)
+                        legacy.append(clean_prompt_text(text))
+            if not is_edge:
+                text = _get_node_experience(tree, region.parent_id)
                 if text:
-                    legacy.append(_prior_note(text, facts))
+                    legacy.append(clean_prompt_text(text))
             if legacy:
                 exp += "\nEarlier research notes: " + _truncate_at_clause(
                     "; ".join(dict.fromkeys(legacy)), MAX_EXPERIENCE_CHARS)
-        if variation:
-            new_tree.edges[target_id].variation_experience = exp
-            new_tree.edges[target_id].variation_observations = observations
+        if is_edge:
+            new_tree.edges[target_id].experience = exp
+            new_tree.edges[target_id].observations = observations
         else:
-            _set_node_selection_exp(new_tree, target_id, exp)
+            _set_node_experience(new_tree, target_id, exp)
             if target_id == new_tree.root_id:
-                new_tree.root_selection_observations = observations
+                new_tree.root_observations = observations
             else:
-                new_tree.nodes[target_id].selection_observations = observations
+                new_tree.nodes[target_id].observations = observations
         records.append(ReflectionCallRecord(
             kind, target_id, len(prompt), exp, used_fallback, usage, prompt, response, error,
         ))
@@ -609,9 +594,9 @@ def reflective_simplify(
     temperature: float = 0.3,
     max_tokens: int = 1536,
     timeout: float = 180.0,
-) -> tuple[TreePopulation, ConsolidationPlan, list[ReflectionCallRecord]]:
-    """统一选择与结构补全，再按移除区域写回变异经验和选择经验。"""
-    plan = plan_consolidation(tree, config)
+) -> tuple[TreePopulation, SimplificationPlan, list[ReflectionCallRecord]]:
+    """规划并执行路径收缩与子树剪枝，写回边经验与节点经验。"""
+    plan = plan_simplification(tree, config)
     new_tree, records = reflect_and_apply(
         tree,
         plan,

@@ -1,4 +1,4 @@
-"""为算法生成提供当前实现、相关发展过程与已有经验。"""
+"""按演化路径（Refine）、分叉双支（Crossover）与种群全局（Explore）组织生成上下文。"""
 
 from dataclasses import dataclass, replace
 from typing import Any
@@ -40,22 +40,22 @@ Return only the JSON object, without Markdown fences or additional text."""
 
 @dataclass(frozen=True)
 class ContextConfig:
-    """上下文呈现边界；这些限制控制模型输入，不限制树的生长、选择或简化。"""
+    """生成上下文的窗口边界；只控制模型输入，不改变树结构或抽样权重。"""
 
     max_input_tokens: int = 30000
     # Optional rendering windows, used only when fitting an oversized request.
     max_path_steps: int | None = None
-    max_unconsolidated_attempts: int | None = None
-    max_unconsolidated_failures: int | None = None
+    max_child_attempts: int | None = None
+    max_failed_attempts: int | None = None
     max_population_members: int | None = None
     max_experiences: int | None = None
     include_reference_code: bool = True
-    include_experiences: bool = True  # 设为 False 即为“留空两种经验”的消融对照
+    include_experiences: bool = True  # 设为 False 即为隐藏节点与边经验的消融对照
 
     def __post_init__(self):
         if type(self.max_input_tokens) is not int or self.max_input_tokens <= 0:
             raise ValueError("max_input_tokens must be a positive integer")
-        for name in ("max_path_steps", "max_unconsolidated_attempts", "max_unconsolidated_failures",
+        for name in ("max_path_steps", "max_child_attempts", "max_failed_attempts",
                      "max_population_members", "max_experiences"):
             value = getattr(self, name)
             if value is not None and (type(value) is not int or value < 0):
@@ -86,7 +86,6 @@ def _lowest_common_ancestor(tree: TreePopulation, u_id: int, v_id: int) -> tuple
 
 
 def _operator_label(tree: TreePopulation, edge: Edge) -> str:
-    """生成干净的算子标签：仅当算子本身是 Crossover 时标记，且仅当参考节点仍在树上时展示参考编号。"""
     if edge.contracted:
         return "Compressed development"
     op_str = edge.operator or "Init"
@@ -103,12 +102,7 @@ def _step_card(
     *,
     include_experiences: bool = True,
 ) -> str:
-    """渲染树上的一条边 parent_id -> child_id。
-
-    - 单步未收缩边：展示分数变化与源码 diff；
-    - 收缩后的阶段边（``edge.contracted`` 或已有 ``variation_experience``）：固定展示端点分数变化与后代 Design，
-      仅在 ``include_experiences=True`` 时附加变异经验，使经验开关构成纯净的增量消融。
-    """
+    """渲染树上的一条边 parent_id -> child_id。"""
     edge = tree.edges[child_id]
     child = tree.nodes[child_id]
     header = f"{label} ({_operator_label(tree, edge)})"
@@ -116,16 +110,16 @@ def _step_card(
 
     if parent_id == tree.root_id:
         lines = [f"{header}: fitness = {child.fitness:.6g}", f"Design: {child_design}"]
-        if include_experiences and edge.variation_experience:
-            lines.append(f"Stage experience: {clean_prompt_text(edge.variation_experience)}")
+        if include_experiences and edge.experience:
+            lines.append(f"Stage experience: {clean_prompt_text(edge.experience)}")
         return "\n".join(lines)
 
     parent = tree.nodes[parent_id]
     outcome = _outcome_word(parent.fitness, child.fitness)
-    if edge.contracted or bool(edge.variation_experience):
+    if edge.contracted or bool(edge.experience):
         lines = [f"{header}: {outcome}", f"Resulting design: {child_design}"]
-        if include_experiences and edge.variation_experience:
-            lines.append(f"Stage experience: {clean_prompt_text(edge.variation_experience)}")
+        if include_experiences and edge.experience:
+            lines.append(f"Stage experience: {clean_prompt_text(edge.experience)}")
         return "\n".join(lines)
 
     diff_text = compact_diff(parent.code, child.code)
@@ -140,13 +134,9 @@ def _render_subpath(
     *,
     max_steps: int | None,
     include_experiences: bool,
-    selection_exclude: int | None = None,
+    exclude_node_experience: int | None = None,
 ) -> tuple[str, list[int]]:
-    """渲染从 start_id 沿 step_nodes 前进的一段路径。
-
-    默认展示整条保留路径。只有请求装不进输入窗口时才缩短到指定步数，
-    此时保留当前入口、近期阶段及可解释差分的实际基准。
-    """
+    """渲染从 start_id 沿 step_nodes 前进的一段演化路径。"""
     if not step_nodes or (max_steps is not None and max_steps <= 0):
         return "", []
     if max_steps is None:
@@ -166,10 +156,10 @@ def _render_subpath(
             f"Retained Path Entry {first_node.id}: fitness = {first_node.fitness:.6g}\n"
             f"Design: {clean_prompt_text(first_node.design)}"
         )
-        if include_experiences and first_edge.variation_experience:
-            init_line += f"\nStage experience: {clean_prompt_text(first_edge.variation_experience)}"
-        if include_experiences and first_node.id != selection_exclude and first_node.selection_experience:
-            init_line += f"\nExperiments from this stage: {clean_prompt_text(first_node.selection_experience)}"
+        if include_experiences and first_edge.experience:
+            init_line += f"\nStage experience: {clean_prompt_text(first_edge.experience)}"
+        if include_experiences and first_node.id != exclude_node_experience and first_node.experience:
+            init_line += f"\nExperiments from this stage: {clean_prompt_text(first_node.experience)}"
         rows.append(init_line)
         tail_steps = all_step_indices[1:]
         keep_tail = max(0, max_steps - 1)
@@ -190,15 +180,15 @@ def _render_subpath(
         p_id, c_id = full_seq[idx - 1], full_seq[idx]
         prior_edge = tree.edges[p_id]
         current_edge = tree.edges[c_id]
-        if idx != selected_indices[0] and (prior_edge.contracted or prior_edge.variation_experience) and not (
-            current_edge.contracted or current_edge.variation_experience
+        if idx != selected_indices[0] and (prior_edge.contracted or prior_edge.experience) and not (
+            current_edge.contracted or current_edge.experience
         ):
             rows.append(f"Implementation after the summarized stage:\n```python\n{_bare_code(tree.nodes[p_id].code)}\n```")
         disp_num = idx - 1 if start_id == tree.root_id else idx
         rows.append(_step_card(tree, p_id, c_id, f"Step {disp_num}", include_experiences=include_experiences))
         node = tree.nodes[c_id]
-        if include_experiences and c_id != selection_exclude and node.selection_experience:
-            rows.append(f"Experiments from this stage: {clean_prompt_text(node.selection_experience)}")
+        if include_experiences and c_id != exclude_node_experience and node.experience:
+            rows.append(f"Experiments from this stage: {clean_prompt_text(node.experience)}")
         shown_ids.append(c_id)
 
     body = "\n\n".join(rows)
@@ -212,19 +202,18 @@ def _direct_attempts_block(
     *,
     config: ContextConfig,
 ) -> tuple[str, dict[str, Any]]:
-    """Read retained outgoing developments and the experience already attached here."""
+    """读取从当前节点出发的直接子代尝试，以及附着在当前节点上的节点经验。"""
     parent = tree.nodes[parent_id]
     parts: list[str] = []
 
-    if config.include_experiences and parent.selection_experience:
-        parts.append(f"Experience from earlier experiments: {clean_prompt_text(parent.selection_experience)}")
+    if config.include_experiences and parent.experience:
+        parts.append(f"Experience from earlier experiments: {clean_prompt_text(parent.experience)}")
 
     direct_kids = [
         tree.nodes[cid]
         for cid, edge in sorted(tree.edges.items())
         if edge.parent_id == parent_id
     ]
-    # 按标准化源码与状态去重，保留最新一条
     unique: dict[tuple[Any, ...], Node] = {}
     for child in direct_kids:
         key = (
@@ -240,11 +229,11 @@ def _direct_attempts_block(
     valid_kids = sorted(
         (c for c in unique.values() if c.fitness is not None),
         key=lambda c: -c.id,
-    )[: config.max_unconsolidated_attempts]
+    )[: config.max_child_attempts]
     failed_kids = sorted(
         (c for c in unique.values() if c.fitness is None),
         key=lambda c: -c.id,
-    )[: config.max_unconsolidated_failures]
+    )[: config.max_failed_attempts]
     shown = sorted([*valid_kids, *failed_kids], key=lambda c: c.id)
 
     if shown:
@@ -255,19 +244,19 @@ def _direct_attempts_block(
             child_design = clean_prompt_text(child.design)
             if child.fitness is None:
                 cards.append(
-                    f"Active/Recent Child {idx} ({op_str}): failed — {compact_failure(child.failure)}\n"
+                    f"Child Attempt {idx} ({op_str}): failed — {compact_failure(child.failure)}\n"
                     f"Attempted design: {child_design}\n"
                     f"Code change:\n```diff\n{compact_diff(parent.code, child.code)}\n```"
                 )
             else:
                 cards.append(_step_card(
-                    tree, parent_id, child.id, f"Active/Recent Child {idx}",
+                    tree, parent_id, child.id, f"Child Attempt {idx}",
                     include_experiences=config.include_experiences,
                 ))
         parts.append("\n\n".join(cards))
 
     meta = {
-        "has_selection_experience": bool(config.include_experiences and parent.selection_experience),
+        "has_node_experience": bool(config.include_experiences and parent.experience),
         "shown_valid_children": [c.id for c in valid_kids],
         "shown_failed_children": [c.id for c in failed_kids],
     }
@@ -279,12 +268,12 @@ def _direct_attempts_block(
 def _population_overview_block(
     tree: TreePopulation, *, config: ContextConfig,
 ) -> tuple[str, list[dict[str, Any]]]:
-    """Read retained individuals and their attached experience without grouping origins."""
+    """按适应度顺序列出树上保留的算法个体及其节点/边经验。"""
     ordered = sorted((i for i in tree.nodes if tree.nodes[i].fitness is not None),
                      key=lambda i: (tree.nodes[i].fitness, i))
     rows = []
-    if config.include_experiences and tree.root_selection_experience:
-        rows.append(f"Experience from initial implementations: {clean_prompt_text(tree.root_selection_experience)}")
+    if config.include_experiences and tree.root_experience:
+        rows.append(f"Experience from initial implementations: {clean_prompt_text(tree.root_experience)}")
     view = []
     for i in ordered[:config.max_population_members]:
         node, edge = tree.nodes[i], tree.edges[i]
@@ -295,10 +284,10 @@ def _population_overview_block(
                  f"Developed from {origin} ({_operator_label(tree, edge)})."]
         experiences = []
         if config.include_experiences:
-            if edge.variation_experience:
-                experiences.append(f"Development experience: {clean_prompt_text(edge.variation_experience)}")
-            if node.selection_experience:
-                experiences.append(f"Experiments from this individual: {clean_prompt_text(node.selection_experience)}")
+            if edge.experience:
+                experiences.append(f"Development experience: {clean_prompt_text(edge.experience)}")
+            if node.experience:
+                experiences.append(f"Experiments from this individual: {clean_prompt_text(node.experience)}")
             if config.max_experiences is not None:
                 experiences = experiences[:config.max_experiences]
         lines.extend(experiences)
@@ -323,10 +312,7 @@ def build_evolution_context(
     reference_id: int | None = None,
     config: ContextConfig = ContextConfig(),
 ) -> tuple[str, str, bool, dict[str, Any]]:
-    """按算子职责抽取路径级（Refine）、分支级（Crossover）或全树级（Explore）上下文。
-
-    返回 ``(rendered_context, instruction, has_scores, metadata_view)``。
-    """
+    """按算子职责抽取路径视图（Refine）、双支视图（Crossover）或种群全局视图（Explore）。"""
     parent = tree.nodes[parent_id]
     blocks: list[str] = []
     if operator != "Explore":
@@ -335,8 +321,8 @@ def build_evolution_context(
 
     if operator == "Refine":
         path = _path_from_root(tree, parent_id)
-        if config.include_experiences and tree.root_selection_experience:
-            blocks.append("[Initial Population Experience]\n" + clean_prompt_text(tree.root_selection_experience))
+        if config.include_experiences and tree.root_experience:
+            blocks.append("[Initial Population Experience]\n" + clean_prompt_text(tree.root_experience))
         path_text, shown_steps = _render_subpath(
             tree,
             tree.root_id,
@@ -344,7 +330,7 @@ def build_evolution_context(
             "Evolution Path",
             max_steps=config.max_path_steps,
             include_experiences=config.include_experiences,
-            selection_exclude=parent_id,
+            exclude_node_experience=parent_id,
         )
         if path_text:
             blocks.append(path_text)
@@ -368,14 +354,14 @@ def build_evolution_context(
                 f"[Common Ancestor]\nAlgorithm {lca_id}: fitness = {lca_node.fitness:.6g}",
                 f"Design: {clean_prompt_text(lca_node.design)}",
             ]
-            if config.include_experiences and lca_node.selection_experience:
+            if config.include_experiences and lca_node.experience:
                 lca_lines.append(
-                    f"Branch experience at ancestor: {clean_prompt_text(lca_node.selection_experience)}"
+                    f"Branch experience at ancestor: {clean_prompt_text(lca_node.experience)}"
                 )
             blocks.append("\n".join(lca_lines))
-        elif lca_id == tree.root_id and config.include_experiences and tree.root_selection_experience:
+        elif lca_id == tree.root_id and config.include_experiences and tree.root_experience:
             blocks.append(
-                f"[Origin Context]\nExperience from initial implementations: {clean_prompt_text(tree.root_selection_experience)}"
+                f"[Origin Context]\nExperience from initial implementations: {clean_prompt_text(tree.root_experience)}"
             )
 
         cur_branch_text, shown_cur = _render_subpath(
@@ -385,7 +371,7 @@ def build_evolution_context(
             "Current Branch since Common Ancestor",
             max_steps=config.max_path_steps,
             include_experiences=config.include_experiences,
-            selection_exclude=parent_id,
+            exclude_node_experience=parent_id,
         )
         if cur_branch_text:
             blocks.append(cur_branch_text)
@@ -397,7 +383,7 @@ def build_evolution_context(
             "Reference Branch since Common Ancestor",
             max_steps=config.max_path_steps,
             include_experiences=config.include_experiences,
-            selection_exclude=parent_id,
+            exclude_node_experience=parent_id,
         )
         if ref_branch_text:
             blocks.append(ref_branch_text)
@@ -559,8 +545,6 @@ class EvoTracePromptBuilder:
         reference_id: int | None = None, context_config: ContextConfig = ContextConfig(),
         count_tokens=None,
     ) -> tuple[str, dict[str, Any]]:
-        # Real serving-tokenizer counts when supplied; UTF-8 bytes are a conservative
-        # fallback for standalone clients, explicitly identified in the run record.
         counter = count_tokens or (lambda text: len(text.encode("utf-8")))
         cfg = context_config
         reductions = []
@@ -579,8 +563,8 @@ class EvoTracePromptBuilder:
                 "max_path_steps": max(len(view.get("shown_steps", [])),
                                       len(view.get("shown_current_branch", [])),
                                       len(view.get("shown_reference_branch", []))),
-                "max_unconsolidated_attempts": len(view.get("shown_valid_children", [])),
-                "max_unconsolidated_failures": len(view.get("shown_failed_children", [])),
+                "max_child_attempts": len(view.get("shown_valid_children", [])),
+                "max_failed_attempts": len(view.get("shown_failed_children", [])),
                 "max_population_members": len(view.get("population", [])),
                 "max_experiences": max((d["shown_experiences"] for d in view.get("population", [])), default=0),
             }

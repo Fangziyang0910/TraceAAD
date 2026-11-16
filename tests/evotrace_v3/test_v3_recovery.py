@@ -1,11 +1,10 @@
-import re
 from copy import deepcopy
 import json
 import pytest
 from evotrace_v3 import Config, EvoTrace, Task
 from evotrace_v3.models import Edge, Node, TreePopulation
 from evotrace_v3.reflection import reflect_and_apply
-from evotrace_v3.topology import TopologyConfig, plan_consolidation
+from evotrace_v3.topology import TopologyConfig, plan_simplification
 
 
 def add(tree, parent, fit):
@@ -40,12 +39,14 @@ def make_search(model, path):
     ('topology', {'cold_evaluations': 40, 'quality_floor': .5, 'clone_distance': .08}),
     ('topology', {'branch_width': 4, 'path_depth': 4, 'cold_evaluations': 40}),
     ('mechanisms', ['tree_population', 'dynamic_reflective_simplification', 'individual_tree_allocation', 'multiscale_context']),
+    ('mechanisms', ['tree_population', 'reflective_tree_simplification', 'individual_tree_allocation', 'multiscale_context']),
     ('selection_rule', 'route_max'),
     ('selection_rule', 'rank_decay_subtree_sampling'),
     ('selection_rule', 'rank_decay_direct_sampling'),
     ('reflection_representation', 'unbound_prose'),
     ('reflection_representation', 'comparison_observations'),
     ('reflection_representation', 'research_note_with_comparisons'),
+    ('reflection_representation', 'algorithm_design_experience'),
     ('selection_rule', 'individual_tree_allocation'),
     ('selection_rule', 'rank_subtree_sampling'),
     ('allocation', {'quality_ratio': 10.0}),
@@ -58,7 +59,7 @@ def test_resume_matches_uninterrupted_search_and_rejects_old_policy(tmp_path, fi
     search = make_search(model, tmp_path/'resumed')
     for _ in range(14):
         search.step()
-    assert search.consolidations_count > 0
+    assert search.simplifications_count > 0
     before = dict(model.state)
     restored = EvoTrace(search.task, model, config=search.config, topology_config=search.topology_config,
                         run_dir=tmp_path/'resumed', resume=True)
@@ -96,7 +97,6 @@ def test_interruption_recovers_only_committed_tree_without_repeating_reflection(
         def write(name, row):
             raise OSError('interrupted after commit')
         search.store.write = write
-    # A different random allocation may not consolidate at the very next step.
     for _ in range(8):
         before_tree = deepcopy(search.tree)
         before_attempts = len(search.attempts)
@@ -130,10 +130,10 @@ def test_model_outage_does_not_age_tree_and_reflection_failure_keeps_experience(
     t.evaluations_used += 40
     class Broken:
         complete = staticmethod(outage)
-    plan = plan_consolidation(t)
+    plan = plan_simplification(t)
     new, records = reflect_and_apply(t, plan, model=Broken())
     assert records and all(r.used_fallback and r.error for r in records)
-    assert new.root_selection_experience
+    assert new.root_experience
 
 
 def test_two_hundred_evaluations_resume_with_identical_trees_and_logged_probabilities(tmp_path):
@@ -165,6 +165,4 @@ def test_two_hundred_evaluations_resume_with_identical_trees_and_logged_probabil
     assert model.state == calls
     assert advance(restored, 100) == expected[100:]
     assert restored.evaluations_used == full.evaluations_used == 200
-    assert restored.consolidations_count == full.consolidations_count > 0
-
-
+    assert restored.simplifications_count == full.simplifications_count > 0

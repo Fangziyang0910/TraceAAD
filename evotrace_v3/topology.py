@@ -1,4 +1,4 @@
-"""工作集驱动的反思树简化（Reflective Tree Simplification）与经验归属。"""
+"""反思树简化（Reflective Tree Simplification）：路径收缩与子树剪枝。"""
 
 import ast
 from collections import Counter, defaultdict
@@ -62,14 +62,7 @@ def ast_shingles(code: str, k: int = 2) -> tuple[tuple[object, int], ...]:
 def identity(code: str) -> str:
     """Same parsed source, ignoring layout, comments and docstrings."""
     try:
-        tree = ast.parse(code)
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
-                first = node.body[0]
-                if (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
-                        and isinstance(first.value.value, str)):
-                    node.body = node.body[1:]
-        text = ast.dump(tree, include_attributes=False)
+        text = ast.dump(_strip_docstrings(code), include_attributes=False)
     except (SyntaxError, ValueError):
         text = code.strip()
     return hashlib.sha256(text.encode()).hexdigest()
@@ -91,12 +84,12 @@ def code_distance(code_a: str, code_b: str) -> float:
 
 @dataclass(frozen=True)
 class TopologyConfig:
-    """Working-set retention window and batch threshold for reflective tree simplification.
+    """Retention window and batch size for reflective tree simplification.
 
-    active_evaluations: evaluations since birth, direct development, or crossover reference
-        within which a distinct feasible individual stays in the active working set.
-    region_size: minimum number of retired nodes in a path or side-branch region before
-        that region is simplified and condensed into V or S.
+    active_evaluations: evaluations since birth, parent use, or crossover reference
+        within which a distinct feasible individual remains active.
+    region_size: minimum number of inactive nodes accumulated in a path or subtree
+        region before that region is simplified into edge or node experience.
     """
 
     active_evaluations: int = 40
@@ -113,29 +106,25 @@ class PathContraction:
     parent_id: int
     child_id: int
     removed_ids: tuple[int, ...]
-    side_ids: tuple[int, ...] = ()
+    branch_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
-class BranchConsolidation:
+class SubtreePruning:
     parent_id: int
     removed_ids: tuple[int, ...]
 
 
 @dataclass(frozen=True)
-class ConsolidationPlan:
+class SimplificationPlan:
     kept_ids: tuple[int, ...]
     path_contractions: tuple[PathContraction, ...] = ()
-    branch_consolidations: tuple[BranchConsolidation, ...] = ()
+    subtree_prunings: tuple[SubtreePruning, ...] = ()
     triggers: tuple[dict, ...] = ()
 
 
 def distinct_individuals(tree: TreePopulation) -> set[int]:
-    """Collapse repeated normalized source and score to the earliest retained record.
-
-    Different measured scores are not treated as interchangeable observations.
-    Retired programs may reappear; no global archive or lineage is merged here.
-    """
+    """Collapse identical normalized source and measured score to the earliest retained node."""
     first = {}
     for i in sorted(tree.nodes):
         node = tree.nodes[i]
@@ -145,10 +134,10 @@ def distinct_individuals(tree: TreePopulation) -> set[int]:
 
 
 def quality_scores(tree: TreePopulation, candidates=None) -> dict[int, float]:
-    """Population rank in [0, 1], with equal fitness receiving equal average rank.
+    """Population rank quality in [0, 1], with equal fitness receiving equal average rank.
 
     Lower fitness is better. A single individual, or an all-tied population,
-    has quality 0.5. Rank removes objective-unit dependence, not task differences.
+    has quality 0.5.
     """
     ordered = sorted((i for i in (tree.nodes if candidates is None else candidates)
                       if tree.nodes[i].fitness is not None),
@@ -166,20 +155,21 @@ def quality_scores(tree: TreePopulation, candidates=None) -> dict[int, float]:
 
 
 def champion(tree: TreePopulation) -> int | None:
-    """The best feasible individual; stable ties prefer the earlier record."""
+    """The best feasible individual; ties prefer the earlier node ID."""
     return min((i for i in tree.nodes if tree.nodes[i].fitness is not None),
                key=lambda i: (tree.nodes[i].fitness, i), default=None)
 
 
-def plan_consolidation(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> ConsolidationPlan:
-    """Working-set retention, LCA virtual-tree closure, and threshold-k region compaction.
+def plan_simplification(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> SimplificationPlan:
+    """Plan batched path contractions and subtree prunings on the evolutionary tree.
 
-    1. Working set: distinct feasible individuals born, directly developed, or used as a
-       crossover reference within ``active_evaluations``, plus the global champion.
-    2. Virtual tree: close the active set under pairwise LCAs so all lineage forks survive,
-       uniquely partitioning retired nodes into intermediate chains (-> V) and side branches (-> S).
-    3. Amortized compaction: only regions with at least ``region_size`` retired nodes execute
-       structural simplification and reflection; smaller regions remain in place untouched.
+    1. Retain active distinct feasible individuals (within ``active_evaluations``)
+       together with the global champion, and close them under pairwise LCAs so
+       branching structure between retained lineages is preserved.
+    2. Partition remaining nodes into intermediate chains between retained endpoints
+       (path contractions -> edge experience) and unretained subtrees under retained
+       ancestors (subtree prunings -> node experience).
+    3. Simplify only regions that have accumulated at least ``region_size`` nodes.
     """
     now, best = tree.evaluations_used, champion(tree)
     distinct = distinct_individuals(tree)
@@ -190,23 +180,21 @@ def plan_consolidation(tree: TreePopulation, config: TopologyConfig = TopologyCo
     children = defaultdict(list)
     for i in sorted(tree.edges):
         children[tree.edges[i].parent_id].append(i)
-    # A parent always has a smaller id than its child, so reverse id order visits children first.
+    # A parent always has a smaller ID than its child, so reverse ID order visits children first.
     used = set(active)
     for i in sorted(tree.nodes, reverse=True):
         if i in used:
             used.add(tree.edges[i].parent_id)
     forks = {i for i in used if i != tree.root_id and sum(c in used for c in children[i]) >= 2}
-    virtual_tree = active | forks
-    retired = set(tree.nodes) - virtual_tree
+    retained_skeleton = active | forks
+    inactive = set(tree.nodes) - retained_skeleton
 
-    # Partition retired nodes on the pre-update topology: intermediate chains form path regions;
-    # remaining retired nodes join their nearest ancestor in a contracted chain or the virtual tree/root.
     raw_contractions = []
     contracted_to_idx: dict[int, int] = {}
-    for child in sorted(virtual_tree):
+    for child in sorted(retained_skeleton):
         parent = tree.edges[child].parent_id
         removed_chain = []
-        while parent != tree.root_id and parent not in virtual_tree:
+        while parent != tree.root_id and parent not in retained_skeleton:
             removed_chain.append(parent)
             parent = tree.edges[parent].parent_id
         if not removed_chain:
@@ -217,30 +205,30 @@ def plan_consolidation(tree: TreePopulation, config: TopologyConfig = TopologyCo
         for mid in removed_chain:
             contracted_to_idx[mid] = idx
 
-    edge_sides: dict[int, list[int]] = defaultdict(list)
-    sides: dict[int, list[int]] = defaultdict(list)
-    for i in sorted(retired - set(contracted_to_idx)):
+    path_branches: dict[int, list[int]] = defaultdict(list)
+    subtrees: dict[int, list[int]] = defaultdict(list)
+    for i in sorted(inactive - set(contracted_to_idx)):
         anc = tree.edges[i].parent_id
-        while anc != tree.root_id and anc not in virtual_tree and anc not in contracted_to_idx:
+        while anc != tree.root_id and anc not in retained_skeleton and anc not in contracted_to_idx:
             anc = tree.edges[anc].parent_id
         if anc in contracted_to_idx:
-            edge_sides[contracted_to_idx[anc]].append(i)
+            path_branches[contracted_to_idx[anc]].append(i)
         else:
-            sides[anc].append(i)
+            subtrees[anc].append(i)
 
     contractions = tuple(
-        PathContraction(p, c, rem, tuple(edge_sides.get(idx, ())))
+        PathContraction(p, c, rem, tuple(path_branches.get(idx, ())))
         for idx, (p, c, rem) in enumerate(raw_contractions)
-        if len(rem) + len(edge_sides.get(idx, ())) >= config.region_size
+        if len(rem) + len(path_branches.get(idx, ())) >= config.region_size
     )
-    branches = tuple(
-        BranchConsolidation(p, tuple(ids))
-        for p, ids in sorted(sides.items())
+    prunings = tuple(
+        SubtreePruning(p, tuple(ids))
+        for p, ids in sorted(subtrees.items())
         if len(ids) >= config.region_size
     )
     removed = {
-        *(i for c in contractions for i in (*c.removed_ids, *c.side_ids)),
-        *(i for b in branches for i in b.removed_ids),
+        *(i for c in contractions for i in (*c.removed_ids, *c.branch_ids)),
+        *(i for b in prunings for i in b.removed_ids),
     }
     kept = tuple(sorted(set(tree.nodes) - removed))
     triggers = (
@@ -249,20 +237,14 @@ def plan_consolidation(tree: TreePopulation, config: TopologyConfig = TopologyCo
             "evaluations": now,
             "active_ids": sorted(active),
             "fork_ids": sorted(forks),
-            "deferred_ids": sorted(retired - removed),
             "removed_ids": sorted(removed),
         },
     ) if removed else ()
-    return ConsolidationPlan(kept, contractions, branches, triggers)
+    return SimplificationPlan(kept, contractions, prunings, triggers)
 
 
-def apply_consolidation(tree: TreePopulation, plan: ConsolidationPlan) -> TreePopulation:
-    """Reconnect versions without changing retained individuals' historical effort.
-
-    Removed development is already included in retained ancestors' counts. It
-    does not become effort spent developing a retained descendant. The global
-    evaluation clock and every surviving individual's counts stay unchanged.
-    """
+def apply_simplification(tree: TreePopulation, plan: SimplificationPlan) -> TreePopulation:
+    """Apply planned path contractions and subtree prunings while keeping surviving effort counts."""
     kept = set(plan.kept_ids)
     contractions = {c.child_id: c for c in plan.path_contractions}
     nodes = {i: replace(tree.nodes[i]) for i in plan.kept_ids}
@@ -271,14 +253,16 @@ def apply_consolidation(tree: TreePopulation, plan: ConsolidationPlan) -> TreePo
         edge = tree.edges[i]
         if i in contractions:
             c = contractions[i]
-            # A contracted edge is a development stage, not one operator application.
             edges[i] = replace(edge, parent_id=c.parent_id, operator=None, reference_id=None, contracted=True)
         else:
             edges[i] = replace(edge)
     return TreePopulation(
-        root_id=tree.root_id, root_selection_experience=tree.root_selection_experience,
-        root_selection_observations=list(tree.root_selection_observations),
-        nodes=nodes, edges=edges, latest_node_id=tree.latest_node_id,
+        root_id=tree.root_id,
+        root_experience=tree.root_experience,
+        root_observations=list(tree.root_observations),
+        nodes=nodes,
+        edges=edges,
+        latest_node_id=tree.latest_node_id,
         used_crossover_pairs=[pair for pair in tree.used_crossover_pairs
                               if pair[0] in kept and pair[1] in kept],
         evaluations_used=tree.evaluations_used,

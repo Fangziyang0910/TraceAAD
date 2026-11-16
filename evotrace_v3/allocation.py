@@ -1,4 +1,4 @@
-"""Global individual sampling using rank quality and lineage subtree effort."""
+"""Parent selection combining global rank quality with lineage-shared evaluation effort."""
 
 from dataclasses import dataclass
 import math
@@ -36,10 +36,10 @@ class AllocationDecision:
 
 
 def lineage_peaks(tree: TreePopulation) -> dict[int, int]:
-    """Map each retained feasible node to the best feasible node on its path from the root.
+    """Map each retained feasible node to the best feasible ancestor on its retained path from the root.
 
     Smaller fitness wins; ties prefer the earlier node ID. Every feasible node lies on its
-    own path, so its lineage peak always exists.
+    own path, so this ancestor always exists.
     """
     best_on_path: dict[int, int | None] = {tree.root_id: None}
     for node_id in tree.nodes:
@@ -65,22 +65,21 @@ def lineage_peaks(tree: TreePopulation) -> dict[int, int]:
 
 def parent_probabilities(tree: TreePopulation,
                          config: AllocationConfig = AllocationConfig()) -> dict[int, float]:
-    """Normalize 2**(-average_rank / rank_half_life) / (1 + lineage_peak_subtree_evaluations).
+    """Normalize 2**(-rank_gap / rank_half_life) / (1 + subtree_evaluations[a(i)]).
 
-    Every distinct retained feasible individual competes globally by measured rank quality,
-    discounted by the cumulative subtree evaluations of the best feasible ancestor on its
-    path from the root:
-    - Non-improving descendants share their lineage peak's effort, preventing zero-count
-      inversion and bounding total family weight by the peak's base quality weight.
-    - Path-record breakthroughs compete immediately at zero subtree effort, while heavily
-      developed lineages and surpassed stepping stones cool down relative to lighter branches.
+    Retained feasible individuals compete globally by measured rank quality while
+    sharing cumulative evaluation effort with the best feasible algorithm ``a(i)``
+    on their retained path from the root:
+    - Descendants that have not improved upon ``a(i)`` share its ``subtree_evaluations``,
+      keeping worse offspring below their parent and bounding the total weight of any
+      non-improving family within a tree state by ``a(i)``'s base quality weight.
+    - A descendant that strictly improves upon its path record becomes its own peak with
+      fresh effort, while heavily explored lineages yield budget to less-explored branches.
     """
     quality = quality_scores(tree, distinct_individuals(tree))
     if not quality:
         return {}
     peaks = lineage_peaks(tree)
-    # Undo population-size normalization. Subtract the best tied rank before
-    # scaling: this common shift cancels and keeps all-tied/extreme inputs finite.
     best_quality = max(quality.values())
     log_weights = {
         i: -math.log(2) * (best_quality - quality[i]) * (len(quality) - 1)
@@ -108,11 +107,7 @@ def eligible_reference_pool(
     parent_id: int,
     config: AllocationConfig = AllocationConfig(),
 ) -> list[int]:
-    """返回候选交叉参考编号列表（按适应度从优到劣排序）。
-
-    所有规模共用相同质量门槛，排除主父代及相同源码。
-    在实际可用的不同实现中排名，避免最优主父代占用参考资格。
-    """
+    """Return feasible crossover reference candidates ranked above ``reference_quality_floor``."""
     if parent_id not in tree.nodes or tree.nodes[parent_id].fitness is None:
         raise ValueError("Crossover parent must be a retained feasible node")
 
@@ -131,11 +126,7 @@ def select_crossover_reference(
     parent_id: int,
     config: AllocationConfig = AllocationConfig(),
 ) -> tuple[int | None, float | None]:
-    """在合格参考池中选择与主父代 AST 结构最不相似（距离最大）的参考节点。
-
-    资格判定使用标准化源码等价性 ``identity(code)``（避免忽略变量身份的 AST 指纹误拒不同计算，如 ``x/y`` 与 ``y/x``）；
-    排序偏好使用 ``code_distance`` 最大。优先选取尚未与 ``parent_id`` 配对过的候选；全部已配对时允许复用。
-    """
+    """Select the eligible reference with maximum AST structural distance from ``parent_id``."""
     pool = eligible_reference_pool(tree, parent_id, config)
     if not pool:
         return None, None
@@ -158,7 +149,6 @@ def select_crossover_reference(
 
     unused_candidates = [(dist, cid) for dist, cid, is_unused in scored if is_unused]
     active = unused_candidates if unused_candidates else [(dist, cid) for dist, cid, _ in scored]
-    # 距离最大优先；距离相同时适应度更优、编号更早者优先
     best_dist, best_id = max(
         active,
         key=lambda item: (item[0], -float(tree.nodes[item[1]].fitness), -item[1]),  # type: ignore[arg-type]
@@ -171,7 +161,7 @@ def allocate_step(
     rng: random.Random,
     config: AllocationConfig = AllocationConfig(),
 ) -> AllocationDecision:
-    """Select one individual, then one generation operator and optional reference."""
+    """Select one parent individual, one evolution operator, and optional crossover reference."""
     parent_id, probability = select_parent(tree, rng, config)
     operators: list[Operator] = ["Refine", "Explore", "Crossover"]
     operator = rng.choices(operators, weights=[config.refine_weight, config.explore_weight,

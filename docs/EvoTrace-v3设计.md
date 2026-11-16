@@ -1,82 +1,69 @@
 # EvoTrace V3：树状种群与反思简化
 
-V3以树状种群结合候选竞争与算法之间的发展关系。节点保存受评算法，主父代边记录派生关系；个体按实测名次质量与路径最优祖先的子树累计投入全局竞争。**反思树简化（Reflective Tree Simplification）**在维护树结构时，将相关路径与旁支中的尝试凝练为节点和边上的设计经验。后续改进、交叉与探索从同一棵树读取算法及经验。研究问题与核心思路见[研究概述](树状种群与反思简化.md)。
+V3 以演化树统一组织算法种群、经验压缩与生成上下文。节点保存受评算法与**节点经验**（`node.experience`），有向边记录派生关系与**边经验**（`edge.experience`）。树上可行个体按全局名次质量与沿演化路径共享的子树评价投入竞争开发机会；**反思树简化（Reflective Tree Simplification）**通过路径收缩与子树剪枝维护种群，将被简化区域的试错经历凝练到对应边和节点上。研究主线见[树状种群与反思简化](树状种群与反思简化.md)。
 
-实现位于独立包[`evotrace_v3/`](../evotrace_v3/README.md)，不依赖V1、V2或其他方法包。V1、V2及其历史实验保留各自冻结条件；V3使用独立运行目录与记录格式。
+实现位于独立包 [`evotrace_v3/`](../evotrace_v3/README.md)，仅依赖 Python 标准库，不依赖历史版本或其他方法包。
 
-## 1. 节点、主父代边与投入记账
+## 1. 演化树表示与评价记账
 
-树中每个受评算法节点保存可执行代码、事实性计算描述（`design`）、实测适应度`fitness`（越小越优）或失败反馈、节点选择经验$S$，以及三项记账字段：
+每个受评尝试的最终算法版本作为节点挂入 `TreePopulation`：
+- `Node` 保存源码 `code`、事实性计算描述 `design`、实测适应度 `fitness`（越小越优，`None` 表示不可行）或错误摘要 `failure`、节点经验 `experience`、原始比较记录 `observations`，以及评价统计字段 `subtree_evaluations`、`last_used`（另附不参与决策的诊断计数 `direct_evaluations`）。
+- `Edge` 保存主父代编号 `parent_id`、生成算子 `operator`、交叉参考编号 `reference_id`、收缩标记 `contracted`、边经验 `experience` 与原始比较记录 `observations`。虚拟根（`root_id = 0`）单独保存初始阶段归并的 `root_experience` 与 `root_observations`。
 
-- `development_evaluations`：以该个体为主父代实际消耗的程序评价次数。
-- `subtree_evaluations`：从该个体及其历史后代出发累计消耗的程序评价次数（含后续已移除后代）。
-- `last_used`：该个体出生、最近一次作为主父代受评，或最近一次被选作交叉参考时的全局评价时钟。
+`Init` 生成的个体挂在虚拟根下（`operator = None`）；`Refine`、`Explore` 与 `Crossover` 生成的子代挂在所选主父代下，`Crossover` 参考个体仅提供上下文而不建立结构边。
 
-每条入边保存主父代编号`parent_id`、生成算子`operator`、交叉参考编号`reference_id`、已收缩标志`contracted`及边变异经验$V$。节点$S$与边$V$在保存文本经验的同时，自动绑定该区域及携带历史的原始比较目录（`selection_observations` / `variation_observations`，记录原始`comparison_id`、起止适应度、算子与错误摘要），多轮经验迁移不改写原始比较端点。
+每次包含程序评价的尝试完成时（含运行失败及修复重评），按实际执行的评价次数推进全局 `evaluations_used`，更新主父代的 `last_used`（`Crossover` 同时刷新参考个体的 `last_used`），并将评价次数累加到主父代及其当前保留祖先链上所有节点的 `subtree_evaluations`。新节点的 `subtree_evaluations` 从 `0` 起计；未进入程序评价的请求错误、格式修复与反思调用不推进评价时钟，其调用与词元用量单列记录。
 
-`Init`从虚拟根生成初始个体；`Refine`、`Explore`与`Crossover`均从所选主父代生成子代。`Crossover`的参考个体只进入生成上下文，不增加结构边。
+## 2. 全局名次与谱系投入父代分配
 
-每次带程序评价的尝试完成时（无论`Refine`、`Explore`还是`Crossover`，含运行失败与修复重评），按实际执行的评价次数更新主父代的`development_evaluations`与`last_used`，并同步累加主父代及其当前所有保留祖先的`subtree_evaluations`。`Crossover`选中的参考个体刷新`last_used`（维持其在活跃工作集中的留存），但不增加`development_evaluations`（仅当参考恰好位于主父代祖先链上时，其`subtree_evaluations`随真实后代评价正常累加）。未触发程序评价的模型请求失败、格式修复与区域反思调用不推进评价计数，其调用与词元用量单独记录。新入树子代自身的`development_evaluations`与`subtree_evaluations`均从0开始，全局`evaluations_used`统计包含初始化在内的全部实际程序评价。
+每次演化生成前，`distinct_individuals` 将标准化源码（`identity(code)`）与实测适应度均相同的可行节点折叠为最早编号；全体独立可行个体 $V^*$ 按适应度从优到劣计算平均并列名次（`quality_scores`）。同时，`lineage_peaks` 沿当前保留边找到每个可行个体 $i$ 从根到自身路径上适应度最优的可行祖先（同分取更早编号）：
 
-## 2. 名次半衰期与谱系投入父代采样
+$$a(i) = \arg\min_{u \in \operatorname{path}(\text{root} \to i),\, u \text{ feasible}} (f_u, u).$$
 
-每次演化生成前，先对保留可行个体做标准化源码与实测分数的精确去重（`distinct_individuals`，将`identity(code)`与`fitness`均相同的节点折叠为最早编号），再在全体独立可行个体中按适应度从优到劣计算平均名次与归一化秩质量（`quality_scores`）：最优为1，最差为0；并列适应度共享所占名次区间的中点平均名次；仅有一个可行个体或全员同分时秩质量取0.5。
+全体 $i \in V^*$ 按同一概率分布抽样主父代：
 
-同时，`lineage_peaks`沿主父代边确定每个可行个体从根到自身的路径上实测适应度最优的可行节点（平分取更小`id`；因个体自身可行，路径峰值恒存在）。包括内部LCA分叉祖先在内的所有独立保留可行个体在同一分布中全局采样：
+$$w_i = \frac{2^{-r_i / H}}{1 + s_{a(i)}}, \qquad p_i = \frac{w_i}{\sum_{j \in V^*} w_j},$$
 
-```text
-质量权重 = 2 ** (-平均名次差 / rank_half_life)
-个体权重 = 质量权重 / (1 + 路径最优可行祖先的 subtree_evaluations)
-选择概率 = 个体权重 / 所有独立保留可行个体权重之和
-```
+其中 $r_i$ 为个体 $i$ 相对当前最优并列组的平均名次差，$H = \text{rank\_half\_life}$（默认 `10.0`）为质量权重减半的名次跨度，$s_{a(i)}$ 为 `tree.nodes[a(i)].subtree_evaluations`。
 
-`rank_half_life`默认为10（须为有限正数），表示**平均名次每落后多少位，个体质量权重减半**。默认设置下，同谱系投入的第1名权重是第11名的2倍、第21名的4倍；实现中在对数空间计算并归一化，以`math.ulp(0.0)`作为正概率下界。
+这一权重同时结合种群全局择优与演化树分支探索：
+- **同路径未突破变体共享投入：** 在当前树状态下，未严格超越 $a(i)$ 的后代（含退步、局部回升未破原纪录及同分改写）与 $a(i)$ 共享同一个 $1 + s_{a(i)}$ 分母；组内严格按实测名次排序，未改进后代不会因自身计数为零而获得高于父代的权重，且同一路径峰值 $a$ 名下所有未突破个体的总权重上界受峰值自身的基础质量权重 $2^{-r_a / H}$ 约束（因每保留一个后代至少向 $s_a$ 计入一次评价）。
+- **路径新突破即时跟进与分支轮换：** 一旦后代严格刷新路径最优适应度，即有 $a(i) = i$ 并以 $s_i = 0$ 参选；持续消耗预算而未再刷新纪录的分支则随 $s_{a(i)}$ 增长逐步降低抽样权重，将预算让渡给投入较少的竞争分支。
 
-固定名次减半跨度使相对选择强度不随在线种群规模波动而扁平化，同时消除不同任务目标值的量纲差异。分母采用路径最优可行祖先的`subtree_evaluations`，统一处理两层关系：
+选定主父代后，按 `0.45 / 0.30 / 0.25` 抽取 `Refine`、`Explore` 或 `Crossover`。执行 `Crossover` 时，排除主父代及标准化源码相同的节点，在秩质量不低于 `reference_quality_floor`（默认 `0.30`）的候选中优先挑选未配对过的 `(parent_id, reference_id)` 组合，并取 AST 结构距离（`code_distance`）最大者；无合格参考时回退为 `Refine`。
 
-- **同谱系变体共享预算（消除零计数反超与刷票）：** 未超越路径峰值的后代（含多步退步、跨谷回升但未破原纪录及同分改写）与该峰值共享同一个`1 + subtree_evaluations`分母，组内严格按实测名次排序，退步或持平子代不会压过更优父代；又因峰值子树每保留一个后代必使峰值的`subtree_evaluations`至少加1，峰值及其名下全部未破纪录变体的权重之和恒不超过峰值单点的基础质量权重，无需人工代码距离分簇。
-- **跨谱系冷却与破纪录即时跟进：** 当后代严格刷新路径最优适应度时，它自身成为新的路径峰值并以`subtree_evaluations = 0`参选，在任意树深均可立即获得跟进预算；已被超越的旧踏脚石及持续开发而未出新纪录的熟分支则随`subtree_evaluations`递增自然降温，将抽样机会转向开发较少的平行竞争分支（`rank_half_life`的5、10、20校准见[参数校准记录](记录/2026-11-14-V3参数校准.md)）。
+## 3. 反思树简化（路径收缩与子树剪枝）
 
-选定主父代后，按`0.45 / 0.30 / 0.25`的概率抽取`Refine`、`Explore`或`Crossover`。选中`Crossover`时，先排除主父代自身及标准化源码等价（`identity(code)`相同）的节点，在剩余可行候选中按同一平均名次规则筛选秩质量不低于`0.30`（`reference_quality_floor`）的参考池，优先挑选尚未配对过的有序`(parent_id, reference_id)`组合，并在其中选取AST多重集Jaccard结构距离（`code_distance`）最大者（同距离依次取适应度更优、编号更小者）；无合格参考时自动回退为`Refine`。每次采样的父代编号、实时选择概率、算子与参考距离均完整写入尝试日志。
+初始化集齐 `initial_size`（默认 `5`）个可行个体后，每次受评个体入树均执行树简化检查（`TopologyConfig`：`active_evaluations = 40`，`region_size = 4`）：
 
-## 3. 反思树简化（Reflective Tree Simplification）
+1. **保留活跃个体与分叉骨架：** 距最近一次使用（`evaluations_used - node.last_used < active_evaluations`）不足 40 次评价的独立可行个体，连同全局最优个体（`champion`），组成活跃集合 $A$；对 $A$ 求两两最近公共祖先闭包得到分叉节点集 $F$，保留骨架为 $A \cup F$。
+2. **划分路径与子树区域：** 其余节点在原树拓扑上唯一归入两类互不相交的区域：
+   - **路径收缩（`PathContraction`）：** 连接两个保留骨架端点（或虚拟根与骨架端点）的中间链 `removed_ids`，连同挂载在该中间链上的未保留分支 `branch_ids`。
+   - **子树剪枝（`SubtreePruning`）：** 其余未保留节点按最近保留祖先（或虚拟根）归集为待剪除子树 `removed_ids`。
+3. **成批简化与经验凝练：** 仅当路径区域节点总数 `len(removed_ids) + len(branch_ids) >= region_size` 或子树区域节点数 `len(removed_ids) >= region_size` 时，执行拓扑简化并发起一次反思调用；未满阈值的区域原样留在树中，待后续尝试自然积累后再一并整理。
 
-树没有固定种群名额，也不按固定全局代数批量整理。初始化获得5个可行程序后，每个受评节点入树时，系统在同一份维护前快照上执行**反思树简化**（`TopologyConfig`，仅含两个正整数参数：`active_evaluations = 40`，`region_size = 4`）：
+简化重连边标记 `contracted = True`（`operator` 与 `reference_id` 置空），所有存活节点的 `subtree_evaluations` 与 `last_used` 原样保留，被简化节点的历史评价不会重复计入或转嫁给保留后代。
 
-1. **活跃工作集留存（`active_evaluations`，默认40）：** 在`distinct_individuals(tree)`中，所有满足`evaluations_used - node.last_used < active_evaluations`的独立可行个体，连同全局最优个体（`champion`，同分取编号最小），构成当前活跃集合$A$。活跃窗口内不按单步适应度裁剪未超越父代的探索铺垫或近期中间祖先；精确复制品（同`identity(code)`且同`fitness`的后发节点）不进入`distinct_individuals`，因而不进入$A$。
-2. **LCA虚树闭包与区域划分：** 对活跃集合$A$在树拓扑上求两两最近公共祖先（LCA）闭包，保留至少连接两条含$A$子树的分叉节点集合$F$，形成虚树骨架$\mathcal V(A) = A \cup F$。冷退集合$R = V(T) \setminus \mathcal V(A)$在维护前拓扑上唯一划分为两类不相交区域：
-   - **路径收缩区域（$\to V$）：** 连接两个虚树端点（或虚拟根与虚树端点）的冷退中间链`removed_ids`，连同挂载在该中间链上的冷退旁支`side_ids`。
-   - **旁支剪除区域（$\to S$）：** 其余冷退节点按最近虚树祖先（或虚拟根）分组归集。
-3. **成批阈值压缩（`region_size`，默认4）：** 仅当某个路径收缩区域满足`len(removed_ids) + len(side_ids) >= region_size`，或某个旁支剪除区域满足`len(removed_ids) >= region_size`时，该区域才在本轮执行结构简化并发起一次反思调用。未满`region_size`的冷退区域原样保留在树中（记入`deferred_ids`），不新增额外状态标签；其中的可行个体若后续被抽样开发或引用，`last_used`刷新后自然重返$A$，其中的精确复制品则因`distinct_individuals`过滤而始终零抽样权重。
+## 4. 节点经验与边经验合成
 
-当本轮存在至少一个达到`region_size`的区域时，日志在`triggers`中记录单条`kind = "reflective_tree_simplification"`事件（包含当前`evaluations`、`active_ids`、`fork_ids`、`deferred_ids`与`removed_ids`）；无区域达到阈值时返回空计划且不调用反思。由于虚树骨架$\mathcal V(A)$作为不可动边界无条件保留，移除满额区域并重连边不会合并或放大任何未满阈值的暂留区域，因此`plan_consolidation(apply_consolidation(tree, plan), config)`对任意树严格满足**单步幂等性**。
+每个达到阈值的简化区域调用一次结构化反思模型（严格 JSON 模式输出单一 `"experience"` 字段，约 120 英文词）：
+- **路径收缩区域**（`build_edge_reflection_prompt`）读取起止代码及净差分、中间步骤代码与分数变化、沿途剪除分支差分、同起点存活参照（`[Related Results]`）、携带的既有经验以及当次区域的比较表（`[Comparison Catalog]`），合成**边经验**写入重连边的 `edge.experience`。
+- **子树剪枝区域**（`build_node_reflection_prompt`）读取保留父代基准代码、各分支相对真实父代的代码差分与实测结果/报错、同起点存活参照、既有经验以及当次区域的比较表，合成**节点经验**写入保留父代的 `node.experience`（或 `tree.root_experience`）。
 
-活跃窗口决定当前保留范围，LCA闭包保留发展分叉，区域阈值控制整理时机。三个规则共同确定一次简化，无需固定种群名额或逐节点反思。
+原始比较元数据保存在节点与边的 `observations` 列表中供审计与无模型回退使用；为防止多轮简化导致反思输入随历史线性膨胀，`[Comparison Catalog]` 仅向模型呈现当次简化区域的比较项。若反思调用异常，系统自动根据比较记录与既有笔记生成有长上限的确定性回退摘要。
 
-## 4. 简化区域的经验凝练与来源绑定
+## 5. 面向算子的树上下文读取
 
-保留端点之间的被收缩中间链及其同轮移除旁支合并为一个**路径收缩区域**，凝练写回重连边的变异经验$V$；其余移除旁支按最近保留祖先（或虚拟根）分组为**旁支剪除区域**，凝练写回承接位置的选择经验$S$。每个移除节点在当轮更新中严格归属唯一区域，全部区域统一读取维护前快照后一次性提交新树。收缩边标记`contracted = True`，表示一段发展阶段，`operator`与`reference_id`置空。
-
-每个区域发起一次结构化反思调用，输入材料包含起止或承接源码、每个尝试相对真实父代的标准化代码差分（无父代时给出完整源码）、实测分数或精简运行错误、载体与移除元素携带的旧经验、各共同起点下区域外最优兄弟参照（`[Related Results]`），以及程序自动生成的`[Comparison Catalog]`。模型按严格JSON模式返回单一`"experience"`字符串（约120英文词的自足研究笔记），保留尝试过的计算思想、有信息量的实测结果及有效旧经验；解释保持试探性且非必答，旁支提示同时说明个体退出源于种群规模管理而非证伪相关思想。
-
-程序自动将该区域的完整`Comparison Catalog`绑定到目标节点或边的`observations`列表；后续该载体再次被简化时，旧笔记前自动附上支撑它的`comparison_id`集合。若模型调用或解析失败，系统从比较目录与旧笔记确定性生成不超过960字符的回退摘要，确保结构简化与来源追溯不中断。
-
-## 5. 保投入重连不变量
-
-当`P → A → B → C`收缩为`P → C`时，`C`自身的`development_evaluations`、`subtree_evaluations`与`last_used`完全保持原值：`A`、`B`及其同轮旁支的试错经历交接至重连边`P → C`的$V$，而它们曾经消耗的评价早已包含在更高层保留祖先`P`的`subtree_evaluations`中，不会重复累加，更不会转嫁到后代`C`头上。此后从`C`继续开发消耗评价时，仅递增`C`的直接计数以及`C`与当前保留祖先的子树计数。剪枝与收缩均不回退全局评价时钟`evaluations_used`。
-
-## 6. 三算子多尺度树视图
-
-| 算子 | 读取内容 |
+| 算子 | 树上下文内容 |
 | --- | --- |
-| Refine | 当前完整代码与分数、从根到当前父代的完整保留形成路径（含未收缩差分、收缩边$V$与路径节点$S$）、根$S_r$及当前个体的直接子尝试（含失败尝试）。 |
-| Crossover | 当前与参考两份完整代码及分数、真实最近公共祖先（LCA）、自LCA分化后的双支路径及沿途$S/V$、主父代的直接子尝试。 |
-| Explore | 按适应度排序的当前保留种群个体概览（设计描述、分数、派生来源及附着$S/V$，含根$S_r$），后接所选父代作为一份现有实现源码。 |
+| `Refine` | 当前算法源码与分数、从根到当前节点的演化路径（未收缩边展示代码 diff，收缩边展示边经验 `edge.experience`，沿途节点展示节点经验 `node.experience`）、初始根经验及当前节点的直接子尝试。 |
+| `Crossover` | 主父代与参考算法两份源码及分数、最近公共祖先及其节点经验、自公共祖先分叉后的两条演化路径与沿途经验、主父代的直接子尝试。 |
+| `Explore` | 按适应度排序的树上可行个体概览（`design`、分数、来源及附着的边/节点经验，含初始根经验），后附所选主父代源码作为一份现有实现对照。 |
 
-演化提示默认输入上限为`30,000` tokens（接入公共调度端点时调用服务端聊天分词器计数，独立运行时以UTF-8字节数保守代替并在`input_window`记录口径）。超限时按实测词元折半缩减可选展示窗口，始终保留核心源码与差分基准，不改变底层树结构、投入计数或经验归属。
+生成提示默认输入上限为 `30,000` tokens（接入调度器时按服务端分词器精确计数，独立运行时按 UTF-8 字节保守估算）。超限时自动折半缩减可选展示窗口，始终保留核心源码与差分基准。将 `ContextConfig(include_experiences=False)` 设为 `False` 可在不改变树拓扑和抽样轨迹的前提下纯粹隐藏节点与边经验，用于消融对照。
 
-## 7. 运行、恢复与已知边界
+## 6. 运行、恢复与边界
 
-仓库统一实验入口支持`--method evotrace.v3`与`evotrace_v3`，独立入口与实验入口均开放`--active-evaluations`、`--region-size`与`--rank-half-life`。`attempts.jsonl`中的已提交尝试是唯一恢复依据：带简化的尝试保存更新后的完整树快照，恢复时确定性重放而不重复调用反思；`run_config.json`校验方法机制列表（含`reflective_tree_simplification`）、选择规则（`rank_decay_lineage_sampling`）、经验表示（`algorithm_design_experience`）及`topology`与`allocation`超参数，不一致时拒绝续跑。
+统一实验入口（`--method evotrace.v3` / `evotrace_v3`）与独立 CLI（`python -m evotrace_v3`）均支持 `--active-evaluations`、`--region-size` 与 `--rank-half-life`。`attempts.jsonl` 是唯一权威恢复日志，发生简化的步骤保存更新后的完整树快照，恢复时确定性重放而不重复调用反思；`run_config.json` 严格校验机制列表、选择规则（`rank_decay_lineage_sampling`）、经验表示（`node_and_edge_experience`）及拓扑/分配配置，防止不同版本混跑。
 
-已知机制边界是：尽管比较标签与来源目录由程序精确绑定，反思模型面对组合代码改动时仍可能产生归因偏差或沿用旧推断。机制演进与结构核验记录见[本周记录](记录/2026-W46.md)。
+已知边界包括：单步自然语言反思是有损归纳，面对多处同时修改的代码仍可能出现归因偏差；`Explore` 子代当前挂接在所选主父代下，因而在未当场超越父代时会继承原路径峰值的评价计数。演进脉络见[研究周记](记录/2026-W46.md)。

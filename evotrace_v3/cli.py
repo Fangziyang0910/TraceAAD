@@ -60,9 +60,9 @@ def main(argv=None):
     parser.add_argument("--rank-half-life", type=float,
                         help="Rank difference that halves quality weight (default: 10)")
     parser.add_argument("--active-evaluations", type=int,
-                        help="Working-set window in evaluations since birth, development, or reference (default: 40)")
+                        help="Active retention window in evaluations since birth, parent use, or reference (default: 40)")
     parser.add_argument("--region-size", type=int,
-                        help="Minimum retired nodes in a region before reflective simplification (default: 4)")
+                        help="Minimum inactive nodes in a path or subtree region before simplification (default: 4)")
     parser.add_argument("--no-example", action="store_true")
     args = parser.parse_args(argv)
     try:

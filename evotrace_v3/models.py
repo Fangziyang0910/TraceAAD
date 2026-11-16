@@ -29,31 +29,31 @@ Status = Literal["success", "error", "timeout"]
 
 @dataclass
 class Node:
-    """已评价的算法版本，以及从它出发的选择经验。"""
+    """受评算法个体，以及从该算法出发探索分支所凝练的节点经验。"""
 
     id: int
     code: str
     design: str
     fitness: float | None  # None 表示不可行个体。
     failure: str | None = None
-    selection_experience: str = ""
-    development_evaluations: int = 0  # 以此个体为主父代实际使用的评价次数，包含失败与修复。
-    subtree_evaluations: int = 0  # 从此个体及其后代开发的历史评价数；删除/收缩不改写保留个体的计数。
-    last_used: int = 0  # 出生、作为主父代开发或被选作交叉参考时的评价时钟。
-    selection_observations: list[dict] = field(default_factory=list)
+    experience: str = ""
+    direct_evaluations: int = 0  # 诊断记录：以此个体为主父代直接消耗的评价次数（不参与抽样决策）。
+    subtree_evaluations: int = 0  # 从此个体及其历史后代累计消耗的评价次数；树简化不回退存活节点的计数。
+    last_used: int = 0  # 出生、作为主父代受评或被选作交叉参考时的评价时钟。
+    observations: list[dict] = field(default_factory=list)
 
 
 @dataclass
 class Edge:
-    """算法之间的发展关系，以及这段发展的变异经验。"""
+    """算法之间的演化派生边，以及路径收缩后凝练的边经验。"""
 
     parent_id: int
     child_id: int
-    operator: Operator | None  # 初始算法的入边与收缩后的阶段边为 None。
+    operator: Operator | None  # 初始算法的入边与路径收缩后的演化边为 None。
     reference_id: int | None = None
-    variation_experience: str = ""
+    experience: str = ""
     contracted: bool = False
-    variation_observations: list[dict] = field(default_factory=list)
+    observations: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -61,22 +61,21 @@ class TreePopulation:
     """虚拟根单独表示；算法节点按 id 索引，入边按 child_id 索引。"""
 
     root_id: int = 0
-    root_selection_experience: str = ""
+    root_experience: str = ""
     nodes: dict[int, Node] = field(default_factory=dict)
     edges: dict[int, Edge] = field(default_factory=dict)
     latest_node_id: int = 0
     used_crossover_pairs: list[tuple[int, int]] = field(default_factory=list)
     evaluations_used: int = 0
-    root_selection_observations: list[dict] = field(default_factory=list)
+    root_observations: list[dict] = field(default_factory=list)
 
     def add(self, node: Node, edge: Edge, *, evaluations: int) -> None:
-        """Attach one evaluated version, counting its actual evaluations including repairs.
+        """Attach one evaluated algorithm and record its actual evaluation cost.
 
-        Creating the child is a direct development of its parent. Developing the
-        child later increments its own direct count and the historical subtree
-        count of itself and every retained ancestor. Selecting a crossover
-        reference refreshes its working-set timestamp without charging direct
-        development effort. A child's birth is not development from that child.
+        Evaluating an offspring increments the parent's diagnostic direct count
+        and increments ``subtree_evaluations`` along all retained ancestors on
+        its path from the root. Using an individual as a crossover reference
+        refreshes ``last_used`` without charging subtree effort.
         """
         if node.id == self.root_id or node.id <= self.latest_node_id or node.id != edge.child_id:
             raise ValueError("New node IDs must increase and match edge.child_id")
@@ -99,7 +98,7 @@ class TreePopulation:
                 raise ValueError("A new algorithm requires a retained feasible parent")
             if edge.operator not in ("Refine", "Crossover", "Explore"):
                 raise ValueError("An evolutionary edge requires an operator")
-            parent.development_evaluations += evaluations
+            parent.direct_evaluations += evaluations
             parent.last_used = clock
             ancestor = parent.id
             while ancestor != self.root_id:
@@ -184,9 +183,10 @@ class ModelReply:
 class Attempt:
     """One generation attempt: its model calls, evaluations and final program.
 
-    ``record`` holds method-specific information, such as trajectory allocation
-    and the material shown to the model.
+    ``record`` holds method-specific information, such as parent allocation
+    and the tree context shown to the model.
     """
+
     id: int
     parent_id: int
     operator: Operator

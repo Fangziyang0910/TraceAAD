@@ -38,7 +38,7 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         "base": [],
         "evotrace.v1": ["tree_population", "reflective_simplification", "shinka_allocation", "multiscale_context"],
         "evotrace.v2": ["tree_population", "dynamic_reflective_simplification", "shinka_allocation", "multiscale_context"],
-        "evotrace.v3": ["tree_population", "reflective_tree_simplification", "individual_tree_allocation", "multiscale_context"],
+        "evotrace.v3": ["tree_population", "reflective_tree_simplification", "lineage_effort_allocation", "tree_context"],
         "v21.3": [2],
         "v22.2": [1, 2],
         "v23.2": [1],

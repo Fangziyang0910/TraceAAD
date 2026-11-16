@@ -19,10 +19,10 @@ def test_paths_and_lca_follow_actual_ancestry_across_explore():
     c = add(tree, b, 7, 'Explore')
     current = add(tree, c, 6)
     reference = add(tree, b, 5, 'Explore')
-    tree.nodes[a].selection_experience = 'EARLY_EVIDENCE'
-    tree.nodes[b].selection_experience = 'FORK_EVIDENCE'
-    tree.edges[c].variation_experience = 'SHIFT_EVIDENCE'
-    tree.root_selection_experience = 'INITIAL_EVIDENCE'
+    tree.nodes[a].experience = 'EARLY_EVIDENCE'
+    tree.nodes[b].experience = 'FORK_EVIDENCE'
+    tree.edges[c].experience = 'SHIFT_EVIDENCE'
+    tree.root_experience = 'INITIAL_EVIDENCE'
     before = deepcopy(tree)
     text, instruction, _, view = build_evolution_context(tree, current, 'Refine')
     assert view['path'] == [a, b, c, current]
@@ -47,7 +47,7 @@ def test_explore_reads_individuals_and_fits_complete_entries_without_grouping():
     parent = 0
     for i in range(16):
         parent = add(tree, parent, 20-i, 'Explore' if i % 3 else 'Refine')
-        tree.nodes[parent].selection_experience = f'NOTE_{parent} ' + 'evidence '*30 + 'END_NOTE'
+        tree.nodes[parent].experience = f'NOTE_{parent} ' + 'evidence '*30 + 'END_NOTE'
     task = Task('Minimize', 'def solve(x): pass', lambda src, fn: fn(1), 2)
     builder = EvoTracePromptBuilder(task, Config())
     full, view = builder.evolution_from_tree(tree, parent, 'Explore', count_tokens=len,
