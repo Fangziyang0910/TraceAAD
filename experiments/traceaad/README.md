@@ -15,7 +15,7 @@
 
 默认后端为 `scheduled`，Qwen3.8-27B 经 server4 公共调度器分配。采样为温度1.0、top_p=0.8、top_k=20、min_p=0、presence_penalty=1.5，关闭思考，默认输出上限16384。完整设置见[scheduling.py](scheduling.py)与运行元数据。
 
-V22.2与V23.2默认开启机制1的轨迹嵌入交叉参考；`--no-trajectory-reference-embedding`在同池随机选参考，作为参考部分消融。Base始终在合格池随机选参考。嵌入服务复用 `SHINKA_EMBEDDING_*` 配置，向量和用量保存在native目录。设计见[机制1](../../docs/演化轨迹叙事/机制设计/机制1-轨迹节点价值评估与预算分配.md)。
+V22.2与V23.2默认开启机制1的轨迹嵌入交叉参考；`--no-trajectory-reference-embedding`在同池随机选参考，作为参考部分消融。Base始终在合格池随机选参考。嵌入服务复用 `SHINKA_EMBEDDING_*` 配置，向量和用量保存在native目录（历史机制文档封存于本地 `archive/`）。
 
 EvoTrace的独立入口、配置与恢复约定见[V3](../../evotrace_v3/README.md)、[V2](../../evotrace_v2/README.md)、[V1](../../evotrace_v1/README.md#记录与恢复)。不同版本分别建立批次并由各自冻结源码恢复；V3四任务正式批次（`20261116_000118_evotrace_v3_full_co4`）保存在`experiments_result/evotrace_v3_full`，此前已停批次仍保留在各自目录。下方真实轨迹harness面向V2冻结记录，不能用V2树快照恢复V3。
 
@@ -129,6 +129,6 @@ V22.2与V23.2需要轨迹参考嵌入服务，不需要反思服务。V24.1不�
 
 `step`校验真实步骤重建的生成提示与已获响应一致。重复执行只复用源码、任务和提示均匹配的已完成步骤；新样本先增加`run --repeats`，再运行相应重复编号。历史回放在原批次的冻结基准仓库内执行，`--source`只切换方法包。
 
-V3父代选择的名次减半跨度由`--rank-half-life`设置，默认10；`run`和`launch_host`均支持。该参数只适用于V3，写入批次及运行配置，并实际传给搜索。恢复时省略该参数会读取原生记录中的值，显式更改会拒绝恢复。参数校准见[V3记录](../../docs/记录/2026-11-14-V3参数校准.md)。
+V3父代选择的名次减半跨度由`--rank-half-life`设置，默认10；`run`和`launch_host`均支持。该参数只适用于V3，写入批次及运行配置，并实际传给搜索。恢复时省略该参数会读取原生记录中的值，显式更改会拒绝恢复。精确定义见[V3设计](../../docs/EvoTrace-v3设计.md)。
 
 V3反思树简化由两个参数控制：`--active-evaluations`（默认40次评价活跃留存窗口，出生、作为主父代受评或被选作交叉参考均刷新时钟）与`--region-size`（默认4个节点起批触发路径收缩或子树剪枝）。两参数同样支持`run`和`launch_host`，记录在批次与运行的`topology`字段中。AST距离只用于交叉参考，不参与生存选择。恢复时校验`reflective_tree_simplification`与原生配置，早期运行由各自冻结源码恢复。

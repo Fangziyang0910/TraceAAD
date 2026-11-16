@@ -9,14 +9,13 @@ EvoTrace以**演化树种群**统一组织算法个体、派生关系与设计�
 | 你想做什么 | 阅读入口 |
 | --- | --- |
 | 理解研究问题与核心思路 | [树状种群与反思简化](docs/树状种群与反思简化.md) |
-| 核对当前V3规则、公式与参数 | [V3正式设计](docs/EvoTrace-v3设计.md)；历史[V2设计](docs/EvoTrace-v2设计.md) |
+| 核对当前V3规则、公式与参数 | [V3正式设计](docs/EvoTrace-v3设计.md) |
 | 阅读完整研究稿、PDF与复现材料 | [论文交付](paper/README.md)、[英文主稿](docs/paper.md)、[中文对照](docs/paper-中文.md) |
 | 撰写论文或选择投稿场合 | [顶会顶刊论文写作指南](docs/顶会顶刊论文写作指南.md) |
 | 复查V1容量触发基线 | [V1正式设计](docs/EvoTrace-v1设计.md) |
-| 追溯机制修订与实验依据 | [本周记录](docs/记录/2026-W46.md) |
+| 了解 Base 的个体表示、上下文与提示 | [Base设计](docs/TraceAAD-Base设计.md) |
+| 核对当前对照批次与已验证边界 | [实验与边界台账](docs/记录/README.md) |
 | 独立使用 EvoTrace 或接入任务与模型 | [V3](evotrace_v3/README.md)、[V2](evotrace_v2/README.md)、[V1](evotrace_v1/README.md) |
-| 查阅演化轨迹叙事与旧版方法 | [演化轨迹叙事](docs/演化轨迹叙事/README.md) |
-| 了解 Base 的个体表示、上下文与提示 | [Base 说明](docs/演化轨迹叙事/TraceAAD-Base.md) |
 | 运行 EvoTrace 或历史轨迹方法 | [统一入口](experiments/traceaad/README.md) |
 | 设计、运行或复查实验 | [实验入口](experiments/README.md) |
 | 查阅第三方提示的来源版本 | [来源记录](baselines/UPSTREAM.md) |
