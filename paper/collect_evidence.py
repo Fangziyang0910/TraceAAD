@@ -3,7 +3,7 @@ from pathlib import Path
 import csv, hashlib, json, statistics, datetime
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'paper/evidence'
-BATCH='20261114_103407_evotrace_v2_repaired_co4'
+BATCH='20261115_115206_evotrace_v3_revised_co4'
 
 def records(path):
     raw=path.read_bytes()
@@ -13,9 +13,10 @@ def records(path):
     return raw,rows
 
 runs=[]
-for p in sorted((ROOT/'experiments_result/evotrace_v2_repaired').glob('*/'+BATCH+'*/native/attempts.jsonl')):
+for p in sorted((ROOT/'experiments_result/evotrace_v3_revised').glob('*/'+BATCH+'*/native/attempts.jsonl')):
     raw,rs=records(p)
     config=json.loads((p.parent.parent/'run_config.json').read_text())
+    native_cfg=json.loads((p.parent/'run_config.json').read_text())
     evs=[ev for r in rs for ev in r['attempt'].get('evaluations',[])]
     trees=[r['tree_after'] for r in rs if 'tree_after' in r]
     updates=[]; reflections=[]
@@ -42,6 +43,7 @@ for p in sorted((ROOT/'experiments_result/evotrace_v2_repaired').glob('*/'+BATCH
         if 'tree_after' in row:assert size==len(row['tree_after']['nodes'])
         if evaluations:tree_series.append({'evaluation':elapsed,'nodes':size})
     safeconfig={k:config[k] for k in ['task','seed','batch','method_params','task_eval','evaluation_execution','llm']}
+    safeconfig['native']={k:native_cfg[k] for k in ['method','selection_rule','generation_protocol','reference_rule','topology','allocation','context','reflection_enabled','reflection_representation','reflection_temperature','reflection_max_tokens']}
     run={'task':config['task'],'seed':config['seed'],'source':str(p.relative_to(ROOT)),
          'sha256':hashlib.sha256(raw).hexdigest(),'attempts':len(rs),'evaluations':len(evs),
          'last_finished_at':rs[-1]['attempt']['finished_at'],'retained_nodes':size,'attached_nodes':attached,

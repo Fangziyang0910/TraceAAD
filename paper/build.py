@@ -20,7 +20,7 @@ for language,source,name in [('en','paper.md','main'),('zh','paper-中文.md','m
     abstract=text.split('## Abstract\n\n' if language=='en' else '## 摘要\n\n',1)[1].split('\n## ',1)[0]
     body='## '+text.split('\n## ',2)[2]
     body=body.split('## References')[0].split('## 参考文献')[0]
-    body=body.replace('figures/evotrace/07-framework.png','figures/framework.png').replace('figures/evotrace/08-reflective-simplification.png','figures/reflective-simplification.png').replace('../paper/figures/early-search.png','figures/early-search.pdf')
+    body=body.replace('figures/evotrace/09-v3-framework.png','figures/framework.png').replace('figures/evotrace/07-framework.png','figures/framework.png').replace('figures/evotrace/08-reflective-simplification.png','figures/reflective-simplification.png').replace('../paper/figures/early-search.png','figures/early-search.pdf')
     # Figure captions stay with the image rather than becoming separate paragraphs.
     body=re.sub(r'!\[[^\]]*\]\(([^)]+)\)\n\n\*\*(?:Figure \d+\.|图\d+｜)(.*?)\*\*\s*(.*?)(?=\n\n)',lambda m:'!['+m[2].strip()+' '+m[3].strip()+']('+m[1]+')',body,flags=re.S)
     body=re.sub(r'\*\*(?:Table 1\.|表1｜)(.*?)\*\*\n\n((?:\|[^\n]+\n)+)', lambda m:m[2]+'\nTable: '+m[1].strip()+'\n\n', body)

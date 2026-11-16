@@ -1,9 +1,13 @@
 {
   "citations": {
     "en": [
+      "a2dept",
       "alphaevolve",
+      "beam",
       "cladeahd",
+      "codegraphs",
       "deltaevolve",
+      "dga2d",
       "elm",
       "eoh",
       "expel",
@@ -25,12 +29,17 @@
       "reflexion",
       "selfrefine",
       "shinka",
-      "survey_aad"
+      "survey_aad",
+      "uct"
     ],
     "zh": [
+      "a2dept",
       "alphaevolve",
+      "beam",
       "cladeahd",
+      "codegraphs",
       "deltaevolve",
+      "dga2d",
       "elm",
       "eoh",
       "expel",
@@ -52,12 +61,13 @@
       "reflexion",
       "selfrefine",
       "shinka",
-      "survey_aad"
+      "survey_aad",
+      "uct"
     ]
   },
   "math_equal": true,
   "score_cells_checked": 20,
-  "attached_nodes": 894,
-  "retained_nodes": 608,
-  "frozen_evaluations": 951
+  "attached_nodes": 2481,
+  "retained_nodes": 747,
+  "frozen_evaluations": 2641
 }

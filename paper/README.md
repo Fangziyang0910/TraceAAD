@@ -1,68 +1,38 @@
-# EvoTrace论文交付
+# EvoTrace研究稿
 
-**EvoTrace: Evolving Tree-Structured Populations through Reflective Compression**
+**EvoTrace: Experience-Bearing Tree-Structured Populations for Automated Algorithm Design**
 
-本文以“实现的开发价值与经历的参考价值不同”为出发点，将反思描述为搜索经历的压缩，并由树状种群统一候选竞争、历史整理与经验交接。
+论文以树状种群结合候选竞争与派生关系，将反思作为树简化中的经验压缩。当前方法采用活跃工作集、LCA分叉保留和成批区域反思，后续改进、交叉与探索从同一棵树读取算法与经验。
 
 ## 阅读与编辑
 
 | 材料 | 入口 |
 | --- | --- |
-| 英文PDF | [evotrace.pdf](evotrace.pdf) |
-| 中文PDF | [evotrace-中文.pdf](evotrace-中文.pdf) |
-| 完整材料包 | [EvoTrace-paper-source.zip](EvoTrace-paper-source.zip)（PDF、LaTeX、Markdown、图示与冻结数据） |
-| 英文内容源 | [docs/paper.md](../docs/paper.md) |
-| 中文内容源 | [docs/paper-中文.md](../docs/paper-中文.md) |
-| 英文LaTeX | [main.tex](main.tex) |
-| 中文LaTeX | [main-zh.tex](main-zh.tex) |
-| 参考文献 | [references.bib](references.bib)，维护源为[共享BibTeX](../docs/paper-references.bib) |
-| 当前机制规格 | [EvoTrace V2设计](../docs/EvoTrace-v2设计.md) |
-| 原始分数与运行条件 | [冻结快照](evidence/snapshot.json)、[逐种子分数](evidence/training_scores.csv) |
+| 英文与中文PDF | [英文](evotrace.pdf)、[中文](evotrace-中文.pdf) |
+| 完整材料包 | [源码与PDF](EvoTrace-paper-source.zip) |
+| Markdown维护源 | [英文](../docs/paper.md)、[中文](../docs/paper-中文.md) |
+| 生成的LaTeX | [英文](main.tex)、[中文](main-zh.tex) |
+| 当前思路与精确规则 | [研究概述](../docs/树状种群与反思简化.md)、[V3设计](../docs/EvoTrace-v3设计.md) |
+| 参考文献维护源 | [共享BibTeX](../docs/paper-references.bib) |
+| 冻结证据 | [快照](evidence/snapshot.json)、[逐种子分数](evidence/training_scores.csv)、[核验报告](evidence/manuscript_checks.json) |
 
-英文稿包含摘要、引言、相关工作、完整方法、初步实验、讨论、结论，以及默认设置、结构性质证明、反思提示、复现条件和核心评价设计五个附录。中文稿保持相同的机制、公式、分数和论证结构；实际英文提示模板在英文附录C逐字收录。
+## 方法与证据版本
 
-## 当前证据状态
+方法部分描述当前的工作集与成批阈值规则。实验部分保留批次 `20261115_115206_evotrace_v3_revised_co4` 在北京时间11月15日15:36的快照：四任务三种子，共2,641次评价，共同横截面为180次评价。
 
-文稿已形成全文，但当前实证部分是**早期研究稿，不是完成实验的投稿终稿**。2026年11月14日12:13北京时间冻结的本地记录包含最新版12路的951次评价；共同分数位置为60次评价，各路完整目标为1000次。
+该批次使用旧的 `quality_slots = 32` 与 `recent_evaluations = 40` 规则，以及个体直接投入采样；结果只描述其冻结配置。当前规则已有结构回放与不变量检查，完整搜索及固定状态消融按附录E另行检验。
 
-- 正文只报告当前源码批次的早期训练分数、结构简化和反思调用事实。
-- 最终独立测试、统一条件的基线比较，以及无历史／原始历史／反思经验的受控对照尚未完成。正文没有填入假设结果。
-- 已有旧基线在采样温度、评价时限或计数口径上存在差异，不能直接拼成同条件排行榜。
-- 当前版不绑定具体会场，采用匿名通用研究稿排版；投稿时按目标会场模板和页数要求适配。
+论文中的搜索曲线读取上述冻结快照。旧机制图未体现当前成批阈值，已从正文与材料包移除；历史图示保留于[版本图目录](../docs/figures/evotrace/README.md)。
 
-实验的下一步按附录E执行。最优先的是完整搜索的独立测试与固定状态历史表示对照，它们分别决定整体算法表现与压缩经验的作用。
+## 重建与校验
 
-## 重建
-
-直接编译已有LaTeX无需Pandoc：
+从Markdown生成双语LaTeX与PDF，并核对引用、公式、冻结分数和排版日志：
 
 ```bash
-cd paper
-latexmk -xelatex -interaction=nonstopmode -halt-on-error main.tex
-latexmk -xelatex -interaction=nonstopmode -halt-on-error main-zh.tex
+.venv/bin/python paper/build.py
+.venv/bin/python paper/validate.py
 ```
 
-以下流程从Markdown重新生成LaTeX和PDF。
+构建需要Pandoc、XeLaTeX和latexmk。Pandoc不在PATH中时可通过 `--pandoc /path/to/pandoc` 指定。构建不刷新实验数据。
 
-依赖：Pandoc、XeLaTeX、BibTeX、latexmk；中文字体使用Noto Serif CJK SC。Markdown是内容维护源，LaTeX和PDF由构建脚本导出。
-
-```bash
-python3 paper/build.py --pandoc /path/to/pandoc
-```
-
-已安装`pypandoc-binary`时可不传路径。构建同时更新两种语言，使用已有证据快照，不请求模型、不评价候选、不刷新实验。
-
-```bash
-# 仅在决定更新文稿观察时，显式重新冻结本地已提交结果。
-python3 paper/collect_evidence.py
-# 使用已安装matplotlib的Python重画数据图。
-python3 paper/plot_evidence.py
-```
-
-更新快照后，须同步正文中的时间、分数和过程统计，再编译。`collect_evidence.py`只读本地运行日志，不启动、停止或改变实验。
-
-## 图示与来源
-
-框架图及反思简化图由生图模型生成，沿用已复核的[生成记录](../docs/figures/evotrace/current-generation-record.json)。第三幅数据图由冻结快照绘制，提供PNG和矢量PDF。图中箭头表示派生、读取或经验交接；节点与边经验的来源遵循正式机制。
-
-历史研究记录保存当时的条件和认识，不随现行论文改写。两轮Opus意见、Carbon调用失败的记录、采纳依据和统计修正见[整合与交付记录](../docs/记录/2026-11-14-EvoTrace论文整合与交付.md)。
+已有LaTeX也可在 `paper/` 下通过 `latexmk -xelatex main.tex` 与 `latexmk -xelatex main-zh.tex` 编译。
