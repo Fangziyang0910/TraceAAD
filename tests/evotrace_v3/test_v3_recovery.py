@@ -30,7 +30,8 @@ class Model:
 def make_search(model, path):
     task = Task('Minimize', 'def solve(x):\n    pass\n', lambda src, fn: fn(1), 2)
     return EvoTrace(task, model, config=Config(initial_size=1, evaluation_budget=24, seed=3),
-                    topology_config=TopologyConfig(active_evaluations=2, region_size=2), run_dir=path)
+                    topology_config=TopologyConfig(max_representatives=8, cover_distance=0.15, region_size=2),
+                    run_dir=path)
 
 
 @pytest.mark.parametrize('field, old_value', [
@@ -38,11 +39,14 @@ def make_search(model, path):
     ('topology', {'quality_slots': 32, 'recent_evaluations': 40}),
     ('topology', {'cold_evaluations': 40, 'quality_floor': .5, 'clone_distance': .08}),
     ('topology', {'branch_width': 4, 'path_depth': 4, 'cold_evaluations': 40}),
+    ('topology', {'active_evaluations': 40, 'region_size': 4}),
     ('mechanisms', ['tree_population', 'dynamic_reflective_simplification', 'individual_tree_allocation', 'multiscale_context']),
     ('mechanisms', ['tree_population', 'reflective_tree_simplification', 'individual_tree_allocation', 'multiscale_context']),
+    ('mechanisms', ['tree_population', 'reflective_tree_simplification', 'lineage_effort_allocation', 'tree_context']),
     ('selection_rule', 'route_max'),
     ('selection_rule', 'rank_decay_subtree_sampling'),
     ('selection_rule', 'rank_decay_direct_sampling'),
+    ('selection_rule', 'rank_decay_lineage_sampling'),
     ('reflection_representation', 'unbound_prose'),
     ('reflection_representation', 'comparison_observations'),
     ('reflection_representation', 'research_note_with_comparisons'),
@@ -127,7 +131,6 @@ def test_model_outage_does_not_age_tree_and_reflection_failure_keeps_experience(
     t = TreePopulation()
     for i in range(5):
         add(t, 0, i+1)
-    t.evaluations_used += 40
     class Broken:
         complete = staticmethod(outage)
     plan = plan_simplification(t)
@@ -141,14 +144,14 @@ def test_two_hundred_evaluations_resume_with_identical_trees_and_logged_probabil
     from evotrace_v3.allocation import parent_probabilities
     task = Task('Minimize', 'def solve(x):\n    pass\n', lambda src, fn: fn(1), 2)
     config = Config(initial_size=1, evaluation_budget=200, seed=3)
-    topology = TopologyConfig(active_evaluations=8, region_size=4)
+    topology = TopologyConfig(max_representatives=8, cover_distance=0.15, region_size=4)
     def make(model, path, resume=False):
         return EvoTrace(task, model, config=config, topology_config=topology,
                         run_dir=path, resume=resume)
     def advance(search, count):
         states = []
         for _ in range(count):
-            probabilities = parent_probabilities(search.tree)
+            probabilities = parent_probabilities(search.tree, search.allocation_config, search.topology_config)
             attempt = search.step()
             assert attempt is not None
             if 'allocation' in attempt.record:

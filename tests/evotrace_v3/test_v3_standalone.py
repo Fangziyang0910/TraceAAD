@@ -66,7 +66,7 @@ class Model:
 
 task = Task("Minimize a finite score", "def solve(x):\n    pass\n", lambda src, fn: fn(1), 2)
 config = Config(initial_size=3, evaluation_budget=12)
-topology = TopologyConfig(active_evaluations=2, region_size=2)
+topology = TopologyConfig(max_representatives=8, cover_distance=0.15, region_size=2)
 search = EvoTrace(task, Model(), config=config, topology_config=topology, run_dir="run")
 for _ in range(8):
     assert search.step() is not None
@@ -124,7 +124,7 @@ def make_task():
         command = [sys.executable, "-S", "-m", "evotrace_v3", "--task-factory", "sample_task:make_task",
                    "--run-dir", "run", "--budget", "2", "--base-url", f"http://127.0.0.1:{server.server_port}/v1",
                    "--model", "local-test", "--rank-half-life", "7",
-                   "--active-evaluations", "8", "--region-size", "3"]
+                   "--max-representatives", "12", "--cover-distance", "0.2", "--region-size", "3"]
         for extra in ([], ["--resume"]):
             completed = subprocess.run(command + extra, cwd=tmp_path, env=env,
                                        text=True, capture_output=True, timeout=30)
@@ -137,7 +137,7 @@ def make_task():
     saved_path = tmp_path / "run" / "run_config.json"
     saved = json.loads(saved_path.read_text())
     assert saved["allocation"]["rank_half_life"] == 7
-    assert saved["topology"] == {'active_evaluations': 8, 'region_size': 3}
+    assert saved["topology"] == {'max_representatives': 12, 'cover_distance': 0.2, 'region_size': 3}
     incompatible = subprocess.run(command + ["--resume", "--region-size", "4"],
                                   cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
     assert incompatible.returncode != 0 and "topology" in incompatible.stderr
@@ -180,7 +180,7 @@ def test_experiment_adapter_uses_evotrace_owned_runtime(tmp_path, monkeypatch, c
 
     task = Task("Minimize the score", "def solve(x):\n    pass\n", lambda src, fn: fn(1), 2,
                 metadata={"n_instance": 1, "settings": {"timeout_seconds": 2}})
-    state = {"calls": 0}
+    state = {"calls": 0, "reflections": 0}
 
     class Scheduled:
         model = "offline-test"
@@ -191,6 +191,10 @@ def test_experiment_adapter_uses_evotrace_owned_runtime(tmp_path, monkeypatch, c
 
         def complete(self, prompt, **settings):
             assert self.factory is OpenAIClient
+            schema = self.request_options.get("response_format", {}).get("json_schema", {}).get("name", "")
+            if schema.startswith("evotrace_"):
+                state["reflections"] += 1
+                return json.dumps({"experience": "Adjusted the constant."})
             state["calls"] += 1
             return json.dumps({"analysis": "Return a finite score", "design": "Return a constant",
                                "code": f"def solve(x):\n    return {state['calls']}\n"})
@@ -212,16 +216,17 @@ def test_experiment_adapter_uses_evotrace_owned_runtime(tmp_path, monkeypatch, c
     run.main(["--method", "evotrace.v3", "--task", "tsp_construct", "--run-name", "owned",
               "--batch", "owned", "--budget", "7", "--initial-size", "3",
               "--scheduler-socket", "/fake", "--skip-heldout", "--rank-half-life", "6",
-              "--active-evaluations", "12", "--region-size", "3"])
+              "--max-representatives", "12", "--cover-distance", "0.2", "--region-size", "3"])
     result = json.loads(capsys.readouterr().out.splitlines()[-1])
     assert result["evaluations"] == state["calls"] == 7
+    assert state["reflections"] >= 1
     directory = Path(result["run_dir"])
     saved = json.loads((directory / "native" / "run_config.json").read_text())
     assert "selection_temperature" not in saved["config"]
     assert saved['allocation']['rank_half_life'] == 6
     public = json.loads((directory / "run_config.json").read_text())
     assert public['allocation'] == saved['allocation']
-    assert public['topology'] == saved['topology'] == {'active_evaluations': 12, 'region_size': 3}
+    assert public['topology'] == saved['topology'] == {'max_representatives': 12, 'cover_distance': 0.2, 'region_size': 3}
     # Native committed records remain authoritative if the reporting copy is lost.
     (directory / "run_config.json").unlink()
     run.main(["--method", "evotrace.v3", "--task", "tsp_construct", "--run-name", "owned",
@@ -233,7 +238,7 @@ def test_experiment_adapter_uses_evotrace_owned_runtime(tmp_path, monkeypatch, c
     with pytest.raises(ValueError, match='topology'):
         run.main(["--method", "evotrace.v3", "--task", "tsp_construct", "--run-name", "owned",
                   "--batch", "owned", "--budget", "7", "--initial-size", "3",
-                  "--scheduler-socket", "/fake", "--skip-heldout", "--resume", "--active-evaluations", "13"])
+                  "--scheduler-socket", "/fake", "--skip-heldout", "--resume", "--max-representatives", "13"])
     assert public['reference_code'] == saved['context']['include_reference_code'] is True
     summary = json.loads((directory / "summary.json").read_text())
     assert summary["evaluation_calls"] == 7 and summary["status"] == "finished"

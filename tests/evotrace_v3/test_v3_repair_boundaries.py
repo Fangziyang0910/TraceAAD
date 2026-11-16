@@ -33,23 +33,29 @@ def test_negative_scores_are_compared_by_program_and_persisted_on_the_edge():
     assert (fact['parent_fitness'], fact['fitness']) == (-14.848125, -11.508125)
 
 
-def test_lineage_subtree_effort_cools_surpassed_ancestor_and_shares_non_improving_effort():
+def test_representative_cover_excludes_worse_nearby_offspring_and_resets_direct_effort_on_novel_or_improving_child():
     import pytest
-    from evotrace_v3.allocation import lineage_peaks, parent_probabilities
+    from evotrace_v3.allocation import parent_probabilities
+    from evotrace_v3.topology import representatives
     t = TreePopulation()
-    a = add(t, 0, 2, 'def f(): return 2')
-    b = add(t, a, 1, 'def f(): return 1')
-    c = add(t, 0, 3, 'def f(): return 3')
-    assert lineage_peaks(t) == {a: a, b: b, c: c}
+    a = add(t, 0, 2.0, 'def f(x): return x + 2')
+    b = add(t, a, 1.0, 'def f(x): return x + 1')  # Better nearby tweak covers `a` (d == 0 < 0.15)
+    c = add(t, 0, 3.0, 'def f(x): return [y * y for y in range(x) if y % 2 == 0]')
+    assert representatives(t) == (b, c)
     before = parent_probabilities(t)
-    add(t, b, None, 'def f(): raise ValueError()')
+    assert set(before) == {b, c}
+    add(t, b, None, 'def f(x): raise ValueError()')
     after = parent_probabilities(t)
-    assert after[a] / after[c] == pytest.approx(before[a] / before[c] * 2 / 3)
     assert after[b] / after[c] == pytest.approx(before[b] / before[c] / 2)
-    d = add(t, b, 1.5, 'def f(): return 1.5')
-    assert lineage_peaks(t)[d] == b
-    final = parent_probabilities(t)
-    assert final[b] > final[d] > 0
+    # Worse nearby tweak under `b` is covered by `b` and does not enter R or invert `b`.
+    worse_tweak = add(t, b, 1.5, 'def f(x): return x + 5')
+    assert worse_tweak not in parent_probabilities(t)
+    # Structurally distinct Explore child under `b` enters R with fresh direct effort = 0.
+    novel = add(t, b, 2.5, 'def f(x):\n    acc = 0\n    for k in range(x):\n        acc ^= (k << 1)\n    return acc', 'Explore')
+    probs = parent_probabilities(t)
+    assert set(probs) == {b, novel, c}
+    assert t.nodes[novel].direct_evaluations == 0
+    assert probs[novel] > probs[c] > 0
 
 
 def test_observations_keep_original_comparison_while_reflection_prompt_stays_bounded():

@@ -113,9 +113,10 @@ def main(argv=None):
     parser.add_argument("--model-timeout", type=float, default=600)
     parser.add_argument("--selection-temperature", type=float, default=1.0,
                         help="Boltzmann parent temperature in fitness units")
-    parser.add_argument("--rank-half-life", type=float, help="V3 quality weight half-life in ranks")
-    parser.add_argument("--active-evaluations", type=int, help="V3 working-set retention window in evaluations")
-    parser.add_argument("--region-size", type=int, help="V3 minimum retired nodes per simplified region")
+    parser.add_argument("--rank-half-life", type=float, help="V3 quality weight half-life in representative ranks")
+    parser.add_argument("--max-representatives", type=int, help="V3 maximum mutually uncovered representatives")
+    parser.add_argument("--cover-distance", type=float, help="V3 AST shingle distance covered by a better representative")
+    parser.add_argument("--region-size", type=int, help="V3 minimum non-skeleton nodes per simplified region")
     parser.add_argument("--trajectory-reference-embedding", action=argparse.BooleanOptionalAction,
                         default=None, help="Mechanism 1 defaults to trajectory references; --no-... ablates them")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,

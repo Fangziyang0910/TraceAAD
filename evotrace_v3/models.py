@@ -37,9 +37,7 @@ class Node:
     fitness: float | None  # None 表示不可行个体。
     failure: str | None = None
     experience: str = ""
-    direct_evaluations: int = 0  # 诊断记录：以此个体为主父代直接消耗的评价次数（不参与抽样决策）。
-    subtree_evaluations: int = 0  # 从此个体及其历史后代累计消耗的评价次数；树简化不回退存活节点的计数。
-    last_used: int = 0  # 出生、作为主父代受评或被选作交叉参考时的评价时钟。
+    direct_evaluations: int = 0  # 以此个体为主父代直接消耗的实际评价次数；树简化保留存活节点的原计数。
     observations: list[dict] = field(default_factory=list)
 
 
@@ -70,13 +68,7 @@ class TreePopulation:
     root_observations: list[dict] = field(default_factory=list)
 
     def add(self, node: Node, edge: Edge, *, evaluations: int) -> None:
-        """Attach one evaluated algorithm and record its actual evaluation cost.
-
-        Evaluating an offspring increments the parent's diagnostic direct count
-        and increments ``subtree_evaluations`` along all retained ancestors on
-        its path from the root. Using an individual as a crossover reference
-        refreshes ``last_used`` without charging subtree effort.
-        """
+        """Attach one evaluated algorithm and record its actual evaluation cost on its primary parent."""
         if node.id == self.root_id or node.id <= self.latest_node_id or node.id != edge.child_id:
             raise ValueError("New node IDs must increase and match edge.child_id")
         if type(evaluations) is not int or evaluations < 1:
@@ -88,7 +80,6 @@ class TreePopulation:
             reference = self.nodes.get(edge.reference_id)
             if reference is None or reference.fitness is None:
                 raise ValueError("Crossover requires a retained feasible reference")
-        clock = self.evaluations_used + evaluations
         if edge.parent_id == self.root_id:
             if edge.operator is not None:
                 raise ValueError("Initial edges must have operator=None")
@@ -99,18 +90,11 @@ class TreePopulation:
             if edge.operator not in ("Refine", "Crossover", "Explore"):
                 raise ValueError("An evolutionary edge requires an operator")
             parent.direct_evaluations += evaluations
-            parent.last_used = clock
-            ancestor = parent.id
-            while ancestor != self.root_id:
-                self.nodes[ancestor].subtree_evaluations += evaluations
-                ancestor = self.edges[ancestor].parent_id
             if edge.operator == "Crossover" and reference is not None:
-                reference.last_used = clock
                 pair = (parent.id, edge.reference_id)
                 if pair not in self.used_crossover_pairs:
                     self.used_crossover_pairs.append(pair)
-        node.last_used = clock
-        self.evaluations_used = clock
+        self.evaluations_used += evaluations
         self.nodes[node.id] = node
         self.edges[node.id] = edge
         self.latest_node_id = node.id

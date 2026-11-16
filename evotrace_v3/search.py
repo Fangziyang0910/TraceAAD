@@ -15,7 +15,7 @@ from .evaluation import Evaluator
 from .storage import Store
 from .models import Attempt, Candidate, FormatError, ModelReply, Program, SearchResult
 
-from .allocation import AllocationConfig, allocate_step, lineage_peaks
+from .allocation import AllocationConfig, allocate_step
 from .context import ContextConfig, EvoTracePromptBuilder
 from .models import CANDIDATE_RESPONSE_FORMAT, Edge, Node, TreePopulation
 from .reflection import reflect_and_apply
@@ -34,16 +34,16 @@ def deserialize_tree(data: dict[str, Any]) -> TreePopulation:
 
 
 class EvoTrace:
-    """基于树状种群、反思简化与谱系投入分配的自动算法设计搜索。"""
+    """基于树状种群、反思树简化与代表集预算分配的自动算法设计搜索。"""
 
     method = "evotrace_v3"
-    selection_rule = "rank_decay_lineage_sampling"
+    selection_rule = "representative_rank_direct_sampling"
     generation_protocol = "tree_population_context"
     reference_rule = "quality_pool_max_ast_distance"
     mechanisms = (
         "tree_population",
         "reflective_tree_simplification",
-        "lineage_effort_allocation",
+        "representative_cover_allocation",
         "tree_context",
     )
 
@@ -317,14 +317,11 @@ class EvoTrace:
             attempt = Attempt(attempt_id, 0, "Init")
             prompt = self.prompts.initialization(self.archive)
         else:
-            decision = allocate_step(self.tree, rng, self.allocation_config)
-            peak_id = lineage_peaks(self.tree)[decision.parent_id]
+            decision = allocate_step(self.tree, rng, self.allocation_config, self.topology_config)
             attempt = Attempt(attempt_id, decision.parent_id, decision.operator, decision.reference_id)
             attempt.record["allocation"] = {
                 "rule": self.selection_rule,
                 **asdict(decision),
-                "lineage_peak_id": peak_id,
-                "lineage_subtree_evaluations": self.tree.nodes[peak_id].subtree_evaluations,
                 "parent_direct_evaluations": self.tree.nodes[decision.parent_id].direct_evaluations,
             }
             prompt, view = self.prompts.evolution_from_tree(

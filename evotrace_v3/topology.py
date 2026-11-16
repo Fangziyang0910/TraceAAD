@@ -5,6 +5,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from functools import lru_cache
 import hashlib
+import math
 
 from .models import TreePopulation
 
@@ -84,21 +85,30 @@ def code_distance(code_a: str, code_b: str) -> float:
 
 @dataclass(frozen=True)
 class TopologyConfig:
-    """Retention window and batch size for reflective tree simplification.
+    """Representative coverage and batch size for reflective tree simplification.
 
-    active_evaluations: evaluations since birth, parent use, or crossover reference
-        within which a distinct feasible individual remains active.
-    region_size: minimum number of inactive nodes accumulated in a path or subtree
+    max_representatives: maximum number of mutually uncovered feasible representatives.
+    cover_distance: AST shingle Jaccard distance below which a better representative
+        covers a later candidate.
+    region_size: minimum number of non-skeleton nodes accumulated in a path or subtree
         region before that region is simplified into edge or node experience.
     """
 
-    active_evaluations: int = 40
+    max_representatives: int = 24
+    cover_distance: float = 0.15
     region_size: int = 4
 
     def __post_init__(self):
-        for name in ("active_evaluations", "region_size"):
+        for name in ("max_representatives", "region_size"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"{name} must be an integer >= 1")
+        if (
+            isinstance(self.cover_distance, bool)
+            or not isinstance(self.cover_distance, (int, float))
+            or not math.isfinite(self.cover_distance)
+            or not (0.0 <= self.cover_distance <= 1.0)
+        ):
+            raise ValueError("cover_distance must be a finite number in [0, 1]")
 
 
 @dataclass(frozen=True)
@@ -160,33 +170,49 @@ def champion(tree: TreePopulation) -> int | None:
                key=lambda i: (tree.nodes[i].fitness, i), default=None)
 
 
+def representatives(
+    tree: TreePopulation,
+    config: TopologyConfig = TopologyConfig(),
+) -> tuple[int, ...]:
+    """Select up to ``max_representatives`` mutually uncovered feasible individuals in fitness order."""
+    ordered = sorted(
+        distinct_individuals(tree),
+        key=lambda i: (tree.nodes[i].fitness, i),  # type: ignore[arg-type]
+    )
+    selected: list[int] = []
+    for i in ordered:
+        code_i = tree.nodes[i].code
+        if any(code_distance(code_i, tree.nodes[r].code) < config.cover_distance for r in selected):
+            continue
+        selected.append(i)
+        if len(selected) >= config.max_representatives:
+            break
+    return tuple(selected)
+
+
 def plan_simplification(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> SimplificationPlan:
     """Plan batched path contractions and subtree prunings on the evolutionary tree.
 
-    1. Retain active distinct feasible individuals (within ``active_evaluations``)
-       together with the global champion, and close them under pairwise LCAs so
-       branching structure between retained lineages is preserved.
+    1. Select the representative set ``R`` via greedy fitness-ordered coverage and close
+       ``R`` under pairwise LCAs so branching structure between retained lineages is preserved.
     2. Partition remaining nodes into intermediate chains between retained endpoints
        (path contractions -> edge experience) and unretained subtrees under retained
        ancestors (subtree prunings -> node experience).
     3. Simplify only regions that have accumulated at least ``region_size`` nodes.
     """
-    now, best = tree.evaluations_used, champion(tree)
-    distinct = distinct_individuals(tree)
-    active = {i for i in distinct if now - tree.nodes[i].last_used < config.active_evaluations}
-    if best is not None:
-        active.add(best)
+    now = tree.evaluations_used
+    reps = set(representatives(tree, config))
 
     children = defaultdict(list)
     for i in sorted(tree.edges):
         children[tree.edges[i].parent_id].append(i)
     # A parent always has a smaller ID than its child, so reverse ID order visits children first.
-    used = set(active)
+    used = set(reps)
     for i in sorted(tree.nodes, reverse=True):
         if i in used:
             used.add(tree.edges[i].parent_id)
     forks = {i for i in used if i != tree.root_id and sum(c in used for c in children[i]) >= 2}
-    retained_skeleton = active | forks
+    retained_skeleton = reps | forks
     inactive = set(tree.nodes) - retained_skeleton
 
     raw_contractions = []
@@ -235,7 +261,7 @@ def plan_simplification(tree: TreePopulation, config: TopologyConfig = TopologyC
         {
             "kind": "reflective_tree_simplification",
             "evaluations": now,
-            "active_ids": sorted(active),
+            "representative_ids": sorted(reps),
             "fork_ids": sorted(forks),
             "removed_ids": sorted(removed),
         },

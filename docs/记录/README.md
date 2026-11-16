@@ -10,7 +10,7 @@
 | EvoTrace V1 | `20261112_165634_evotrace_v1_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_165634_evotrace_v1_co4` | `experiments_result/evotrace_v1`（已完成搜索与独立测试） |
 | TraceAAD Base | `20261031_base_schema_co6` | 六任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_schema_final` | `experiments_result/traceaad_base`（已完成搜索与独立测试） |
 
-注：在线运行的 `evotrace_v3_full` 快照冻结于提交 `a28b1ed7`；仓库当前提交 `8c9533c4` 对齐了节点经验/边经验命名，并将反思提示中的比较表限制在当次简化区域内（消除多轮简化后的历史比较列表线性累加），树拓扑与父代分配数学规则与在线批次一致。
+注：server4 在线运行的 `evotrace_v3_full` 使用提交 `a28b1ed7` 的冻结快照（`active_evaluations=40` 窗口留存 + 路径峰值 `subtree_evaluations` 抽样）。相对该快照，当前仓库包含两项机制/实现更新：（1）提交 `8c9533c4` 将反思提示中的 `[Comparison Catalog]` 限制为当次简化区域（消除多轮简化后的历史比较列表线性膨胀）；（2）针对在线批次观察到的非冠军异构节点过期删除、同分近邻挤占排名与探索子代继承祖先分母三项现象，将保留与父代分配统一改为**覆盖代表集 + 直接开发投入计数**（`max_representatives=24`、`cover_distance=0.15`、`region_size=4`、`representative_rank_direct_sampling`）。论文稿 `docs/paper*.md` 仍对应早期冻结快照，待新对照批次完成后一并更新。
 
 ## 2. 已核实的机制边界与证伪记录（防重复试错）
 

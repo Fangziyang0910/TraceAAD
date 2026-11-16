@@ -58,11 +58,13 @@ def main(argv=None):
     parser.add_argument("--max-tokens", type=int)
     parser.add_argument("--model-timeout", type=float)
     parser.add_argument("--rank-half-life", type=float,
-                        help="Rank difference that halves quality weight (default: 10)")
-    parser.add_argument("--active-evaluations", type=int,
-                        help="Active retention window in evaluations since birth, parent use, or reference (default: 40)")
+                        help="Representative rank difference that halves quality weight (default: 10)")
+    parser.add_argument("--max-representatives", type=int,
+                        help="Maximum number of mutually uncovered representatives (default: 24)")
+    parser.add_argument("--cover-distance", type=float,
+                        help="AST shingle distance below which a better representative covers a candidate (default: 0.15)")
     parser.add_argument("--region-size", type=int,
-                        help="Minimum inactive nodes in a path or subtree region before simplification (default: 4)")
+                        help="Minimum non-skeleton nodes in a path or subtree region before simplification (default: 4)")
     parser.add_argument("--no-example", action="store_true")
     args = parser.parse_args(argv)
     try:
