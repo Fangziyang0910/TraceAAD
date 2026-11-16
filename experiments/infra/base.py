@@ -46,21 +46,21 @@ BACKENDS: dict[str, BackendProfile] = {
     ),
     "server1": BackendProfile(
         base_url="http://222.201.145.8:8080/v1",
-        model="qwen3.8-27b-awq",
+        model="Qwen3.8-27B",
         no_proxy="222.201.145.8,localhost,127.0.0.1,::1",
-        capacity=6,
+        capacity=3,
     ),
     "server3": BackendProfile(
         base_url="http://222.201.145.6:8000/v1",
-        model="qwen3.8-27b-awq",
+        model="qwen3.8-27b-fp8",
         no_proxy="222.201.145.6,localhost,127.0.0.1,::1",
-        capacity=9,
+        capacity=6,
     ),
     "server3b": BackendProfile(
         base_url="http://222.201.145.6:8001/v1",
-        model="qwen3.8-27b-awq",
+        model="qwen3.8-27b-fp8",
         no_proxy="222.201.145.6,localhost,127.0.0.1,::1",
-        capacity=9,
+        capacity=6,
     ),
 }
 

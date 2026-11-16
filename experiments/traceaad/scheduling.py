@@ -13,6 +13,10 @@ from urllib.parse import urlsplit
 from traceaad_base import Evaluator, OpenAIClient
 from traceaad_base.llm import CANDIDATE_RESPONSE_FORMAT
 
+from .parallel_evaluation import PooledEvaluator, independent_instances
+
+
+EVALUATION_WORKERS = 8
 
 # Same non-thinking Qwen controls as the existing experiment pool; temperature
 # and output length come from the independently configured Base on every call.
@@ -80,6 +84,17 @@ class Lease:
             if resources := self.poll(1):
                 return resources[0]
             time.sleep(.1)
+
+    def acquire_up_to(self, count):
+        """Wait for one core, then keep the others that are free now and drop the rest."""
+        count = min(count, self.status()["cpu"]["capacity"])
+        held = []
+        while not held:
+            held = self.poll(count)
+            if not held:
+                time.sleep(.1)
+        self.poll(len(held))
+        return held
 
     def __enter__(self):
         return self
@@ -169,26 +184,35 @@ class ScheduledModel:
 
 
 class ScheduledEvaluator:
-    def __init__(self, task, path, label, *, evaluator_factory=Evaluator):
+    """One evaluation takes up to ``workers`` cores; its instances run side by side."""
+
+    def __init__(self, task, path, label, *, evaluator_factory=Evaluator, workers=EVALUATION_WORKERS):
         self.task = task
         self.evaluator = evaluator_factory(task)
         self.path, self.label = str(path), label
         self.last_dispatch = {}
+        self.pooled = (PooledEvaluator(self.evaluator)
+                       if workers > 1 and independent_instances(task) else None)
+        self.workers = min(workers, self.pooled.count) if self.pooled else 1
+        self.cpus = ()
 
     def evaluate(self, code):
+        if self.pooled:
+            return self.pooled.evaluate(code, self.cpus or sorted(os.sched_getaffinity(0))[:self.workers])
         return self.evaluator.evaluate(code)
 
     @contextmanager
     def evaluation_context(self):
         started = time.monotonic()
         with Lease(self.path, "cpu", self.label) as lease:
-            cpu = lease.acquire()
-            self.last_dispatch = {"cpu": cpu, "queue_seconds": time.monotonic() - started}
+            held = lease.acquire_up_to(self.workers)
+            self.cpus = cpus = [int(cpu) for cpu in held]
+            self.last_dispatch = {"cpus": cpus, "queue_seconds": time.monotonic() - started}
             original = os.sched_getaffinity(0)
             try:
-                os.sched_setaffinity(0, {int(cpu)})
+                os.sched_setaffinity(0, set(cpus))
                 yield
             finally:
                 os.sched_setaffinity(0, original)
-                lease.poll(0, [cpu])
-
+                self.cpus = ()
+                lease.poll(0, held)

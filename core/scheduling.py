@@ -192,6 +192,8 @@ class _Handler(socketserver.StreamRequestHandler):
 class SchedulerServer(socketserver.ThreadingUnixStreamServer):
     daemon_threads = True
     block_on_close = False
+    # Many drivers and evaluations connect at once; the default backlog of 5 refuses the rest.
+    request_queue_size = 1024
 
     def __init__(self, path, cpus, endpoints):
         self._owns_socket = False

@@ -2,7 +2,19 @@
 
 运行前核对[实验条件](../PROTOCOL.md)。本页的主机与服务位置用于查找；实时状态需要检查进程、日志和健康接口。
 
-当前V2的Qwen批次为 `20261114_103407_evotrace_v2_repaired_co4`，结果目录为 `evotrace_v2_repaired`，四任务TSP、CVRP、FSSP、OP各seed0/1/2、每路1000次评价。冻结源码位于server4的 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261114_103407_evotrace_v2_repaired_co4`。使用11月14日修复：采样前在当前树重算质量代表以提供中位数/MAD、按路线读取局部上下文、Explore去除重复设计描述、选择反思删除独立冠军并使用程序计算的比较标签。反思、经验和交叉参考源码均开启；训练赢家固定后执行独立测试。模型、评价条件与上一批一致。[启动核验](../../experiments_result/evotrace_v2_repaired/launch_20261114_103407_evotrace_v2_repaired_co4/README.md)。
+北京时间11月16日00:05，完整版V3批次`20261116_000118_evotrace_v3_full_co4`在server4启动，四任务TSP、CVRP、FSSP、OP各seed0/1/2，共12路，每路1000次实际评价。结果目录`evotrace_v3_full`，源码冻结于`/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_000118_evotrace_v3_full_co4`。该批统一启用反思树简化（`active_evaluations=40`、`region_size=4`）与谱系冷却预算分配（`rank_decay_lineage_sampling`、`rank_half_life=10`），算子比例、V1简短反思、S/V读取及最多8核公共并行评价器保持不变。已纳入自动同步、健康检查和默认看板。[启动核验](../../experiments_result/evotrace_v3_full/launch_20261116_000118_evotrace_v3_full_co4/README.md)。
+
+北京时间11月16日00:04，按用户要求停止修订版V3批次`20261115_115206_evotrace_v3_revised_co4`的12路驱动（SIGTERM后全部退出），结果保留在`evotrace_v3_revised`，停在502–762次评价、合计7525次。停止记录在`experiments_result/evotrace_v3_revised/launch_20261115_115206_evotrace_v3_revised_co4/stop_20261116.json`。该批已移出主实验名单`methods`，不再进入自动同步与健康检查；`visualization_methods`保留看板入口。
+
+北京时间11月15日12:17，按用户要求停止旧V3批次`20261115_011117_evotrace_v3_co4`的12路驱动（SIGTERM后全部退出），结果保留在`evotrace_v3`，停在343–660次评价、合计5701次。停止记录在`experiments_result/evotrace_v3/launch_20261115_011117_evotrace_v3_co4/stop_20261115.json`。该批已移出主实验名单`methods`，不再进入自动同步与健康检查；`visualization_methods`保留看板入口。停止原因是24路共用17个模型槽，每路约0.9次评价/分钟；停止后修订批升到约1.46次评价/分钟。
+
+北京时间11月15日11:58，修订后的V3批次`20261115_115206_evotrace_v3_revised_co4`在server4启动，四任务各seed0/1/2，共12路，每路1000评价。结果目录`evotrace_v3_revised`，源码冻结于`/home/fzy/code/LLM4AD/TraceAAD_runs/20261115_115206_evotrace_v3_revised_co4`。该批采用个体直接投入分配、V1简短反思任务和当前最多8核的公共并行评价器，32/40/10及算子比例保持不变。新批次已接入自动同步、健康检查和默认看板。[复核与启动条件](../../docs/记录/2026-11-15-V3整体复核与新批次启动.md)。
+
+北京时间11月15日01:20，新V3批次 `20261115_011117_evotrace_v3_co4` 在server4启动，TSP、CVRP、FSSP、OP各seed0/1/2，共12路，每路1000次实际评价。源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261115_011117_evotrace_v3_co4`，结果目录 `evotrace_v3`。质量名额32、近期窗口40、名次减半跨度10；反思和S/V读取开启，训练赢家固定后执行独立测试。使用当前公共调度器及FP8/GGUF模型端点，实际配置和调用记录随批次保存。已登记自动同步、健康检查和默认看板。[启动核验](../../experiments_result/evotrace_v3/launch_20261115_011117_evotrace_v3_co4/README.md)。
+
+北京时间11月14日22:18，按用户要求停止server4上全部V2驱动（共26路，SIGTERM后全部退出）：修复版 `20261114_103407_evotrace_v2_repaired_co4` 12路（停在313–646次评价）、补充批次 `20261114_140147_evotrace_v2_repaired_extra2` 6路（162–208次）、修复前 `20261113_233010_evotrace_v2_full_co4` 8路（640–892次）；该批另有4路已完成并有主测试。停止前已做最后一次拉取，结果保留，各批次启动记录目录内有 `stop_20261114.json`。停止的运行移出活动同步名单，看板入口保留。V1此前已完成，未受影响。下方三段描述的是这些批次停止前的冻结条件。
+
+下面描述的当前V2的Qwen批次为 `20261114_103407_evotrace_v2_repaired_co4`，结果目录为 `evotrace_v2_repaired`，四任务TSP、CVRP、FSSP、OP各seed0/1/2、每路1000次评价。冻结源码位于server4的 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261114_103407_evotrace_v2_repaired_co4`。使用11月14日修复：采样前在当前树重算质量代表以提供中位数/MAD、按路线读取局部上下文、Explore去除重复设计描述、选择反思删除独立冠军并使用程序计算的比较标签。反思、经验和交叉参考源码均开启；训练赢家固定后执行独立测试。模型、评价条件与上一批一致。[启动核验](../../experiments_result/evotrace_v2_repaired/launch_20261114_103407_evotrace_v2_repaired_co4/README.md)。
 
 北京时间11月14日14:02，另启动图着色与JSSP补充批次`20261114_140147_evotrace_v2_repaired_extra2`，每任务三种子、每路1000次评价，沿用上面同一冻结源码与模型评价条件；两项均为完整求解器接口。修复后V2共六任务18路，新增批次已纳入自动同步、看板和健康检查。[启动核验](../../experiments_result/evotrace_v2_repaired/launch_20261114_140147_evotrace_v2_repaired_extra2/README.md)。
 
@@ -45,7 +57,7 @@ uv run python -m experiments.visualization --host 0.0.0.0 --port 8765
 
 看板地址为 `http://10.150.68.218:8765/`，本机也可访问 `http://127.0.0.1:8765/`。本地数据只反映已同步的状态。生成预算读取事件与恢复点，不用有效程序数代替。文件说明见[结果格式](SEARCH_FORMAT.md)。
 
-看板展示由主实验名单中的`visualization_methods`单独控制；当前默认展示“EvoTrace V2 · 完整版”，同时保留“EvoTrace V2 · 子树视角”“EvoTrace V2 · 动态简化”“EvoTrace V2 · 旧版”和EvoTrace V1，各展示四任务、三个种子的12路实验。`visualization_reference`指定Base为默认比较参照。展示范围不删除历史运行，也不改变同步/检查使用的`methods`清单。浏览器时间统一为北京时间，刷新提示表示读取本地同步副本。
+看板展示由主实验名单中的`visualization_methods`单独控制；当前默认展示“EvoTrace V3”的四任务、三种子12路实验，同时保留V1、V2及其他历史入口。`visualization_reference`指定Base为默认比较参照。展示范围不删除历史运行，也不改变同步/检查使用的`methods`清单。浏览器时间统一为北京时间，刷新提示表示读取本地同步副本。
 
 本机看板由 systemd 用户服务 `traceaad-dashboard.service` 启动；结果同步由 `traceaad-results-sync.service` 按[主实验名单](../../experiments_result/primary_runs.json)每60秒从server4拉取。两个服务开机后自动启动。
 
@@ -63,6 +75,30 @@ journalctl --user -u traceaad-watch.service -n 5 --no-pager
 
 源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_schema_final`，609个文件中7个变化、602个一致，远端60项检查通过。结果入口为 `experiments_result/traceaad_base`（server4主仓库中的符号链接，指向快照内的 `traceaad_base_schema` 目录），看板和同步使用该批次。它使用11月5日修改前的 Base 代码。原 `traceaad_base`（`20261030_base_compact_co6`）改名为 `traceaad_base_compact`；此前的记录中，`experiments_result/traceaad_base` 指紧凑批次。上一批分析实验的18路已正常停止并保留结果；更早批次继续按各自状态运行。[启动记录](../../experiments_result/traceaad_base/launch_20261031/README.md)保存配置、源码核对、停止与启动证据。
 
+
+## server1 GPU1：llama.cpp
+
+11月15日起，server1 的 GPU1（RTX 4080 SUPER 32 GB，UUID `GPU-c875982a-4776-123f-64f2-1c8bcae78de6`）上的 8080 端点由原 vLLM（Qwen3.8 AWQ，6 槽）改为 llama.cpp v1.0.0，配置与本机一致：`Qwen3.8-27B-UD-Q4_K_M.gguf`、非思考模式、MTP（`--spec-draft-n-max 4`）、主/草稿 KV 均为 `f8_e4m3`，采样温度0.7、top-p 0.8、top-k 20、min-p 0、presence 1.5；3 槽、每槽65536（总196608）。服务名 `Qwen3.8-27B`，API key 沿用 `~/vllm031/api_key.txt`（`--api-key-file`）。显存占用约26.7 GB。
+
+| 对象 | 位置 |
+| --- | --- |
+| 启动脚本 | server1 `~/llama/serve_llama_gpu1.sh`，tmux 会话 `llama_gpu1`，失败后10秒重试 |
+| 日志 | `~/logs/llama-q38-gpu1-8080.log` |
+| 程序与源码 | `~/app/llama-v1.0.0`（安装）、`~/app/llama.cpp`（源码，CUDA 12.6、架构89编译） |
+| 模型文件 | `~/models/gguf/qwen3.8-27b-q4km/`（主模型与 `mtp-Qwen3.8-27B-Q4_0.gguf`） |
+| 原 vLLM | 启动脚本 `~/vllm031/serve_gpu1.sh` 保留；该会话 `qwen38_gpu1` 已停止 |
+
+实测（代码生成提示）：单请求约85 tok/s，3并发每路约58–74 tok/s；三路同时60124 token 提示均正常返回。GPU1 余约6 GB，尚未试 `--spec-draft-n-max` 大于4。该端点按 `Qwen3.8-27B` 提供服务，请求中的模型名不影响 llama.cpp 路由。11月15日已重启 server4 调度器（命令见 `experiments_result/migrations/20261115_server1_llama/scheduler_command.txt`）：server1 改为 3 槽、本机端点改为 2 槽，server3 两个端点各 9 槽不变，并从 server4 对 server1 与本机端点各完成一次真实请求。同日把调度器监听队列从 socketserver 默认的 5 调为 1024（`core/scheduling.py` 的 `request_queue_size`）：此前同一瞬间超过约 5 个连接会收到 `Resource temporarily unavailable`，而 `SchedulerError` 不在 `generate` 的可重试范围内，该次生成会直接失败。调整后在 server4 上用 `ScheduledLLM`（每线程一个实例）做突发测试：60 个生成请求与 100 个 CPU 申请同一瞬间到达，160 个连接全部成功，四个端点都被用到，同时在途数均未超过各自槽数（9、9、3、2），结束后调度器无残留任务。调度器进程的真实参数以 `--status` 为准；tmux 服务器进程的命令行仍显示旧参数（`server1=6`），只是进程标题，不代表当前配置。
+
+## server3：官方 FP8（11月15日）
+
+server3 的 GPU0、GPU1 上的 8000、8001 端点由 AWQ-INT4 改为官方 `Qwen/Qwen3.8-27B-FP8`（`~/models/Qwen3.8-27B-FP8`），vLLM 0.31.0，服务名 `qwen3.8-27b-fp8`。启动脚本 `~/vllm031/serve_fp8.sh <gpu> <port> <mtp> <显存比例> <最大并发序列>`，当前为 `0 8000 2 0.97 8` 与 `1 8001 2 0.97 8`，tmux 会话 `vllm031_fp8_gpu0_8000`、`vllm031_fp8_gpu1_8001`，日志 `~/logs/vllm031-q38-fp8-<端口>.log`。参数：仅语言模型、`--max-model-len 49152`、`--kv-cache-dtype fp8`、MTP 2 个草稿 token、显存比例 0.97。原 AWQ 脚本 `~/vllm031/serve.sh` 保留。
+
+嵌入服务 `qwen3-embedding-4b-fp8`（端口 8002）从 GPU0 移到 GPU3（`~/vllm031/serve_embedding_fp8_gpu3.sh`，tmux 会话 `vllm031_embedding_fp8_gpu3_8002`），与用户 `wkz` 的训练任务共用该卡；server4 隧道与接口不变，已用 server4 的隧道验证。GPU2、GPU3 属共享资源，随时可能被他人占用。
+
+vLLM 启动日志给出每卡 KV 空间 14.43 GiB、317,773 个 token，48K 上下文下最坏并发 6.47 倍，据此每路设 6 槽。权重加载占 28.49 GiB，激活峰值 2.85 GiB。此前按 AWQ 日志的每 token 显存估算为 8 倍，高估；实测每 token 约 47.6 KiB，AWQ 日志为约 36.6 KiB。
+
+实测（代码生成提示、非思考）：单请求约 61 tok/s，6 并发每路 38–63 tok/s，MTP 接受率约 91%；6 个同时 43063 token 的提示在 26–30 秒内全部答对，无抢占。调度器已重启（命令见 `experiments_result/migrations/20261115_server3_fp8/scheduler_command.txt`），server4 上的 `base.py` 同步改为 FP8 模型名与 6 槽，突发测试（60 个生成请求与 100 个 CPU 申请同一瞬间）全部成功，各端点同时在途数未超过槽数。AWQ 与 FP8 的输出质量与速度尚未在同一批提示上对比。
 
 ## server3 入口
 
@@ -92,15 +128,15 @@ uv run --frozen python -m experiments.infra.scheduler --status
 
 `.env.server4` 设置 CPU 调度器 `TRACEAAD_SCHEDULER_SOCKET`、模型调度器 `TRACEAAD_MODEL_SCHEDULER_SOCKET`、离线模式及单线程 BLAS。两个变量均指向 `/tmp/traceaad-1003/scheduler.sock`。调度器在 tmux `traceaad_scheduler` 中运行；资源池以 `--status` 的实时输出为准。TraceAAD 使用 `--scheduler-socket`，基线入口通过上述环境变量接入。
 
-当前资源池为 128 个物理 CPU 核和 27 个模型请求槽位：server3 的 8000、8001 端点各 9 个，server1 的 8080 端点 6 个，本机 GGUF 端点 3 个请求名额。10月25日按用户要求恢复为 3 个独立 KV 槽，与公共调度器的 3 个请求名额一致；公共调度器未重启。原机器上的实验驱动、队列及独立调度器已停止，模型服务继续运行。用户已要求所有 GPU 来源等价：每次模型请求使用任意空闲端点，不绑定实验原来的机器、模型别名或量化；单个端点仍受自己的槽位上限约束。CPU 评价也共用同一资源池，单次 `eval_workers` 是请求上限，不是独占核心。其他绕过公共调度器的调用不受该池限制。
+当前资源池为 128 个物理 CPU 核和 17 个模型请求槽位：server3 的 8000、8001 端点（官方 FP8）各 6 个，server1 的 8080 端点 3 个（11月15日起为下述 llama.cpp 3 槽），本机 GGUF 端点 2 个请求名额（11月14日起为 2 槽）。10月25日按用户要求恢复为 3 个独立 KV 槽，与公共调度器的 3 个请求名额一致；公共调度器未重启。原机器上的实验驱动、队列及独立调度器已停止，模型服务继续运行。用户已要求所有 GPU 来源等价：每次模型请求使用任意空闲端点，不绑定实验原来的机器、模型别名或量化；单个端点仍受自己的槽位上限约束。CPU 评价也共用同一资源池，单次 `eval_workers` 是请求上限，不是独占核心。TraceAAD/EvoTrace 的整任务评价（`experiments/traceaad/parallel_evaluation.py`）自 11月15日起每次最多申请 8 个核，实例并行，总时限按实例秒之和计量；申请时只取当前空闲的核，至少 1 个。其他绕过公共调度器的调用不受该池限制。
 
-本机通过 systemd 用户服务 `traceaad-local-model-tunnel.service` 建立反向 SSH 隧道，将 server4 的 `127.0.0.1:18001` 转发到本机 `127.0.0.1:8001`。模型由 `qwen38-llama.service` 管理：关闭 MTP、关闭共享 KV、总上下文 147456、三个并发槽（单路 49152 tokens），超额请求在服务端排队。模型异常退出自动重启，隧道断开自动重连。使用 `systemctl --user status qwen38-llama.service traceaad-local-model-tunnel.service` 查询；配置位于本机 `~/.config/systemd/user/`，模型日志为 `/tmp/llama-qwen38-recovered.log`。原两个 tmux 会话已由这些服务替代。server4 的两张 GPU 尚未部署模型服务。
+本机通过 systemd 用户服务 `traceaad-local-model-tunnel.service` 建立反向 SSH 隧道，将 server4 的 `127.0.0.1:18001` 转发到本机 `127.0.0.1:8001`。模型由 `qwen38-llama.service` 管理：关闭 MTP、关闭共享 KV、总上下文 147456、三个并发槽（单路 49152 tokens），超额请求在服务端排队。模型异常退出自动重启，隧道断开自动重连。使用 `systemctl --user status qwen38-llama.service traceaad-local-model-tunnel.service` 查询；配置位于本机 `~/.config/systemd/user/`，模型日志为 `/tmp/llama-qwen38-recovered.log`。11月14日起服务使用 llama.cpp v1.0.0（build 12359），安装在 `~/app/llama-v1.0.0`，由 service 的 `LD_LIBRARY_PATH` 加载；原 `/usr/local/bin` 中的 build 9210 保留，备份在 `~/app/llama-backup-b9210`。模型改为 unsloth `Qwen3.8-27B-UD-Q4_K_M.gguf`（`~/models/gguf/qwen3.8-27b-q4km/`），非思考模式（`--chat-template-kwargs '{"enable_thinking":false}'`），采样为温度0.7、top-p 0.8、top-k 20、min-p 0、presence 1.5（unsloth 非思考模式推荐值）。开启 MTP：`--spec-type draft-mtp`，草稿模型 `mtp-Qwen3.8-27B-Q4_0.gguf`，`--spec-draft-n-max 4`；主 KV 与草稿 KV 均为 `f8_e4m3`；`--load-mode mlock` 代替 `--no-mmap --mlock`。并发2槽、每槽65536（总131072）。显存约23.8 GB（24 GB 卡）：MTP 把循环状态缓冲放大为 (n-max+1) 倍，n-max=5 装不下。同一服务上测过 n-max 1/2/3/4 的代码生成速度：单请求79/107/122/141 tok/s，2并发每路约71/93/109/118 tok/s。两路同时 63523 token 提示可正常处理。原两个 tmux 会话已由这些服务替代。server4 的两张 GPU 尚未部署模型服务。
 
 需要 embedding 的基线复用 server3 的 `qwen3-embedding-4b-fp8`。server4 的 tmux `traceaad_embedding_tunnel` 将本机 `127.0.0.1:18002` 转发到 server3 的 `127.0.0.1:8002`；专用 SSH 密钥只允许该转发。`.env.server4` 的 `SHINKA_EMBEDDING_*` 指向此接口。隧道需保持运行；重启命令保存在补齐记录的 `embedding_tunnel_command.txt`。该服务与生成模型的 27 请求槽分开。
 
 `/tmp/tmux-1003` 存 tmux socket，`/tmp/traceaad-1003` 存调度器 socket，清理 `/tmp` 时不能删。tmux socket 丢失后，服务进程仍在：先重建目录（权限700），再向 `tmux: server` 进程发 `SIGUSR1`。
 
-服务器重启后，确认旧调度器已退出，再执行 `bash experiments_result/migrations/20261022_server4/scheduler_command.txt`。实验恢复前还需核对各运行锁。环境初始验证保存在 `experiments_result/environment_setup/20261022_server4/`；该目录的旧 17 槽命令已被迁移命令替代。
+服务器重启后，确认旧调度器已退出，再执行 `bash experiments_result/migrations/20261115_server3_fp8/scheduler_command.txt`。实验恢复前还需核对各运行锁。环境初始验证保存在 `experiments_result/environment_setup/20261022_server4/`；该目录的旧 17 槽命令已被迁移命令替代。
 
 
 ## 同步与清理

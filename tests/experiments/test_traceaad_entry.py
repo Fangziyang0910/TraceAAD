@@ -38,7 +38,7 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         "base": [],
         "evotrace.v1": ["tree_population", "reflective_simplification", "shinka_allocation", "multiscale_context"],
         "evotrace.v2": ["tree_population", "dynamic_reflective_simplification", "shinka_allocation", "multiscale_context"],
-        "evotrace.v3": ["tree_population", "dynamic_reflective_simplification", "individual_tree_allocation", "multiscale_context"],
+        "evotrace.v3": ["tree_population", "reflective_tree_simplification", "individual_tree_allocation", "multiscale_context"],
         "v21.3": [2],
         "v22.2": [1, 2],
         "v23.2": [1],
@@ -59,7 +59,7 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         metadata = json.loads(capsys.readouterr().out)
         assert metadata["method"] == metadata["experiment"] == directory
         if directory == "evotrace_v3":
-            assert metadata["selection_rule"] == "rank_subtree_sampling"
+            assert metadata["selection_rule"] == "rank_decay_lineage_sampling"
         mechanisms = combinations[method.replace("_", ".")]
         assert metadata["mechanisms"] == mechanisms
         assert metadata["trajectory_reference_embedding"] == (1 in mechanisms)
@@ -197,3 +197,46 @@ def test_enqueue_saves_the_subset_without_starting_workers(tmp_path, monkeypatch
     assert len(manifest["tasks"]) == 4
     assert all(row["status"] == "queued" for row in manifest["plan"])
     assert not any(Path(row["run_dir"]).exists() for row in manifest["plan"])
+
+
+def test_v3_parameters_are_recorded_and_other_methods_reject_them(entry_environment, capsys):
+    args = ['--task', 'tsp_construct', '--run-name', 'span', '--batch', 'span',
+            '--scheduler-socket', '/fake', '--dry-run', '--rank-half-life', '5',
+            '--active-evaluations', '20', '--region-size', '3']
+    run.main(['--method', 'evotrace.v3', *args])
+    metadata = json.loads(capsys.readouterr().out)
+    assert metadata['allocation']['rank_half_life'] == 5
+    assert metadata['topology'] == {'active_evaluations': 20, 'region_size': 3}
+    with pytest.raises(SystemExit):
+        run.main(['--method', 'evotrace.v2', *args])
+
+
+def test_v3_batch_plan_forwards_allocation_and_topology():
+    from argparse import Namespace
+    from experiments.traceaad.launch_host import build_plan
+    args = Namespace(tasks=['tsp_construct'], method='evotrace.v3', batch='span',
+                     experiment='evotrace_v3', repeats=1, backend='scheduled', budget=1000,
+                     initial_size=5, max_tokens=16384, model_timeout=600,
+                     selection_temperature=1., trajectory_reference_embedding=None,
+                     scheduler_socket='/fake', seconds_per_instance=10., env_file=None,
+                     skip_heldout=False, rank_half_life=5., active_evaluations=20, region_size=3)
+    row, = build_plan(args)
+    at = row['command'].index('--rank-half-life')
+    assert row['command'][at+1] == '5.0'
+    for flag, value in [('--active-evaluations', '20'), ('--region-size', '3')]:
+        assert row['command'][row['command'].index(flag)+1] == value
+    args.method = 'evotrace.v2'
+    with pytest.raises(ValueError, match='V3 only'):
+        build_plan(args)
+
+
+def test_v3_batch_manifest_records_effective_topology(tmp_path, monkeypatch, capsys):
+    from experiments.traceaad import launch_host
+    monkeypatch.setattr(launch_host, 'ROOT', tmp_path)
+    monkeypatch.setattr(launch_host, 'scheduler_status', lambda _: {'instance_id': 'test'})
+    launch_host.main(['--method', 'evotrace.v3', '--batch', 'topology', '--scheduler-socket', '/fake',
+                      '--tasks', 'tsp_construct', '--repeats', '1',
+                      '--active-evaluations', '20', '--region-size', '3'])
+    manifest = json.loads(capsys.readouterr().out)
+    assert manifest['topology'] == {'active_evaluations': 20, 'region_size': 3}
+    assert not list(tmp_path.rglob('batch_*.json'))

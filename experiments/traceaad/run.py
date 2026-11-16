@@ -2,7 +2,7 @@
 
 import argparse
 from contextlib import nullcontext
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import hashlib
@@ -17,6 +17,8 @@ from benchmarks.tasks import ALL_TASKS, PRIMARY_SPLITS, heldout_task, scale_of_s
 import evotrace_v1
 import evotrace_v2
 import evotrace_v3
+from evotrace_v3.allocation import AllocationConfig as V3AllocationConfig
+from evotrace_v3.topology import TopologyConfig as V3TopologyConfig
 from evotrace_v3.cli import load_task as load_evotrace_v3_task
 from evotrace_v3.evaluation import Evaluator as EvoTraceV3Evaluator
 from evotrace_v2.cli import load_task as load_evotrace_v2_task
@@ -34,11 +36,12 @@ import traceaad_v22_2
 import traceaad_v23_2
 import traceaad_v24_1
 from traceaad_v21_3.prompts import CANDIDATE_RESPONSE_FORMAT as V21_RESPONSE_FORMAT
-from .scheduling import REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, load_environment
+from .scheduling import EVALUATION_WORKERS, REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, load_environment
 
 
 ROOT = Path(__file__).resolve().parents[2]
 MEMORY_BYTES = 2 << 30
+TOPOLOGY_FIELDS = tuple(f.name for f in fields(V3TopologyConfig))
 METHODS = {"base": ("traceaad_base", traceaad_base.TraceAAD),
            "evotrace.v1": ("evotrace_v1", evotrace_v1.EvoTrace), "evotrace_v1": ("evotrace_v1", evotrace_v1.EvoTrace),
            "evotrace.v2": ("evotrace_v2", evotrace_v2.EvoTrace), "evotrace_v2": ("evotrace_v2", evotrace_v2.EvoTrace),
@@ -90,7 +93,7 @@ def metadata_for(args, task, config, model):
         "run_name": args.run_name, "batch": args.batch,
         "seed": args.seed, "repeat": args.seed + 1,
         "budget": config.evaluation_budget, "budget_axis": "评价次数", "budget_basis": "evaluate_calls",
-        "method_params": asdict(config), "final_selection": "training", "eval_workers": 1,
+        "method_params": asdict(config), "final_selection": "training", "eval_workers": EVALUATION_WORKERS,
         "selection_rule": selection_rule_for(args.method),
         "mechanisms": list(METHODS[args.method][1].mechanisms),
         "generation_protocol": METHODS[args.method][1].generation_protocol
@@ -102,7 +105,7 @@ def metadata_for(args, task, config, model):
         "task_eval": task.metadata["settings"],
         "evaluation_execution": {
             "timeout_scope": "whole_task", "timeout_seconds": task.time_limit,
-            "n_workers": 1, "memory_limit_bytes": task.memory_limit_bytes,
+            "time_budget": "pooled_instance_seconds", "n_workers": EVALUATION_WORKERS, "memory_limit_bytes": task.memory_limit_bytes,
             "evaluation_seed": task.evaluation_seed,
             "seconds_per_instance": args.seconds_per_instance,
         },
@@ -147,7 +150,8 @@ def evaluate_heldout(directory, name, best, scheduler, *, evaluation_seed,
             "status": evaluation.status, "failure": evaluation.failure,
             "seconds": seconds, "score_metric": "raw_objective", "search_status": "finished",
             "condition": condition, "timeout_scope": "whole_task",
-            "timeout_seconds": task.time_limit, "n_workers": 1,
+            "timeout_seconds": task.time_limit, "n_workers": getattr(evaluator, "workers", 1),
+            "time_budget": "pooled_instance_seconds",
             "seconds_per_instance": seconds_per_instance,
             "memory_limit_bytes": task.memory_limit_bytes, "evaluation_seeds": [evaluation_seed],
             "resources": getattr(evaluator, "last_dispatch", {}),
@@ -176,6 +180,9 @@ def main(argv=None):
     parser.add_argument("--model-timeout", type=float, default=600)
     parser.add_argument("--selection-temperature", type=float, default=1.0,
                         help="Boltzmann parent temperature in fitness units")
+    parser.add_argument("--rank-half-life", type=float, help="V3 quality weight half-life in ranks")
+    parser.add_argument("--active-evaluations", type=int, help="V3 working-set retention window in evaluations")
+    parser.add_argument("--region-size", type=int, help="V3 minimum retired nodes per simplified region")
     parser.add_argument("--trajectory-reference-embedding", action=argparse.BooleanOptionalAction,
                         default=None, help="Mechanism 1 uses trajectory references by default; --no-... ablates them")
     parser.add_argument("--reference-code", action="store_true",
@@ -189,6 +196,9 @@ def main(argv=None):
     parser.add_argument("--skip-heldout", action="store_true")
     args = parser.parse_args(argv)
     args.experiment = args.experiment or METHODS[args.method][0]
+    for name in ("rank_half_life", *TOPOLOGY_FIELDS):
+        if getattr(args, name) is not None and METHODS[args.method][0] != "evotrace_v3":
+            parser.error(f"{name.replace('_', '-')} applies to EvoTrace V3 only")
     try:
         args.trajectory_reference_embedding = reference_embedding_enabled(args.method, args.trajectory_reference_embedding)
     except ValueError as error:
@@ -207,6 +217,13 @@ def main(argv=None):
     load_environment(ROOT / ".env")
     load_environment(args.env_file)
     method_id = METHODS[args.method][0]
+    allocation_config = None
+    topology_config = None
+    if method_id == "evotrace_v3":
+        allocation_config = V3AllocationConfig(
+            **({"rank_half_life": args.rank_half_life} if args.rank_half_life is not None else {}))
+        topology_config = V3TopologyConfig(**{
+            key: getattr(args, key) for key in TOPOLOGY_FIELDS if getattr(args, key) is not None})
     evotrace = {"evotrace_v1": evotrace_v1, "evotrace_v2": evotrace_v2, "evotrace_v3": evotrace_v3}.get(method_id)
     is_evotrace = evotrace is not None
     config_type = evotrace.Config if is_evotrace else Config
@@ -221,6 +238,9 @@ def main(argv=None):
     if is_evotrace:
         model.factory = evotrace.OpenAIClient
     metadata = metadata_for(args, task, config, model)
+    if allocation_config is not None:
+        metadata["allocation"] = asdict(allocation_config)
+        metadata["topology"] = asdict(topology_config)
     reference_embedding = None
     if args.trajectory_reference_embedding:
         from experiments.deltaevolve.embedding import CodeEmbedding
@@ -237,6 +257,25 @@ def main(argv=None):
     directory.mkdir(parents=True, exist_ok=True)
     if args.resume and (directory / "run_config.json").exists():
         metadata = json.loads((directory / "run_config.json").read_text())
+    if args.resume and allocation_config is not None:
+        native = json.loads((directory / "native" / "run_config.json").read_text())
+        if native.get("selection_rule") != evotrace_v3.EvoTrace.selection_rule:
+            raise ValueError("Incompatible selection_rule; resume with the original frozen source")
+        allocation = dict(native["allocation"])
+        if args.rank_half_life is not None:
+            allocation["rank_half_life"] = args.rank_half_life
+        allocation_config = V3AllocationConfig(**allocation)
+        topology = dict(native["topology"])
+        for key in TOPOLOGY_FIELDS:
+            if getattr(args, key) is not None:
+                topology[key] = getattr(args, key)
+        try:
+            topology_config = V3TopologyConfig(**topology)
+        except TypeError as exc:
+            raise ValueError("Incompatible topology; resume with the original frozen source") from exc
+    if allocation_config is not None:
+        metadata["allocation"] = asdict(allocation_config)
+        metadata["topology"] = asdict(topology_config)
 
     def stop(signum, frame):
         raise KeyboardInterrupt(f"Received signal {signum}")
@@ -247,6 +286,8 @@ def main(argv=None):
 
     search = METHODS[args.method][1](task, model, config=config,
                               run_dir=directory / "native", resume=args.resume,
+                              **({"allocation_config": allocation_config} if allocation_config is not None else {}),
+                              **({"topology_config": topology_config} if topology_config is not None else {}),
                               **({"reference_embedding": reference_embedding}
                                  if reference_embedding is not None else {}),
                               **({"reference_code": True} if args.reference_code else {}))

@@ -1,6 +1,7 @@
 """Preview or start independently recorded versioned TraceAAD searches on the current host."""
 
 import argparse
+from dataclasses import asdict
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import json
@@ -15,8 +16,8 @@ from benchmarks.tasks import CO_TASKS, TASK_SHORT
 from experiments.infra.launcher import is_session_alive
 from traceaad_base.storage import write_json
 from traceaad_base.selection import SELECTION_RULE
-from .run import METHODS, reference_embedding_enabled, request_options, selection_rule_for
-from .scheduling import scheduler_status
+from .run import METHODS, TOPOLOGY_FIELDS, V3AllocationConfig, V3TopologyConfig, reference_embedding_enabled, request_options, selection_rule_for
+from .scheduling import EVALUATION_WORKERS, scheduler_status
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +29,17 @@ def _slug(method):
 
 def build_plan(args):
     plan = []
+    rank_half_life = getattr(args, "rank_half_life", None)
+    topology = {key: getattr(args, key) for key in TOPOLOGY_FIELDS
+                if getattr(args, key, None) is not None}
+    if topology:
+        if METHODS[args.method][0] != "evotrace_v3":
+            raise ValueError("Topology triggers apply to EvoTrace V3 only")
+        V3TopologyConfig(**topology)
+    if rank_half_life is not None:
+        if METHODS[args.method][0] != "evotrace_v3":
+            raise ValueError("rank-half-life applies to EvoTrace V3 only")
+        V3AllocationConfig(rank_half_life=rank_half_life)
     slug = _slug(args.method)
     embedding = reference_embedding_enabled(args.method, args.trajectory_reference_embedding)
     tasks = args.tasks if args.tasks is not None else CO_TASKS
@@ -47,6 +59,10 @@ def build_plan(args):
                        "--model-timeout", str(args.model_timeout)]
             if method_id not in {"evotrace_v1", "evotrace_v2", "evotrace_v3"}:
                 command += ["--selection-temperature", str(args.selection_temperature)]
+            if rank_half_life is not None:
+                command += ["--rank-half-life", str(rank_half_life)]
+            for key, value in topology.items():
+                command += ["--" + key.replace("_", "-"), str(value)]
             command += ["--trajectory-reference-embedding" if embedding else "--no-trajectory-reference-embedding"]
             if args.scheduler_socket:
                 command += ["--scheduler-socket", args.scheduler_socket]
@@ -97,6 +113,9 @@ def main(argv=None):
     parser.add_argument("--model-timeout", type=float, default=600)
     parser.add_argument("--selection-temperature", type=float, default=1.0,
                         help="Boltzmann parent temperature in fitness units")
+    parser.add_argument("--rank-half-life", type=float, help="V3 quality weight half-life in ranks")
+    parser.add_argument("--active-evaluations", type=int, help="V3 working-set retention window in evaluations")
+    parser.add_argument("--region-size", type=int, help="V3 minimum retired nodes per simplified region")
     parser.add_argument("--trajectory-reference-embedding", action=argparse.BooleanOptionalAction,
                         default=None, help="Mechanism 1 defaults to trajectory references; --no-... ablates them")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
@@ -138,7 +157,7 @@ def main(argv=None):
         "trajectory_reference_embedding": args.trajectory_reference_embedding,
         "mechanisms": list(METHODS[args.method][1].mechanisms),
         "generation_protocol": METHODS[args.method][1].generation_protocol,
-        "sampling": request_options(args.method), "final_selection": "training", "eval_workers": 1,
+        "sampling": request_options(args.method), "final_selection": "training", "eval_workers": EVALUATION_WORKERS,
         "evaluation_scope": "whole_task", "resource_scheduler": scheduler,
         "seconds_per_instance": args.seconds_per_instance,
         "source_snapshot": str(ROOT),
@@ -147,6 +166,11 @@ def main(argv=None):
     }
     if METHODS[args.method][0] in {"evotrace_v1", "evotrace_v2", "evotrace_v3"}:
         manifest.pop("selection_temperature")
+    if METHODS[args.method][0] == "evotrace_v3":
+        manifest["allocation"] = asdict(V3AllocationConfig(
+            **({"rank_half_life": args.rank_half_life} if args.rank_half_life is not None else {})))
+        manifest["topology"] = asdict(V3TopologyConfig(**{
+            key: getattr(args, key) for key in TOPOLOGY_FIELDS if getattr(args, key) is not None}))
     if not args.launch and not args.enqueue:
         print(json.dumps({"manifest": str(path), **manifest}, ensure_ascii=False, indent=2))
         return

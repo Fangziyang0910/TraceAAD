@@ -254,3 +254,41 @@ def test_scheduler_disconnect_stops_running_instances(daemon, tmp_path):
     with pytest.raises(ProcessLookupError):
         os.kill(pid, 0)
     eventually(lambda: server.pools["cpu"].status()["used"] == 0)
+
+
+def _scheduled_evaluator(path):
+    from evotrace_v3 import Task
+    from evotrace_v3.evaluation import Evaluator
+    from experiments.traceaad.scheduling import ScheduledEvaluator
+
+    class Four:
+        _datasets, n_instance = [1, 2, 3, 4], 4
+
+        def evaluate_program(self, code, function):
+            values = [function(v) for v in self._datasets[:self.n_instance]]
+            return sum(values) / len(values)
+
+    task = Task("Return it.", "def score(x):\n    return x\n", Four().evaluate_program, 30)
+    return ScheduledEvaluator(task, path, "test:search", evaluator_factory=Evaluator, workers=8)
+
+
+def test_one_evaluation_takes_every_free_core_up_to_its_limit_and_returns_them(daemon):
+    path, server = daemon
+    evaluator = _scheduled_evaluator(path)
+    with evaluator.evaluation_context():
+        assert sorted(evaluator.last_dispatch["cpus"]) == sorted(server.cpus)
+        assert len(os.sched_getaffinity(0)) == 2
+        assert evaluator.evaluate("def score(x):\n    return x * 2\n").fitness == 5
+    eventually(lambda: scheduler_status(path)["cpu"]["used"] == 0)
+
+
+def test_evaluation_with_one_free_core_runs_on_it_without_waiting_for_more(daemon):
+    path, server = daemon
+    with SchedulerSession(path, "cpu") as holder:
+        held = holder.poll(1)
+        evaluator = _scheduled_evaluator(path)
+        with evaluator.evaluation_context():
+            assert len(evaluator.last_dispatch["cpus"]) == 1
+            assert evaluator.evaluate("def score(x):\n    return x\n").fitness == 2.5
+            assert scheduler_status(path)["cpu"]["waiting"] == 0
+        holder.poll(0, held)
