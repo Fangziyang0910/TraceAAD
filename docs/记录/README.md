@@ -10,7 +10,7 @@
 | EvoTrace V1 | `20261112_165634_evotrace_v1_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_165634_evotrace_v1_co4` | `experiments_result/evotrace_v1`（已完成搜索与独立测试） |
 | TraceAAD Base | `20261031_base_schema_co6` | 六任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_schema_final` | `experiments_result/traceaad_base`（已完成搜索与独立测试） |
 
-注：server4 在线运行的 `evotrace_v3_full` 使用提交 `a28b1ed7` 的冻结快照（`active_evaluations=40` 窗口留存 + 路径峰值 `subtree_evaluations` 抽样）。相对该快照，当前仓库包含两项机制/实现更新：（1）提交 `8c9533c4` 将反思提示中的 `[Comparison Catalog]` 限制为当次简化区域（消除多轮简化后的历史比较列表线性膨胀）；（2）针对在线批次观察到的非冠军异构节点过期删除、同分近邻挤占排名与探索子代继承祖先分母三项现象，将保留与父代分配统一改为**覆盖代表集 + 直接开发投入计数**（`max_representatives=24`、`cover_distance=0.15`、`region_size=4`、`representative_rank_direct_sampling`）。论文稿 `docs/paper*.md` 仍对应早期冻结快照，待新对照批次完成后一并更新。
+注：server4 在线运行的 `evotrace_v3_full` 使用提交 `a28b1ed7` 的早期冻结快照（40 评窗口留存 + 路径峰值子树投入抽样）。相对该快照，当前仓库已完成两项更新：（1）提交 `8c9533c4` 将反思提示中的 `[Comparison Catalog]` 限制为当次简化区域（消除多轮简化后的历史比较列表线性膨胀）；（2）提交 `d3cbb242` 针对在线批次观察到的非冠军异构节点过期删除、同分近邻挤占排名与探索子代继承祖先分母三项现象，将保留与父代分配统一为**覆盖代表集 + 直接开发投入计数**（`max_representatives=24`、`cover_distance=0.15`、`region_size=4`、`representative_rank_direct_sampling`）。双语论文稿 `docs/paper*.md` 的方法主干与附录已同步至当前代表集覆盖机制，第 4 节暂保留早期冻结快照作为机制诊断证据，待新版正式对照批次完成后更新主实验表。
 
 ## 2. 已核实的机制边界与证伪记录（防重复试错）
 

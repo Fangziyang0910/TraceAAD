@@ -1,440 +1,297 @@
-% Options for packages loaded elsewhere
-\PassOptionsToPackage{unicode}{hyperref}
-\PassOptionsToPackage{hyphens}{url}
-\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
-\PassOptionsToPackage{space}{xeCJK}
-\documentclass[
-  11pt,
-]{article}
-\usepackage{xcolor}
-\usepackage[margin=0.9in]{geometry}
-\usepackage{amsmath,amssymb}
-\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
-\usepackage{iftex}
-\ifPDFTeX
-  \usepackage[T1]{fontenc}
-  \usepackage[utf8]{inputenc}
-  \usepackage{textcomp} % provide euro and other symbols
-\else % if luatex or xetex
-  \usepackage{unicode-math} % this also loads fontspec
-  \defaultfontfeatures{Scale=MatchLowercase}
-  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
-\fi
-\usepackage{lmodern}
-\ifPDFTeX\else
-  % xetex/luatex font selection
-  \setmainfont[]{TeX Gyre Termes}
-  \setmathfont[]{TeX Gyre Termes Math}
-  \ifXeTeX
-    \usepackage{xeCJK}
-    \setCJKmainfont[]{Noto Serif CJK SC}
-  \fi
-  \ifLuaTeX
-    \usepackage[]{luatexja-fontspec}
-    \setmainjfont[]{Noto Serif CJK SC}
-  \fi
-\fi
-% Use upquote if available, for straight quotes in verbatim environments
-\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
-\IfFileExists{microtype.sty}{% use microtype if available
-  \usepackage[]{microtype}
-  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
-}{}
+% Generated from docs/ by paper/build.py. Edit the Markdown source.
+\documentclass{article}
 \makeatletter
-\@ifundefined{KOMAClassName}{% if non-KOMA class
-  \IfFileExists{parskip.sty}{%
-    \usepackage{parskip}
-  }{% else
-    \setlength{\parindent}{0pt}
-    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
-}{% if KOMA class
-  \KOMAoptions{parskip=half}}
+\def\input@path{{vendor/icml2027/}}
 \makeatother
-\usepackage{longtable,booktabs,array}
-\newcounter{none} % for unnumbered tables
-\usepackage{calc} % for calculating minipage widths
-% Correct order of tables after \paragraph or \subparagraph
-\usepackage{etoolbox}
-\makeatletter
-\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
-\makeatother
-% Allow footnotes in longtable head/foot
-\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
-\makesavenoteenv{longtable}
-\usepackage{graphicx}
-\makeatletter
-\newsavebox\pandoc@box
-\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
-  \sbox\pandoc@box{#1}%
-  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
-  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
-  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
-  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
-  \else\usebox{\pandoc@box}%
-  \fi%
-}
-% Set default figure placement to htbp
-\def\fps@figure{htbp}
-\makeatother
-\setlength{\emergencystretch}{3em} % prevent overfull lines
-\providecommand{\tightlist}{%
-  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
-\usepackage[]{natbib}
-\bibliographystyle{plainnat}
 \usepackage{microtype}
-\usepackage{fvextra}
-\usepackage{xurl}
-\usepackage{needspace}
-\usepackage{fancyhdr}
-\usepackage{caption}
-\captionsetup{font=small,labelfont=bf}
-\DefineVerbatimEnvironment{verbatim}{Verbatim}{breaklines=true,breakanywhere=true,fontsize=\footnotesize}
-\setlength{\emergencystretch}{3em}
-\setlength{\parskip}{0.35em}
-\setlength{\parindent}{0pt}
-\setlength{\headheight}{14pt}
-\pagestyle{fancy}
-\fancyhf{}
-\fancyhead[L]{\small EvoTrace: Tree-Structured Populations}
-\fancyhead[R]{\small Research manuscript}
-\fancyfoot[C]{\thepage}
-\renewcommand{\headrulewidth}{0.3pt}
-\usepackage{bookmark}
-\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
-\urlstyle{same}
-\hypersetup{
-  pdftitle={EvoTrace：面向自动算法设计的带经验树状种群},
-  pdfauthor={匿名作者},
-  colorlinks=true,
-  linkcolor={black},
-  filecolor={Maroon},
-  citecolor={black},
-  urlcolor={blue},
-  pdfcreator={LaTeX via pandoc}}
-
-\title{EvoTrace：面向自动算法设计的带经验树状种群}
-\author{匿名作者}
-\date{}
-
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+\usepackage{icml2027}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{fontspec}
+\setmainfont{Times New Roman}
+\setsansfont{TeX Gyre Heros}
+\setmonofont{TeX Gyre Cursor}[Scale=MatchLowercase]
+\input{style.tex}
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Serif CJK SC}
+\setCJKsansfont{Noto Sans CJK SC}
 \setCJKmonofont{Noto Sans Mono CJK SC}
 \renewcommand{\tablename}{表}
+\renewcommand{\figurename}{图}
 \renewcommand{\abstractname}{摘要}
 \renewcommand{\refname}{参考文献}
-\renewcommand{\figurename}{图}
+\makeatletter
+\renewcommand{\fnum@table}{表~\thetable}
+\renewcommand{\fnum@figure}{图~\thefigure}
+\makeatother
+\floatname{algorithm}{算法}
+
+\icmltitlerunning{EvoTrace: Experience-Bearing Tree-Structured Populations}
 \begin{document}
-\maketitle
+\twocolumn[
+\icmltitle{EvoTrace：面向自动算法设计的带经验树状种群}
+\begin{icmlauthorlist}
+\icmlauthor{Anonymous Authors}{anon}
+\end{icmlauthorlist}
+\icmlaffiliation{anon}{Anonymous Institution}
+\icmlcorrespondingauthor{}{}
+\icmlkeywords{Automated algorithm design, evolutionary search, reflection}
+\vskip 0.3in
+]
+\printAffiliationsAndNotice{}
 \begin{abstract}
-种群竞争与派生树为自动算法设计提供互补的组织方式：竞争在候选之间分配评价机会，树结构连接连续修改与分支探索。本文提出EvoTrace，将两者结合于带经验的树状种群，并将反思作为搜索经历的压缩过程。节点表示受评算法，主父代边记录派生关系。反思树简化保留活跃工作集、最优个体及连接它们的分叉，将其余历史划分为路径与旁支区域，再对达到规模阈值的区域成批简化与反思。路径经验写入重连边，旁支经验写入保留祖先。后续改进、交叉与探索从同一棵树读取路径级、分支级与种群级视图，将种群的生长与竞争同算法设计经验的持续凝练和使用连接起来。
+演化式算法设计不断产生代码变化及评价结果，可以为后续设计提供参考，但种群选择本身不会保留被淘汰算法的设计经验。本文研究如何随种群演化积累和复用这些经验。我们提出EvoTrace，以树状种群使算法的优胜劣汰同时成为积累算法设计经验的过程。其核心机制将淘汰与反思结合：路径收缩将经验保存在连接保留端点的边上，子树剪枝将经验保存在相应的保留祖先节点上。后续反思整合已有经验与新的演化过程，更新后的种群进一步提供用于预算分配的代表算法，以及用于精化、交叉和探索的演化轨迹。本文分析这一更新的结构性质，并利用早期搜索记录考察经验积累过程与反思开销。
 \end{abstract}
 
-\subsection{1. 引言}\label{ux5f15ux8a00}
+\section{引言}\label{ux5f15ux8a00}
 
-大语言模型（large language
-model，LLM）通过反复生成、评价与修改程序支持自动算法设计（automated
-algorithm
-design，AAD）\citep{funsearch, eoh, elm}。在有限评价预算下，搜索需要选择接下来开发哪些候选，并利用此前尝试的结果。种群竞争在算法个体之间分配评价机会；派生树组织算法如何被修改，以及搜索分支如何发展。
+演化式算法设计通过生成和评价子代、选择保留个体，逐步改进算法种群。大语言模型（large language model，LLM）能够生成和修改可执行程序，使这一过程可以探索超出预设变异规则的算法设计\citep{funsearch, eoh}。在种群演化中，父子算法之间的变化及其评价结果记录了算法如何逐步发展。这些记录为积累算法设计经验提供了依据。
 
-已有研究提供了种群演化\citep{funsearch, eoh, partevo, shinka}、基于树或图的搜索\citep{mctsahd, cladeahd, pathwise, phyloevolve}，以及用于后续生成的反思和记忆\citep{reevo, refineevo, deltaevolve, memorytree}。由此引出一个共同的设计问题：\textbf{如何在同一个持续演化的搜索状态中，连接候选竞争、树的维护与经验使用？}
-随着新程序和尝试不断积累，这一表示需要支持后续搜索，并为生成组织相关历史。
+从演化过程中总结经验，需要结合算法之间的派生关系。父子算法的比较反映相应改动后的性能变化；连续的父子关系记录一个算法如何形成；同一祖先产生的不同分支则记录不同的演化过程。仅保留当前算法及其分数，无法直接呈现这些过程，而保存全部历史算法又会使种群持续增长。ReEvo通过反思算法之间的差异与性能比较指导生成\citep{reevo}，近期方法进一步利用算法谱系、语义差分和分支记忆组织搜索历史\citep{phyloevolve, deltaevolve, memorytree}。由此需要回答：算法不断被选择和淘汰时，如何将其演化过程凝练为设计经验，并保留经验与当前算法之间的联系？
 
-本文以\textbf{带经验的树状种群}结合种群竞争与派生结构。节点是参与竞争的算法个体，主父代边连接它们的发展关系。我们将\textbf{反思视为树简化中的搜索经历压缩}：共同整理相关尝试，并将经验存储在后续生成读取这些历史所经过的节点与边上。
+树状种群为这一过程提供了组织方式。节点表示算法个体，父子关系记录演化轨迹。确定保留节点后，待淘汰节点可按它们在树中的位置组织为连接保留节点的路径区域，以及从保留节点延伸出的子树区域。两类区域分别记录保留算法之间的演化过程，以及从某个算法出发的分支演化过程。这些关系既确定反思哪些算法，也确定反思形成的经验应保存在何处。由此形成本文的核心认识：\textbf{树状种群使算法的优胜劣汰，同时成为积累和复用算法设计经验的过程。}
 
-\textbf{EvoTrace}实现了这一思路。每次受评个体入树后，反思树简化保留近期出生、被直接开发或被选作交叉参考的个体、最优个体及其最近公共祖先（lowest
-common
-ancestor，LCA）。保留骨架将其余节点划分为路径与旁支区域，只有达到规模阈值的区域才执行简化与反思。路径区域及其附属旁支凝练到重连边，其余旁支凝练到保留祖先；已有笔记随树更新继续参与后续反思。
+EvoTrace将这一认识落实为淘汰与反思共同完成的种群更新。路径收缩移除中间节点并重连两端的保留节点，相关演化过程经反思后形成边经验，保存在重连边上。子树剪枝移除不再保留的分支，相关演化过程经反思后形成节点经验，保存在分支所依附的保留节点上。反思分析区域内的代码变化、评价结果及已有经验；后续更新继续整合这些经验。因此，算法被淘汰后，其演化过程仍能以设计经验的形式保留在种群中。
 
-搜索在同一棵树上完成选择与生成。全体保留的独立可行个体按适应度名次与谱系开发投入全局竞争。\textbf{Refine}读取形成路径和局部尝试；\textbf{Crossover}读取共同祖先之后的两条分支；\textbf{Explore}通览种群设计与经验。树的维护和这些视图将早期尝试的压缩同后续算法设计连接起来。
+这一种群进一步为后续生成提供算法及相应的设计经验。精化参考当前算法的演化轨迹，以及从它生成子代所积累的经验；交叉参考两个算法自共同祖先之后的演化轨迹及经验；探索参考种群中的算法设计与经验。预算分配依据代表算法的适应度排名，以及以其为主父代已消耗的评价次数。新子代经评价后进入种群，继续参与选择、淘汰与反思。
 
-方法包含三个相互连接的部分：
+本文的贡献包括：
 
-\begin{enumerate}
-\def\labelenumi{\arabic{enumi}.}
+\begin{itemize}
 \tightlist
 \item
-  \textbf{带经验的树状种群。}
-  共同表示参与竞争的算法、派生关系及节点与边上的经验。
+  提出将算法优胜劣汰与设计经验积累相结合的树状种群，以演化关系组织算法个体及其设计经验。
 \item
-  \textbf{反思树简化。}
-  通过活跃工作集留存、分叉保留与成批区域反思，维护种群并凝练相关尝试。
+  设计结合淘汰与反思的种群更新机制，在路径收缩与子树剪枝时分别形成边经验和节点经验，并在后续更新中持续整合。
 \item
-  \textbf{基于维护树的搜索。}
-  全局父代采样与面向算子的树视图共同使用这一表示中的算法和经验。
-\end{enumerate}
+  利用树状种群分配评价预算，并结合演化轨迹与设计经验指导精化、交叉和探索。
+\end{itemize}
 
-\subsection{2. 相关工作}\label{ux76f8ux5173ux5de5ux4f5c}
+\section{EvoTrace}\label{evotrace}
 
-\textbf{演化种群与父代预算分配。}
-遗传编程演化可执行程序结构\citep{koza}，超启发式与自动算法配置则在启发式组件和求解器参数空间中搜索\citep{hh, irace}。LLM驱动的AAD将变异算子拓展至代码合成与重写\citep{survey_aad, elm, lmcrossover}。FunSearch结合程序生成与岛屿模型\citep{funsearch}，EoH协同演化自然语言思想与代码实现\citep{eoh}，LLaMEA与AlphaEvolve进一步推进评价反馈引导的算法演化\citep{llamea, alphaevolve}。围绕多样性维护与父代分配，研究者提出了和声搜索\citep{hsevo}、生态位划分\citep{partevo}以及兼顾适应度与使用次数的加权采样\citep{shinka}。EvoTrace延续全局个体竞争思路，采用与种群规模无关的名次半衰期校准选择强度，按每个体保留祖先路径上的最优可行节点统计谱系开发投入，并将竞争个体嵌入派生树而非扁平集合。
+\subsection{算法个体、演化轨迹与设计经验}\label{ux7b97ux6cd5ux4e2aux4f53ux6f14ux5316ux8f68ux8ff9ux4e0eux8bbeux8ba1ux7ecfux9a8c}
 
-\textbf{算法搜索中的谱系树与图结构。}
-MCTS-AHD利用蒙特卡洛树搜索\citep{uct}及根到叶路径推理扩展启发式\citep{mctsahd}，Clade-AHD进一步聚合后代评价形成分支级信念\citep{cladeahd}。相关研究还探索了演化程序树与有向代码演化图\citep{a2dept, codegraphs, dga2d}。PathWise结合外层种群与内层蕴含图协调规划与反思\citep{pathwise}；PhyloEvolve同时维护系统发育森林与独立精英池，剪除停滞子树并定期摘要轨迹以供相似度检索\citep{phyloevolve}。EvoTrace以树作为种群本体。工作集留存与区域规模阈值决定路径收缩和旁支剪枝，反思将选中区域凝练到保留边或祖先上。
+考虑具有固定接口与评价器的算法设计任务。候选程序 \(v\) 实现外层求解器调用的函数。一次程序评价调用评价器处理训练实例，返回目标值 \(f(v)\)（越小越好）或失败反馈。本文将通过评价器检查并返回有限目标值的程序称为可行程序。搜索受限于 \(B\) 次程序评价，执行失败与运行修复后的再次评价均计入预算。最终输出训练目标值最优的可行程序，再进行独立测试。
 
-\textbf{语言反思与经验记忆。}
-迭代自我反馈\citep{selfrefine}与跨尝试语言反思记忆\citep{reflexion, expel}启发了AAD中的经验复用机制。ReEvo结合短期成对比较与长期反思\citep{reevo}，RefineEvo融合规划引导与正负双向经验\citep{refineevo}，MeEvo交替执行自然演化与共享历史元认知反思\citep{meevo}，BEAM在启发式演化中自适应调整双层记忆\citep{beam}。在与谱系结合更紧密的记忆机制中，DeltaEvolve在层次化上下文中追踪语义代码差分\citep{deltaevolve}，MEMOIR在分支终止时提炼分支局部记忆\citep{memorytree}。EvoTrace将反思的触发范围与写入位置严格绑定到树状种群的简化操作，并在递归交接过程中持续保留带来源编号的实测比较目录。
+EvoTrace以有根树 \(T=(\mathcal N\cup\{v_0\},\mathcal E)\) 表示种群。每次进入评价的生成过程贡献一个节点，对应修复结束后的最终被评价程序，保存其代码、评价结果和模型生成的算法描述。评价失败的程序也会入树。虚拟根 \(v_0\) 不对应算法，也没有分数，用于连接初始个体。后续子代连接至所选主父代；交叉额外记录参考算法，同时保持每个算法节点只有一个结构父节点。这些边记录生成关系；路径收缩后，重连边记录跨越已移除节点的祖先关系。
 
-\subsection{3. 方法}\label{ux65b9ux6cd5}
+父子关系构成算法的演化轨迹。路径记录连续的算法变化，分支记录从同一祖先开始的不同演化过程。反思结合这些过程中的代码变化、评价结果与已有经验，生成以自然语言表达的算法设计经验。路径收缩时形成的经验保存在边上，记为 \(E_{u\to v}\)；子树剪枝时形成的经验保存在保留节点上，记为 \(E_u\)。后续生成结合相关算法及其演化轨迹读取这些经验。
 
-\subsubsection{3.1.
-问题设定与总体流程}\label{ux95eeux9898ux8bbeux5b9aux4e0eux603bux4f53ux6d41ux7a0b}
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/framework.png}
+\caption{树状种群中的算法演化与经验积累。 选择算法代表并保留它们的分叉节点后，对达到简化阈值的路径和子树区域执行反思。算法节点被移除，反思形成的经验保存在重连边或保留节点上。代表算法参与预算分配，演化轨迹与设计经验用于精化、交叉和探索。新子代经评价后进入种群，参与后续更新。}\label{fig:evotrace-1}
+\end{figure*}
 
-考虑面向固定求解器接口的自动算法设计任务。候选程序实现一个由外层优化框架调用的指定Python函数。评价器在固定训练实例集上运行候选程序，返回标量适应度\(f(v)\)（全文采用越小越优约定）或执行失败反馈（异常栈、非法返回值或超时诊断）。搜索受限于\(B\)次实际程序评价预算，初始化评价、执行失败与修复重评均计入\(B\)；用于生成、格式或运行修复以及区域反思的LLM调用单独记账。
+\subsection{算法选择与树简化}\label{ux7b97ux6cd5ux9009ux62e9ux4e0eux6811ux7b80ux5316}
 
-EvoTrace同时维护在线树状种群\(T\)与只追加的完整尝试档案。树\(T\)提供可抽样的父代实现及结构化生成上下文；档案完整保存每次生成的程序、评价结果、模型调用与简化记录。初始化完成后，每步迭代从\(T\)采样主父代与演化算子，构造对应尺度的树视图，生成并评价候选程序（最多允许一次修复），将最终受评版本接入\(T\)，随后执行动态反思简化。预算耗尽时，系统从完整档案中选出训练适应度最优的可行程序（同分取编号较早者），在预留测试实例集上执行一次性独立评价。
+种群更新需要选择用于后续生成的算法，也需要保留组织演化轨迹的分叉关系。EvoTrace先依据适应度与代码结构距离选择代表算法，再保留连接代表的共同祖先。仅为连接代表而保留的祖先节点不参与父代抽样。
 
-\subsubsection{3.2.
-带经验的树状种群}\label{ux5e26ux7ecfux9a8cux7684ux6811ux72b6ux79cdux7fa4}
-
-记在线种群树为\(T=(\mathcal N\cup\{r\},\mathcal E)\)，其中\(r\)是不含可执行代码的虚拟根。每个节点\(v\in\mathcal N\)代表一个受评候选个体，保存：（1）可执行源码及简明事实性计算描述（\texttt{design}）；（2）实测适应度\(f(v)\)或失败反馈；（3）直接开发投入\(d(v)\)（\texttt{development\_evaluations}），统计以\(v\)为主父代实际消耗的评价次数；（4）覆盖\(v\)及其历史后代的累计子树评价数（\texttt{subtree\_evaluations}）；（5）最近活动评价时钟\(u(v)\)（\texttt{last\_used}）；（6）节点\textbf{选择经验}\(S_v\)及其支撑比较目录。虚拟根\(r\)同样保存由已淘汰初始程序凝练而成的根选择经验\(S_r\)。
-
-每个节点\(v\in\mathcal N\)有且仅有一条来自主父代\(p(v)\in\mathcal N\cup\{r\}\)的有向入边\((p(v),v)\in\mathcal E\)。初始化候选挂接在\(r\)下；\texttt{Refine}、\texttt{Crossover}与\texttt{Explore}生成的新受评候选挂接在所选主父代下。\texttt{Crossover}额外记录只读参考节点编号\texttt{reference\_id}，不增加第二条结构边，从而严格保持树拓扑。每条边保存算子标签、标记中间祖先是否已收缩的布尔标志，以及边\textbf{变异经验}\(V_{p(v),v}\)与对应比较目录。
-
-\textbf{投入与活动时钟记账。}
-全局时钟\(t\)统计已消耗的程序评价总数。当以节点\(p\)为主父代的一次尝试实际执行了\(e\in\{1,2\}\)次程序评价（首次评价加可选的修复重评）时，\(d(p)\)增加\(e\)，\(u(p)\)更新为\(t\)，同时\(p\)及其当前所有保留祖先的\texttt{subtree\_evaluations}各增加\(e\)。该记账规则对\texttt{Refine}、\texttt{Crossover}与\texttt{Explore}完全一致：\texttt{Explore}表达生成任务向新主要计算机制的转向，其子代仍作为普通个体参与竞争。被选作交叉参考会刷新个体的活动时钟\(u\)，但不增加\(d\)；仅在提示中展示个体不改变计数或时钟。新接入的子节点\(v\)初始满足\(d(v)=0\)、\texttt{subtree\_evaluations}为\(0\)且\(u(v)=t\)。
-
-\subsubsection{3.3. 反思树简化}\label{ux53cdux601dux6811ux7b80ux5316}
-
-获得5个可行初始程序后，每次受评个体入树都执行维护。所有决策读取同一份更新前快照。维护只使用两个参数：活跃窗口\(W\)（\texttt{active\_evaluations}）与区域规模阈值\(m\)（\texttt{region\_size}）。
-
-\textbf{活跃工作集。}
-设\(\mathcal P\)包含树中的可行节点。将标准化源码与实测分数均相同的记录折叠到最早保留记录，得到\(\mathcal D=\operatorname{distinct}(\mathcal P)\)。记\(v^\star\)为最优可行个体，同分取编号最小者。活跃集合为
+设 \(\mathcal P\) 为树上的可行节点。同一标准化源码且分数相同的重复节点由最早节点代表，得到集合 \(\mathcal D\)。将其按适应度由优到劣排序，同分按编号排序，记为 \((v_1,\ldots,v_{|\mathcal D|})\)。从 \(R_0=\varnothing\) 开始选择至多 \(K\) 个代表：
 
 \[
-\mathcal A=\{v\in\mathcal D:t-u(v)<W\}\cup\{v^\star\},
-\qquad W=40,
+\begin{aligned}
+R_k &= R_{k-1} \cup \bigl\{v_k : |R_{k-1}| < K,\\
+&\qquad d(v_k,u)\geq\delta\quad\forall u\in R_{k-1}\bigr\},\\
+R &= R_{|\mathcal D|}.
+\end{aligned}
 \tag{1}
 \]
 
-其中，\(u(v)\)在出生、直接开发或被选作交叉参考时刷新。这一规则保留近期使用的个体，无需固定质量名额。精确复制品不进入\(\mathcal D\)，也不获得独立的父代或交叉参考抽样机会。
+其中 \(d\) 为抽象语法树（abstract syntax tree，AST）特征的多重集Jaccard距离，\(\delta\) 为覆盖距离阈值。适应度更优的算法优先入选，后续候选若与已选代表的距离小于 \(\delta\)，则不再作为代表。存在可行算法时，最优者进入 \(R\)，同分按节点编号确定顺序。特征构造与默认参数见附录A。
 
-\textbf{保留分叉与划分区域。}
-保留虚拟根及活跃个体之间的两两最近公共祖先：
+令 \(\operatorname{LCA}_T(R)\) 表示代表两两之间的最近公共祖先（lowest common ancestor，LCA）集合。额外保留的分叉节点集 \(F\) 与保留骨架 \(\mathcal H\) 定义为
 
 \[
-\mathcal H=\{r\}\cup\mathcal A\cup\operatorname{LCA}(\mathcal A).
+\begin{aligned}
+F &= \operatorname{LCA}_T(R)\setminus(R\cup\{v_0\}),\\
+\mathcal H &= \{v_0\}\cup R\cup F.
+\end{aligned}
 \tag{2}
 \]
 
-从每个非根骨架节点沿原父指针找到最近骨架祖先。两者之间的节点及其位于\(\mathcal H\)之外的旁支共同组成路径区域。其余骨架外节点按最近骨架祖先归集为旁支区域，得到互不相交的区域集合\(\mathcal C\)。骨架端点提供反思上下文，不计入区域规模。
+骨架 \(\mathcal H\) 确定其余部分如何简化。若两个骨架节点之间的路径内部没有其他骨架节点，则称它们沿该路径相邻。非空的中间链及其沿途分支组成路径区域；其余非骨架分支按最近骨架祖先归集为子树区域。保留共同祖先后，这些区域互不相交，每个非骨架节点恰好属于一个区域。
 
-\textbf{成批简化。} 只有达到阈值的完整区域才执行简化：
+为使一次反思能够结合多个算法的演化过程，EvoTrace仅简化包含至少 \(m\) 个非骨架节点的区域。记区域划分为 \(\mathcal C\)，选中移除的节点为 \(\mathcal U\)，保留节点为 \(\mathcal K\)：
 
 \[
-\mathcal R=\bigcup_{C\in\mathcal C:\,|C|\geq m}C,
-\qquad
-\mathcal K=(\mathcal N\cup\{r\})\setminus\mathcal R,
-\qquad m=4.
+\begin{aligned}
+\mathcal U &= \bigcup_{C\in\mathcal C:\,|C|\geq m} C,\\
+\mathcal K &= (\mathcal N\cup\{v_0\})\setminus\mathcal U.
+\end{aligned}
 \tag{3}
 \]
 
-较小区域原样暂留，其中符合条件的可行个体可因再次使用而恢复活跃。对选中的路径区域，重连保留端点，将反思经验写入新边的\(V\)；对选中的旁支区域，将反思经验写入骨架祖先的\(S\)。已有笔记与比较目录共同参与此次更新。
+路径区域中的节点被移除，两端保留节点通过一条新边相连；子树区域中的节点被剪除，其骨架祖先继续保留。相应经验按下一节所述写入重连边或保留节点。较小区域暂留在树上；它们位于 \(R\) 之外，不参与父代抽样。
 
-全部选中区域一次性移除。重连边标记为已收缩，并清空\texttt{operator}与\texttt{reference\_id}，表示其涵盖多步尝试。所有存活个体的直接投入、子树投入及活动时钟保持原值。固定骨架使各区域保持分离；没有新增搜索活动时，再次维护不产生额外简化（附录B）。
+这一更新保持有根树结构，且不改变选定的代表，即 \(R(T')=R(T)\)。在没有新个体加入时，再次更新不会触发进一步简化。简化将被移除的路径片段替换为单条边，保留存活节点之间的祖先关系。证明见附录B。
 
-\subsubsection{3.4.
-区域反思与来源追溯}\label{ux533aux57dfux53cdux601dux4e0eux6765ux6e90ux8ffdux6eaf}
+\subsection{通过反思积累设计经验}\label{ux901aux8fc7ux53cdux601dux79efux7d2fux8bbeux8ba1ux7ecfux9a8c}
 
-针对当轮产生的每个路径收缩区域与每组同承接点旁支区域，EvoTrace各发起一次结构化反思调用，全部读取维护前快照；若当轮无节点退出，则不发起任何反思调用。
+两种简化操作分别对应两类演化过程。路径区域包含一个保留算法演化为另一个的过程，以及中间算法产生的分支；子树区域包含从保留祖先出发、最终未被保留的分支。EvoTrace在移除算法节点前，对相应区域执行反思。
 
-\textbf{区域证据组织。}
-路径反思输入包含保留起止端点源码（\(a(v)\neq r\)时）、首尾净代码差分与净分数变化、中间节点实现与评价结果、并入该路径的同轮旁支尝试，以及区域内节点和边携带的旧经验。旁支反思输入包含承接节点源码（\(u\neq r\)时）、各移除尝试相对真实父代的代码差分、实测分数或精简运行错误诊断，以及承接位置原有的\(S_u\)。为帮助模型理解局部得失，两类输入均附带简短的\texttt{{[}Related\ Results{]}}（列出各共同起点下区域之外表现最好的一个兄弟实现描述与分数）以及程序自动生成的\texttt{{[}Comparison\ Catalog{]}}（逐条列出原始\texttt{parent\_id-\textgreater{}child\_id}、算子、\texttt{improved}/\texttt{tied}/\texttt{regressed}/\texttt{failed}实测标签与错误摘要）。
+对路径 \(u\leadsto v\)，反思读取两端算法的代码、沿途算法的变化及评价结果、中间节点的分支，以及区域中已有的经验。边经验 \(E_{u\to v}\) 总结这条路径及其分支上的演化过程。对依附于保留节点 \(u\) 的子树区域，反思读取 \(u\) 的代码、区域内各节点相对更新前树中父节点的代码差分、评价结果与已有经验。节点经验 \(E_u\) 总结这些分支中的设计及结果。反思还会读取具有相同父节点的其他所选可行算法的设计描述与分数。若 \(u=v_0\)，则不提供起始算法代码或分数；相应子树经验保存在虚拟根上。
 
-\textbf{研究笔记凝练与比较目录绑定。}
-每次反思调用按严格JSON模式返回\texttt{\{"experience":\ "..."\}}，生成一段约120词的自足英文研究笔记，记录尝试过的计算思想、有信息量的结果及相关旧经验，不使用临时尝试编号。解释与假说保持试探性且非强制，旁支提示同时明确指出个体退出源于种群规模管理而非否定其算法思想。写入生成的文本摘要时，程序自动将该区域完整的\texttt{Comparison\ Catalog}结构化元数据（\texttt{selection\_observations}或\texttt{variation\_observations}）绑定至目标节点或边。若该载体在后续更新中再次被简化，系统会在旧笔记前自动标注其支撑的\texttt{comparison\_id}列表，确保多轮递归交接后原始比较端点依然精确可查。若模型调用或解析失败，系统从比较目录与旧笔记确定性生成960字符以内的回退摘要，保证结构更新与来源记录完整无损。
+经验通过连续反思逐步积累。若边 \(u\to v\) 后续成为更长收缩路径的一部分，其边经验将与新增算法的变化及评价结果一同进入反思；若更多从 \(u\) 延伸出的分支被剪除，相应结果将与已有节点经验 \(E_u\) 整合。算法个体不断更替，经验通过这些总结继续传递。反思提示要求忠实记录计算思想与观察到的结果，并将对原因的解释保持为试探性判断。结构化比较记录独立于生成文本保留相关评价结果；提示全文见附录C。
 
-\subsubsection{3.5.
-父代分配与任务对齐生成}\label{ux7236ux4ee3ux5206ux914dux4e0eux4efbux52a1ux5bf9ux9f50ux751fux6210}
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/reflective-simplification.png}
+\caption{已有经验进入后续反思。 （a）后续路径收缩移除 \(D\) 及沿途算法时，已有边经验 \(E_{AD}\) 与新的演化过程共同形成 \(E_{AG}\)。（b）从 \(A\) 剪除新增分支时，将分支中的设计及结果与已有节点经验 \(E_A\) 整合。图中每个待简化区域均包含四个待移除节点，保留端点位于区域之外。}\label{fig:evotrace-2}
+\end{figure*}
 
-\textbf{名次半衰期与谱系投入全局采样。}
-每次演化生成前，树中全体保留的独立可行个体\(\mathcal D\)（含内部LCA分叉节点）在同一概率分布中竞争。将\(\mathcal D\)（记\(M=|\mathcal D|\)）按适应度\(f(v)\)由优到劣排序，并列个体共享所占零基名次区间的中点平均名次\(\bar r(v)\in[0,M-1]\)（对应归一化秩质量\(q(v)=1-\bar r(v)/(M-1)\)，\(M=1\)时取\(q(v)=0.5\)），记\(b(v)\)为从根到\(v\)的保留路径上适应度最优的可行节点，包含\(v\)自身，同分取编号最小者；记\(s(b(v))\)为该节点的历史子树评价数。父代权重与抽样概率为
+\subsection{利用种群中的算法与经验继续搜索}\label{ux5229ux7528ux79cdux7fa4ux4e2dux7684ux7b97ux6cd5ux4e0eux7ecfux9a8cux7ee7ux7eedux641cux7d22}
+
+更新后的种群既包含用于生成子代的代表算法，也保存它们的演化轨迹与设计经验。预算分配决定从哪些代表生成子代；各算子从树的相关部分构造上下文，展示范围受附录A所述输入限制约束。
+
+仅代表集 \(R\) 中的算法参与主父代抽样。\(n_r\) 统计以 \(r\) 为主父代生成子代时已消耗的程序评价次数，包括执行失败与修复后的再次评价。同分取平均名次 \(\bar\rho_R(r)\)，并令名次差为 \(\Delta\bar\rho_R(r)=\bar\rho_R(r)-\min_{u\in R}\bar\rho_R(u)\)。定义
 
 \[
-w(v)=\frac{2^{-\bar r(v)/H}}{1+s(b(v))},
-\qquad
-P(v)=\frac{w(v)}{\sum_{u\in\mathcal D}w(u)},
-\qquad v\in\mathcal D,
+\begin{aligned}
+w(r) &= \frac{2^{-\Delta\bar\rho_R(r)/H}}{1+n_r},\\
+P(r) &= \frac{w(r)}{\sum_{u\in R}w(u)}.
+\end{aligned}
 \tag{4}
 \]
 
-其中，\(H=10\)为名次半衰期：名次每落后\(H\)位，质量权重减半。具有相同路径最优祖先的候选共享该祖先的投入分母；刷新路径最优分数的子代以自身为参照，其子树投入初始为零。个体的直接开发计数仍单独记录。该规则由\texttt{lineage\_peaks}与\texttt{parent\_probabilities}实现。
+半衰期 \(H\) 控制采样权重随适应度名次下降的速度。分母降低已消耗较多子代评价次数的算法权重。新加入的算法节点从 \(n_r=0\) 起计，树简化保持保留节点的计数不变。祖先节点的评价次数不计入 \(n_r\)，祖先路径上的算法变化与经验仍可用于生成上下文。默认参数与交叉参考选择规则见附录A。
 
-\textbf{算子抽样与结构距离交叉参考。}
-选定主父代\(v\)后，系统按\(0.45\)、\(0.30\)、\(0.25\)的概率抽取\texttt{Refine}、\texttt{Explore}或\texttt{Crossover}。选中\texttt{Crossover}时，先排除\(v\)自身及标准化源码等价（\texttt{identity(code)}相同）的节点，在剩余互异源码可行候选中计算秩质量\(q(u)\)，保留满足\(q(u)\geq 0.30\)（\texttt{reference\_quality\_floor}）的参考池。系统优先挑选尚未记录在\texttt{used\_crossover\_pairs}中的有序配对\texttt{(v,\ u)}（仅当\(v\)与所有合格参考均已配对后才允许复用），并在其中选择AST多重集Jaccard结构距离（\texttt{code\_distance}，基于剥离文档字符串后的AST父子类型对与遍历二元组，同距离依次取适应度更优、编号更早者）最大的参考\(u\)；若无合格参考则自动转为\texttt{Refine}。
+\textbf{精化（Refine）。} 上下文包含当前算法的代码、从根到当前节点的演化路径，以及当前树中连接至该节点的分支记录。未收缩的边提供代码差分，已收缩的边提供边经验，展示路径上的节点提供节点经验。这些内容使生成器能够结合当前算法的演化过程提出改进。
 
-\textbf{任务对齐的多尺度树视图。}
-三种算子不再受人为路线边界截断，而是直接按各自的设计职责读取\(T\)的互补结构视图：
+\textbf{交叉（Crossover）。} 上下文包含主父代和参考算法的代码、最近公共祖先的设计描述与分数、其后的两条路径及相关经验。若最近公共祖先为虚拟根，则展示两条初始谱系各自的路径，并在存在根经验时提供该经验。提示要求结合双方设计中有用的部分；若无法形成有用的组合，也允许根据比较结果改进主父代算法。子代连接至主父代，并记录参考算法。
 
-{\def\LTcaptype{none} % do not increment counter
-\begin{longtable}[]{@{}
-  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}@{}}
-\toprule\noalign{}
-\begin{minipage}[b]{\linewidth}\raggedright
-算子
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-树状种群\(T\)的结构视图
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-设计职责
-\end{minipage} \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-Refine &
-当前完整源码与分数；从根到当前父代的完整保留\texttt{{[}Evolution\ Path{]}}（含未收缩差分、已收缩阶段经验\(V\)及路径节点\(S\)）；根经验\(S_r\)；\texttt{{[}Attempts\ from\ Current\ Algorithm{]}}（父代\(S_v\)及保留的有效与失败子尝试）
-& 结合算法形成脉络与局部试错结果改进当前计算逻辑 \\
-Crossover &
-当前与参考两份完整源码及分数；真实\texttt{{[}Common\ Ancestor{]}}（或根部\texttt{{[}Origin\ Context{]}}）；自共同祖先分化的双支路径（\texttt{{[}Current\ Branch{]}}与\texttt{{[}Reference\ Branch{]}}）及沿途\(S/V\)；主父代的直接子尝试
-& 对照两支谱系的分化演变，甄别并重组互补的计算机制 \\
-Explore &
-按适应度排序的\texttt{{[}Population\ Individuals\ and\ Experience{]}}（汇总全体保留可行个体的设计描述、分数、派生来源及附着\(S/V\)，含根\(S_r\)），后接\texttt{{[}One\ Existing\ Implementation{]}}
-& 跳出局部修补，构思核心计算过程明显不同的替代算法 \\
-\end{longtable}
-}
+\textbf{探索（Explore）。} 上下文呈现当前树中可行算法的设计描述、分数与相关经验，范围包含 \(R\) 之外的节点。所选主父代的代码提供实现参考。提示要求结合种群中的设计及结果，构思核心计算过程不同的算法。
 
-未收缩边展示分数变化与精简标准化代码差分（必要时补齐差分基准代码）；收缩边展示端点分数变化、结果设计与阶段变异经验\(V\)。
+新算法经评价后进入树中，选择规则确定下一轮代表，达到简化阈值的区域经过反思后被收缩或剪除。算法1概括这一过程；修复、上下文限制与数值细节见附录A。
 
-当渲染后的演化提示超出输入上限\texttt{max\_input\_tokens}（\(30{,}000\)）时，系统在可选展示窗口（\texttt{max\_path\_steps}、\texttt{max\_unconsolidated\_attempts}、\texttt{max\_unconsolidated\_failures}、\texttt{max\_population\_members}、\texttt{max\_experiences}）中迭代折半能够使实测词元数降至最小的维度，同时始终保留至少一条路径或种群记录、当前与参考完整源码以及解释差分所需的基准代码。上下文裁剪仅作用于当次模型输入视图，不修改树结构或经验归属。每次生成调用严格输出含\texttt{"analysis"}、\texttt{"code"}与\texttt{"design"}三个字段的JSON对象。
+\begin{algorithm}[H]
+\caption{EvoTrace}\label{alg:evotrace}
+\begin{algorithmic}[1]
+\REQUIRE 任务、评价器、LLM、预算 $B$、初始规模 $I$
+\STATE 初始化仅含虚拟根 $v_0$ 的树 $T$
+\WHILE{预算尚有剩余且未满足停止条件}
+  \IF{已获得的可行初始程序不足 $I$ 个}
+    \STATE 选择虚拟根上的初始化
+  \ELSE
+    \STATE 抽样代表父代与生成算子
+  \ENDIF
+  \STATE 构造相应的生成上下文
+  \STATE 生成并评价，期间至多修复一次
+  \IF{没有程序进入评价}
+    \STATE \textbf{continue}
+  \ENDIF
+  \STATE 将最终被评价程序挂接至父代
+  \IF{已获得的可行初始程序不足 $I$ 个}
+    \STATE \textbf{continue}
+  \ENDIF
+  \STATE 选择代表集 $R$ 与骨架 $\mathcal H$
+  \STATE 将非骨架节点划分为区域
+  \STATE 基于更新前的树反思达到阈值的区域
+  \STATE 收缩路径并剪除子树
+  \STATE 将经验保存至保留的边和节点
+\ENDWHILE
+\RETURN 搜索中评价过的最优可行程序
+\end{algorithmic}
+\end{algorithm}
 
-\subsubsection{3.6.
-搜索算法流程}\label{ux641cux7d22ux7b97ux6cd5ux6d41ux7a0b}
+\section{种群更新与经验积累的分析}\label{ux79cdux7fa4ux66f4ux65b0ux4e0eux7ecfux9a8cux79efux7d2fux7684ux5206ux6790}
 
-算法1总结了EvoTrace的完整流程。初始化与演化阶段共享总评价预算\(B\)与单次修复上限。JSON或语法格式错误最多触发一次不消耗评价预算的格式修复；运行异常、非法输出或超时最多触发一次消耗评价预算的程序修复重评。只有实际执行过至少一次程序评价的尝试才会将最终受评节点接入\(T\)并推进全局时钟\(t\)。
+\subsection{搜索任务与分析范围}\label{ux641cux7d22ux4efbux52a1ux4e0eux5206ux6790ux8303ux56f4}
 
-\par\noindent\begin{minipage}{\linewidth}
-\begin{verbatim}
-算法1：EvoTrace
-输入：任务接口、评价器、大语言模型、评价预算 B
-初始化虚拟根 r、空树状种群 T 与尝试档案 A
-当 evaluations_used < B 且连续无评价尝试数 < 10 时：
-    若 A 中可行初始程序少于 5 个：
-        由任务接口与初始档案构造初始化提示
-    否则：
-        按式(4)采样主父代 v，并采样算子 {Refine, Explore, Crossover}
-        若算子为 Crossover：在高质量池中选取 AST 结构距离最大的参考 u
-        从 T 构造并按词元上限适配与算子对齐的树上下文视图
-    生成候选程序（最多一次格式或运行修复）并执行评价
-    将全部模型调用与评价结果记入档案 A
-    若本次尝试至少执行过一次程序评价：
-        将最终受评节点挂接至 T 中主父代；更新 d、subtree、u 与全局时钟 t
-        若初始化已完成：
-            计算去重集合 D、包含最优个体的活跃集合 A 及 LCA 骨架 H
-            将骨架外节点划分为路径区域与旁支区域
-            选取冷退节点数至少为 m 的完整区域
-            反思选中区域并绑定原始比较目录
-            移除选中区域、重连端点，并写回经验 V 与 S
-    提交尝试记录与更新后的树快照
-返回档案 A 中训练适应度最优的可行程序
-\end{verbatim}
-\end{minipage}
+本文在四项组合优化任务上考察种群更新中的经验积累：旅行商问题（traveling salesman problem，TSP）的下一节点选择、带容量车辆路径问题（capacitated vehicle routing problem，CVRP）的蚁群边启发式、置换流水车间调度问题（permutation flow-shop scheduling problem，FSSP）的加工时间扰动与作业选择，以及定向越野问题（orienteering problem，OP）的蚁群边启发式。每项任务使用三个搜索随机种子，每次评价使用16个固定训练实例。生成与反思均使用 \texttt{Qwen3.8-27B}，求解器与执行设置见附录D。
 
+分析使用12次搜索在快照保存时的记录，共包含2,641次程序评价，每次搜索完成180--256次评价。这些搜索采用早期保留规则：在去重后的可行个体中，按适应度保留至多32个个体，并保留最近40次评价内新生成或用作主父代的个体，再补齐连接它们的分叉祖先；单节点区域即可触发简化。这些记录用于考察该配置下的路径收缩、子树剪枝与连续反思，不构成第2.2节代表覆盖与成批简化规则的性能验证。
 
-\subsection{4. 初步实验}\label{ux521dux6b65ux5b9eux9a8c}
+\subsection{算法淘汰与经验形成}\label{ux7b97ux6cd5ux6dd8ux6c70ux4e0eux7ecfux9a8cux5f62ux6210}
 
-本节证据来自此前使用\texttt{quality\_slots\ =\ 32}、\texttt{recent\_evaluations\ =\ 40}及个体直接投入采样的V3配置，早于第3.3节的工作集与区域阈值规则。冻结记录描述该配置的行为，并为成批反思提供设计依据；它们不衡量当前维护规则的搜索效果。
+在累计加入树中的2,481个算法节点中，1,195次简化更新移除了1,734个节点，占 \(69.9\%\)；12棵树在快照保存时共保留747个算法节点。每个被移除节点均属于唯一的简化区域，移除数量与更新后的节点数量一致。
 
-我们在四个标准组合优化基准任务上检验源码冻结的EvoTrace实现，并报告来自2026年11月15日源码冻结部署（北京时间15:36捕获，详见附录D）的多随机种子早期搜索快照。该部署包含12路独立运行（四项任务各取随机种子0、1、2），每路目标预算为\(B=1{,}000\)次实际程序评价。捕获快照时，各路已完成180至256次程序评价（对应168至247次已提交生成尝试）。我们在全部12路共同达到的最大预算横截面（180次评价）报告训练最优适应度，并对全部2,641次已提交评价中的种群维护与区域反思过程进行统计核查。
+这些节点分属509个路径区域与887个子树区域。前者包含连接保留算法的演化过程，后者包含从保留祖先延伸出的分支演化过程。对这1,396个区域的反思分别形成边经验或节点经验。因此，两类经验均在连续种群更新中产生，其保存位置由相应的演化关系确定。
 
-\subsubsection{4.1.
-基准任务与执行条件}\label{ux57faux51c6ux4efbux52a1ux4e0eux6267ux884cux6761ux4ef6}
+\subsection{反思频率与开销}\label{ux53cdux601dux9891ux7387ux4e0eux5f00ux9500}
 
-每项基准任务都在固定外层求解器内演化一个核心决策函数：
+每个反思区域移除的节点数量并不相同。在1,396个反思区域中，1,127个（\(80.7\%\)）仅包含一个新移除节点，但仍可能携带此前反思形成的经验。因此，一次反思可以在移除单个节点时继续整合已有经验。式(3)的简化阈值规定每个反思区域至少移除多少个节点。
 
-\begin{itemize}
-\tightlist
-\item
-  \textbf{旅行商问题（\texttt{tsp\_construct}，TSP）：}
-  在50节点欧氏实例上演化逐步构造回路时的下一节点选择函数，最小化平均回路长度。
-\item
-  \textbf{带容量车辆路径问题（\texttt{cvrp\_aco}，CVRP）：}
-  为蚁群优化（30只蚂蚁、100轮迭代）演化边启发式先验矩阵，最小化平均路径总长。
-\item
-  \textbf{流水车间调度问题（\texttt{fssp\_gls}，FSSP）：}
-  为引导式局部搜索演化惩罚矩阵与作业扰动选择计算，最小化平均最大完工时间（makespan）。
-\item
-  \textbf{定向越野问题（\texttt{op\_aco}，OP）：}
-  在路径长度约束下为蚁群优化（20只蚂蚁、50轮迭代）演化边启发式先验，最小化负的平均收集奖励。
-\end{itemize}
+全部1,396次反思调用均返回符合规定格式的经验文本，未触发回退摘要。它们消耗4,897,554个输入词元与256,594个输出词元，平均每区域3,508个输入词元、184个输出词元。这些词元开销不包含算法生成调用，完整区域规模分布及统计条件见附录D。
 
-每次训练评价在16个固定实例上运行，采用最多8个工作进程并行的实例秒池化时限（总计160实例秒，单进程内存上限2
-GiB，各实例随机种子由评价种子\texttt{730241}加实例序号固定生成）。执行失败与修复重评均计入预算\(B\)。另有50个不相交同分布实例（500实例秒总时限）预留用于1,000次评价完成后的单次独立测试。模型请求统一经由关闭原生思考的\texttt{Qwen3.8-27B}共享端点池调度：生成温度为\(1.0\)、输出上限\(16{,}384\)词元；区域反思温度为\(0.3\)、输出上限\(1{,}536\)词元（完整参数见附录A与附录D）。
+\subsection{搜索过程中的种群规模}\label{ux641cux7d22ux8fc7ux7a0bux4e2dux7684ux79cdux7fa4ux89c4ux6a21}
 
-\subsubsection{4.2.
-180次评价横截面上的搜索轨迹}\label{ux6b21ux8bc4ux4ef7ux6a2aux622aux9762ux4e0aux7684ux641cux7d22ux8f68ux8ff9}
-
-表1给出各任务三个随机种子在180次评价处的训练最优适应度，以及三种子样本均值与样本标准差（SD）。图1将共同180次评价窗口内的最优训练适应度曲线（上排）与每次受评入树及简化提交后的树上保留个体数（下排）对照展示。
-
-\Needspace{12\baselineskip}
-\begin{longtable}[]{@{}lrrr@{}}
-\caption{180次评价处的训练最优适应度（越小越好）。}\tabularnewline
-\toprule\noalign{}
-任务 & 种子0 / 1 / 2 & 均值 & 标准差 \\
-\midrule\noalign{}
-\endfirsthead
-\toprule\noalign{}
-任务 & 种子0 / 1 / 2 & 均值 & 标准差 \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-TSP & 5.8527 / 5.8362 / 5.9800 & 5.8897 & 0.0787 \\
-CVRP & 8.5592 / 8.5845 / 8.2413 & 8.4617 & 0.1913 \\
-FSSP & 3928.81 / 3928.25 / 3927.69 & 3928.25 & 0.56 \\
-OP & -14.3919 / -14.7719 / -14.6069 & -14.5902 & 0.1905 \\
-\end{longtable}
-
-\begin{figure}
+\begin{figure*}[t]
 \centering
-\pandocbounded{\includegraphics[keepaspectratio,alt={12路冻结运行的搜索进展与保留种群规模。 上排展示前180次评价共同区间内的最优训练适应度（实线为三种子均值，细线分别为种子0、1、2）。下排展示前180次评价内每次提交维护后的保留个体数\textbar\textbackslash mathcal K\textbackslash setminus\textbackslash\{r\textbackslash\}\textbar，并与存储的完整树快照逐一核对一致。跨过40次评价的近期窗口后，生存选择与LCA闭包使在线种群规模保持稳定有界。}]{figures/early-search.pdf}}
-\caption{12路冻结运行的搜索进展与保留种群规模。
-上排展示前180次评价共同区间内的最优训练适应度（实线为三种子均值，细线分别为种子0、1、2）。下排展示前180次评价内每次提交维护后的保留个体数\(|\mathcal K\setminus\{r\}|\)，并与存储的完整树快照逐一核对一致。跨过40次评价的近期窗口后，生存选择与LCA闭包使在线种群规模保持稳定有界。}
-\end{figure}
+\includegraphics[width=\textwidth]{figures/early-search.pdf}
+\caption{训练最优适应度与种群规模的变化。 上排展示前180次评价内的训练最优适应度，下排展示每次更新后的保留算法数量，每条曲线对应一个随机种子。这些运行采用第3.1节说明的早期保留规则。}\label{fig:evotrace-3}
+\end{figure*}
 
-在全部四项任务与12个种子上，训练适应度均显著超越5个初始可行程序的起点：前60次评价内快速下降，并在60至180次评价间通过持续改进与跨支路交叉进一步提升（例如CVRP种子2降至8.2413，OP种子1达到-14.7719）。与此同时，图1下排直观呈现了生存简化的结构调节效果：在线个体数在前40次评价的近期窗口内近似线性增长，随后迅速收敛并稳定在紧凑区间，即便到256次评价的各路观察终点，12路树的保留个体数仍严格处在54至70之间（由32个质量名额、窗口内近期个体及连接分叉共同构成）。
+全部12次运行在第180次评价处的训练最优目标值均优于第5次评价。在已记录的搜索过程中，新算法持续进入种群，树简化同时移除算法节点。在快照保存时，每棵树保留54--70个算法。表1汇总各次运行在第180次评价处的训练目标值。
 
-\subsubsection{4.3.
-结构简化与递归反思统计}\label{ux7ed3ux6784ux7b80ux5316ux4e0eux9012ux5f52ux53cdux601dux7edfux8ba1}
+\begin{table*}[t]
+\caption{各次运行在第180次评价处的训练最优适应度（越小越好）。 均值与样本标准差由三个搜索随机种子的结果计算。}\label{tab:training}
+\centering
+\begin{tabular}{lrrrrr}
+\toprule
+任务 & 种子0 & 种子1 & 种子2 & 均值 & 标准差 \\
+\midrule
+TSP & 5.8527 & 5.8362 & 5.9800 & 5.8897 & 0.0787 \\
+CVRP & 8.5592 & 8.5845 & 8.2413 & 8.4617 & 0.1913 \\
+FSSP & 3928.81 & 3928.25 & 3927.69 & 3928.25 & 0.56 \\
+OP & -14.3919 & -14.7719 & -14.6069 & -14.5902 & 0.1905 \\
+\bottomrule
+\end{tabular}
+\end{table*}
 
-对12路前缀全部2,481次已提交尝试（2,641次评价）的逐条审计确认，记录了冻结规则下的节点移除、区域归属与反思行为：
+\section{相关工作}\label{ux76f8ux5173ux5de5ux4f5c}
 
-\begin{itemize}
-\tightlist
-\item
-  \textbf{节点移除与保留状态：}
-  在累计接入树\(T\)的2,481个受评节点中，1,195次简化更新共移除1,734个实现（占\(69.9\%\)），在12棵活动树中保留747个显式个体。每次更新中的每个移除节点均唯一归属一个简化区域，无孤立节点或计数漂移。
-\item
-  \textbf{路径收缩与旁支剪枝协同生效：}
-  搜索推进至远超\(W=40\)后，两类简化模式均充分运转：1,195次更新将1,734个移除节点划分为\textbf{509个路径收缩区域}（更新边经验\(V\)）与\textbf{887个旁支剪除区域}（更新节点或根经验\(S\)），共计1,396个简化区域。
-\item
-  \textbf{增量式递归凝练：}
-  全部1,396个区域均正常完成结构化LLM反思，\textbf{回退摘要数为0}（无解析或模式校验失败）。按单次区域新移除的节点数统计，1,127个区域（\(80.7\%\)）凝练1个新退出实现，204个凝练2个，62个凝练3个，2个凝练4个，1个凝练5个，体现了每次维护将小规模新退出记录与载体已有经验增量融合的运行特征。
-\item
-  \textbf{独立的反思成本核算：}
-  在累计2,641次程序评价过程中，1,396次反思调用共消耗4,897,554个输入词元与256,594个输出词元（平均每区域约3,508个输入词元、184个输出词元），与求解器评价预算分开透明记账。
-\end{itemize}
+\textbf{演化式算法设计。} 遗传编程搜索可执行结构\citep{koza}。超启发式在启发式空间中搜索\citep{hh}，算法配置则为给定算法选择参数设置\citep{irace}。基于LLM的方法通过生成变异与组合拓展程序变化的空间\citep{elm, survey_aad, lmcrossover}。FunSearch通过岛屿种群搜索程序\citep{funsearch}，EoH共同演化自然语言设计描述与代码\citep{eoh}，LLaMEA与AlphaEvolve进一步发展评价引导的算法演化\citep{llamea, alphaevolve}。HSEvo利用和声搜索平衡多样性与收敛\citep{hsevo}，PartEvo维护生态位\citep{partevo}，ShinkaEvolve在父代选择中结合适应度与抽样频率\citep{shinka}。EvoTrace将经验积累纳入种群更新，使被淘汰算法的演化过程也能为后续设计提供参考。
 
-\subsection{5. 讨论}\label{ux8ba8ux8bba}
+\textbf{树与图表示。} MCTS-AHD通过蒙特卡洛树搜索\citep{uct}与路径上下文生成启发式\citep{mctsahd}，Clade-AHD以后代评价支持分支选择\citep{cladeahd}。A2DEPT通过演化程序树组织搜索\citep{a2dept}，Code Evolution Graphs用于分析代码的演化过程\citep{codegraphs}。DGA2D中图的作用不同：节点表示功能算子，图中的游走构成算法流程\citep{dga2d}。PhyloEvolve维护算法谱系，并通过精英池支持跨谱系复用\citep{phyloevolve}；PathWise以蕴含图保存记忆，支持规划与反思\citep{pathwise}。在EvoTrace中，派生关系决定反思涉及哪些算法，以及形成的经验保存在何处。
 
-\textbf{竞争、结构与经验。}
-EvoTrace用同一棵树选择个体、组织相关尝试，并向生成提供经验。父代采样结合个体名次质量与谱系投入；工作集和LCA骨架决定哪些部分继续显式保留；区域反思凝练选中简化的相关尝试。路径级、分支级与种群级视图随后使用这一维护后的状态。
+\textbf{反思与设计经验。} Self-Refine使用迭代式自我反馈\citep{selfrefine}，Reflexion在多次尝试之间保留语言反思\citep{reflexion}，ExpeL从任务经历中提取可复用的认识\citep{expel}。ReEvo将比较反思纳入演化搜索\citep{reevo}，RefineEvo结合规划与正负经验池\citep{refineevo}，MeEvo交替执行演化与共享历史反思\citep{meevo}。BEAM结合双层算法优化与自适应记忆\citep{beam}。DeltaEvolve通过多级数据库存储语义差分\citep{deltaevolve}；MEMOIR维护分支内记忆，在分支终止时将凝练经验交给全局记忆\citep{memorytree}。EvoTrace将反思与种群简化结合，在路径收缩和子树剪枝时生成设计经验，并将其保存在重连边和保留节点上。后续生成结合相关算法及其演化轨迹读取这些经验。
 
-\textbf{为何成批反思。}
-在第4节的早期规则下，80.7\%的区域只包含一个新移除节点。当前阈值使每个反思区域至少汇集\(m\)个冷退节点。这改变了反思频率和可供凝练的材料；它是否改善经验或后续生成，需要直接检验。
+\section{讨论}\label{ux8ba8ux8bba}
 
-\textbf{评价范围。}
-冻结运行记录了早期保留规则下的搜索与经验交接。当前工作集简化已通过结构回放与不变量检查。附录E的完整搜索比较和固定状态经验实验将检验当前方法的搜索表现，以及凝练经验对生成的作用。
+树将设计经验与算法及其演化关系联系起来。边经验对应保留端点之间及沿途被移除分支上的演化过程；节点经验对应从保留祖先处剪除的分支。这些联系使精化与交叉能够沿相关演化路径访问经验。算法的选择和淘汰确定反思范围，生成算子与输入限制共同决定哪些算法、轨迹和经验进入上下文。
 
-\subsection{6. 结论}\label{ux7ed3ux8bba}
+简化从活跃种群中移除算法节点及其代码，实现在搜索归档中继续保留它们。非代表节点不能作为主父代，包括区域尚未达到简化阈值、节点暂留在树上的情形。反思以有损的自然语言总结传递被移除区域中的经验，其中可能包含对性能变化原因的不确定解释。经验对后续生成的影响需要通过受控比较判断；本文分析了经验的形成过程及反思开销。
 
-EvoTrace以带经验的树状种群结合种群竞争与派生结构。反思树简化随树更新，将路径与旁支中的相关尝试压缩为节点与边上的经验。全局父代采样与面向算子的树视图在同一状态上继续设计算法，将种群生长、经验凝练与后续生成连接起来。
+\section{结论}\label{ux7ed3ux8bba}
 
-\subsection{附录 A.
-默认超参数与记账细则}\label{ux9644ux5f55-a.-ux9ed8ux8ba4ux8d85ux53c2ux6570ux4e0eux8bb0ux8d26ux7ec6ux5219}
+EvoTrace使算法的优胜劣汰同时成为积累和复用算法设计经验的过程。树状种群记录算法的演化关系，淘汰时通过路径收缩与子树剪枝组织反思，将相应过程中的设计经验保存在边和节点上。更新后的种群进一步用于预算分配，并为后续生成提供演化轨迹与设计经验。算法演化与经验积累由此在种群中共同推进。
 
-{\def\LTcaptype{none} % do not increment counter
+\section*{AI使用声明}\label{aiux4f7fux7528ux58f0ux660e}
+\addcontentsline{toc}{section}{AI使用声明}
+
+生成式AI工具用于辅助文献综合、论文起草与修订、对照实现检查表述，以及制作机制图。EvoTrace方法中使用的LLM见第2、3节与附录D。作者对论文及其主张承担责任。
+
+\section*{影响声明}\label{ux5f71ux54cdux58f0ux660e}
+\addcontentsline{toc}{section}{影响声明}
+
+本文研究自动算法设计，其潜在益处包括减少开发计算方法所需的人工工作。所生成算法的更广泛影响取决于其应用的任务与场景。
+
+\FloatBarrier
+\label{evotrace-main-end}
+\bibliographystyle{vendor/icml2027/icml2027}
+\bibliography{references}
+
+\clearpage
+\onecolumn
+\appendix
+\section{实现细节}\label{ux5b9eux73b0ux7ec6ux8282}
+
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.5000}}
   >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.5000}}@{}}
+\caption{当前EvoTrace方法的默认设置。 第3节冻结轨迹采用的早期保留规则见附录D。}\tabularnewline
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+组成部分
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+默认设置
+\end{minipage} \\
+\midrule\noalign{}
+\endfirsthead
 \toprule\noalign{}
 \begin{minipage}[b]{\linewidth}\raggedright
 组成部分
@@ -445,115 +302,111 @@ EvoTrace以带经验的树状种群结合种群竞争与派生结构。反思树
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-初始化与总评价预算 & 5个可行初始程序；总计\(B=1{,}000\)次实际程序评价 \\
-重复记录折叠 &
-将\texttt{(identity(code),\ fitness)}均相同的可行节点合并至最小节点编号 \\
-活跃工作集（\texttt{active\_evaluations}） &
-距出生、直接开发或被选作交叉参考不足\(W=40\)次评价；始终保留最优个体 \\
-成批阈值（\texttt{region\_size}） &
-仅对冷退节点数达到\(m=4\)的完整区域执行简化与反思 \\
-结构连通 & 对\(\mathcal A\)取两两LCA闭包并保留虚拟根\(r\) \\
-父代采样（\texttt{rank\_half\_life}） &
-平均名次半衰期\(H=10.0\)；谱系投入折扣\(1/(1+s(b(v)))\) \\
-算子先验权重 & \texttt{Refine} \(0.45\)；\texttt{Explore}
-\(0.30\)；\texttt{Crossover} \(0.25\) \\
-交叉参考选择规则 &
-排除相同标准化源码；秩质量\(q(u)\geq 0.30\)；优先未配对组合，取最大AST
-\texttt{code\_distance} \\
-演化提示词元窗口 & \texttt{max\_input\_tokens}
-\(=30{,}000\)；超限时按实测词元折半缩减可选展示窗口 \\
-生成模型参数 & 温度\(1.0\)；\texttt{top\_p} \(0.8\)；\texttt{top\_k}
-\(20\)；\texttt{presence\_penalty} \(1.5\)；最大输出\(16{,}384\)词元 \\
-反思模型参数 & 温度\(0.3\)；最大输出\(1{,}536\)词元；约120英文词的JSON
-\texttt{"experience"}研究笔记 \\
+初始化与总评价预算 & 在总计 \(B=1{,}000\) 次程序评价内，以获得5个可行初始程序为目标 \\
+代表候选去重 & 对当前树内 \texttt{(identity(code),\ f(v))} 均相同的可行节点，仅以最早编号节点参与代表选择 \\
+覆盖代表集（\texttt{K}, \texttt{delta}） & 按 \((f,\operatorname{id})\) 升序贪心扫描；\texttt{max\_representatives} \(K=24\)，\texttt{cover\_distance} \(\delta=0.15\) \\
+骨架结构连通 & \(F=\operatorname{LCA}_T(R)\setminus(R\cup\{v_0\})\)；\(\mathcal H=R\cup F\cup\{v_0\}\) \\
+成批简化阈值（\texttt{region\_size}） & 仅对非骨架节点数满足 \(|C|\geq m=4\) 的完整路径或子树区域执行简化与反思 \\
+父代抽样（\texttt{rank\_half\_life}） & 仅在 \(R\) 上抽样：半衰期 \(H=10.0\) 个代表名次；子代评价次数对应的权重因子 \(1/(1+n_r)\) \\
+算子先验权重 & \texttt{Refine} \(0.45\)；\texttt{Explore} \(0.30\)；\texttt{Crossover} \(0.25\) \\
+交叉参考选择规则 & 在 \(R\setminus\{p\}\) 中排除相同 \texttt{identity(code)}，要求 \(q(u)\geq 0.30\)，优先未配对组合，取最大 \(d(p,u)\) \\
+演化提示词元窗口 & \texttt{max\_input\_tokens} \(=30{,}000\)；超限时按实测词元折半缩减可选展示窗口 \\
+生成模型参数 & 温度 \(1.0\)；\texttt{top\_p} \(0.8\)；\texttt{top\_k} \(20\)；\texttt{presence\_penalty} \(1.5\)；最大输出 \(16{,}384\) 词元 \\
+反思模型参数 & 温度 \(0.3\)；最大输出 \(1{,}536\) 词元；JSON \texttt{"experience"} 字段中的约120英文词经验文本 \\
 \end{longtable}
-}
 
-\textbf{数值计算与边界规则。}
-在\texttt{quality\_scores}中，当\(M\)个可行候选中某并列适应度块占据零基下标\texttt{start}至\texttt{end\ -\ 1}时，若\(M>1\)则赋予归一化秩质量\(q(v)=1-(\text{start}+\text{end}-1)/(2(M-1))\)，若\(M=1\)则取\(0.5\)。\texttt{parent\_probabilities}先减去当前最优并列名次再在对数空间求指数，并以\texttt{math.ulp(0.0)}作为概率下界，防止极端名次差导致数值下溢或隐式取消抽样资格。直接投入\(d(v)\)统计所有以\(v\)为主父代的受评\texttt{Refine}、\texttt{Explore}与\texttt{Crossover}尝试（含失败与修复重评），且在祖先收缩或旁支剪枝时严格不变。
+\textbf{代码表示。} 移除文档字符串后，EvoTrace统计AST父子标签对与深度优先遍历序列的二元组。标签编码节点类别、运算符类型及被调用的函数名或属性名，其余标识符名称和常数值不进入这些特征。距离 \(d(u,v)\) 为这些特征的多重集Jaccard距离。重复检测则比较忽略排版、注释与文档字符串后的语法树，并要求实测适应度相同；AST特征距离为零并不意味着程序重复。
 
-\textbf{词元计数与回退保护。}
-接入公共调度端点池时，\texttt{count\_tokens}调用服务端聊天分词器精确计数；无分词器的独立客户端保守使用UTF-8字节长度并在\texttt{input\_window}中标记\texttt{"utf8\_bytes"}。若某次反思请求失败或违反JSON模式，系统从\texttt{comparison\_catalog}与按分句截断的旧笔记确定性生成不超过\texttt{MAX\_EXPERIENCE\_CHARS\ =\ 960}字符的摘要，同时完整保留结构化\texttt{observations}列表。仅当连续\texttt{max\_unevaluated\ =\ 10}次尝试均未产生任何程序评价时，搜索提前终止。
+\textbf{评价与修复。} 可行初始程序在总预算内收集。每次生成总共至多修复一次，用于输出格式错误或评价失败的程序；只有评价预算尚有剩余时才尝试运行修复。修复后的程序接受评价时另计一次评价，格式修复本身不消耗评价预算。仅最终被评价的程序成为树节点。全部评价调用均计入 \(B\)；初始化之外，还计入主父代的 \(n_r\)。
 
-\subsection{附录 B.
-单次简化更新的结构性质}\label{ux9644ux5f55-b.-ux5355ux6b21ux7b80ux5316ux66f4ux65b0ux7684ux7ed3ux6784ux6027ux8d28}
+\textbf{参考选择与更新。} 交叉参考排除主父代及标准化源码相同者。其余代表的适应度排名得分归一化至 \([0,1]\)，同分取平均名次，只有一个候选时取 \(0.5\)。排除得分低于 \(0.30\) 的候选后，优先选择尚未使用的有序父代组合，再依次按AST距离更大、适应度更优、节点编号更小确定参考。没有合格参考时改用精化。同一次更新中的全部反思读取同一棵更新前的树。重连边标记为已收缩，并清空算子与参考字段；保留节点的子代评价计数不变。
 
-考虑有限的更新前树\(T_0\)，其活跃集合\(\mathcal A\)、骨架\(\mathcal H\)、候选区域\(\mathcal C\)及最终保留集合\(\mathcal K\)按第3.3节定义。虚拟根始终保留。以下性质针对固定评价时钟下的结构更新。
+\textbf{数值计算。} 在 \texttt{quality\_scores} 中，当 \(M\) 个候选中某同分并列块占据零基下标 \texttt{start} 至 \texttt{end\ -\ 1} 时，\(M>1\) 赋予得分 \(q(v)=1-(\text{start}+\text{end}-1)/(2(M-1))\)，\(M=1\) 取 \(0.5\)。父代抽样中，\(M_R=|R|\)，\(q_R\) 表示在 \(R\) 上计算的上述得分，\(q_{\max}=\max_{r\in R}q_R(r)\)。对 \(M_R\geq1\)，有 \((q_{\max}-q_R(r))(M_R-1)=\Delta\bar\rho_R(r)\)。实现先减去最大对数权重，再取指数，保证归一化分母为正；随后以最小正浮点数 \texttt{math.ulp(0.0)} 作为归一化权重下界，避免浮点下溢使代表失去抽样资格。重复检测仅作用于当前树；已淘汰的实现若被重新生成，会作为新节点加入。
 
-\textbf{树结构保持。}
-每个保留的非根节点在\(T_0\)中都有唯一的最近保留祖先。重连至该祖先使原树深度严格下降，连续沿父指针上行必然到达根且不形成环。每个保留非根节点有且仅有一个父节点，因此更新后仍为有根树。
+\textbf{生成上下文窗口。} 未收缩边提供分数变化、标准化代码差分与必要基准；已收缩边提供端点分数、结果设计描述与边经验。提示超过 \texttt{max\_input\_tokens}（\(30{,}000\)）时，系统分别尝试将可选展示窗口（\texttt{max\_path\_steps}、\texttt{max\_child\_attempts}、\texttt{max\_failed\_attempts}、\texttt{max\_population\_members} 与 \texttt{max\_experiences}）折半，采用提示长度减少最多的方式。截断后，在原有记录存在的情况下至少保留一条路径或种群记录，并保留当前与参考实现及必要的差分基准。因此，一次提示可能仅呈现部分轨迹。若继续缩减仍无法满足上限，上下文构造将报错。\texttt{include\_experiences\ =\ False} 在固定树状态下隐藏节点与边经验，不改变父代抽样概率。生成提示要求返回包含 \texttt{"analysis"}、\texttt{"code"} 与 \texttt{"design"} 的JSON对象。
 
-\textbf{区域唯一归属。}
-相邻骨架节点之间的路径内点互不相交。否则两条路径在\(\mathcal H\)之外共享分叉，与LCA闭包矛盾。其余骨架外节点均有唯一的最近祖先位于路径内点或\(\mathcal H\)中：前者归入对应路径区域，后者归入该骨架节点的旁支区域。因此所有区域构成\(\mathcal N\setminus\mathcal H\)的划分。按规模选择完整区域不会改变互不相交性，每个移除节点只归属一个选中区域。
+\textbf{词元计数、回退与停止条件。} 接入共享调度端点池时，\texttt{count\_tokens} 调用服务端聊天分词器；无分词器时，采用UTF-8字节数作为保守代理量，并在 \texttt{input\_window} 中记录 \texttt{"utf8\_bytes"}。反思请求失败或输出不符合模式时，系统根据格式化比较记录与截断后的已有经验生成确定性摘要。\texttt{MAX\_EXPERIENCE\_CHARS\ =\ 960} 用于控制各部分的截断，不是完整摘要的长度上限；结构化 \texttt{observations} 列表仍被完整保留。除评价预算耗尽外，搜索还设置了连续 \texttt{max\_unevaluated\ =\ 10} 次尝试均未产生程序评价时的停止条件。
 
-\textbf{最优个体与投入保持。}
-最优个体属于\(\mathcal A\subseteq\mathcal H\subseteq\mathcal K\)。重连改变父指针与经验载体，保留节点的投入计数和活动时钟原样复制。已移除尝试的评价仍保留在全局计数与适用的保留祖先历史计数中。
+\section{单次简化更新的结构性质}\label{ux5355ux6b21ux7b80ux5316ux66f4ux65b0ux7684ux7ed3ux6784ux6027ux8d28}
 
-\textbf{单步幂等。}
-没有新的搜索活动时，原有活跃个体及其LCA骨架全部保留。如果较早的重复代表被移除，使暂留副本获得工作集资格，新骨架可以增加节点，但不会失去原有边界。因此每个剩余区域都包含在某个此前的暂留区域中：新增骨架节点可以将其拆分，保留边界则阻止跨区域合并。每个区域仍小于\(m\)，再次规划不产生额外移除。
+考虑有限有根树 \(T_0=(\mathcal N_0\cup\{v_0\},\mathcal E_0)\)，其代表集为 \(R(T_0)\)，额外分叉节点集为 \(F(T_0)\)，骨架为 \(\mathcal H(T_0)\)，区域划分为 \(\mathcal C(T_0)\)，移除并集为 \(\mathcal U\)，更新后树 \(T_1\) 建立在存活节点 \(\mathcal K=(\mathcal N_0\cup\{v_0\})\setminus\mathcal U\) 上。设 \(K,m\geq1\)、\(\delta\in[0,1]\)；简化过程中，存活节点的代码、适应度、编号与子代评价计数保持不变。
 
-\subsection{附录 C.
-反思提示模板}\label{ux9644ux5f55-c.-ux53cdux601dux63d0ux793aux6a21ux677f}
+\textbf{有根树结构保持。} 因 \(v_0\in\mathcal H(T_0)\subseteq\mathcal K\)，任意非根存活节点 \(v\in\mathcal K\setminus\{v_0\}\) 沿 \(T_0\) 父指针上行必有唯一的最近存活祖先 \(a(v)\in\mathcal K\)。将已移除父节点重连至 \(a(v)\) 使每步上行的原树深度严格递减，不会形成环，且保证每个非根存活节点有且仅有一条入边，故 \(T_1\) 仍为有根树。
 
-\texttt{evotrace\_v3/reflection.py}中的两类反思提示均先给出包含任务说明\texttt{{[}Task{]}}、函数签名\texttt{{[}Function\ Interface{]}}与目标方向\texttt{Score\ direction}的公共头部，随后列出区域证据（\texttt{{[}Path\ Evidence{]}}或\texttt{{[}Branch\ Experiments{]}}，含源码、差分、同起点兄弟参照\texttt{{[}Related\ Results{]}}、带\texttt{{[}Supporting\ comparisons:\ ...{]}}标注的旧经验及程序生成的\texttt{{[}Comparison\ Catalog{]}}）。英文主稿附录C逐字收录了英文模板原文，其核心任务与输出规范对应如下：
+\textbf{区域精确互不相交划分。} 相邻骨架节点 \(u,v\in\mathcal H(T_0)\) 之间的中间链 \(C_{\text{chain}}(u,v)\) 两两不相交：若两条链共享骨架外节点，则二者最深的公共内点将是至少两个含 \(R(T_0)\) 元素不同子树的LCA，与 \(\operatorname{LCA}_{T_0}(R(T_0))\subseteq\mathcal H(T_0)\) 矛盾。其余位于链外且不属于 \(\mathcal H(T_0)\) 的节点 \(w\in\mathcal N_0\setminus\mathcal H(T_0)\) 沿父指针上行，必首次命中 \(\mathcal H(T_0)\cup\bigcup C_{\text{chain}}\) 中的唯一祖先：命中 \(C_{\text{chain}}(u,v)\) 时归入 \((u,v)\) 的路径区域，命中 \(\mathcal H(T_0)\) 时归入该骨架节点的子树区域。因此 \(\mathcal C(T_0)\) 构成 \(\mathcal N_0\setminus\mathcal H(T_0)\) 的精确划分；按 \(|C|\geq m\) 选取完整区域保持互不相交性，每个移除节点唯一归属一个选中区域。
 
-\textbf{变异经验提示（\texttt{VARIATION\_PROMPT\_TEMPLATE}，对应路径收缩）。}
+\textbf{最优个体保留与代表集不变性。} 当 \(\mathcal P_0\neq\varnothing\) 时，按适应度与编号排序的最优节点进入 \(R(T_0)\subseteq\mathcal K\)。每个代表仍是其 \texttt{(identity(code),\ f)} 等价类中最早存活的节点，因此仍属于候选集 \(\mathcal D(T_1)\)。按顺序考察 \(\mathcal D(T_1)\) 的贪心扫描，并归纳假设此前接受的节点恰为排在当前位置之前的原代表。若当前节点是原代表，它遇到的已接受前缀与原扫描相同，因此仍被接受。对于其他候选 \(w\)，令 \(w_0\) 为 \(T_0\) 中同等价类的最早节点，允许 \(w_0=w\)。\(w_0\) 在原扫描中被拒绝，且排序不晚于 \(w\)；拒绝原因是被更早的代表覆盖，或 \(K\) 个名额已经用完。相关代表均存活且仍排在 \(w\) 之前，而相同标准化源码使 \(w\) 与 \(w_0\) 具有相同AST特征，因此 \(w\) 仍被拒绝。由归纳可得 \(R(T_1)=R(T_0)\)。适应度排名与 \(n_r\) 也保持不变，因此当 \(R\) 非空时，式(4)给出的父代抽样概率在简化前后一致。
 
-\begin{quote}
-\textbf{任务要求：}
-为继续推进搜索的研究者压缩这段演化过渡中的算法设计经验。撰写一段简短的研究笔记，保留此次发展中值得记住的内容：计算思想、有信息量的结果以及相关的早期经验。忠实记录即可，原理解释或一般规律属于可选项；任何解释均应保持试探性，并为后续设计决策留出开放空间。
+\textbf{严格单步幂等性。} 由 \(R(T_1)=R(T_0)\) 及收缩非骨架中间链不改变 \(R(T_0)\) 节点间的两两LCA，可得 \(F(T_1)=F(T_0)\) 与 \(\mathcal H(T_1)=\mathcal H(T_0)\)。于是剩余非骨架节点 \(\mathcal N_1\setminus\mathcal H(T_1)=(\mathcal N_0\setminus\mathcal H(T_0))\setminus\mathcal U\) 恰好分解为原先未达阈值的暂留区域 \(\{C\in\mathcal C(T_0):|C|<m\}\)。\(\mathcal C(T_1)\) 中每个区域均满足 \(|C|<m\)，在无新增入树时再次执行维护不会移除任何节点，也不会触发任何反思调用。
 
-\textbf{输出格式：}
-返回仅含\texttt{"experience"}字符串字段的JSON对象（约120英文词的紧凑段落），说明计算过程如何演变以及中间实验有哪些值得保留的认识，指明具体计算机制而非临时尝试编号；起止端点分数由系统自动附加。
-\end{quote}
+\section{反思提示模板}\label{ux53cdux601dux63d0ux793aux6a21ux677f}
 
-\textbf{选择经验提示（\texttt{SELECTION\_PROMPT\_TEMPLATE}，对应旁支剪除）。}
+\texttt{evotrace\_v3/reflection.py} 中的两类反思提示均以包含任务描述、优化方向 \texttt{Score} 与函数接口 \texttt{Function\ interface} 的 \texttt{{[}Problem{]}} 头部起始，随后给出区域证据（\texttt{{[}Path\ Evidence{]}} 或 \texttt{{[}Explored\ Branches{]}}，含路径端点或子树所依附节点的代码、标准化代码差分、同一父节点下的其他保留算法 \texttt{{[}Related\ Results{]}}、既有经验 \texttt{{[}Earlier\ Algorithm-Design\ Experience{]}} 及当次区域的 \texttt{{[}Comparison\ Catalog{]}}）。英文主稿附录C逐字收录了英文模板原文，其任务与输出规范对应如下：
+
+\textbf{边经验提示（\texttt{EDGE\_PROMPT\_TEMPLATE}，对应路径收缩）。}
 
 \begin{quote}
-\textbf{任务要求：}
-为继续推进搜索的研究者压缩这组分支实验中的算法设计经验。撰写一段简短的研究笔记，保留尝试过的计算思想、有信息量的结果以及相关早期经验。忠实记录即可，解释或一般规律属于可选项；保持解释的试探性。明确指出这些分支仅因种群管理而退出，并不代表其算法思想被证伪。
+\textbf{任务要求（\texttt{{[}Task{]}}）：} 为继续推进搜索的研究者压缩这段演化过渡中的算法设计经验。撰写一段简短的研究笔记，保留此次发展中值得记住的内容：计算思想、有信息量的结果以及相关的早期经验。忠实记录即可，原理解释或一般规律属于可选项；任何解释均应保持试探性，并为后续设计决策留出开放空间。
 
-\textbf{输出格式：}
-返回仅含\texttt{"experience"}字符串字段的JSON对象（约120英文词的自足段落），关联所尝试的计算思想与实测结果并整合有效旧经验，陪伴存活算法参与后续设计调用，保存仅靠当前源码无法传达的试错认识。
+\textbf{输出格式（\texttt{{[}Output{]}}）：} 返回仅含 \texttt{"experience"} 字符串字段的JSON对象（约120英文词的紧凑段落），说明计算过程如何演变以及中间实验有哪些值得保留的认识，纳入有信息量的结果与早期经验；段落将随存活实现进入后续设计调用，需指明具体计算机制而非临时尝试编号；起止端点分数由系统自动提供。
 \end{quote}
 
-\subsection{附录 D.
-复现条件与部署记账}\label{ux9644ux5f55-d.-ux590dux73b0ux6761ux4ef6ux4e0eux90e8ux7f72ux8bb0ux8d26}
+\textbf{节点经验提示（\texttt{NODE\_PROMPT\_TEMPLATE}，对应子树剪枝）。}
 
-该早期批次采用质量名额32与近期窗口40，标识为
+\begin{quote}
+\textbf{任务要求（\texttt{{[}Task{]}}）：} 为继续推进搜索的研究者压缩这组已探索分支中的算法设计经验。撰写一段简短的研究笔记，保留这些实验中值得记住的内容：计算思想、有信息量的结果以及相关的早期经验。忠实记录即可，解释或一般规律属于可选项；保持解释的试探性并为后续决策留出空间。这些分支仅因活跃种群简化而退出，并不代表其算法思想被证伪。
 
-\texttt{20261115\_115206\_evotrace\_v3\_revised\_co4}。
+\textbf{输出格式（\texttt{{[}Output{]}}）：} 返回仅含 \texttt{"experience"} 字符串字段的JSON对象（约120英文词的自足段落），关联所尝试的计算思想与有信息量的结果并整合相关早期经验；它将陪伴存活算法参与后续设计调用，保存仅靠源码本身无法传达的算法设计经验，且须不依赖临时尝试编号独立可读。
+\end{quote}
 
-批次于2026年11月15日启动前冻结了源码、任务评价器与配置，共463个文件。
+\section{实验设置与冻结轨迹}\label{ux5b9eux9a8cux8bbeux7f6eux4e0eux51bbux7ed3ux8f68ux8ff9}
 
-尝试档案\texttt{native/attempts.jsonl}中的每条已提交记录完整保存生成程序、首次及修复评价结果、采样的\texttt{parent\_id}、\texttt{parent\_probability}、\texttt{operator}、\texttt{reference\_id}、\texttt{reference\_distance}、词元适配后的上下文元数据、简化触发详情、反思提示与原始响应，以及更新后的\texttt{TreePopulation}快照。使用\texttt{-\/-resume}从\texttt{attempts.jsonl}恢复时会确定性重放已提交树快照，绝不重复调用历史反思，并严格拒绝方法名或关键配置不一致的续跑请求。
+\subsection{任务与评价}\label{ux4efbux52a1ux4e0eux8bc4ux4ef7}
 
-搜索统一使用随机种子0、1、2。TSP训练集采用16个50节点欧氏实例（\texttt{seed\ =\ 2024}）；CVRP采用30只蚂蚁、100轮ACO迭代（\texttt{aco\_seed\ =\ 1234}）；OP采用20只蚂蚁、50轮ACO迭代（\texttt{aco\_seed\ =\ 1234}）；FSSP采用冻结配置规定的实例集与GLS参数。训练评价执行参数固定为\texttt{timeout\_scope\ =\ "whole\_task"}、\texttt{time\_budget\ =\ "pooled\_instance\_seconds"}、\texttt{timeout\_seconds\ =\ 160.0}（16个实例共享160实例秒，单实例均值10.0秒）、\texttt{n\_workers\ =\ 8}、\texttt{memory\_limit\_bytes\ =\ 2147483648}及\texttt{evaluation\_seed\ =\ 730241}。生成提示仅暴露任务描述、优化方向与函数模板，实例规模、数据划分与外层迭代次数严格作为外部评价条件。
+每次评价使用16个固定训练实例，在最多8个工作进程上共享160实例秒的执行预算，计时为各实例已用时间之和，包括仍在运行的实例。在Linux上，每个工作进程的数据段上限设为其初始占用加2 GiB，已有更严格限制时采用较小值。实例 \(i\) 从零编号，评价随机种子为 \(730241+i\)。求解器设置如下：
 
-对\texttt{Qwen3.8-27B}（\texttt{enable\_thinking\ =\ false}）的请求由本地共享调度池在FP8与GGUF服务端点间分配，并逐次记录路由端点与返回词元用量。服务端传输异常自动重试且与候选执行失败分开统计。\texttt{paper/evidence/snapshot.json}保存各路日志路径、SHA-256校验值、脱敏配置与逐次评价序列；\texttt{paper/build.py}与\texttt{paper/validate.py}直接依据该冻结快照编译并核验中英文双稿，不会隐式刷新正在运行的实验。
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}@{}}
+\caption{四项任务的演化函数与求解器条件。}\tabularnewline
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+任务
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+演化函数
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+求解器条件
+\end{minipage} \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+任务
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+演化函数
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+求解器条件
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+TSP（\texttt{tsp\_construct}） & 构造回路的下一节点选择 & 50节点欧氏实例，训练实例种子 \texttt{2024} \\
+CVRP（\texttt{cvrp\_aco}） & 蚁群优化的边启发式矩阵 & 50个客户与1个配送中心；容量50；30只蚂蚁、100轮迭代，ACO种子 \texttt{1234} \\
+FSSP（\texttt{fssp\_gls}） & 扰动后的加工时间矩阵与所选作业编号 & 50个作业、20台机器；NEH初始化；200轮搜索，每轮至多3次局部下降扫描 \\
+OP（\texttt{op\_aco}） & 蚁群优化的边启发式矩阵 & 50个节点（含起点）；路线长度上限3；20只蚂蚁、50轮迭代，ACO种子 \texttt{1234} \\
+\end{longtable}
 
-\subsection{附录 E.
-完整预算与受控消融评价方案}\label{ux9644ux5f55-e.-ux5b8cux6574ux9884ux7b97ux4e0eux53d7ux63a7ux6d88ux878dux8bc4ux4ef7ux65b9ux6848}
+TSP函数返回下一待访问节点的编号。FSSP实例通过固定随机种子生成1至99的整数加工时间，其演化函数返回扰动后的加工时间矩阵及1至5个不同作业的编号，用于扰动步骤；目标值始终按原始加工时间计算。四项任务的目标依次为平均回路长度、平均路径长度、平均最大完工时间及负的平均收集奖励，均采用越小越好的约定。搜索预算为 \(B=1{,}000\) 次程序评价，包括执行失败与运行修复后的再次评价。另有50个不相交测试实例，采用500实例秒预算，用于锁定训练最优程序后的独立评价。第3节报告训练前缀，不包含这些测试结果。
 
-当前维护规则需要单独冻结源码并运行搜索批次。以下方案用于该批次及其机制检验，与早期配置的结果分开报告：
+全部搜索使用种子0、1、2及关闭原生思考的 \texttt{Qwen3.8-27B}。生成温度为 \(1.0\)，输出上限为 \(16{,}384\) 词元；反思温度为 \(0.3\)，输出上限为 \(1{,}536\) 词元。请求在FP8与GGUF端点间调度，每次调用记录端点和词元用量；传输重试与候选执行失败分开统计。提示暴露任务、分数方向和函数接口，实例数量与求解器迭代预算作为外部条件。
 
-\begin{enumerate}
-\def\labelenumi{\arabic{enumi}.}
-\tightlist
-\item
-  \textbf{同预算完整搜索与独立测试比较。}
-  在相同的16实例训练集、160实例秒8进程并行评价限制、\texttt{Qwen3.8-27B}采样参数及\(B=1{,}000\)次实际评价记账口径下，运行各对比种群方法、树搜索方法与反思方法（每任务种子0、1、2）。各路搜索结束后先锁定训练最优可行程序，再在预留的50实例测试集（500实例秒）上执行一次性测试，完整报告逐种子测试分数、训练收敛曲线、失败率及生成、修复与反思词元开销。
-\item
-  \textbf{固定快照的经验表示对照（\texttt{include\_experiences}消融）。}
-  在预先声明的评价节点抽取已提交树快照（不按后续是否改进筛选）。固定树快照、\texttt{parent\_id}、\texttt{operator}、\texttt{reference\_id}与输入词元预算，对比同一批已移除区域的三种表示：（a）省略经验（\texttt{include\_experiences\ =\ False}）；（b）提供相同移除区域的原始代码差分与评价结果；（c）提供EvoTrace凝练的\(S/V\)笔记。以快照为配对单位重复采样，按算子统计子代可行率、相对父代胜率、适应度变化与实测输入词元。
-\item
-  \textbf{结构化定位与扁平经验列表对照。}
-  在相同快照上固定已选\(S/V\)笔记文本与输入词元上限，对比EvoTrace按路径边和祖先节点原位呈现的方式与保留来源编号的共享时间序列表，分离``谱系结构定位''相对``纯文本可见性''的独立作用。
-\item
-  \textbf{多轮交接保真度抽检。}
-  按任务、区域类型（路径收缩与旁支剪除）及累计交接轮数分层随机抽取已记录的反思样本，对照\texttt{attempts.jsonl}及绑定的\texttt{Comparison\ Catalog}逐条核查实测涨跌方向准确性、代码改动描述忠实度以及是否存在过度引申的因果归因。
-\end{enumerate}
+\subsection{配置与来源记录}\label{ux914dux7f6eux4e0eux6765ux6e90ux8bb0ux5f55}
 
-\bibliography{references.bib}
+冻结批次 \texttt{20261115\_115206\_evotrace\_v3\_revised\_co4} 于2026年11月15日启动，事前冻结463个源码文件及评价器与配置；论文快照于北京时间15:36捕获。其保留规则采用 \texttt{quality\_slots\ =\ 32}、\texttt{recent\_evaluations\ =\ 40} 与单节点简化。12次运行各包含168--247次已提交尝试、180--256次程序评价，统一报告第180次评价处的结果。
 
+归档记录保存生成程序、评价、父代与算子选择、反思输入输出及更新后的树。随文提供的 \texttt{snapshot.json} 包含各次运行的来源哈希、配置、评价序列与树规模，\texttt{training\_scores.csv} 保存第180次评价处的分数。
+
+反思区域的规模分布为：1个节点的区域1,127个，2个节点的204个，3个节点的62个，4个节点的2个，5个节点的1个，合计1,396个区域、1,734个新移除算法。这些规模只统计新移除节点；区域还可能承载此前简化积累的经验。
 \end{document}

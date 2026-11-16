@@ -2,7 +2,7 @@
 
 运行前核对[实验条件](../PROTOCOL.md)。本页的主机与服务位置用于查找；实时状态需要检查进程、日志和健康接口。
 
-北京时间11月16日00:05，完整版V3批次`20261116_000118_evotrace_v3_full_co4`在server4启动，四任务TSP、CVRP、FSSP、OP各seed0/1/2，共12路，每路1000次实际评价。结果目录`evotrace_v3_full`，源码冻结于`/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_000118_evotrace_v3_full_co4`。该批启用反思树简化（`active_evaluations=40`、`region_size=4`）与路径峰值共享投入分配（`rank_decay_lineage_sampling`、`rank_half_life=10`），算子比例、简短反思、节点/边经验读取及最多8核公共并行评价器保持不变，已纳入自动同步、健康检查和默认看板（[启动核验](../../experiments_result/evotrace_v3_full/launch_20261116_000118_evotrace_v3_full_co4/README.md)）。
+北京时间11月16日00:05，早期V3冻结批次`20261116_000118_evotrace_v3_full_co4`（提交 `a28b1ed7` 快照）在server4启动，四任务TSP、CVRP、FSSP、OP各seed0/1/2，共12路，每路1000次实际评价。结果目录`evotrace_v3_full`，源码冻结于`/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_000118_evotrace_v3_full_co4`（已纳入自动同步、健康检查和默认看板，见[启动核验](../../experiments_result/evotrace_v3_full/launch_20261116_000118_evotrace_v3_full_co4/README.md)）。当前仓库主线 `evotrace_v3` 已升级为提交 `d3cbb242` 的覆盖代表集与直接投入分配机制（见[V3正式设计](../../docs/EvoTrace-v3设计.md)），其独立校准先导实验运行于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_v3_rep_cover_pilot`。
 
 当前保留的主对照基线批次：
 - **EvoTrace V1**：Qwen批次 `20261112_165634_evotrace_v1_co4`（四任务12路）与 DeepSeek 批次 `20261112_165634_evotrace_v1_deepseek_none_co4`（四任务各seed0），源码快照 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_165634_evotrace_v1_co4`，均已完成搜索与独立测试（[启动核验](../../experiments_result/evotrace_v1/launch_20261112_165634_evotrace_v1_co4/latest_verification.json)）。

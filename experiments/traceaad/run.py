@@ -31,11 +31,6 @@ from traceaad_base.cli import load_task
 from traceaad_base.selection import SELECTION_RULE
 from experiments.infra.storage import seal_calls
 from traceaad_base.storage import write_json
-import traceaad_v21_3
-import traceaad_v22_2
-import traceaad_v23_2
-import traceaad_v24_1
-from traceaad_v21_3.prompts import CANDIDATE_RESPONSE_FORMAT as V21_RESPONSE_FORMAT
 from .scheduling import EVALUATION_WORKERS, REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, load_environment
 
 
@@ -45,11 +40,7 @@ TOPOLOGY_FIELDS = tuple(f.name for f in fields(V3TopologyConfig))
 METHODS = {"base": ("traceaad_base", traceaad_base.TraceAAD),
            "evotrace.v1": ("evotrace_v1", evotrace_v1.EvoTrace), "evotrace_v1": ("evotrace_v1", evotrace_v1.EvoTrace),
            "evotrace.v2": ("evotrace_v2", evotrace_v2.EvoTrace), "evotrace_v2": ("evotrace_v2", evotrace_v2.EvoTrace),
-           "evotrace.v3": ("evotrace_v3", evotrace_v3.EvoTrace), "evotrace_v3": ("evotrace_v3", evotrace_v3.EvoTrace),
-           "v21.3": ("traceaad_v21_3", traceaad_v21_3.TraceAAD), "v21_3": ("traceaad_v21_3", traceaad_v21_3.TraceAAD),
-           "v22.2": ("traceaad_v22_2", traceaad_v22_2.TraceAAD), "v22_2": ("traceaad_v22_2", traceaad_v22_2.TraceAAD),
-           "v23.2": ("traceaad_v23_2", traceaad_v23_2.TraceAAD), "v23_2": ("traceaad_v23_2", traceaad_v23_2.TraceAAD),
-           "v24.1": ("traceaad_v24_1", traceaad_v24_1.TraceAAD), "v24_1": ("traceaad_v24_1", traceaad_v24_1.TraceAAD)}
+           "evotrace.v3": ("evotrace_v3", evotrace_v3.EvoTrace), "evotrace_v3": ("evotrace_v3", evotrace_v3.EvoTrace)}
 
 
 def configure_time_budget(task, seconds_per_instance):
@@ -72,19 +63,12 @@ def selection_rule_for(method):
 
 
 def request_options(method):
-    mechs = METHODS[method][1].mechanisms
-    if 2 in mechs or "multiscale_context" in mechs:
-        return {**REQUEST_OPTIONS, "response_format": V21_RESPONSE_FORMAT}
+    module = {"evotrace_v1": evotrace_v1, "evotrace_v2": evotrace_v2,
+              "evotrace_v3": evotrace_v3}.get(METHODS[method][0])
+    if module is not None:
+        return {**REQUEST_OPTIONS, "response_format": module.models.CANDIDATE_RESPONSE_FORMAT}
     return REQUEST_OPTIONS
 
-
-def reference_embedding_enabled(method, requested):
-    """Mechanism 1 includes trajectory references unless explicitly ablated."""
-    has_allocation = 1 in METHODS[method][1].mechanisms
-    enabled = has_allocation if requested is None else requested
-    if enabled and not has_allocation:
-        raise ValueError("trajectory-reference-embedding requires a method with mechanism 1")
-    return enabled
 
 
 def metadata_for(args, task, config, model):
@@ -98,7 +82,7 @@ def metadata_for(args, task, config, model):
         "mechanisms": list(METHODS[args.method][1].mechanisms),
         "generation_protocol": METHODS[args.method][1].generation_protocol
                                + ("+reference_code" if args.reference_code and METHODS[args.method][0] not in {"evotrace_v1", "evotrace_v2", "evotrace_v3"} else ""),
-        "trajectory_reference_embedding": args.trajectory_reference_embedding,
+        "trajectory_reference_embedding": False,
         "reference_code": args.reference_code or METHODS[args.method][0] == "evotrace_v3",
         "started_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
         "source_snapshot": str(ROOT), "task_definition": task.description(),
@@ -184,8 +168,6 @@ def main(argv=None):
     parser.add_argument("--max-representatives", type=int, help="V3 maximum mutually uncovered representatives")
     parser.add_argument("--cover-distance", type=float, help="V3 AST shingle distance covered by a better representative")
     parser.add_argument("--region-size", type=int, help="V3 minimum nodes per simplified path or subtree region")
-    parser.add_argument("--trajectory-reference-embedding", action=argparse.BooleanOptionalAction,
-                        default=None, help="Mechanism 1 uses trajectory references by default; --no-... ablates them")
     parser.add_argument("--reference-code", action="store_true",
                         help="Crossover also shows the reference algorithm source")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
@@ -200,12 +182,8 @@ def main(argv=None):
     for name in ("rank_half_life", *TOPOLOGY_FIELDS):
         if getattr(args, name) is not None and METHODS[args.method][0] != "evotrace_v3":
             parser.error(f"{name.replace('_', '-')} applies to EvoTrace V3 only")
-    try:
-        args.trajectory_reference_embedding = reference_embedding_enabled(args.method, args.trajectory_reference_embedding)
-    except ValueError as error:
-        parser.error(str(error))
-    if args.reference_code and METHODS[args.method][0] not in {"traceaad_v21_3", "evotrace_v1", "evotrace_v2", "evotrace_v3"}:
-        parser.error("--reference-code applies to v21.3 or EvoTrace only")
+    if args.reference_code and METHODS[args.method][0] not in {"evotrace_v1", "evotrace_v2", "evotrace_v3"}:
+        parser.error("--reference-code applies to EvoTrace only")
     if not args.scheduler_socket and args.backend == "scheduled":
         parser.error("A resource scheduler socket is required")
     if not math.isfinite(args.seconds_per_instance) or args.seconds_per_instance <= 0:
@@ -242,13 +220,6 @@ def main(argv=None):
     if allocation_config is not None:
         metadata["allocation"] = asdict(allocation_config)
         metadata["topology"] = asdict(topology_config)
-    reference_embedding = None
-    if args.trajectory_reference_embedding:
-        from experiments.deltaevolve.embedding import CodeEmbedding
-        from traceaad_v22_2.references import settings_for
-
-        reference_embedding = CodeEmbedding()
-        metadata["reference_settings"] = settings_for(reference_embedding)
     if args.dry_run:
         print(json.dumps(metadata, ensure_ascii=False, indent=2))
         return
@@ -289,8 +260,6 @@ def main(argv=None):
                               run_dir=directory / "native", resume=args.resume,
                               **({"allocation_config": allocation_config} if allocation_config is not None else {}),
                               **({"topology_config": topology_config} if topology_config is not None else {}),
-                              **({"reference_embedding": reference_embedding}
-                                 if reference_embedding is not None else {}),
                               **({"reference_code": True}
                                  if args.reference_code and method_id != "evotrace_v3" else {}))
     search.evaluator = ScheduledEvaluator(
@@ -318,9 +287,6 @@ def main(argv=None):
         summary.update(status="stopped", error=f"{type(exc).__name__}: {exc}")
         write_json(directory / "summary.json", summary)
         raise
-    finally:
-        if reference_embedding is not None:
-            reference_embedding.close()
     seal_calls(directory / "native")
     if result.best is not None and not args.skip_heldout:
         evaluate_heldout(directory, args.task, result.best, args.scheduler_socket,

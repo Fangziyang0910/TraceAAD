@@ -1,46 +1,198 @@
-"""Build English and Chinese PDFs from the maintained Markdown manuscripts.
-
-Requires pandoc, XeLaTeX, latexmk, and BibTeX. Uses the frozen evidence;
-never refreshes results or runs candidate algorithms.
-"""
+"""Build bilingual ICML 2027 manuscripts without refreshing frozen evidence."""
 from pathlib import Path
-import argparse, json, os, re, shutil, subprocess, tempfile
-P=Path(__file__).resolve().parent;ROOT=P.parent
-parser=argparse.ArgumentParser();parser.add_argument('--pandoc');args=parser.parse_args()
-pandoc=args.pandoc or shutil.which('pandoc')
+import argparse
+import re
+import shutil
+import subprocess
+
+P = Path(__file__).resolve().parent
+ROOT = P.parent
+parser = argparse.ArgumentParser()
+parser.add_argument('--pandoc')
+args = parser.parse_args()
+pandoc = args.pandoc or shutil.which('pandoc')
 if not pandoc:
     try:
         import pypandoc
-        pandoc=pypandoc.get_pandoc_path()
-    except ImportError:raise SystemExit('Install pandoc or pypandoc-binary, or pass --pandoc PATH.')
-shutil.copy2(ROOT/'docs/paper-references.bib',P/'references.bib')
-for language,source,name in [('en','paper.md','main'),('zh','paper-中文.md','main-zh')]:
-    text=(ROOT/'docs'/source).read_text()
-    title=text.splitlines()[0][2:]
-    abstract=text.split('## Abstract\n\n' if language=='en' else '## 摘要\n\n',1)[1].split('\n## ',1)[0]
-    body='## '+text.split('\n## ',2)[2]
-    body=body.split('## References')[0].split('## 参考文献')[0]
-    body=body.replace('figures/evotrace/09-v3-framework.png','figures/framework.png').replace('figures/evotrace/07-framework.png','figures/framework.png').replace('figures/evotrace/08-reflective-simplification.png','figures/reflective-simplification.png').replace('../paper/figures/early-search.png','figures/early-search.pdf')
-    # Figure captions stay with the image rather than becoming separate paragraphs.
-    body=re.sub(r'!\[[^\]]*\]\(([^)]+)\)\n\n\*\*(?:Figure \d+\.|图\d+｜)(.*?)\*\*\s*(.*?)(?=\n\n)',lambda m:'!['+m[2].strip()+' '+m[3].strip()+']('+m[1]+')',body,flags=re.S)
-    body=re.sub(r'\*\*(?:Table 1\.|表1｜)(.*?)\*\*\n\n((?:\|[^\n]+\n)+)', lambda m:m[2]+'\nTable: '+m[1].strip()+'\n\n', body)
-    # Bibliography is generated once by BibTeX; preserve explicit manuscript section numbering.
-    meta='---\n'+ '\n'.join(k+': '+json.dumps(v,ensure_ascii=False) for k,v in {'title':title,'author':'Anonymous authors' if language=='en' else '匿名作者','date':'','abstract':abstract,'bibliography':'references.bib','biblio-style':'plainnat','link-citations':True}.items())+'\n---\n\n'
-    tmp=P/(name+'-build.md');tmp.write_text(meta+body)
-    cmd=[str(pandoc),str(tmp),'--from=markdown+tex_math_dollars','--to=latex','--standalone','--natbib','--no-highlight',
-         '-V','documentclass=article','-V','fontsize=11pt','-V','mainfont=TeX Gyre Termes','-V','mathfont=TeX Gyre Termes Math',
-         '-V','geometry=margin=0.9in','-V','colorlinks=true','-V','urlcolor=blue','-V','linkcolor=black','-V','citecolor=black',
-         '--include-in-header',str(P/'style.tex'),'-o',str(P/(name+'.tex'))]
-    if language=='zh':cmd+=['-V','CJKmainfont=Noto Serif CJK SC']
-    subprocess.run(cmd,cwd=P,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    tex=(P/(name+'.tex')).read_text()
-    if language=='zh':
-        tex=tex.replace('\\begin{document}', '\\setCJKmonofont{Noto Sans Mono CJK SC}\n\\renewcommand{\\tablename}{表}\n\\renewcommand{\\abstractname}{摘要}\n\\renewcommand{\\refname}{参考文献}\n\\renewcommand{\\figurename}{图}\n\\begin{document}')
-    # Keep the four-task score table and the short search algorithm intact.
-    tex=re.sub(r'(\\begin\{longtable\}.*?\\end\{longtable\})', lambda m:('\\Needspace{12\\baselineskip}\n' if '\\caption{' in m[0] else '')+m[0], tex, flags=re.S)
-    tex=re.sub(r'(\\begin\{verbatim\}.*?\\end\{verbatim\})', lambda m:'\\par\\noindent\\begin{minipage}{\\linewidth}\n'+m[0]+'\n\\end{minipage}\n', tex, flags=re.S)
+        pandoc = pypandoc.get_pandoc_path()
+    except ImportError:
+        raise SystemExit('Install pandoc or pypandoc-binary, or pass --pandoc PATH.')
+
+
+def latex(markdown):
+    return subprocess.run(
+        [str(pandoc), '--from=markdown+tex_math_dollars', '--to=latex',
+         '--natbib', '--no-highlight', '--wrap=none', '--shift-heading-level=-1'],
+        input=markdown, text=True, capture_output=True, check=True, cwd=P,
+    ).stdout.strip()
+
+
+def algorithm(language):
+    pairs = [
+        ('Task, evaluator, LLM, budget $B$, initial size $I$', '任务、评价器、LLM、预算 $B$、初始规模 $I$'),
+        ('Initialize $T$ with virtual root $v_0$', '初始化仅含虚拟根 $v_0$ 的树 $T$'),
+        ('budget remains and stopping rule is not met', '预算尚有剩余且未满足停止条件'),
+        ('fewer than $I$ feasible initial programs collected', '已获得的可行初始程序不足 $I$ 个'),
+        ('Choose initialization at $v_0$', '选择虚拟根上的初始化'),
+        ('Sample a representative parent and an operator', '抽样代表父代与生成算子'),
+        ('Build the corresponding generation context', '构造相应的生成上下文'),
+        ('Generate and evaluate; allow at most one repair', '生成并评价，期间至多修复一次'),
+        ('no program was evaluated', '没有程序进入评价'),
+        ('Attach the final evaluated program to its parent', '将最终被评价程序挂接至父代'),
+        ('Select representatives $R$ and skeleton $\\mathcal H$', '选择代表集 $R$ 与骨架 $\\mathcal H$'),
+        ('Partition non-skeleton nodes into regions', '将非骨架节点划分为区域'),
+        ('Reflect on eligible regions in the pre-update tree', '基于更新前的树反思达到阈值的区域'),
+        ('Contract paths and prune subtrees', '收缩路径并剪除子树'),
+        ('Store experience on retained edges and nodes', '将经验保存至保留的边和节点'),
+        ('best feasible program evaluated during search', '搜索中评价过的最优可行程序'),
+    ]
+    s = [a if language == 'en' else b for a, b in pairs]
+    return r'''\begin{algorithm}[H]
+\caption{EvoTrace}\label{alg:evotrace}
+\begin{algorithmic}[1]
+\REQUIRE ''' + s[0] + r'''
+\STATE ''' + s[1] + r'''
+\WHILE{''' + s[2] + r'''}
+  \IF{''' + s[3] + r'''}
+    \STATE ''' + s[4] + r'''
+  \ELSE
+    \STATE ''' + s[5] + r'''
+  \ENDIF
+  \STATE ''' + s[6] + r'''
+  \STATE ''' + s[7] + r'''
+  \IF{''' + s[8] + r'''}
+    \STATE \textbf{continue}
+  \ENDIF
+  \STATE ''' + s[9] + r'''
+  \IF{''' + s[3] + r'''}
+    \STATE \textbf{continue}
+  \ENDIF
+  \STATE ''' + s[10] + r'''
+  \STATE ''' + s[11] + r'''
+  \STATE ''' + s[12] + r'''
+  \STATE ''' + s[13] + r'''
+  \STATE ''' + s[14] + r'''
+\ENDWHILE
+\RETURN ''' + s[15] + r'''
+\end{algorithmic}
+\end{algorithm}'''
+
+
+def convert_body(markdown, language):
+    markdown = re.sub(r'^(#{2,4}) (?:\d+(?:\.\d+)*\.|[A-D]\.\d+\.)\s+', r'\1 ', markdown, flags=re.M)
+    markdown = re.sub(r'^## (?:Appendix|附录)\s+[A-D]\.\s+', '## ', markdown, flags=re.M)
+    markdown = re.sub(r'```text\n(?:Algorithm 1: |算法1：)EvoTrace\n.*?```', 'EVOTRACEALGORITHM', markdown, flags=re.S)
+    graphics = []
+    def figure(match):
+        path, lead, tail = match.groups()
+        path = {'figures/evotrace/12-v3-experience-cycle.png': 'figures/framework.png',
+                'figures/evotrace/13-v3-experience-accumulation.png': 'figures/reflective-simplification.png',
+                '../paper/figures/early-search.png': 'figures/early-search.pdf'}[path]
+        caption = latex(lead.strip() + ' ' + tail.strip())
+        number = len(graphics) + 1
+        graphics.append('\\begin{figure*}[t]\n\\centering\n'
+                        + f'\\includegraphics[width=\\textwidth]{{{path}}}\n'
+                        + f'\\caption{{{caption}}}\\label{{fig:evotrace-{number}}}\n'
+                        + '\\end{figure*}')
+        return f'EVOTRACEFIGURE{number}'
+    markdown = re.sub(r'!\[[^\]]*\]\(([^)]+)\)\n\n\*\*(?:Figure \d+\.|图\d+｜)(.*?)\*\*\s*(.*?)(?=\n\n)', figure, markdown, flags=re.S)
+    score_table = None
+    def table(match):
+        nonlocal score_table
+        caption = latex(match[1].strip() + ' ' + match[2].strip())
+        rows = []
+        for line in match[3].strip().splitlines()[2:]:
+            cells = [c.strip() for c in line.strip('|').split('|')]
+            rows.append(' & '.join([cells[0], *cells[1].split(' / '), *cells[2:]]) + r' \\')
+        headings = ('Task & Seed 0 & Seed 1 & Seed 2 & Mean & SD' if language == 'en'
+                    else '任务 & 种子0 & 种子1 & 种子2 & 均值 & 标准差')
+        score_table = ('\\begin{table*}[t]\n\\caption{' + caption + '}\\label{tab:training}\n'
+                       '\\centering\n\\begin{tabular}{lrrrrr}\n\\toprule\n' + headings + r' \\'
+                       + '\n\\midrule\n' + '\n'.join(rows) + '\n\\bottomrule\n\\end{tabular}\n\\end{table*}')
+        return 'EVOTRACESCORETABLE\n\n'
+    markdown = re.sub(r'\*\*(?:Table 1\.|表1｜)(.*?)\*\*([^\n]*)\n\n((?:\|[^\n]+\n)+)', table, markdown)
+    markdown = re.sub(r'\*\*(?:Table [2-9]\.|表[2-9]｜)(.*?)\*\*([^\n]*)\n\n(?=\|)',
+                      lambda m: 'Table: ' + m[1].strip() + ' ' + m[2].strip() + '\n\n', markdown)
+    result = latex(markdown)
+    for i, graphic in enumerate(graphics, 1):
+        result = result.replace(f'EVOTRACEFIGURE{i}', graphic)
+    if score_table:
+        result = result.replace('EVOTRACESCORETABLE', score_table)
+    return result.replace('EVOTRACEALGORITHM', algorithm(language))
+
+
+shutil.copy2(ROOT/'docs/paper-references.bib', P/'references.bib')
+for language, source, name in [('en', 'paper.md', 'main'), ('zh', 'paper-中文.md', 'main-zh')]:
+    text = (ROOT/'docs'/source).read_text()
+    title = latex(text.splitlines()[0][2:])
+    abstract_heading = '## Abstract\n\n' if language == 'en' else '## 摘要\n\n'
+    abstract = latex(text.split(abstract_heading, 1)[1].split('\n## ', 1)[0])
+    body = '## ' + text.split('\n## ', 2)[2]
+    appendix_heading = '## Appendix A.' if language == 'en' else '## 附录 A.'
+    main, appendix = body.split(appendix_heading, 1)
+    appendix = appendix_heading + appendix
+    main = main.split('## References')[0].split('## 参考文献')[0]
+    main_tex, appendix_tex = convert_body(main, language), convert_body(appendix, language)
+    cjk = (r'''\usepackage{xeCJK}
+\setCJKmainfont{Noto Serif CJK SC}
+\setCJKsansfont{Noto Sans CJK SC}
+\setCJKmonofont{Noto Sans Mono CJK SC}
+\renewcommand{\tablename}{表}
+\renewcommand{\figurename}{图}
+\renewcommand{\abstractname}{摘要}
+\renewcommand{\refname}{参考文献}
+\makeatletter
+\renewcommand{\fnum@table}{表~\thetable}
+\renewcommand{\fnum@figure}{图~\thefigure}
+\makeatother
+\floatname{algorithm}{算法}
+''' if language == 'zh' else '')
+    tex = r'''% Generated from docs/ by paper/build.py. Edit the Markdown source.
+\documentclass{article}
+\makeatletter
+\def\input@path{{vendor/icml2027/}}
+\makeatother
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+\usepackage{icml2027}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{fontspec}
+\setmainfont{Times New Roman}
+\setsansfont{TeX Gyre Heros}
+\setmonofont{TeX Gyre Cursor}[Scale=MatchLowercase]
+\input{style.tex}
+''' + cjk + r'''
+\icmltitlerunning{EvoTrace: Experience-Bearing Tree-Structured Populations}
+\begin{document}
+\twocolumn[
+\icmltitle{''' + title + r'''}
+\begin{icmlauthorlist}
+\icmlauthor{Anonymous Authors}{anon}
+\end{icmlauthorlist}
+\icmlaffiliation{anon}{Anonymous Institution}
+\icmlcorrespondingauthor{}{}
+\icmlkeywords{Automated algorithm design, evolutionary search, reflection}
+\vskip 0.3in
+]
+\printAffiliationsAndNotice{}
+\begin{abstract}
+''' + abstract + '\n\\end{abstract}\n\n' + main_tex + r'''
+
+\FloatBarrier
+\label{evotrace-main-end}
+\bibliographystyle{vendor/icml2027/icml2027}
+\bibliography{references}
+
+\clearpage
+\onecolumn
+\appendix
+''' + appendix_tex + '\n\\end{document}\n'
     (P/(name+'.tex')).write_text(tex)
-    tmp.unlink()
-    subprocess.run(['latexmk','-xelatex','-interaction=nonstopmode','-halt-on-error','-outdir=build',name+'.tex'],cwd=P,check=True,stdout=(P/(name+'-build.log')).open('w'),stderr=subprocess.STDOUT)
-    shutil.copy2(P/'build'/(name+'.pdf'),P/('evotrace.pdf' if language=='en' else 'evotrace-中文.pdf'))
-    print(name,'complete')
+    with (P/(name+'-build.log')).open('w') as log:
+        subprocess.run(['latexmk', '-xelatex', '-interaction=nonstopmode', '-halt-on-error',
+                        '-outdir=build', name+'.tex'], cwd=P, check=True, stdout=log, stderr=subprocess.STDOUT)
+    shutil.copy2(P/'build'/(name+'.pdf'), P/('evotrace.pdf' if language == 'en' else 'evotrace-中文.pdf'))
+    print(name, 'complete', flush=True)

@@ -1,6 +1,6 @@
 # TraceAAD 统一实验入口
 
-保留Base、EvoTrace-V1、EvoTrace-V2、EvoTrace-V3、V21.3、V22.2、V23.2与V24.1。使用 `--method` 选择方法；默认 `base`，未指定 `--experiment` 时使用所选方法的结果目录名。点号与下划线写法均支持，例如 `evotrace.v1` 与 `evotrace_v1`、`v22.2` 与 `v22_2`。
+保留 Base、EvoTrace V1–V3。使用 `--method` 选择；默认 `base`。EvoTrace 支持点号与下划线两种写法。V21–V24 源码、测试和旧入口已移入本地 `archive/trajectory_methods_20261116/`。
 
 | 方法 | 搜索实现 |
 | --- | --- |
@@ -8,14 +8,9 @@
 | `evotrace.v3` | 独立EvoTrace v3：在贪心覆盖代表集上按名次质量与直接投入抽样父代，通过路径收缩与子树剪枝成批凝练边经验与节点经验；[设计与用法](../../evotrace_v3/README.md)。 |
 | `evotrace.v2` | 独立EvoTrace v2：按最近使用与质量差异一次选择，补齐必要分叉后联合剪枝和路径收缩；[设计与用法](../../evotrace_v2/README.md)。 |
 | `evotrace.v1` | 独立EvoTrace v1：自有搜索、任务、模型与评价实现，使用树状种群、反思简化、加权分配与三尺度上下文。 |
-| `v21.3` | Base加机制2：Refine读形成与修改记录，Crossover读参考形成与接入，Explore读方向及后续发展；`--reference-code`额外给出参考完整源码。 |
-| `v22.2` | V21.3加机制1。 |
-| `v23.2` | Base加机制1。 |
-| `v24.1` | V21.3加机制3：条件经验、展示与跨分支修订。 |
 
 默认后端为 `scheduled`，Qwen3.8-27B 经 server4 公共调度器分配。采样为温度1.0、top_p=0.8、top_k=20、min_p=0、presence_penalty=1.5，关闭思考，默认输出上限16384。完整设置见[scheduling.py](scheduling.py)与运行元数据。
 
-V22.2与V23.2默认开启机制1的轨迹嵌入交叉参考；`--no-trajectory-reference-embedding`在同池随机选参考，作为参考部分消融。Base始终在合格池随机选参考。嵌入服务复用 `SHINKA_EMBEDDING_*` 配置，向量和用量保存在native目录（历史机制文档封存于本地 `archive/`）。
 
 EvoTrace的独立入口、配置与恢复约定见[V3](../../evotrace_v3/README.md)、[V2](../../evotrace_v2/README.md)、[V1](../../evotrace_v1/README.md#记录与恢复)。不同版本分别建立批次并由各自冻结源码恢复；V3四任务正式批次（`20261116_000118_evotrace_v3_full_co4`）保存在`experiments_result/evotrace_v3_full`，此前已停批次仍保留在各自目录。下方真实轨迹harness面向V2冻结记录，不能用V2树快照恢复V3。
 
@@ -39,25 +34,9 @@ EvoTrace的独立入口、配置与恢复约定见[V3](../../evotrace_v3/README.
 ```bash
 source .env.server4
 .venv/bin/python -m experiments.traceaad.launch_host \
-  --method v21.3 --experiment traceaad_v21_3 --batch BATCH_NAME \
+  --method base --experiment traceaad_base_boltzmann_20261109 --batch BATCH_NAME \
   --repeats 3 --budget 1000 --scheduler-socket /tmp/traceaad-1003/scheduler.sock \
   --env-file .env.server4 --launch
-```
-
-V22.2与V23.2需要轨迹参考嵌入服务，不需要反思服务。V24.1不需要嵌入服务；反思独立使用4096 tokens输出，输入按服务端聊天tokenizer计数，默认上限44544 tokens。代码见[V21.3实现](../../traceaad_v21_3)、[V22.2实现](../../traceaad_v22_2)、[V23.2实现](../../traceaad_v23_2)与[V24.1实现](../../traceaad_v24_1)。
-
-`validate_v24_1`复查V24.1的材料组织与反思：
-
-```bash
-# 仅调tokenizer，不请求生成、不评价程序
-.venv/bin/python -m experiments.traceaad.validate_v24_1 \
-  --pack-root RESULT_DIR \
-  --output experiments_result/traceaad_v24_1_validation/NEW_PACKING_RUN
-
-# 明确指定 --live 才发送模型反思；同一窗口从空经验开始，不回写源档案
-.venv/bin/python -m experiments.traceaad.validate_v24_1 \
-  --live --case RUN_DIR:ATTEMPT_ID --repeats 2 \
-  --output experiments_result/traceaad_v24_1_validation/NEW_REFLECTION_RUN
 ```
 
 ## 四任务阶段与跨版本补位队列
@@ -66,7 +45,7 @@ V22.2与V23.2需要轨迹参考嵌入服务，不需要反思服务。V24.1不�
 
 ```bash
 .venv/bin/python -m experiments.traceaad.launch_host \
-  --method v21.3 --experiment traceaad_v21_3 --batch BATCH_NAME \
+  --method base --experiment traceaad_base_boltzmann_20261109 --batch BATCH_NAME \
   --tasks tsp_construct cvrp_aco fssp_gls op_aco \
   --repeats 3 --budget 1000 --selection-temperature 1 \
   --scheduler-socket /tmp/traceaad-1003/scheduler.sock --env-file .env.server4 --enqueue

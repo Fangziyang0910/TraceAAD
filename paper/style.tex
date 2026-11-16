@@ -1,18 +1,8 @@
-\usepackage{microtype}
+% Supporting packages only; ICML controls margins, spacing, headings and captions.
+\usepackage{longtable,array,calc}
 \usepackage{fvextra}
 \usepackage{xurl}
-\usepackage{needspace}
-\usepackage{fancyhdr}
-\usepackage{caption}
-\captionsetup{font=small,labelfont=bf}
-\DefineVerbatimEnvironment{verbatim}{Verbatim}{breaklines=true,breakanywhere=true,fontsize=\footnotesize}
-\setlength{\emergencystretch}{3em}
-\setlength{\parskip}{0.35em}
-\setlength{\parindent}{0pt}
-\setlength{\headheight}{14pt}
-\pagestyle{fancy}
-\fancyhf{}
-\fancyhead[L]{\small EvoTrace: Tree-Structured Populations}
-\fancyhead[R]{\small Research manuscript}
-\fancyfoot[C]{\thepage}
-\renewcommand{\headrulewidth}{0.3pt}
+\usepackage{placeins}
+\DefineVerbatimEnvironment{verbatim}{Verbatim}{breaklines=true,breakanywhere=true}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\urlstyle{same}

@@ -1,42 +1,295 @@
 {
-  "date": "2026-11-15",
+  "schema_version": 3,
+  "recorded_at_utc": "2026-11-16T13:41:34.832831+00:00",
   "generator": "built-in image_gen",
+  "mechanism": "EvoTrace V3: selection, reflective elimination, and experience reuse",
   "figures": [
     {
-      "file": "09-v3-framework.png",
+      "id": 1,
+      "file": "12-v3-experience-cycle.png",
+      "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-7b66c044-8454-4533-8544-071953069143.png",
       "size": [
-        1376,
-        768
+        2061,
+        763
       ],
-      "sha256": "726aede98aa65686b5cb5cb0fd1fd3adf85113802e7c1eb7f782f49560343f91"
+      "format": "PNG",
+      "mode": "RGB",
+      "bytes": 1706725,
+      "sha256": "4d1c06a8e4ceb7b9f3d6177fdeed235980d77ce65632311a42aabecc8d10beb3",
+      "paper_copy": "paper/figures/framework.png",
+      "paper_copy_sha256": "4d1c06a8e4ceb7b9f3d6177fdeed235980d77ce65632311a42aabecc8d10beb3",
+      "accepted_revision": 2,
+      "generation_count": 2,
+      "postprocessing": "None; byte-for-byte copy of the selected built-in imagegen output.",
+      "history": [
+        {
+          "revision": 1,
+          "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-d22dcaf7-7e4a-498e-b5c0-d6627a3d9a91.png",
+          "decision": "revise"
+        },
+        {
+          "revision": 2,
+          "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-7b66c044-8454-4533-8544-071953069143.png",
+          "decision": "selected"
+        }
+      ]
     },
     {
-      "file": "08-reflective-simplification.png",
-      "source": "/home/fang/.codex/generated_images/01a1d551-8597-7311-992d-d7035868de2b/exec-ddd65a6e-1b60-476c-bac2-0a6e0e3f1f6d.png",
+      "id": 2,
+      "file": "13-v3-experience-accumulation.png",
+      "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-7c394960-3583-4e12-a753-bdcb15fa004d.png",
       "size": [
-        1752,
-        897
+        1920,
+        819
       ],
-      "sha256": "59d50b7bac7cb293a94ef5f69787a597ffc8fb4a5474639421faed59ee1eb474"
-    },
-    {
-      "file": "07-framework.png",
-      "source": "/home/fang/.codex/generated_images/01a1d551-8597-7311-992d-d7035868de2b/exec-d22033d9-8be2-48d6-a008-b837a80d7997.png",
-      "size": [
-        1752,
-        897
-      ],
-      "sha256": "974e99f1345e1ca504c5f478f6e143999e70f045beb899159e855e540a4c6097",
-      "note": "Historical V2 framework diagram retained for archival reference"
+      "format": "PNG",
+      "mode": "RGB",
+      "bytes": 1289376,
+      "sha256": "ae63f5ab79ca13a6690ca2adeb05c518579de44cc883a6bb2bf57ab9aec1979f",
+      "paper_copy": "paper/figures/reflective-simplification.png",
+      "paper_copy_sha256": "ae63f5ab79ca13a6690ca2adeb05c518579de44cc883a6bb2bf57ab9aec1979f",
+      "accepted_revision": 2,
+      "generation_count": 2,
+      "postprocessing": "None; byte-for-byte copy of the selected built-in imagegen output.",
+      "history": [
+        {
+          "revision": 1,
+          "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-0b46c221-6a64-41d0-83f8-97fa0511f60a.png",
+          "decision": "revise"
+        },
+        {
+          "revision": 2,
+          "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-7c394960-3583-4e12-a753-bdcb15fa004d.png",
+          "decision": "selected"
+        }
+      ]
     }
   ],
   "verified_semantics": [
-    "single primary parent; crossover reference is information only",
-    "top-K quality + recency window + LCA closure survival on one snapshot",
-    "retained A and D outside removed path region",
-    "B C X go to V_AD; Y goes to S_A",
-    "old S_B goes to V_AD; old S_A merges with Y",
-    "global rank-half-life and direct-effort parent sampling; path/branch/population views"
+    "Figure 1: b1,b2,b3,x form a four-node path region; s1,s2,s3,s4 form a four-node subtree region.",
+    "Figure 1: A,B,C and virtual root survive; E_AB attaches to A-to-B and E_A attaches to A.",
+    "Figure 1: B is the sole structural parent of N; the navy feedback arrow is a process connector and touches no other algorithm node.",
+    "Figure 2: D,u1,u2,u3 are removed together; E_AD enters the later reflection producing E_AG.",
+    "Figure 2: y1,y2,y3,y4 are pruned; A,C survive and E_A is updated.",
+    "Reflection is depicted as integration of prior experience and new development, not lossless algebraic addition."
   ],
-  "adopted_framework_revision": 3
+  "visual_audit": {
+    "method": "Direct visual inspection of both generated drafts and final edits, followed by inspection of the figures rendered at the ICML text width in both bilingual PDFs.",
+    "format": "PNG raster; no artificial upscaling or vector claim.",
+    "pdf_checks": [
+      "Figure 1 and Figure 2 occupy the full two-column text width without clipping.",
+      "Labels, node identities, region boundaries, experience carriers, and arrow directions remain legible in the rendered manuscript.",
+      "Captions are below the figures and describe the illustrated operations."
+    ]
+  },
+  "superseded_figures": [
+    {
+      "id": "A",
+      "file": "10-v3-framework.png",
+      "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-e2506e59-5fd0-4206-803d-4018757f502d.png",
+      "size": [
+        1672,
+        941
+      ],
+      "sha256": "70a7afcf56c9e3019b83d4774bb41a0ea5c826bbdf95a7f395e337e5657ca4ea",
+      "bytes": 1748129,
+      "format": "PNG",
+      "mode": "RGB",
+      "paper_copy": "paper/figures/framework.png",
+      "paper_copy_sha256": "70a7afcf56c9e3019b83d4774bb41a0ea5c826bbdf95a7f395e337e5657ca4ea",
+      "accepted_revision": 4,
+      "generation_count": 4,
+      "postprocessing": "None. Final PNG is a byte-for-byte copy of the selected built-in imagegen output.",
+      "history": [
+        {
+          "source": "/home/fang/.codex/generated_images/01a1e31e-7937-7d43-870d-2d81bce3d19c/exec-32a68051-35f0-43d4-b6a4-34a7d8f27b16.png",
+          "size": [
+            1672,
+            941
+          ],
+          "sha256": "177495c3a7d5ddc34e1f340905eaea6e5926fd715d48060a1c8fa51fca978605",
+          "bytes": 1471435,
+          "format": "PNG",
+          "mode": "RGB",
+          "revision": 1,
+          "decision": "revise",
+          "inspection": "Direct full-image visual inspection of the generated PNG.",
+          "findings": [
+            "All required node identities and two four-node trial regions are present.",
+            "Incorrect path enclosure includes retained D; shorten enclosure to exclude D.",
+            "A to D structural edge was orange; change to dark slate.",
+            "Reduce gradient styling."
+          ]
+        },
+        {
+          "source": "/home/fang/.codex/generated_images/01a1e31e-7937-7d43-870d-2d81bce3d19c/exec-d7fc4487-04cd-4490-adaa-b9efa14a4ed1.png",
+          "size": [
+            1672,
+            941
+          ],
+          "sha256": "95a846f004910c57c4515000bedd7123dea21a26689d21c644d2b56541c437a0",
+          "bytes": 1483775,
+          "format": "PNG",
+          "mode": "RGB",
+          "revision": 2,
+          "decision": "revise",
+          "inspection": "Direct full-image visual inspection of the generated PNG.",
+          "findings": [
+            "D is now outside the path enclosure; both four-node regions and deferred P to Z are correct.",
+            "E stays hollow; reference is Q; experience tags use current notation.",
+            "Experience connector crosses A to E; relocate its source pill and route above the tree.",
+            "Further reduce strong borders and mottled fills."
+          ]
+        },
+        {
+          "source": "/home/fang/.codex/generated_images/01a1e31e-7937-7d43-870d-2d81bce3d19c/exec-3b6a41da-a76d-4ee8-8e5b-7c362eb9cd26.png",
+          "size": [
+            1672,
+            941
+          ],
+          "sha256": "98541e651fedb921590d402c0c570ad08fe70f8a9ded7a84fe20385ebecf948d",
+          "bytes": 1474154,
+          "format": "PNG",
+          "mode": "RGB",
+          "revision": 3,
+          "decision": "selected",
+          "inspection": "Direct full-image visual inspection plus a 1008-pixel-wide in-memory print-scale preview.",
+          "findings": [
+            "Representative cover constraints and R-before-LCA order are legible.",
+            "Filled A,D,P,Q and hollow E distinguish representatives from fork anchors.",
+            "Path region contains B1,B2,B3,X only; subtree region contains Y1,Y2,Y3,Y4 only.",
+            "D is outside both regions; gray P to Z remains in panels a and b.",
+            "E_AD lies on A to D; E_A attaches to A.",
+            "Orange Experience starts at E_A and reaches operator-view header without crossing a structural tree edge.",
+            "Blue dashed Reference starts at Q and ends at Crossover.",
+            "Teal representative connector originates at representative D and feeds parent selection.",
+            "Rank decay and 1/(1+n_r) are present, with direct evaluations defined.",
+            "Refine, Crossover and Explore contexts match the specification.",
+            "N has only P as its structural parent; feedback returns to panel a.",
+            "All visible words, subscripts, formulas and arrow directions were manually checked; no deprecated labels observed."
+          ]
+        },
+        {
+          "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-e2506e59-5fd0-4206-803d-4018757f502d.png",
+          "size": [
+            1672,
+            941
+          ],
+          "sha256": "70a7afcf56c9e3019b83d4774bb41a0ea5c826bbdf95a7f395e337e5657ca4ea",
+          "bytes": 1748129,
+          "format": "PNG",
+          "mode": "RGB",
+          "revision": 4,
+          "decision": "selected",
+          "inspection": "Direct full-image visual inspection of generated output during manuscript concept audit.",
+          "findings": [
+            "F denotes additional non-representative branching nodes; legend now matches Eq. (2).",
+            "Offspring evaluations and branch records replace ambiguous direct evaluations and child attempts.",
+            "All nodes, regions, edges, equation labels and arrow directions inspected and preserved."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "file": "11-v3-reflective-simplification.png",
+      "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-073ccb7f-6266-4ed3-a4ef-6c3dfa741920.png",
+      "size": [
+        1672,
+        941
+      ],
+      "sha256": "9d4f823ff167c4281f6331889d9571dc64ba6bb06dc63e7200a34c7b9cd8cbba",
+      "bytes": 1750600,
+      "format": "PNG",
+      "mode": "RGB",
+      "paper_copy": "paper/figures/reflective-simplification.png",
+      "paper_copy_sha256": "9d4f823ff167c4281f6331889d9571dc64ba6bb06dc63e7200a34c7b9cd8cbba",
+      "accepted_revision": 4,
+      "generation_count": 4,
+      "postprocessing": "None. Final PNG is a byte-for-byte copy of the selected built-in imagegen output.",
+      "history": [
+        {
+          "source": "/home/fang/.codex/generated_images/01a1e31e-7937-7d43-870d-2d81bce3d19c/exec-775469e0-dc67-4d9e-a8a9-27ed168a098d.png",
+          "size": [
+            1672,
+            941
+          ],
+          "sha256": "0341e3058aafcb58419e08e0991e7aa8080425f432483c8ca2e575a099faa189",
+          "bytes": 1489284,
+          "format": "PNG",
+          "mode": "RGB",
+          "revision": 1,
+          "decision": "revise",
+          "inspection": "Direct full-image visual inspection of the generated PNG.",
+          "findings": [
+            "Tree, region counts, inherited-note carriers and readout arrows are correct.",
+            "Four path nodes B1,B2,B3,X and four subtree nodes Y1,Y2,Y3,Y4; Z remains outside.",
+            "Remove gradient title strips and excessive shading."
+          ]
+        },
+        {
+          "source": "/home/fang/.codex/generated_images/01a1e31e-7937-7d43-870d-2d81bce3d19c/exec-9814e6e8-41a1-416d-9e8a-1fdd61c549d6.png",
+          "size": [
+            1672,
+            941
+          ],
+          "sha256": "b94af047e91739d9f2fe948b05032dff1a2da9220260f5a0966fedb0d40feaa1",
+          "bytes": 1470878,
+          "format": "PNG",
+          "mode": "RGB",
+          "revision": 2,
+          "decision": "revise",
+          "inspection": "Direct full-image visual inspection of the generated PNG.",
+          "findings": [
+            "All wording and semantic mappings preserved.",
+            "Heavy panel and legend borders should be lightened; main title can be smaller."
+          ]
+        },
+        {
+          "source": "/home/fang/.codex/generated_images/01a1e31e-7937-7d43-870d-2d81bce3d19c/exec-911c63c6-1b7e-4030-b46d-f6f53b7d0e81.png",
+          "size": [
+            1672,
+            941
+          ],
+          "sha256": "631e1c05276b32540cf8e280078dbc7cf470e0816ba4c496f174bb9c74ca9955",
+          "bytes": 1459072,
+          "format": "PNG",
+          "mode": "RGB",
+          "revision": 3,
+          "decision": "selected",
+          "inspection": "Direct full-image visual inspection plus a 1008-pixel-wide in-memory print-scale preview.",
+          "findings": [
+            "A and D remain outside the four-node path region; B1 to X lies inside.",
+            "Prior E attaches to intermediate B2; prior E_A stays at retained A.",
+            "Subtree region contains exactly Y1,Y2,Y3,Y4 and originates at A.",
+            "D to Z remains intact before and after simplification, explicitly below threshold.",
+            "Edge reflection includes endpoint net diff, intermediate and side-branch evidence, inherited notes and bounded comparison catalog.",
+            "Node reflection includes baseline, pruned branch diffs and outcomes, prior E_A and bounded comparison catalog.",
+            "Contracted A to D carries E_AD; A carries updated E_A.",
+            "Dotted orange readout arrows start at the two experience pills, not D or Z.",
+            "All visible words, subscripts and arrow directions were manually checked; no deprecated labels observed."
+          ]
+        },
+        {
+          "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-073ccb7f-6266-4ed3-a4ef-6c3dfa741920.png",
+          "size": [
+            1672,
+            941
+          ],
+          "sha256": "9d4f823ff167c4281f6331889d9571dc64ba6bb06dc63e7200a34c7b9cd8cbba",
+          "bytes": 1750600,
+          "format": "PNG",
+          "mode": "RGB",
+          "revision": 4,
+          "decision": "selected",
+          "inspection": "Direct full-image visual inspection of generated output during manuscript concept audit.",
+          "findings": [
+            "Current-region comparisons replaces the unsupported bounded-catalog label.",
+            "Experience storage and generation context labels match manuscript terminology.",
+            "Both four-node regions, retained A and D, deferred Z, and all experience arrows inspected and preserved."
+          ]
+        }
+      ]
+    }
+  ]
 }

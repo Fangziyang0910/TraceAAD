@@ -1,6 +1,6 @@
 # EvoTrace v3
 
-V3 以演化树统一派生历史与经验归属，以覆盖代表集统一空间竞争与预算分配：通过路径收缩与子树剪枝成批简化非骨架区域，凝练为边经验（`edge.experience`）与节点经验（`node.experience`），并在代表集上按名次与直接开发投入抽样父代、按算子职责读取树上下文。完整设计见 [EvoTrace-v3设计](../docs/EvoTrace-v3设计.md)。
+V3通过树状种群，将算法优胜劣汰与设计经验积累结合。路径收缩时，反思形成的边经验保存在重连边上（`edge.experience`）；子树剪枝时，节点经验保存在相应的保留节点上（`node.experience`）。后续反思继续整合已有经验与新的算法变化及评价结果。预算依据代表算法的适应度排名和以其为主父代消耗的评价次数分配，精化、交叉与探索读取相关演化轨迹和设计经验。研究论证见[研究概述](../docs/树状种群与反思简化.md)，精确规则见[V3设计](../docs/EvoTrace-v3设计.md)。
 
 本包只依赖 Python 标准库，不依赖 V1、V2 或其他方法包。外部任务可直接运行；仓库基准与公共调度器由实验适配器提供。
 
@@ -33,15 +33,15 @@ python3 -m evotrace_v3 --task-factory my_task:make_task \
 ```
 
 核心超参数（独立入口与仓库统一入口均开放同名命令行参数）：
-- `--max-representatives`（默认 `24`）：代表集 $R$ 的最大规模；可行个体按适应度从优到劣贪心扫描，不被已选更优代表覆盖者进入 $R$。
-- `--cover-distance`（默认 `0.15`）：AST 二元组 Jaccard 距离小于该阈值时视为被更优代表覆盖（设为 `0.0` 即关闭结构覆盖）。
+- `--max-representatives`（默认 `24`）：代表集 $R$ 的最大规模；可行个体按适应度从优到劣贪心扫描，不被排序更靠前的已选代表覆盖者进入 $R$。
+- `--cover-distance`（默认 `0.15`）：AST 二元组 Jaccard 距离小于该阈值时视为被排序更靠前的代表覆盖（设为 `0.0` 即关闭结构覆盖）。
 - `--region-size`（默认 `4`）：路径收缩区域或子树剪枝区域触发简化与反思所需的最小节点数。
-- `--rank-half-life`（默认 `10`）：在代表集 $R$ 内平均名次每落后多少位，基础质量权重减半；分母为 `1 + direct_evaluations`。
+- `--rank-half-life`（默认 `10`）：在代表集 $R$ 内平均名次每落后多少位，适应度排名对应的权重减半；分母为 `1 + direct_evaluations`。
 
 模块职责：
 - `models.py`：算法节点 `Node`、派生边 `Edge` 与树种群容器 `TreePopulation`；维护评价时钟与主父代 `direct_evaluations`。
 - `topology.py`：贪心覆盖代表集（`representatives`）与反思树简化（`plan_simplification` / `apply_simplification`），划分路径收缩（`PathContraction`）与子树剪枝（`SubtreePruning`）。
-- `allocation.py`：在代表集上按名次质量与直接开发投入抽样父代（`representative_rank_direct_sampling`），并在代表集中按质量门槛与最大 AST 距离挑选交叉参考。
+- `allocation.py`：在代表集上按适应度排名和子代评价次数抽样父代（`representative_rank_direct_sampling`），并结合归一化适应度排名阈值与 AST 距离挑选交叉参考。
 - `reflection.py`：将路径收缩区域合成为边经验，将子树剪枝区域合成为节点经验；当次比较进入提示词，历史比较元数据落盘保存。
 - `context.py`：`Refine` 读取演化路径，`Crossover` 读取共同祖先及分叉双支，`Explore` 读取种群全局概览。
 - `search.py`：生成、修复、评价、树简化更新与确定性断点恢复。

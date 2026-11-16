@@ -2,176 +2,167 @@
 
 ## Abstract
 
-Population competition and derivation trees offer complementary ways to organize automated algorithm design: competition allocates evaluations among candidates, while trees connect successive modifications and branching attempts. We introduce EvoTrace, which combines these roles in an experience-bearing tree-structured population and treats reflection as compression of search experience. Nodes represent evaluated algorithms, and primary-parent edges record their derivations. Reflective tree simplification retains an active working set, the best individual, and the forks connecting them. It partitions the remaining history into path and side-branch regions, then simplifies and reflects on regions that reach a minimum size. Path experience is stored on reconnected edges, and side-branch experience on retained ancestors. Subsequent refinement, crossover, and exploration read path-, branch-, and population-scale views of this same tree. The resulting search process connects population growth and competition with the continual condensation and use of algorithm-design experience.
+Evolutionary algorithm design produces code changes and evaluation results that can inform subsequent design, yet population selection does not by itself retain experience from eliminated algorithms. We study how to accumulate and reuse this experience as the population evolves. We introduce EvoTrace, a tree-structured population that makes algorithm survival and elimination a process of accumulating algorithm-design experience. Its core mechanism couples elimination with reflection: path contraction stores experience on the edge between retained endpoints, while subtree pruning stores experience at the retained ancestor. Later reflections integrate existing experience with new development, and the maintained population supplies representatives for budget allocation and evolutionary trajectories for refinement, crossover, and exploration. We establish structural properties of the update and analyze early search records to characterize experience accumulation and reflection cost.
 
 ## 1. Introduction
 
-Large language models (LLMs) support automated algorithm design (AAD) through repeated program generation, evaluation, and revision [@funsearch; @eoh; @elm]. Under a finite evaluation budget, search must choose which candidates to develop and how to use the outcomes of earlier attempts. Population competition directs evaluations toward candidates, while a derivation tree organizes how algorithms are modified and how search branches develop.
+Evolutionary algorithm design improves a population by generating and evaluating offspring and selecting individuals to retain. Large language models (LLMs) generate and revise executable programs, allowing this process to explore beyond a fixed set of mutation rules [@funsearch; @eoh]. As the population evolves, changes between parent and offspring algorithms and their evaluation results record how the algorithms develop. These records provide a basis for accumulating algorithm-design experience.
 
-Prior work provides population-based evolution [@funsearch; @eoh; @partevo; @shinka], tree- and graph-organized search [@mctsahd; @cladeahd; @pathwise; @phyloevolve], and reflection or memory for subsequent generation [@reevo; @refineevo; @deltaevolve; @memorytree]. These approaches motivate a common design question: **how can candidate competition, tree maintenance, and experience use operate within one evolving search state?** As new programs and attempts accumulate, the representation must support continued search while organizing relevant history for generation.
+Learning from evolution requires relating these records to algorithm derivations. A parent-offspring comparison shows the performance change following a modification. A sequence of parent-offspring relationships records how an algorithm developed, while branches from a shared ancestor record different evolutionary processes. Retaining only current algorithms and their scores does not expose these processes, whereas retaining every historical algorithm makes the population grow continuously. ReEvo uses reflection on algorithm differences and performance comparisons to guide generation [@reevo]. Recent methods further organize search history through algorithm lineages, semantic differences, and branch memories [@phyloevolve; @deltaevolve; @memorytree]. This raises a question: as algorithms are selected and eliminated, how can their evolutionary processes be condensed into design experience that remains associated with the current population?
 
-Our approach combines population competition with derivation structure in an **experience-bearing tree-structured population**. Nodes are competing algorithm individuals; primary-parent edges connect their derivations. We treat **reflection as compression of search experience** during tree simplification. Related attempts are condensed together, and their experience is stored on the nodes and edges through which subsequent generation reads that history.
+A tree-structured population provides a way to organize this process. Nodes represent algorithms, and parent-child relationships record their evolutionary trajectories. Once retained nodes have been selected, the nodes to be removed form path regions connecting retained nodes or subtree regions extending from them. These regions record evolution between retained algorithms and evolution along branches from an algorithm, respectively. Their relationships determine both which algorithms reflection examines and where the resulting experience is stored. This motivates our central idea: **a tree-structured population can make algorithm survival and elimination a process of accumulating and reusing algorithm-design experience**.
 
-We implement this approach in **EvoTrace**. After an evaluated insertion, reflective tree simplification retains recently created, directly developed, or crossover-referenced individuals, the best individual, and their lowest common ancestors (LCAs). The retained skeleton partitions other nodes into path and side-branch regions. Only regions reaching a minimum size are simplified and reflected on. Path regions, including their attached side attempts, condense onto reconnected edges; other side branches condense onto retained ancestors. Existing notes participate in later reflections as the tree continues to change.
+EvoTrace implements this idea through a population update that combines elimination with reflection. Path contraction removes intermediate nodes and reconnects the retained endpoints; reflection on the corresponding evolutionary process produces edge experience stored on the new edge. Subtree pruning removes discarded branches; reflection produces node experience stored at the retained node from which those branches extend. Reflection analyzes code changes, evaluation results, and existing experience within each region. Later updates continue to integrate this experience. An algorithm can therefore leave the population while experience from its evolution remains available within it.
 
-Search uses the same tree for selection and generation. All retained distinct feasible individuals compete globally according to fitness rank and lineage development effort. **Refine** reads a formation path and local attempts; **Crossover** reads two branches after their common ancestor; **Explore** surveys population designs and experience. Tree maintenance and these views connect the compression of earlier attempts to subsequent algorithm design.
+This population supplies algorithms and their design experience for subsequent generation. Refinement consults the current algorithm's evolutionary trajectory and experience from generating its offspring. Crossover consults the two algorithms' trajectories after their common ancestor and the associated experience. Exploration consults algorithm designs and experience across the population. Budget allocation uses representatives' fitness ranks and the evaluations already spent with each as the primary parent. Evaluated offspring enter the population and participate in further selection, elimination, and reflection.
 
-The method has three connected components:
+Our contributions are:
 
-1. **Experience-bearing tree-structured population.** A common representation for competing algorithms, derivation relationships, and node and edge experience.
-2. **Reflective tree simplification.** Working-set retention, fork preservation, and batched region reflection jointly maintain the population and condense related attempts.
-3. **Search over the maintained tree.** Global parent sampling and operator-specific tree views use the algorithms and experience in this representation.
+- A tree-structured population that combines algorithm selection and elimination with experience accumulation, organizing algorithms and their design experience through evolutionary relationships.
+- A population update that couples elimination with reflection, producing edge experience during path contraction and node experience during subtree pruning, and integrating this experience in subsequent updates.
+- A search procedure that uses this population to allocate evaluation budgets and guide refinement, crossover, and exploration with evolutionary trajectories and design experience.
 
-## 2. Related Work
+## 2. EvoTrace
 
-**Evolutionary populations and parent allocation.** Genetic programming evolves executable structures [@koza], while hyper-heuristics and automated configuration search over heuristic components and solver parameters [@hh; @irace]. LLM-based AAD extends variation to code synthesis and revision [@survey_aad; @elm; @lmcrossover]. FunSearch pairs program generation with an island model [@funsearch], EoH co-evolves natural-language thoughts and code [@eoh], and LLaMEA and AlphaEvolve advance evaluator-guided algorithm evolution [@llamea; @alphaevolve]. Subsequent work improves diversity and parent allocation through harmony search [@hsevo], niching [@partevo], and fitness-and-usage-weighted sampling [@shinka]. EvoTrace retains global competition across feasible individuals, calibrates quality selection via a rank half-life independent of population size, accounts for development effort through the best feasible node on each candidate's retained ancestry path, and embeds individuals in a derivation tree rather than a flat pool.
+### 2.1. Algorithms, Evolutionary Trajectories, and Design Experience
 
-**Lineage trees and graphs in algorithm search.** MCTS-AHD organizes heuristics in a Monte Carlo search tree [@uct] and conditions expansion on root-to-leaf paths [@mctsahd], while Clade-AHD aggregates descendant evaluations into clade-level beliefs [@cladeahd]. Related frameworks represent search history through evolutionary program trees or directed code graphs [@a2dept; @codegraphs; @dga2d]. PathWise couples an outer population with an inner entailment graph for coordinated planning and reflection [@pathwise]. PhyloEvolve maintains a phylogenetic forest alongside a separate elite pool, pruning stalled subtrees and periodically summarizing trajectories for similarity-based retrieval [@phyloevolve]. In EvoTrace, the population itself is a tree. Working-set retention and region-size thresholds govern path contraction and branch pruning; reflection condenses each selected region onto a retained edge or ancestor.
+We consider a fixed task interface and evaluator. A candidate program $v$ implements a function used by an enclosing solver. An evaluation invokes the evaluator on the training instances and returns an objective $f(v)$, with lower values preferred, or failure feedback. We call a program feasible when it passes the evaluator's checks and returns a finite objective. Search is limited to $B$ program evaluations, including failures and re-evaluations after runtime repair. The output is the feasible program with the best observed training objective; held-out evaluation follows this selection.
 
-**Verbal reflection and experience memory.** Iterative self-feedback [@selfrefine] and verbal memory across trials [@reflexion; @expel] motivate language-level learning in AAD. ReEvo combines short-term pairwise comparisons with long-term reflections [@reevo], RefineEvo integrates planning with bidirectional positive and negative experience [@refineevo], MeEvo alternates population evolution with shared-history reflection [@meevo], and BEAM adapts bi-level memory during heuristic search [@beam]. Closer to lineage-indexed memory, DeltaEvolve tracks semantic code deltas in a hierarchical context store [@deltaevolve], and MEMOIR distills branch-local memory upon branch termination [@memorytree]. EvoTrace binds both the scope and the storage location of reflection to simplification of the population tree, preserving provenance-linked comparison catalogs as summaries pass recursively across generations.
+EvoTrace represents its population as a rooted tree $T=(\mathcal N\cup\{v_0\},\mathcal E)$. Each generation attempt that reaches evaluation contributes one node: the final evaluated program after any repair, with its code, evaluation result, and model-generated design description. Programs that fail evaluation also enter the tree. The virtual root $v_0$ has no algorithm or score and connects initial individuals. Subsequent offspring connect to their selected primary parent. Crossover additionally records a reference algorithm, preserving one structural parent per node. These edges record generation relationships; after path contraction, an edge records ancestry across the removed nodes.
 
-## 3. Method
+Parent-child relationships form evolutionary trajectories. Paths record successive algorithm changes, and branches record different evolutionary processes from a shared ancestor. Reflection uses the code changes, evaluation results, and existing experience in these processes to produce algorithm-design experience expressed in natural language. Experience produced during path contraction is stored on an edge as $E_{u\to v}$; experience produced during subtree pruning is stored at a retained node as $E_u$. Subsequent generation reads this experience together with the relevant algorithms and trajectories.
 
-### 3.1. Problem Setup and Overview
+![EvoTrace population update and search](figures/evotrace/12-v3-experience-cycle.png)
 
-We consider AAD for a fixed solver interface. A candidate program implements a target Python function invoked by an enclosing optimization algorithm. Evaluating a candidate on a fixed training instance set returns either a scalar fitness $f(v)$ (where lower values indicate better performance) or execution failure feedback (exception tracebacks, invalid outputs, or timeout diagnostics). Search proceeds under a budget of $B$ actual program evaluations, counting initialization, failed executions, and repair re-evaluations; LLM calls for generation, format or runtime repair, and reflection are logged separately.
+**Figure 1. Algorithm evolution and experience accumulation in the tree-structured population.** After selecting representatives and retaining their branching nodes, EvoTrace reflects on path and subtree regions that meet the simplification threshold. Algorithm nodes are removed, and the resulting experience is stored on new edges or retained nodes. Representatives participate in budget allocation; trajectories and experience inform refinement, crossover, and exploration. Evaluated offspring enter the population and participate in subsequent updates.
 
-EvoTrace maintains an online tree-structured population $T$ alongside an append-only attempt archive. The tree provides selectable parent implementations and structured context for generation, while the archive records every generated program, evaluation result, LLM call, and simplification update. In each post-initialization step, EvoTrace samples a parent and operator from $T$, assembles an operator-specific tree view, generates and evaluates a candidate (with at most one repair attempt), attaches the final evaluated version to $T$, and executes dynamic reflective simplification. At budget exhaustion, EvoTrace returns the feasible archived program with the best training fitness (breaking ties by earlier creation order) for single-shot evaluation on held-out test instances.
+### 2.2. Selecting Algorithms and Simplifying the Tree
 
-### 3.2. Experience-Bearing Tree-Structured Population
+A population update selects algorithms for subsequent generation and preserves the branching relationships that organize their trajectories. EvoTrace first selects representative algorithms using fitness and code distance, then retains the common ancestors connecting them. Ancestors retained only to connect representatives do not participate in parent sampling.
 
-Let $T=(\mathcal N\cup\{r\},\mathcal E)$ denote the online population tree rooted at a virtual root $r$ that holds no executable code. Every node $v\in\mathcal N$ represents an evaluated candidate individual and stores: (i) executable source code and a concise factual description of its computation (`design`), (ii) measured fitness $f(v)$ or failure feedback, (iii) direct development effort $d(v)$ (`development_evaluations`), counting actual evaluations spent on attempts with $v$ as primary parent, (iv) cumulative historical `subtree_evaluations` across $v$ and its descendants, (v) last-activity clock $u(v)$ (`last_used`), and (vi) node **selection experience** $S_v$ paired with its supporting comparison catalog. The virtual root $r$ similarly stores root selection experience $S_r$ condensed from culled initial programs.
-
-Each node $v\in\mathcal N$ has a single incoming directed edge $(p(v),v)\in\mathcal E$ from its primary parent $p(v)\in\mathcal N\cup\{r\}$. Initialization attaches initial candidates to $r$; `Refine`, `Crossover`, and `Explore` attach new candidates to their sampled primary parent. `Crossover` additionally records a read-only `reference_id` as metadata without introducing a second structural edge, preserving the tree invariant. Each edge stores its operator label, a boolean contraction flag indicating whether intermediate ancestors were simplified along that link, and edge **variation experience** $V_{p(v),v}$ paired with its supporting comparison catalog.
-
-**Effort and activity accounting.** The global clock $t$ counts total program evaluations consumed so far. When an attempt from primary parent $p$ executes $e\in\{1,2\}$ program evaluations (initial evaluation plus optional repair re-evaluation), $d(p)$ increases by $e$, $u(p)$ updates to $t$, and `subtree_evaluations` increases by $e$ at $p$ and all current ancestors of $p$. This accounting applies uniformly across `Refine`, `Crossover`, and `Explore`: `Explore` specifies a generative shift toward a new core computation, while its offspring competes as an ordinary individual in $T$. Selecting an individual as a crossover reference refreshes its activity clock $u$ without increasing $d$. Merely displaying an individual in a prompt changes neither count nor clock. The newly attached child $v$ begins with $d(v)=0$, `subtree_evaluations` equal to $0$, and $u(v)=t$.
-
-### 3.3. Reflective Tree Simplification
-
-After five feasible initial programs have been obtained, maintenance runs after each evaluated insertion. All decisions read the same pre-update snapshot. The two maintenance parameters are the activity window $W$ (`active_evaluations`) and minimum region size $m$ (`region_size`).
-
-**Active working set.** Let $\mathcal P$ contain feasible nodes in $T$. Collapse identical normalized-source-and-fitness pairs to their earliest retained record, obtaining $\mathcal D=\operatorname{distinct}(\mathcal P)$. Let $v^\star$ be the best feasible individual, breaking fitness ties by earliest ID. The active set is
+Let $\mathcal P$ be the feasible nodes in $T$. Exact duplicates with identical normalized source and fitness are represented by their earliest node, yielding $\mathcal D$. Order these nodes by increasing fitness, breaking ties by node ID, as $(v_1,\ldots,v_{|\mathcal D|})$. Starting from $R_0=\varnothing$, select at most $K$ representatives:
 
 $$
-\mathcal A=\{v\in\mathcal D:t-u(v)<W\}\cup\{v^\star\},
-\qquad W=40,
+\begin{aligned}
+R_k &= R_{k-1} \cup \bigl\{v_k : |R_{k-1}| < K,\\
+&\qquad d(v_k,u)\geq\delta\quad\forall u\in R_{k-1}\bigr\},\\
+R &= R_{|\mathcal D|}.
+\end{aligned}
 \tag{1}
 $$
 
-where $u(v)$ is refreshed at birth, direct development, or selection as a crossover reference. This rule preserves recently used individuals without a fixed quality quota. Exact duplicates do not enter $\mathcal D$ and are excluded from parent selection and the reference pool.
+Here $d$ is a multiset Jaccard distance over abstract syntax tree (AST) features, and $\delta$ is the coverage distance threshold. Algorithms with better fitness are selected first; later candidates at distance less than $\delta$ from a selected representative are excluded. If a feasible algorithm exists, the best one enters $R$, with ties resolved by node ID. Appendix A gives the feature construction and default parameters.
 
-**Fork preservation and region partitioning.** Preserve the virtual root and pairwise LCAs of active individuals:
+Let $\operatorname{LCA}_T(R)$ denote the set of pairwise lowest common ancestors (LCAs) of representatives. The additional branching nodes $F$ and the retained skeleton $\mathcal H$ are
 
 $$
-\mathcal H=\{r\}\cup\mathcal A\cup\operatorname{LCA}(\mathcal A).
+\begin{aligned}
+F &= \operatorname{LCA}_T(R)\setminus(R\cup\{v_0\}),\\
+\mathcal H &= \{v_0\}\cup R\cup F.
+\end{aligned}
 \tag{2}
 $$
 
-For each non-root skeleton node, follow its original parents to the nearest skeleton ancestor. Any intervening nodes form a path region together with their side branches outside $\mathcal H$. Other nodes outside $\mathcal H$ are grouped by their nearest skeleton ancestor into side-branch regions. Let $\mathcal C$ be this disjoint collection of regions. Skeleton endpoints provide reflection context but are not counted in a region's size.
+The skeleton $\mathcal H$ determines how to simplify the rest of the tree. Two skeleton nodes are adjacent along a path when no other skeleton node lies strictly between them. A nonempty intervening chain and its off-chain branches form a path region. The remaining non-skeleton branches are grouped at their nearest skeleton ancestor into subtree regions. Retaining the common ancestors makes these regions disjoint, so each non-skeleton node belongs to exactly one region.
 
-**Batched simplification.** Simplify only whole regions reaching the size threshold:
+To let each reflection examine the evolution of multiple algorithms, EvoTrace simplifies only regions containing at least $m$ non-skeleton nodes. Let $\mathcal C$ be the region partition, $\mathcal U$ the nodes selected for removal, and $\mathcal K$ the retained nodes:
 
 $$
-\mathcal R=\bigcup_{C\in\mathcal C:\,|C|\geq m}C,
-\qquad
-\mathcal K=(\mathcal N\cup\{r\})\setminus\mathcal R,
-\qquad m=4.
+\begin{aligned}
+\mathcal U &= \bigcup_{C\in\mathcal C:\,|C|\geq m} C,\\
+\mathcal K &= (\mathcal N\cup\{v_0\})\setminus\mathcal U.
+\end{aligned}
 \tag{3}
 $$
 
-Smaller regions remain unchanged and eligible feasible individuals can become active again through use. For each selected path region, reconnect its retained endpoints and write the reflected experience to the new edge's $V$. For each selected side-branch region, write the reflected experience to its skeleton ancestor's $S$. Prior notes and comparison catalogs participate in this update.
+Nodes in a path region are removed, and its retained endpoints are connected by a new edge. Nodes in a subtree region are pruned, while their skeleton ancestor remains. The associated experience is written to the new edge or retained node as described below. Smaller regions remain in the tree; they lie outside $R$ and do not participate in parent sampling.
 
-All selected regions are removed together. A reconnected edge is marked as contracted, with `operator` and `reference_id` cleared because it now represents multiple steps. Surviving individuals retain their original direct effort, subtree effort, and activity clocks. The fixed skeleton keeps regions separate: applying maintenance again without further search produces no additional simplification (Appendix B).
+This update preserves the rooted tree and leaves the selected representatives unchanged, $R(T')=R(T)$. Repeating the update without inserting a new individual produces no further simplification. Simplification preserves ancestry among retained nodes while replacing removed path segments with single edges. Appendix B provides the proofs.
 
-### 3.4. Region Reflection and Provenance
+### 2.3. Reflection as Experience Accumulation
 
-EvoTrace issues one structured reflection call per path-contraction region and one per grouped side-branch region, reading exclusively from the pre-simplification snapshot; updates with no removed nodes invoke zero reflection calls.
+The two simplification operations correspond to two evolutionary processes. A path region contains the evolution from one retained algorithm to another, together with branches from intermediate algorithms. A subtree region contains discarded branches extending from a retained ancestor. EvoTrace reflects on each region before removing its algorithm nodes.
 
-**Evidence assembly.** A path reflection prompt presents the retained start and endpoint code (when $a(v)\neq r$), their net code diff and net score change, intermediate implementations and outcomes along the chain, any same-update side attempts attached to those intermediates, and inherited $S$ or $V$ notes carried by removed elements. A side-branch reflection prompt presents the retained receiver's code (when $u\neq r$), each removed trial's code diff relative to its actual parent, measured scores or compact runtime error diagnostics, and the receiver's existing $S_u$. To ground local outcomes, both prompts include a compact `[Related Results]` reference naming the best other evaluated sibling from each shared starting node, together with a program-computed `[Comparison Catalog]` listing every original `parent_id->child_id` transition, operator, measured score change (`improved`, `tied`, `regressed`, or `failed`), and error summary.
+For a path $u\leadsto v$, the reflector receives the endpoint code, intervening algorithm changes and evaluation results, branches from intermediate nodes, and experience already stored in the region. Edge experience $E_{u\to v}$ summarizes the development along this path and its branches. For a subtree region attached to retained node $u$, the reflector receives the code of $u$, code differences from each node's parent in the pre-update tree, evaluation results, and existing experience. Node experience $E_u$ summarizes the designs and outcomes in these branches. Reflection also receives design descriptions and scores of selected feasible nodes sharing the relevant parents. When $u=v_0$, no starting implementation or score is supplied; subtree experience is stored at the virtual root.
 
-**Research-note condensation and provenance binding.** Each reflection call returns a strict JSON object `{"experience": "..."}` containing a self-contained paragraph of roughly 120 words that records the computational ideas tested, informative outcomes, and relevant carried-over experience without referencing transient trial numbers. Interpretations remain tentative and optional, and side-branch prompts explicitly note that population removal reflects capacity management rather than disproof of an algorithmic idea. Alongside the generated text, EvoTrace automatically binds the region's complete `Comparison Catalog` metadata (`selection_observations` or `variation_observations`) to the target node or edge. When a carrier node or edge is simplified in a subsequent update, its note is prefixed with its supporting `comparison_id` keys so original comparison endpoints remain exact across multi-step recursive handoffs. If a reflection request or JSON parse fails, a deterministic 960-character summary rendered from the comparison catalog and prior notes preserves the structural update without loss of provenance.
+Experience accumulates through successive reflections. If edge $u\to v$ later becomes part of a longer contracted path, its experience is read together with newly added algorithms' changes and evaluation results. If additional branches extending from $u$ are pruned, their results are integrated with the existing node experience $E_u$. Algorithms change as the population evolves, while experience is carried forward through these summaries. The reflection prompts ask for faithful accounts of computational ideas and observed outcomes, with any explanation of their causes kept tentative. Structured comparison records retain the underlying evaluation results separately from the generated text; Appendix C gives the prompts.
 
-### 3.5. Parent Allocation and Task-Aligned Generation
+![Experience accumulation across successive updates](figures/evotrace/13-v3-experience-accumulation.png)
 
-**Global rank-decay and lineage-effort sampling.** All retained distinct feasible individuals in $\mathcal D$, including internal fork nodes, compete in one global distribution. Order $\mathcal D$ by fitness and assign each tied block its midpoint zero-based rank $\bar r(v)$. With $M=|\mathcal D|$, normalized rank quality is $q(v)=1-\bar r(v)/(M-1)$ for $M>1$, and $q(v)=0.5$ for $M=1$.
+**Figure 2. Existing experience enters subsequent reflection.** (a) When a later path contraction removes $D$ and the intervening algorithms, the existing edge experience $E_{AD}$ is integrated with the new development into $E_{AG}$. (b) Pruning additional branches from $A$ integrates their designs and outcomes with the existing node experience $E_A$. Each illustrated region contains four nodes selected for removal; retained endpoints remain outside the region.
 
-Let $b(v)$ be the best feasible node on the retained root-to-$v$ path, including $v$ itself and breaking fitness ties by earliest ID. Let $s(b(v))$ denote that node's historical subtree evaluation count. Parent weights and selection probabilities are
+### 2.4. Searching with the Maintained Population
+
+The maintained population contains representative algorithms for offspring generation, together with their evolutionary trajectories and design experience. Budget allocation determines which representatives generate offspring. Each operator draws its context from the relevant parts of the tree, subject to the input limit described in Appendix A.
+
+Only representatives in $R$ are sampled as primary parents. Let $n_r$ count program evaluations spent generating offspring with $r$ as the primary parent, including execution failures and re-evaluations after repair. With average fitness rank $\bar\rho_R(r)$ for ties and rank difference $\Delta\bar\rho_R(r)=\bar\rho_R(r)-\min_{u\in R}\bar\rho_R(u)$, define
 
 $$
-w(v)=\frac{2^{-\bar r(v)/H}}{1+s(b(v))},
-\qquad
-P(v)=\frac{w(v)}{\sum_{u\in\mathcal D}w(u)},
-\qquad v\in\mathcal D,
+\begin{aligned}
+w(r) &= \frac{2^{-\Delta\bar\rho_R(r)/H}}{1+n_r},\\
+P(r) &= \frac{w(r)}{\sum_{u\in R}w(u)}.
+\end{aligned}
 \tag{4}
 $$
 
-Here $H=10$ is the rank half-life: trailing by $H$ rank positions halves the quality weight. Candidates sharing the same path-best ancestor share its effort denominator. A child that establishes a new path-best fitness becomes its own reference and initially has zero subtree effort. Direct development counts remain recorded separately. This rule is implemented by `lineage_peaks` and `parent_probabilities`.
+The half-life $H$ controls how quickly sampling weight decreases with fitness rank. The denominator reduces the weight of algorithms whose offspring generation has consumed more evaluations. Newly inserted nodes start at $n_r=0$, and simplification preserves the counts of retained nodes. Evaluations attributed to ancestors do not contribute to $n_r$, while algorithm changes and experience along the ancestral path remain available for generation context. The defaults and crossover-reference rule appear in Appendix A.
 
-**Operator and structural-distance reference selection.** Given primary parent $v$, EvoTrace samples `Refine`, `Explore`, or `Crossover` with probabilities $0.45$, $0.30$, and $0.25$. When `Crossover` is chosen, EvoTrace forms the candidate reference pool by excluding $v$ and any feasible node with identical normalized source (`identity(code)`), computing rank quality $q(u)$ within the remaining distinct-source feasible candidates, and retaining those with $q(u)\geq 0.30$ (`reference_quality_floor`). Preferring ordered pairs `(v, u)` not yet recorded in `used_crossover_pairs` (and allowing reuse only after all eligible pairs for $v$ have been tried), EvoTrace selects the reference $u$ that maximizes AST multiset Jaccard distance (`code_distance`, built from docstring-stripped AST parent-child type pairs and traversal bigrams, breaking ties by better fitness then earlier ID). If no eligible reference exists, the step executes `Refine`.
+**Refinement.** The context includes the current algorithm's code, its evolutionary path from the root, and branches attached to it in the maintained tree. Uncontracted edges provide code differences, contracted edges provide edge experience, and nodes along the displayed path provide node experience. This context lets the generator consider the current algorithm's evolution when proposing an improvement.
 
-**Task-aligned multi-scale tree views.** Rather than truncating context at arbitrary operator boundaries, the three operators read complementary structural slices of $T$ matched to their design scope:
+**Crossover.** The context includes the primary and reference algorithms' code, their LCA's design description and score, the two subsequent paths, and associated experience. If the LCA is the virtual root, the paths instead begin at their initial lineages, with root experience supplied when available. The prompt asks the generator to combine useful aspects of both designs; if no useful combination emerges, it permits improving the primary algorithm through the comparison. The offspring connects to its primary parent and records the reference algorithm.
 
-| Operator | Structural view of $T$ | Design role |
-| --- | --- | --- |
-| Refine | Current code and score; full retained root-to-parent `[Evolution Path]` with uncontracted diffs, contracted stage summaries $V$, and path-node $S$; root $S_r$; `[Attempts from Current Algorithm]` (parent $S_v$ plus retained valid and failed children) | Improve the current computation using its formation trajectory and local trial outcomes |
-| Crossover | Current and reference implementations and scores; true `[Common Ancestor]` (or root `[Origin Context]`); both diverging branches since the LCA (`[Current Branch]` and `[Reference Branch]`) with $S$ and $V$; outgoing attempts from the primary parent | Combine complementary mechanisms informed by how the two lineages diverged |
-| Explore | Fitness-ordered `[Population Individuals and Experience]` across retained feasible individuals (designs, scores, parent origins, and attached $S/V$, plus root $S_r$), followed by `[One Existing Implementation]` | Formulate an algorithm with a substantially different core computation |
+**Exploration.** The context presents design descriptions, scores, and associated experience of feasible algorithms across the maintained population, including nodes outside $R$. The selected primary parent's code provides an implementation reference. The prompt asks for a different core computation, using the population's designs and outcomes to inform the proposal.
 
-Uncontracted path steps display score transitions and compact normalized-code diffs alongside baseline code where needed; contracted edges display endpoint score changes, resulting designs, and stage experience $V$.
-
-When a rendered prompt exceeds `max_input_tokens` ($30{,}000$), EvoTrace iteratively halves the optional display window (`max_path_steps`, `max_unconsolidated_attempts`, `max_unconsolidated_failures`, `max_population_members`, or `max_experiences`) whose reduction yields the smallest measured prompt size while keeping at least one path or population entry, current and reference code, and required diff baselines. Context fitting adjusts only the transient prompt view without altering $T$ or its stored experience. Each generation call outputs strict JSON containing `"analysis"`, `"code"`, and `"design"`.
-
-### 3.6. Search Loop
-
-Algorithm 1 summarizes the complete EvoTrace procedure. Initialization and evolutionary steps share the same evaluation budget $B$ and single-repair allowance. Format failures trigger at most one format-repair request without consuming evaluation budget; runtime errors, invalid outputs, or timeouts trigger at most one program-repair request whose re-evaluation consumes budget. Only attempts that execute at least one program evaluation attach a node (the final evaluated version) to $T$ and advance $t$.
+Each generated algorithm is evaluated and inserted into the tree. Selection identifies the next representatives, and regions that meet the simplification threshold are reflected on and then contracted or pruned. Algorithm 1 summarizes this process; repair handling, context limits, and numerical details are given in Appendix A.
 
 ```text
 Algorithm 1: EvoTrace
-Input: task interface, evaluator, LLM, evaluation budget B
-Initialize virtual root r, empty tree population T, and attempt archive A
-while evaluations_used < B and consecutive_unevaluated < 10:
-    if feasible initial programs in A < 5:
-        build initialization prompt from task interface and initial archive
-    else:
-        sample parent v ~ P(v) via Eq. (4) and operator in {Refine, Explore, Crossover}
-        if operator == Crossover: select high-quality max-AST-distance reference u
-        build and token-fit operator-aligned context view from T
-    generate candidate (with at most one format or runtime repair) and evaluate
-    log all LLM calls and evaluation outcomes to A
-    if at least one program evaluation was executed:
-        attach final evaluated node to primary parent in T; update d, subtree, u, t
-        if initialization is complete:
-            compute distinct D, active A with champion, and LCA skeleton H
-            partition nodes outside H into path and side-branch regions
-            select whole regions with at least m retired nodes
-            reflect on selected regions; bind comparison catalogs
-            remove selected regions, reconnect endpoints, and attach updated V and S
-    commit attempt record and updated tree snapshot
-return archived feasible program in A with best training fitness
+Input: task interface, evaluator, LLM, evaluation budget B, initial size I
+Initialize tree T with a virtual root
+while evaluation budget remains and the stopping rule is not met:
+    If fewer than I feasible initial programs have been collected, choose Init at the root
+    Otherwise, select a representative parent and generation operator
+    Construct the corresponding generation context
+    Generate a candidate; evaluate it with at most one repair
+    If no program was evaluated, continue
+    Attach the final evaluated program to its primary parent
+    If fewer than I feasible initial programs have been collected, continue
+    Select representatives R and their branching skeleton H
+    Partition non-skeleton nodes into path and subtree regions
+    Reflect on each eligible region using the pre-update tree
+    Contract paths and prune subtrees; store experience on new edges and retained nodes
+return the best feasible algorithm evaluated during search
 ```
 
-## 4. Preliminary Evaluation
+## 3. Analysis of Population Updates and Experience Accumulation
 
-The evidence in this section comes from an earlier V3 configuration using `quality_slots = 32`, `recent_evaluations = 40`, and direct-effort parent sampling, before the working-set and minimum-region-size rule in Section 3.3. These frozen observations describe that configuration and motivate batched reflection; they do not measure the current maintenance rule.
+### 3.1. Search Tasks and Scope of Analysis
 
-We evaluate the source-frozen EvoTrace implementation across four standard combinatorial optimization benchmarks and report a frozen multi-seed search snapshot from the 15 November 2026 deployment (captured at 15:36 Beijing time; Appendix D). The deployment comprises 12 independent runs (four tasks across search seeds 0, 1, and 2), each configured with a target budget of $B=1{,}000$ evaluations. At snapshot capture, individual runs had completed between 180 and 256 actual program evaluations (168 to 247 committed generation attempts). We report training fitness across all 12 runs at their largest common horizon of 180 evaluations and audit population maintenance and reflection across all 2,641 committed evaluations.
+We examine experience accumulation during population updates on four combinatorial optimization tasks: next-node selection for the traveling salesman problem (TSP), an edge heuristic for ant colony optimization on capacitated vehicle routing (CVRP), processing-time perturbation and job selection for permutation flow-shop scheduling (FSSP), and an edge heuristic for ant colony optimization on orienteering (OP). Each task uses three search seeds and 16 fixed training instances per evaluation. Generation and reflection use `Qwen3.8-27B`; Appendix D gives the solver and execution settings.
 
-### 4.1. Benchmark Tasks and Execution Protocol
+The analysis uses records from 12 searches at the time their snapshots were saved, containing 2,641 program evaluations in total and 180–256 per run. These searches use an earlier retention rule: among deduplicated feasible individuals, retain up to 32 by fitness and those created or used as primary parents within the preceding 40 evaluations, then retain their branching ancestors. A single-node region can trigger simplification. The records characterize path contraction, subtree pruning, and successive reflection under that configuration. They do not establish the performance of the representative-cover and batched simplification rules in Section 2.2.
 
-Each benchmark evolves a key decision function embedded in a fixed optimization framework:
+### 3.2. Algorithm Elimination and Experience Formation
 
-- **Traveling Salesman Problem (`tsp_construct`, TSP):** evolves sequential next-node selection for constructive tour generation on 50-node Euclidean instances, minimizing mean tour length.
-- **Capacitated Vehicle Routing Problem (`cvrp_aco`, CVRP):** evolves heuristic edge desirability priors for Ant Colony Optimization (30 ants, 100 iterations), minimizing mean route length.
-- **Flow Shop Scheduling Problem (`fssp_gls`, FSSP):** evolves penalty-matrix and job-perturbation scoring within Guided Local Search, minimizing mean makespan.
-- **Orienteering Problem (`op_aco`, OP):** evolves edge heuristic priors for Ant Colony Optimization (20 ants, 50 iterations) under a tour-length budget, minimizing negative mean prize collected.
+Across 2,481 algorithm nodes inserted into the trees, 1,195 simplifying updates removed 1,734 nodes ($69.9\%$). The 12 trees retained 747 algorithm nodes when the snapshots were saved. Every removed node belonged to exactly one simplification region, and removal counts matched the resulting node counts.
 
-Each training evaluation executes on 16 fixed instances under a pooled 160 instance-second time budget across up to 8 parallel worker processes (2 GiB memory limit per worker, deterministic per-instance seeds offset from `730241`). Failed executions and repair re-evaluations each count toward $B$. A disjoint set of 50 instances (500 pooled instance-seconds) is reserved for single-shot held-out testing after the 1,000-evaluation search concludes. All LLM calls route through a shared `Qwen3.8-27B` pool with native thinking disabled: candidate generation uses temperature $1.0$ and up to $16{,}384$ output tokens, while region reflection uses temperature $0.3$ and up to $1{,}536$ output tokens (full parameters in Appendices A and D).
+These nodes belonged to 509 path regions and 887 subtree regions. The former contain evolution between retained algorithms; the latter contain evolution along branches extending from retained ancestors. Reflection on these 1,396 regions produced edge or node experience, respectively. Both types of experience therefore arise in successive population updates, with their storage locations determined by the corresponding evolutionary relationships.
 
-### 4.2. Search Trajectories at the 180-Evaluation Horizon
+### 3.3. Reflection Frequency and Cost
 
-Table 1 summarizes the best training fitness reached by each seed at 180 evaluations alongside the three-seed sample mean and sample standard deviation (SD). Figure 1 pairs the common-horizon best-fitness trajectories (top row) with the exact number of retained individuals in $T$ after every committed insertion and simplification step up to each run's observed endpoint (bottom row).
+The number of nodes removed per reflected region varies. Of the 1,396 regions, 1,127 ($80.7\%$) contained only one newly removed node but could also carry experience from earlier reflections. A reflection can therefore integrate existing experience while removing a single node. The simplification threshold in Eq. (3) specifies the minimum number of nodes to be removed in each reflected region.
 
-**Table 1. Best training fitness at 180 evaluations (lower is better).**
+All 1,396 reflection calls returned experience text in the required format without triggering a fallback summary. They consumed 4,897,554 input tokens and 256,594 output tokens, averaging 3,508 input and 184 output tokens per region. These token costs exclude algorithm-generation calls. Appendix D reports the full region-size distribution and the accounting conditions.
+
+### 3.4. Population Size During Search
+
+![Best training fitness and number of retained algorithms](../paper/figures/early-search.png)
+
+**Figure 3. Best training fitness and population size during search.** The upper panels show best training fitness over the first 180 evaluations. The lower panels show the number of retained algorithms after each update. Each curve corresponds to one random seed. These runs use the earlier retention rule described in Section 3.1.
+
+All 12 runs improve their best training objective between evaluations 5 and 180. During the recorded searches, new algorithms continue to enter the population while simplification removes algorithm nodes. When the snapshots were saved, the trees contained 54–70 algorithms each. Table 1 reports the training objectives at evaluation 180 for each run.
+
+**Table 1. Best training fitness at evaluation 180 for each run (lower is better).** Mean and sample standard deviation (SD) are computed across the three search seeds.
 
 | Task | Seeds 0 / 1 / 2 | Mean | SD |
 | --- | ---: | ---: | ---: |
@@ -180,70 +171,83 @@ Table 1 summarizes the best training fitness reached by each seed at 180 evaluat
 | FSSP | 3928.81 / 3928.25 / 3927.69 | 3928.25 | 0.56 |
 | OP | -14.3919 / -14.7719 / -14.6069 | -14.5902 | 0.1905 |
 
-![Early search and retained population](../paper/figures/early-search.png)
+## 4. Related Work
 
-**Figure 1. Search progress and population size across 12 frozen runs.** Upper panels plot best training fitness over the common 180-evaluation horizon (solid curves show three-seed means; thin curves show seeds 0, 1, and 2). Lower panels plot the number of retained individuals $|\mathcal K\setminus\{r\}|$ across the first 180 evaluations, verified against committed tree snapshots. Survival selection and LCA closure stabilize active population size once search progresses past the 40-evaluation recency window.
+**Evolutionary algorithm design.** Genetic programming searches over executable structures [@koza]. Hyper-heuristics search over heuristics [@hh], while algorithm configuration selects parameter settings for a given algorithm [@irace]. LLM-based methods extend program variation through generated mutations and combinations [@elm; @survey_aad; @lmcrossover]. FunSearch searches over programs within an island population [@funsearch], and EoH evolves natural-language design descriptions together with code [@eoh]. LLaMEA and AlphaEvolve further develop evaluation-guided evolutionary coding [@llamea; @alphaevolve]. HSEvo uses harmony search to balance diversity and convergence [@hsevo]; PartEvo maintains niches [@partevo]; ShinkaEvolve combines fitness and sampling frequency in parent selection [@shinka]. EvoTrace incorporates experience accumulation into population updates, allowing the evolution of eliminated algorithms to inform subsequent design.
 
-Across all four tasks and all 12 seeds, training fitness improves substantially beyond the five-program initialization phase, with rapid gains during the first 60 evaluations followed by continued refinement and recombination between evaluations 60 and 180 (for example, CVRP seed 2 drops to 8.2413 and OP seed 1 reaches -14.7719). Simultaneously, the lower panels of Figure 1 show the structural effect of survival selection: population size grows roughly linearly during the initial 40-evaluation recency window and then stabilizes tightly, ending between 54 and 70 retained individuals across all 12 runs even at 256 evaluations (`quality_slots = 32` plus active recent trials and connecting LCA forks).
+**Tree and graph representations.** MCTS-AHD uses Monte Carlo tree search [@uct] and path context for heuristic generation [@mctsahd], while Clade-AHD uses descendant evaluations for clade selection [@cladeahd]. A2DEPT organizes search with evolutionary program trees [@a2dept], and Code Evolution Graphs support analysis of evolving code [@codegraphs]. DGA2D uses graphs for a different purpose: nodes represent functional operators, and walks compose algorithmic pipelines [@dga2d]. PhyloEvolve maintains phylogenetic trajectories and an elite pool for cross-lineage reuse [@phyloevolve]. PathWise uses an entailment graph as memory for planning and reflection [@pathwise]. In EvoTrace, derivation relationships determine which algorithms reflection examines and where the resulting experience is stored.
 
-### 4.3. Structural Simplification and Recursive Reflection Dynamics
-
-Auditing all 2,481 committed attempts (2,641 evaluations) across the 12 prefixes documents node removal, region assignment, and reflection under the frozen retention rule:
-
-- **Recorded removal and retained state:** Of the 2,481 nodes attached to $T$, survival updates have removed 1,734 implementations ($69.9\%$) and retained 747 explicit individuals across the 12 active trees, triggered across 1,195 simplifying updates. Every removed node in every update maps to a single region, with zero orphaned nodes or accounting drift.
-- **Balanced path contraction and branch pruning:** Once search advances well past $W=40$, both simplification modes operate heavily: the 1,195 updates partition the 1,734 removed nodes into **509 path-contraction regions** (updating edge $V$) and **887 side-branch regions** (updating node or root $S$), totaling 1,396 regions.
-- **Incremental recursive condensation:** All 1,396 regions completed structured LLM reflection with **zero fallback summaries** (`0` parse or schema errors). Measured by newly removed nodes per region, 1,127 regions ($80.7\%$) condense 1 newly removed implementation, 204 condense 2, 62 condense 3, 2 condense 4, and 1 condenses 5, integrating each incremental removal with any carried-over experience and provenance catalogs already present on its carrier.
-- **Separate reflection accounting:** Across all 2,641 program evaluations, the 1,396 reflection calls consumed 4,897,554 input tokens and 256,594 output tokens in total (roughly 3,508 input tokens and 184 output tokens per region), logged independently of the solver evaluation budget.
+**Reflection and experience.** Self-Refine uses iterative self-feedback [@selfrefine], Reflexion carries verbal reflections across attempts [@reflexion], and ExpeL extracts reusable insights from task experience [@expel]. ReEvo incorporates comparative reflection into evolutionary search [@reevo], RefineEvo combines planning with positive and negative experience pools [@refineevo], and MeEvo interleaves evolution with shared-history reflection [@meevo]. BEAM combines bi-level algorithm optimization with adaptive memory [@beam]. DeltaEvolve stores semantic modifications in a multi-level database [@deltaevolve]. MEMOIR maintains branch-local memory and transfers condensed experience into global memory when a branch terminates [@memorytree]. EvoTrace couples reflection with population simplification, producing design experience during path contraction and subtree pruning and storing it on new edges and retained nodes. Subsequent generation reads this experience with the relevant algorithms and evolutionary trajectories.
 
 ## 5. Discussion
 
-**Competition, structure, and experience.** EvoTrace uses the same tree to select individuals, organize related attempts, and present experience to generation. Parent sampling combines individual rank quality with lineage effort. The working set and LCA skeleton determine which parts of the tree remain explicit, while region reflection condenses the related attempts selected for simplification. Path-, branch-, and population-scale views then use this maintained state.
+The tree associates design experience with algorithms and their evolutionary relationships. Edge experience refers to the development between its retained endpoints and along the removed branches; node experience refers to branches pruned from its retained ancestor. These associations let refinement and crossover access experience along the relevant evolutionary paths. Selection and elimination determine the regions examined by reflection, while the generation operator and input limit determine which algorithms, trajectories, and experience enter the context.
 
-**Why batch reflection.** Under the earlier rule in Section 4, 80.7% of regions contained only one newly removed node. The current threshold groups at least $m$ retired nodes in each reflected region. This changes reflection frequency and the material available for a note; whether it improves the note or subsequent generation requires direct evaluation.
-
-**Evaluation scope.** The frozen runs document early search and experience handoffs under the earlier retention rule. Current working-set simplification has been checked through structural replay and invariant tests. Full-search comparisons and fixed-state experience studies in Appendix E are needed to assess the current method's search performance and how its reflected experience affects generation.
+Simplification removes algorithm nodes and their code from the active population; the implementation retains them in the search archive. A non-representative cannot be selected as a primary parent, including while its region awaits simplification. Reflection carries forward experience from removed regions as a lossy natural-language summary, which may contain uncertain explanations of performance changes. Its effect on subsequent generation requires controlled comparison; the present analysis describes how experience is formed and the associated reflection cost.
 
 ## 6. Conclusion
 
-EvoTrace combines population competition and derivation structure in an experience-bearing tree-structured population. Reflective tree simplification compresses related path and side-branch attempts into node and edge experience as the tree changes. Global parent sampling and operator-specific tree views use that same state for continued algorithm design, connecting population growth, experience condensation, and subsequent generation.
+EvoTrace makes algorithm selection and elimination a process of accumulating and reusing algorithm-design experience. A tree-structured population records evolutionary relationships, and reflection during path contraction and subtree pruning preserves experience from the corresponding processes on edges and nodes. The resulting population supports budget allocation and supplies evolutionary trajectories and design experience for subsequent generation. Algorithm evolution and experience accumulation thus proceed together within the population.
 
-## Appendix A. Default Hyperparameters and Accounting Details
+## AI Use Statement {.unnumbered}
+
+Generative AI tools assisted with literature synthesis, manuscript drafting and revision, checks against the implementation, and mechanism-figure preparation. The LLMs used within EvoTrace are described in Sections 2 and 3 and Appendix D. The authors remain responsible for the manuscript and its claims.
+
+## Impact Statement {.unnumbered}
+
+This work studies automated algorithm design. Its potential benefits include reducing the manual effort required to develop computational methods. The broader consequences of the generated algorithms depend on the tasks and applications in which they are used.
+
+## References
+
+References are rendered from `paper-references.bib` in the accompanying PDF.
+
+## Appendix A. Implementation Details
+
+**Table 2. Default settings of the current EvoTrace method.** The frozen traces in Section 3 use the earlier retention rule described in Appendix D.
 
 | Component | Default setting |
 | --- | --- |
-| Initialization and budget | 5 feasible initial programs; $B=1{,}000$ total actual program evaluations |
-| Duplicate collapse | Collapse feasible nodes sharing `(identity(code), fitness)` to earliest node ID |
-| Active working set (`active_evaluations`) | $W=40$ evaluations since birth, direct development, or selection as crossover reference; always retain champion |
-| Batch threshold (`region_size`) | Reflect and simplify whole regions containing at least $m=4$ retired nodes |
-| Structural connectivity | Pairwise LCA closure of $\mathcal A$ plus virtual root $r$ |
-| Parent sampling (`rank_half_life`) | Half-life $H=10.0$ average-rank positions; lineage-effort discount $1/(1+s(b(v)))$ |
+| Initialization and budget | Target of 5 feasible initial programs within $B=1{,}000$ total program evaluations |
+| Representative-candidate deduplication | For feasible nodes sharing `(identity(code), f(v))`, consider only the earliest node ID during representative selection |
+| Representative cover (`K`, `delta`) | `max_representatives` $K=24$; `cover_distance` $\delta=0.15$ in $(f,\operatorname{id})$ order |
+| Skeleton connectivity | $F=\operatorname{LCA}_T(R)\setminus(R\cup\{v_0\})$; $\mathcal H=R\cup F\cup\{v_0\}$ |
+| Batch threshold (`region_size`) | Simplify and reflect complete path or subtree regions with $|C|\geq m=4$ |
+| Parent sampling (`rank_half_life`) | Over $R$ only: half-life $H=10.0$ rank steps; offspring-evaluation factor $1/(1+n_r)$ |
 | Operator weights | `Refine` $0.45$; `Explore` $0.30$; `Crossover` $0.25$ |
-| Crossover reference rule | Distinct normalized source; rank quality $q(u)\geq 0.30$; unused pair first, max AST `code_distance` |
+| Crossover reference rule | Within $R\setminus\{p\}$, distinct `identity(code)`, $q(u)\geq 0.30$, unused pair first, max $d(p,u)$ |
 | Evolution prompt window | `max_input_tokens` $=30{,}000$; iterative halving of optional display windows |
 | Generation LLM settings | Temperature $1.0$; `top_p` $0.8$; `top_k` $20$; `presence_penalty` $1.5$; max output $16{,}384$ tokens |
-| Reflection LLM settings | Temperature $0.3$; max output $1{,}536$ tokens; target ~120-word JSON `"experience"` note |
+| Reflection LLM settings | Temperature $0.3$; max output $1{,}536$ tokens; ~120 words of experience in the JSON `"experience"` field |
 
-**Numerical and edge-case rules.** In `quality_scores`, tied fitness blocks spanning zero-based indices `start` through `end - 1` among $M$ feasible candidates receive normalized quality $q(v)=1-(\text{start}+\text{end}-1)/(2(M-1))$ when $M>1$, and $0.5$ when $M=1$. `parent_probabilities` shifts average ranks by the best tied rank before exponentiation in log space and floors normalized probabilities by `math.ulp(0.0)` so extreme rank gaps never cause numerical zero-division or silent exclusion. Direct effort $d(v)$ counts every evaluated `Refine`, `Explore`, or `Crossover` attempt with $v$ as primary parent (including failed executions and repair re-evaluations), and never changes when ancestors contract or side branches prune.
+**Code representation.** After removing docstrings, EvoTrace counts AST parent-child tag pairs and bigrams from a depth-first traversal. Tags encode node kinds, operator types, and called function or attribute names. Other identifier names and constant values are omitted from these features. The distance $d(u,v)$ is their multiset Jaccard distance. Duplicate detection instead compares parsed source while ignoring layout, comments, and docstrings, and also requires equal measured fitness. Zero AST-feature distance alone does not imply duplication.
 
-**Token counting and fallback rules.** When served through the scheduled endpoint pool, `count_tokens` queries the serving chat tokenizer; standalone runs without a tokenizer fall back to UTF-8 byte length and record `"utf8_bytes"` in `input_window`. If a reflection call fails or violates schema, EvoTrace renders up to `MAX_EXPERIENCE_CHARS = 960` characters of measured comparisons from `comparison_catalog` plus clause-truncated prior notes while retaining the complete structured `observations` list. Search halts early only if `max_unevaluated = 10` consecutive attempts fail to produce any program evaluation.
+**Evaluation and repair.** Feasible initial programs are collected within the total budget. Each generation attempt permits at most one repair in total, either for output format or for a program that fails evaluation. Runtime repair is attempted only if evaluation budget remains. A repaired program consumes another evaluation when evaluated; format repair itself does not. Only the final evaluated program becomes a tree node. All evaluator calls count toward $B$ and, outside initialization, the primary parent's $n_r$.
+
+**Reference selection and updates.** Crossover references exclude the primary parent and identical normalized source. The remaining representatives receive fitness-rank scores in $[0,1]$, using average ranks for ties; a single candidate receives $0.5$. Candidates below $0.30$ are excluded. Among eligible references, unused ordered pairs are preferred, followed by larger AST distance, better fitness, and smaller node ID. If none is eligible, the operator becomes refinement. All reflections in one update read the same pre-update tree. Each contracted edge is marked as contracted and has its operator and reference fields cleared. Retained nodes keep their offspring evaluation counts.
+
+**Numerical details.** In `quality_scores`, a tied fitness block spanning zero-based indices `start` through `end - 1` among $M$ candidates receives $q(v)=1-(\text{start}+\text{end}-1)/(2(M-1))$ for $M>1$, and $0.5$ for $M=1$. For parent sampling, $M_R=|R|$, $q_R$ denotes these scores over $R$, and $q_{\max}=\max_{r\in R}q_R(r)$. Then $(q_{\max}-q_R(r))(M_R-1)=\Delta\bar\rho_R(r)$ for $M_R\geq1$. The implementation subtracts the largest log-weight before exponentiation, ensuring a positive normalization denominator. It floors normalized weights at `math.ulp(0.0)`, the smallest positive representable float, to prevent underflow from making a representative ineligible. Duplicate detection applies only to the retained tree; an eliminated implementation regenerated later enters as a new node.
+
+**Generation context windows.** Uncontracted edges supply score changes and normalized-code diffs with the required baseline; contracted edges supply endpoint scores, the resulting design, and edge experience. If a prompt exceeds `max_input_tokens` ($30{,}000$), the system tests halving each optional display window (`max_path_steps`, `max_child_attempts`, `max_failed_attempts`, `max_population_members`, and `max_experiences`) and chooses the largest reduction in prompt length. Truncation retains at least one path or population entry where present, the current and reference implementations, and required diff baselines. Thus a prompt may contain only part of a trajectory. If no further reduction fits the limit, prompt construction raises an error. At a fixed tree state, `include_experiences = False` hides node and edge experience without changing parent probabilities. Generation requests JSON fields `"analysis"`, `"code"`, and `"design"`.
+
+**Token counting, fallback, and stopping.** Under the scheduled serving pool, `count_tokens` queries the endpoint chat tokenizer. Without a tokenizer, the implementation uses UTF-8 byte length as a conservative proxy and records `"utf8_bytes"` in `input_window`. If a reflection call fails or violates the output schema, EvoTrace forms a deterministic summary from formatted comparisons and truncated prior experience. The `MAX_EXPERIENCE_CHARS = 960` parameter controls truncation of these components, not the total summary length; the full structured `observations` list is retained. In addition to budget exhaustion, search has a stopping rule for `max_unevaluated = 10` consecutive attempts without any program evaluation.
 
 ## Appendix B. Structural Properties of One Simplification Update
 
-Consider a finite pre-update tree $T_0$ with active set $\mathcal A$, skeleton $\mathcal H$, candidate regions $\mathcal C$, and final retained set $\mathcal K$ as defined in Section 3.3. The virtual root is always retained. The following properties concern the structural update at a fixed evaluation clock.
+Consider a finite rooted tree $T_0=(\mathcal N_0\cup\{v_0\},\mathcal E_0)$ with representative set $R(T_0)$, branching-node set $F(T_0)$, skeleton $\mathcal H(T_0)$, region partition $\mathcal C(T_0)$, removed union $\mathcal U$, and post-update tree $T_1$ on surviving nodes $\mathcal K=(\mathcal N_0\cup\{v_0\})\setminus\mathcal U$. Assume $K,m\geq1$ and $\delta\in[0,1]$. Code, fitness, node IDs, and offspring evaluation counts of surviving nodes are unchanged during simplification.
 
-**Tree preservation.** Every retained non-root node has a unique nearest retained ancestor in $T_0$. Reconnecting to that ancestor strictly decreases original depth, so repeated parent traversal reaches the root without a cycle. Each retained non-root node has one parent; the result is a rooted tree.
+**Rooted-tree preservation.** Because $v_0\in\mathcal H(T_0)\subseteq\mathcal K$, every surviving node $v\in\mathcal K\setminus\{v_0\}$ has a unique nearest surviving ancestor $a(v)\in\mathcal K$ along its $T_0$-ancestry path. Reconnecting unkept parents to $a(v)$ strictly decreases $T_0$-depth at every step, preventing cycles and guaranteeing a unique incoming edge per node in $\mathcal K\setminus\{v_0\}$. Thus $T_1$ is a valid rooted tree.
 
-**Unique region assignment.** Chains between adjacent skeleton nodes have disjoint interiors. Otherwise, two such chains would share a fork outside $\mathcal H$, contradicting LCA closure. Every remaining node outside the skeleton reaches a unique nearest ancestor in a chain interior or in $\mathcal H$. In the first case it joins that path region; in the second it joins the side-branch region at that skeleton node. Thus the regions partition $\mathcal N\setminus\mathcal H$. Selecting whole regions by size preserves disjointness, and every removed node belongs to one selected region.
+**Exact disjoint region partitioning.** Interior chains $C_{\text{chain}}(u,v)$ between adjacent skeleton nodes $u,v\in\mathcal H(T_0)$ are pairwise disjoint: if two chains shared an off-skeleton node, their deepest shared node would be the LCA of two distinct subtrees containing elements of $R(T_0)$, contradicting $\operatorname{LCA}_{T_0}(R(T_0))\subseteq\mathcal H(T_0)$. Every remaining node $w\in\mathcal N_0\setminus\mathcal H(T_0)$ outside all chain interiors has a unique first ancestor in $\mathcal H(T_0)\cup\bigcup C_{\text{chain}}$: if that ancestor lies in $C_{\text{chain}}(u,v)$, $w$ joins the path region for $(u,v)$; otherwise that ancestor lies in $\mathcal H(T_0)$ and $w$ joins its subtree region. Hence $\mathcal C(T_0)$ partitions $\mathcal N_0\setminus\mathcal H(T_0)$, and thresholding by $|C|\geq m$ removes disjoint regions where each removed node belongs to exactly one region.
 
-**Champion retention and effort preservation.** The champion belongs to $\mathcal A\subseteq\mathcal H\subseteq\mathcal K$. Reconnection changes parent pointers and experience carriers, while retained nodes' effort counters and activity clocks are copied unchanged. Removed evaluations remain in the global count and the applicable retained ancestors' historical counters.
+**Champion retention and representative invariance.** When $\mathcal P_0\neq\varnothing$, its best node under the fitness-and-ID ordering enters $R(T_0)\subseteq\mathcal K$. Every representative remains the earliest surviving node for its `(identity(code), f)` key, so it remains a candidate in $\mathcal D(T_1)$. Consider the greedy scan of $\mathcal D(T_1)$ in order. By induction, suppose its accepted nodes so far are exactly the preceding representatives of $T_0$. An original representative is accepted because it encounters the same accepted prefix as before. For any other candidate $w$, let $w_0$ be the earliest node with its key in $T_0$, possibly $w$ itself. Node $w_0$ was rejected in the original scan and occurs no later than $w$. Its rejecting condition was either coverage by an earlier representative or exhaustion of the $K$ slots. Those representatives all survive and still precede $w$; identical normalized code gives $w$ the same AST features as $w_0$. Thus $w$ is rejected as well. Induction gives $R(T_1)=R(T_0)$. Fitness ranks and counts $n_r$ remain unchanged, so Eq. (4) gives the same parent probabilities before and after simplification whenever $R$ is nonempty.
 
-**One-step idempotence.** Without new search activity, all originally active individuals and their LCA skeleton remain retained. If removing an older duplicate representative makes a deferred copy eligible for the working set, the new skeleton can gain nodes but cannot lose an original boundary. Every remaining region therefore lies within a previously deferred region: adding skeleton nodes can split it, while preserved boundaries prevent merging across regions. Each such region still contains fewer than $m$ nodes, so replanning produces no additional removal.
+**Strict single-step idempotence.** Because $R(T_1)=R(T_0)$ and contracting non-skeleton chains preserves pairwise LCAs among nodes of $R(T_0)$, we obtain $F(T_1)=F(T_0)$ and $\mathcal H(T_1)=\mathcal H(T_0)$. Consequently, $\mathcal N_1\setminus\mathcal H(T_1)=(\mathcal N_0\setminus\mathcal H(T_0))\setminus\mathcal U$ decomposes into the exact deferred regions $\{C\in\mathcal C(T_0):|C|<m\}$. Every region in $\mathcal C(T_1)$ therefore satisfies $|C|<m$, and re-running maintenance on $T_1$ without new insertions removes zero nodes and triggers zero reflection calls.
 
 ## Appendix C. Verbatim Reflection Prompt Templates
 
-Both templates in `evotrace_v3/reflection.py` follow a common header supplying `[Task]`, `[Function Interface]`, and `Score direction`, followed by the region evidence (`[Path Evidence]` or `[Branch Experiments]`, including code, diffs, `[Related Results]`, inherited notes tagged with `Supporting comparisons`, and `[Comparison Catalog]`). The `[Task]` and `[Output]` blocks are reproduced verbatim below.
+Both templates in `evotrace_v3/reflection.py` begin with a shared `[Problem]` header specifying the task description, score direction, and `Function interface`, followed by `[Path Evidence]` or `[Explored Branches]` (containing endpoint/baseline code, normalized code diffs, `[Related Results]`, `[Earlier Algorithm-Design Experience]`, and the current region's `[Comparison Catalog]`). Their `[Task]` and `[Output]` blocks are reproduced verbatim below.
 
-**Variation experience prompt (`VARIATION_PROMPT_TEMPLATE`, path contraction).**
+**Edge experience prompt (`EDGE_PROMPT_TEMPLATE`, path contraction).**
 
 > `[Task]`
 > Compress the algorithm-design experience along this transition for a researcher continuing the search.
@@ -252,32 +256,38 @@ Both templates in `evotrace_v3/reflection.py` follow a common header supplying `
 > `[Output]`
 > Return one JSON object with an "experience" string: a concise paragraph, about 120 words, explaining how the computation developed and what is worth remembering from the intervening experiments. Include informative outcomes and earlier experience. The paragraph will accompany the surviving implementation in later design calls; name computations rather than trial numbers. The system supplies endpoint scores.
 
-**Selection experience prompt (`SELECTION_PROMPT_TEMPLATE`, side-branch pruning).**
+**Node experience prompt (`NODE_PROMPT_TEMPLATE`, subtree pruning).**
 
 > `[Task]`
-> Compress the algorithm-design experience from these experiments for a researcher continuing the search.
-> Write a short research note preserving what is worth remembering from these experiments: the computational ideas, informative outcomes, and relevant earlier experience. A faithful account is enough; an explanation or general principle is optional. Keep any interpretation tentative and leave future design decisions open. These branches were removed to manage the population; their ideas are not thereby disproved.
+> Compress the algorithm-design experience from these explored branches for a researcher continuing the search.
+> Write a short research note preserving what is worth remembering from these experiments: the computational ideas, informative outcomes, and relevant earlier experience. A faithful account is enough; an explanation or general principle is optional. Keep any interpretation tentative and leave future design decisions open. These branches were simplified out of the active population; their ideas are not thereby disproved.
 >
 > `[Output]`
 > Return one JSON object with an "experience" string: a concise paragraph, about 120 words, relating the computational ideas tried and their informative outcomes, including earlier experience. It will accompany an algorithm in later design calls, preserving experiences its code alone cannot convey. The paragraph must stand on its own without trial numbers.
 
-## Appendix D. Reproducibility and Deployment Accounting
+## Appendix D. Experimental Settings and Frozen Traces
 
-The earlier quality-quota configuration (`quality_slots = 32`, `recent_evaluations = 40`) in batch `20261115_115206_evotrace_v3_revised_co4` froze 463 repository source files, task evaluators, and configurations prior to launch on 15 November 2026. Every committed line in `native/attempts.jsonl` records the generated program, all initial and repair evaluations, sampled `parent_id`, `parent_probability`, `operator`, `reference_id`, `reference_distance`, token-fitted context metadata, simplification triggers, reflection prompts and responses, and the resulting `TreePopulation` snapshot. Resuming from `attempts.jsonl` replays committed tree snapshots deterministically without re-invoking reflection calls and rejects any mismatched method or parameter configuration.
+### D.1. Tasks and Evaluation
 
-Search runs use seeds 0, 1, and 2. TSP training uses 16 Euclidean 50-node instances (`seed = 2024`). CVRP uses 30 ants and 100 ACO iterations (`aco_seed = 1234`); OP uses 20 ants and 50 ACO iterations (`aco_seed = 1234`); FSSP uses fixed benchmark instances and GLS settings from the frozen task configuration. Training evaluations run with `timeout_scope = "whole_task"`, `time_budget = "pooled_instance_seconds"`, `timeout_seconds = 160.0` (10.0 seconds per instance pooled across 16 instances), `n_workers = 8`, `memory_limit_bytes = 2147483648`, and `evaluation_seed = 730241`. Prompts expose only the task description, score direction, and function template, keeping dataset sizes and solver budgets external to generation instructions.
+Each evaluation uses 16 fixed training instances. Execution has a shared budget of 160 instance-seconds across up to 8 workers, measured as the sum of elapsed instance times, including running instances. On Linux, each worker's data-segment limit is set to its initial usage plus 2 GiB, subject to any tighter existing limit. Instance $i$, indexed from zero, uses evaluation seed $730241+i$. The solver settings are:
 
-Calls to `Qwen3.8-27B` (`enable_thinking = false`) are scheduled across a shared local endpoint pool (routing across FP8 and GGUF serving instances and logging per-request endpoint metadata and token counts). Provider transport errors are retried and accounted separately from candidate execution failures. `paper/evidence/snapshot.json` records per-run file paths, SHA-256 checksums, sanitized configurations, and evaluation series; `paper/build.py` and `paper/validate.py` compile and verify both manuscripts directly against this frozen file without refreshing live runs.
+**Table 3. Evolved functions and solver conditions in the four tasks.**
 
-## Appendix E. Protocol for Full-Budget and Controlled Ablation Studies
+| Task | Function evolved | Solver conditions |
+| --- | --- | --- |
+| TSP (`tsp_construct`) | Next-node selection for constructive tours | 50-node Euclidean instances; training instance seed `2024` |
+| CVRP (`cvrp_aco`) | Edge heuristic matrix for ant colony optimization | 50 customers and a depot; capacity 50; 30 ants, 100 iterations; ACO seed `1234` |
+| FSSP (`fssp_gls`) | Perturbed processing-time matrix and selected job IDs | 50 jobs, 20 machines; NEH initialization; 200 search iterations; up to 3 local-descent passes per iteration |
+| OP (`op_aco`) | Edge heuristic matrix for ant colony optimization | 50 nodes including the depot; route-length limit 3; 20 ants, 50 iterations; ACO seed `1234` |
 
-The current maintenance rule requires a separately frozen search batch. The following protocol applies to that batch and its controlled mechanism checks; results from the earlier configuration remain separate:
+TSP returns the index of the next unvisited node. FSSP instances use seeded integer processing times from 1 to 99. Its evolved function returns a perturbed processing-time matrix and one to five distinct job IDs for the perturbation step; the objective is always evaluated using the original processing times. The objectives are mean tour length, mean route length, mean makespan, and negative mean collected reward, respectively. Lower is better in every reported task. The search budget is $B=1{,}000$ program evaluations, including failures and re-evaluations after repair. A disjoint 50-instance test split with 500 pooled instance-seconds is reserved for evaluation after selecting the best training program. Section 3 reports training prefixes, not these held-out results.
 
-1. **Matched-budget full search and held-out testing.** Run all compared population, tree, and reflective baselines across seeds 0, 1, and 2 per task under identical training instances, pooled 160 instance-second parallel evaluation limits, `Qwen3.8-27B` sampling parameters, and $B=1{,}000$ actual evaluation accounting. Evaluate each run's best feasible training program once on the reserved 50-instance test split (500 pooled instance-seconds), reporting seed-level test scores, training convergence curves, failure rates, and total generation, repair, and reflection token costs.
-2. **Fixed-snapshot experience representation (`include_experiences` ablation).** Sample committed tree snapshots at declared evaluation checkpoints without filtering for downstream improvement. Holding the snapshot, `parent_id`, `operator`, `reference_id`, and token budget fixed, compare repeated candidate generations under three representations of the same removed regions: (a) experience omitted (`include_experiences = False`), (b) raw diffs and outcomes from the removed regions, and (c) EvoTrace's reflected $S/V$ notes. Pair analyses at the snapshot level and report child feasibility, parent-relative win rate, fitness delta, and prompt tokens by operator.
-3. **Structural placement versus flat experience list.** Holding the reflected $S/V$ notes and input token budget fixed on identical snapshots, compare EvoTrace's path- and ancestor-localized presentation against a flat chronological list of the same notes with source IDs retained, isolating the benefit of lineage-aligned placement.
-4. **Multi-handoff fidelity audit.** Draw a stratified random sample of recorded reflections across tasks, region types (path vs. side), and cumulative handoff depth. Audit each note against `attempts.jsonl` and its bound `Comparison Catalog` for outcome-direction accuracy, code-change faithfulness, and over-generalized causal claims.
+All searches use seeds 0, 1, and 2 and `Qwen3.8-27B` with native thinking disabled. Generation uses temperature $1.0$ and at most $16{,}384$ output tokens; reflection uses temperature $0.3$ and at most $1{,}536$ output tokens. Requests were scheduled across FP8 and GGUF endpoints, with the endpoint and token usage recorded for each call. Transport retries are distinguished from candidate execution failures. Prompts expose the task, score direction, and function signature; solver instance counts and iteration budgets are external conditions.
 
-## References
+### D.2. Configuration and Source Records
 
-References are rendered from `paper-references.bib` in the accompanying PDF.
+The frozen batch `20261115_115206_evotrace_v3_revised_co4` was launched on 15 November 2026 after freezing 463 source files together with the evaluators and configuration. The manuscript snapshot was captured at 15:36 Beijing time. Its retention configuration uses `quality_slots = 32`, `recent_evaluations = 40`, and single-node simplification. The 12 captured runs contain 168–247 committed attempts and 180–256 program evaluations each. The shared reporting horizon is 180 evaluations.
+
+Archived records contain generated programs, evaluations, parent and operator choices, reflection inputs and outputs, and the updated tree. The accompanying `snapshot.json` contains per-run source hashes, configurations, evaluation sequences, and tree sizes; `training_scores.csv` records the common-horizon scores.
+
+The reflection region sizes were 1,127 regions of size 1, 204 of size 2, 62 of size 3, 2 of size 4, and 1 of size 5. Their sum is 1,396 regions and 1,734 newly removed algorithms. These sizes count new removals; a region can additionally carry experience from earlier simplifications.

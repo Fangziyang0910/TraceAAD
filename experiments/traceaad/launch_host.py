@@ -16,7 +16,7 @@ from benchmarks.tasks import CO_TASKS, TASK_SHORT
 from experiments.infra.launcher import is_session_alive
 from traceaad_base.storage import write_json
 from traceaad_base.selection import SELECTION_RULE
-from .run import METHODS, TOPOLOGY_FIELDS, V3AllocationConfig, V3TopologyConfig, reference_embedding_enabled, request_options, selection_rule_for
+from .run import METHODS, TOPOLOGY_FIELDS, V3AllocationConfig, V3TopologyConfig, request_options, selection_rule_for
 from .scheduling import EVALUATION_WORKERS, scheduler_status
 
 
@@ -41,7 +41,6 @@ def build_plan(args):
             raise ValueError("rank-half-life applies to EvoTrace V3 only")
         V3AllocationConfig(rank_half_life=rank_half_life)
     slug = _slug(args.method)
-    embedding = reference_embedding_enabled(args.method, args.trajectory_reference_embedding)
     tasks = args.tasks if args.tasks is not None else CO_TASKS
     if not tasks or len(set(tasks)) != len(tasks) or any(task not in CO_TASKS for task in tasks):
         raise ValueError("tasks must be distinct members of co6")
@@ -63,7 +62,6 @@ def build_plan(args):
                 command += ["--rank-half-life", str(rank_half_life)]
             for key, value in topology.items():
                 command += ["--" + key.replace("_", "-"), str(value)]
-            command += ["--trajectory-reference-embedding" if embedding else "--no-trajectory-reference-embedding"]
             if args.scheduler_socket:
                 command += ["--scheduler-socket", args.scheduler_socket]
             command += ["--seconds-per-instance", str(args.seconds_per_instance)]
@@ -117,8 +115,6 @@ def main(argv=None):
     parser.add_argument("--max-representatives", type=int, help="V3 maximum mutually uncovered representatives")
     parser.add_argument("--cover-distance", type=float, help="V3 AST shingle distance covered by a better representative")
     parser.add_argument("--region-size", type=int, help="V3 minimum non-skeleton nodes per simplified region")
-    parser.add_argument("--trajectory-reference-embedding", action=argparse.BooleanOptionalAction,
-                        default=None, help="Mechanism 1 defaults to trajectory references; --no-... ablates them")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
                         help="Time allowance per instance; their sum is the whole-task deadline")
     parser.add_argument("--scheduler-socket")
@@ -130,10 +126,6 @@ def main(argv=None):
     action.add_argument("--enqueue", action="store_true", help="Save a queued manifest without starting workers")
     args = parser.parse_args(argv)
     args.experiment = args.experiment or METHODS[args.method][0]
-    try:
-        args.trajectory_reference_embedding = reference_embedding_enabled(args.method, args.trajectory_reference_embedding)
-    except ValueError as error:
-        parser.error(str(error))
     if args.repeats < 1 or args.spacing < 0:
         parser.error("repeats must be positive and spacing must be nonnegative")
     if not math.isfinite(args.seconds_per_instance) or args.seconds_per_instance <= 0:
@@ -155,7 +147,7 @@ def main(argv=None):
         "budget_per_run": args.budget, "budget_axis": "评价次数", "budget_basis": "evaluate_calls",
         "output_tokens": args.max_tokens, "temperature": 1., "initial_size": args.initial_size,
         "selection_rule": selection_rule_for(args.method), "selection_temperature": args.selection_temperature,
-        "trajectory_reference_embedding": args.trajectory_reference_embedding,
+        "trajectory_reference_embedding": False,
         "mechanisms": list(METHODS[args.method][1].mechanisms),
         "generation_protocol": METHODS[args.method][1].generation_protocol,
         "sampling": request_options(args.method), "final_selection": "training", "eval_workers": EVALUATION_WORKERS,
