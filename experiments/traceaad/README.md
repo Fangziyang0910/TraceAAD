@@ -12,7 +12,7 @@
 默认后端为 `scheduled`，Qwen3.8-27B 经 server4 公共调度器分配。采样为温度1.0、top_p=0.8、top_k=20、min_p=0、presence_penalty=1.5，关闭思考，默认输出上限16384。完整设置见[scheduling.py](scheduling.py)与运行元数据。
 
 
-EvoTrace的独立入口、配置与恢复约定见[V3](../../evotrace_v3/README.md)、[V2](../../evotrace_v2/README.md)、[V1](../../evotrace_v1/README.md#记录与恢复)。不同版本分别建立批次并由各自冻结源码恢复；V3四任务正式批次（`20261116_000118_evotrace_v3_full_co4`）保存在`experiments_result/evotrace_v3_full`，此前已停批次仍保留在各自目录。下方真实轨迹harness面向V2冻结记录，不能用V2树快照恢复V3。
+EvoTrace的独立入口、配置与恢复约定见[V3](../../evotrace_v3/README.md)、[V2](../../evotrace_v2/README.md)、[V1](../../evotrace_v1/README.md#配置与恢复)。不同版本分别建立批次并由各自冻结源码恢复；当前运行与保留批次清单以[实验与边界台账](../../docs/记录/README.md)为准。下方真实轨迹harness面向V2冻结记录，不能用V2树快照恢复V3。
 
 默认初始化5个有效程序，每路1000次评价。初始化、失败与修复重评按实际评价计费，辅助模型调用与token单列。训练16例共享160秒、内存2 GiB；训练最好程序固定后，再执行独立测试。条件见[实验协议](../PROTOCOL.md)。
 

@@ -44,11 +44,14 @@ def _origin(edge: Edge) -> str:
 
 
 def _record(
-    tree: TreePopulation, node_id: int, earlier: list[str], *, retained: bool = False, attempts: bool = True
+    tree: TreePopulation, node_id: int, earlier: list[str], *,
+    retained: bool = False, attempts: bool = True, best_kept: float | None = None,
 ) -> str:
     node, edge = tree.nodes[node_id], tree.edges[node_id]
     parent = tree.nodes.get(edge.parent_id)
     result = outcome_text(None if parent is None else parent.fitness, node.fitness)
+    if parent is None and node.fitness is not None and best_kept is not None and node.fitness > best_kept:
+        result += f" (worse than best kept {best_kept:.6g})"
     name = f"Algorithm {node_id}" + (" (kept)" if retained else "")
     lines = [f"{name}, {_origin(edge)}: {result}", f"Design: {node.design}"]
     if node.fitness is None:
@@ -94,15 +97,21 @@ def build_reflection_prompt(tree: TreePopulation, region: Region, problem: str) 
     else:
         p = region.parent_id
         removed = sorted(region.removed_ids)
+        removed_set = set(removed)
+        best_kept = None
         if p == ROOT_ID:
             removed.sort(key=lambda i: (tree.nodes[i].fitness is None, tree.nodes[i].fitness or 0.0))
-        anchors = sorted({tree.edges[i].parent_id for i in removed} - set(removed) - {ROOT_ID, p})
+            best_kept = min(
+                (n.fitness for k, n in tree.nodes.items() if k not in removed_set and n.fitness is not None),
+                default=None,
+            )
+        anchors = sorted({tree.edges[i].parent_id for i in removed} - removed_set - {ROOT_ID, p})
         records = [] if p == ROOT_ID else [_anchor(tree, p, earlier, attempts=True)]
         records += [_anchor(tree, i, earlier) for i in anchors]
-        records += [_record(tree, i, earlier) for i in removed]
+        records += [_record(tree, i, earlier, best_kept=best_kept) for i in removed]
         if p == ROOT_ID:
             situation = ("The algorithms below were designed from scratch, together with any attempts made from "
-                         "them, listed from best to worst fitness.")
+                         "them, listed from best to worst fitness (lower fitness is better).")
             if root_exp := clean_text(tree.root_experience):
                 earlier.append(root_exp)
                 records.insert(0, "Earlier observations: " + root_exp)

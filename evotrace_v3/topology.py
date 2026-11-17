@@ -217,7 +217,6 @@ def apply_simplification(tree: TreePopulation, regions: Sequence[Region]) -> Tre
         for i in ((*r.removed_ids, *r.branch_ids) if isinstance(r, PathContraction) else r.removed_ids)
     }
     kept = sorted(tree.nodes.keys() - removed)
-    kept_set = set(kept)
     rewired = {r.child_id: r.parent_id for r in regions if isinstance(r, PathContraction)}
     return TreePopulation(
         root_experience=tree.root_experience,
@@ -227,5 +226,4 @@ def apply_simplification(tree: TreePopulation, regions: Sequence[Region]) -> Tre
                 if i in rewired else replace(tree.edges[i]))
             for i in kept
         },
-        used_crossover_pairs=[pair for pair in tree.used_crossover_pairs if pair[0] in kept_set and pair[1] in kept_set],
     )

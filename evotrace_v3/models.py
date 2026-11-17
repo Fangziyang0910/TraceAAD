@@ -98,13 +98,10 @@ class TreePopulation:
     root_experience: str = ""
     nodes: dict[int, Node] = field(default_factory=dict)
     edges: dict[int, Edge] = field(default_factory=dict)
-    used_crossover_pairs: list[tuple[int, int]] = field(default_factory=list)
 
     def add(self, node: Node, edge: Edge, *, evaluations: int = 0) -> None:
         if edge.parent_id != ROOT_ID:
             self.nodes[edge.parent_id].direct_evaluations += evaluations
-            if edge.operator == "Crossover" and (edge.parent_id, edge.reference_id) not in self.used_crossover_pairs:
-                self.used_crossover_pairs.append((edge.parent_id, edge.reference_id))
         self.nodes[node.id] = node
         self.edges[node.id] = edge
 
@@ -114,7 +111,6 @@ class TreePopulation:
             root_experience=clean_text(data.get("root_experience", "")),
             nodes={int(i): Node(**n) for i, n in data["nodes"].items()},
             edges={int(i): Edge(**e) for i, e in data["edges"].items()},
-            used_crossover_pairs=[(p, r) for p, r in data.get("used_crossover_pairs", ())],
         )
 
 

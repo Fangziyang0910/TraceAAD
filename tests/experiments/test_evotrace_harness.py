@@ -15,6 +15,15 @@ def test_trace_reader_accepts_committed_rows_and_leaves_partial_tail(tmp_path,co
     assert list(read_rows(p))==[{'attempt':1}]
 
 
+def test_trace_reader_uses_compressed_copy_only_when_raw_is_missing(tmp_path):
+    p=tmp_path/'calls.jsonl'
+    p.write_bytes(b'{"attempt":2}\n')
+    p.with_suffix('.jsonl.gz').write_bytes(gzip.compress(b'{"attempt":1}\n{"attempt":'))
+    assert list(read_rows(p))==[{'attempt':2}]
+    p.unlink()
+    assert list(read_rows(p))==[{'attempt':1}]
+
+
 def test_trace_reader_exposes_corrupt_committed_evidence(tmp_path):
     p=tmp_path/'attempts.jsonl'
     p.write_bytes(b'{"attempt":1}\ncorrupt\n{"attempt":3}\n')

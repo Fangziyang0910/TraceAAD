@@ -185,11 +185,16 @@ def test_explore_programs_start_new_lineages_at_the_root(tmp_path):
     def record(attempt):
         attach(attempt)
         if attempt.program_id in search.tree.edges:
-            added.append((attempt.operator, attempt.parent_id, search.tree.edges[attempt.program_id].parent_id))
+            prog = search.archive[attempt.program_id]
+            added.append((attempt.operator, attempt.parent_id, prog.parent_id, search.tree.edges[attempt.program_id].parent_id))
 
     search._attach_evaluated_attempt = record
     search.run()
-    operators = {op for op, _, _ in added}
+    operators = {op for op, _, _, _ in added}
     assert {"Explore", "Refine"} <= operators
-    for op, parent, attached in added:
-        assert attached == (parent if op in ("Refine", "Crossover") else 0)
+    for op, parent, prog_parent, attached in added:
+        assert parent == prog_parent == attached
+        if op in ("Init", "Explore"):
+            assert parent == 0
+        else:
+            assert parent > 0

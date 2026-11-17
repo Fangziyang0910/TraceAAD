@@ -540,9 +540,37 @@
       "op_aco/20261117_132027_evotrace_v3_lean_co4_op_evotrace_v3_rep1",
       "op_aco/20261117_132027_evotrace_v3_lean_co4_op_evotrace_v3_rep2",
       "op_aco/20261117_132027_evotrace_v3_lean_co4_op_evotrace_v3_rep3"
+    ],
+    "evotrace_v3_factual": [
+      "tsp_construct/20261117_153134_evotrace_v3_factual_co4_tsp_evotrace_v3_rep1",
+      "tsp_construct/20261117_153134_evotrace_v3_factual_co4_tsp_evotrace_v3_rep2",
+      "tsp_construct/20261117_153134_evotrace_v3_factual_co4_tsp_evotrace_v3_rep3",
+      "cvrp_aco/20261117_153134_evotrace_v3_factual_co4_cvrp_evotrace_v3_rep1",
+      "cvrp_aco/20261117_153134_evotrace_v3_factual_co4_cvrp_evotrace_v3_rep2",
+      "cvrp_aco/20261117_153134_evotrace_v3_factual_co4_cvrp_evotrace_v3_rep3",
+      "fssp_gls/20261117_153134_evotrace_v3_factual_co4_fssp_evotrace_v3_rep1",
+      "fssp_gls/20261117_153134_evotrace_v3_factual_co4_fssp_evotrace_v3_rep2",
+      "fssp_gls/20261117_153134_evotrace_v3_factual_co4_fssp_evotrace_v3_rep3",
+      "op_aco/20261117_153134_evotrace_v3_factual_co4_op_evotrace_v3_rep1",
+      "op_aco/20261117_153134_evotrace_v3_factual_co4_op_evotrace_v3_rep2",
+      "op_aco/20261117_153134_evotrace_v3_factual_co4_op_evotrace_v3_rep3"
+    ],
+    "evotrace_v3_clean": [
+      "tsp_construct/20261117_181830_evotrace_v3_clean_co4_tsp_evotrace_v3_rep1",
+      "tsp_construct/20261117_181830_evotrace_v3_clean_co4_tsp_evotrace_v3_rep2",
+      "tsp_construct/20261117_181830_evotrace_v3_clean_co4_tsp_evotrace_v3_rep3",
+      "cvrp_aco/20261117_181830_evotrace_v3_clean_co4_cvrp_evotrace_v3_rep1",
+      "cvrp_aco/20261117_181830_evotrace_v3_clean_co4_cvrp_evotrace_v3_rep2",
+      "cvrp_aco/20261117_181830_evotrace_v3_clean_co4_cvrp_evotrace_v3_rep3",
+      "fssp_gls/20261117_181830_evotrace_v3_clean_co4_fssp_evotrace_v3_rep1",
+      "fssp_gls/20261117_181830_evotrace_v3_clean_co4_fssp_evotrace_v3_rep2",
+      "fssp_gls/20261117_181830_evotrace_v3_clean_co4_fssp_evotrace_v3_rep3",
+      "op_aco/20261117_181830_evotrace_v3_clean_co4_op_evotrace_v3_rep1",
+      "op_aco/20261117_181830_evotrace_v3_clean_co4_op_evotrace_v3_rep2",
+      "op_aco/20261117_181830_evotrace_v3_clean_co4_op_evotrace_v3_rep3"
     ]
   },
-  "default_experiment": "evotrace_v3_lean",
+  "default_experiment": "evotrace_v3_clean",
   "labels": {
     "traceaad_v12_0": "TraceAAD V12.0",
     "traceaad_v12_1": "TraceAAD V12.1",
@@ -580,7 +608,9 @@
     "evotrace_v3_revised": "EvoTrace V3 · 修订后",
     "evotrace_v3_full": "EvoTrace V3 · 谱系旧版",
     "evotrace_v3_rep_cover": "EvoTrace V3 · 代表覆盖版",
-    "evotrace_v3_lean": "EvoTrace V3 · 精简版"
+    "evotrace_v3_lean": "EvoTrace V3 · 精简版",
+    "evotrace_v3_factual": "EvoTrace V3 · 事实反思版",
+    "evotrace_v3_clean": "EvoTrace V3 · 定型版"
   },
   "visualization_batches": {
     "traceaad_v12_0": "20261013_qwen_co6",
@@ -603,9 +633,13 @@
     "evotrace_v3_revised": "20261115_115206_evotrace_v3_revised_co4",
     "evotrace_v3_full": "20261116_000118_evotrace_v3_full_co4",
     "evotrace_v3_rep_cover": "20261116_165500_evotrace_v3_rep_cover_co4",
-    "evotrace_v3_lean": "20261117_132027_evotrace_v3_lean_co4"
+    "evotrace_v3_lean": "20261117_132027_evotrace_v3_lean_co4",
+    "evotrace_v3_factual": "20261117_153134_evotrace_v3_factual_co4",
+    "evotrace_v3_clean": "20261117_181830_evotrace_v3_clean_co4"
   },
   "visualization_methods": [
+    "evotrace_v3_clean",
+    "evotrace_v3_factual",
     "evotrace_v3_lean",
     "evotrace_v3_rep_cover",
     "evotrace_v3_full",
@@ -706,10 +740,22 @@
       "cvrp_aco",
       "fssp_gls",
       "op_aco"
+    ],
+    "evotrace_v3_factual": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco"
+    ],
+    "evotrace_v3_clean": [
+      "tsp_construct",
+      "cvrp_aco",
+      "fssp_gls",
+      "op_aco"
     ]
   },
   "active_campaign": {
-    "batch": "20261117_132027_evotrace_v3_lean_co4",
+    "batch": "20261117_181830_evotrace_v3_clean_co4",
     "tasks": [
       "tsp_construct",
       "cvrp_aco",
@@ -723,6 +769,6 @@
     ],
     "runs_per_method": 12,
     "controller_session": [],
-    "note": "V3 after the Occam revision: unified reflection records (origin and outcome, design, failure, earlier experience, code once; no diffs, related results or comparison catalog; scope-bound wording; fallback carries earlier experience), trajectory generation context without directional hints, used crossover pairs kept. Replaces the discarded context-only batch 20261117_114412 (stopped at about 8% of budget). Four tasks and three seeds; running alongside finishing evotrace_v3_rep_cover."
+    "note": "Finalized clean V3 batch: anchored root reflection (worse than best kept baseline), Explore isolated to root_experience + existing design cards without local lineage notes, operator-first allocation without phantom Explore parent, soft rank*distance Crossover reference sampling without used_crossover_pairs. Replaces evotrace_v3_factual (stopped at 253-321 evaluations/run)."
   }
 }

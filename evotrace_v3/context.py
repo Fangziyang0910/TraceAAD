@@ -98,13 +98,9 @@ def _lineage_blocks(
     return blocks, seen
 
 
-def _card(
-    tree: TreePopulation, node_id: int, seen: set[tuple[str, int]], *,
-    include_experiences: bool, label: str = "", code: bool = False,
-) -> str:
+def _reference_card(tree: TreePopulation, node_id: int, seen: set[tuple[str, int]], *, include_experiences: bool) -> str:
     node = tree.nodes[node_id]
-    head = f"fitness = {node.fitness:.6g}"
-    lines = [f"{label}: {head}" if label else head, f"Design: {node.design}"]
+    lines = [f"fitness = {node.fitness:.6g}", f"Design: {node.design}"]
     if include_experiences:
         exp = []
         for j in _path_from_root(tree, node_id):
@@ -116,8 +112,7 @@ def _card(
             seen.update({("edge", j), ("node", j)})
         if exp:
             lines += ["Experience along its development:", *exp]
-    if code:
-        lines.append(f"```python\n{bare_code(node.code)}\n```")
+    lines.append(f"```python\n{bare_code(node.code)}\n```")
     return "\n".join(lines)
 
 
@@ -135,6 +130,26 @@ def build_evolution_context(
     include_experiences: bool = True,
 ) -> tuple[str, str]:
     """按算子返回 (树上下文文本, 指令文本)。"""
+    if operator == "Explore":
+        blocks = []
+        if include_experiences and (root_exp := clean_text(tree.root_experience)):
+            blocks.append("[Experience from Earlier Approaches]\n" + root_exp)
+        shown = sorted({i for i in explore_ids if i in tree.nodes}, key=lambda i: (tree.nodes[i].fitness, i))
+        if shown:
+            cards = [
+                f"Approach {k}: fitness = {tree.nodes[i].fitness:.6g}\nDesign: {tree.nodes[i].design}"
+                for k, i in enumerate(shown, 1)
+            ]
+            blocks.append("\n\n".join(["[Existing Approaches]\nFrom best to worst fitness.", *cards]))
+        instruction = (
+            "Rethink how this task can be solved and implement an alternative whose main computation differs from the existing approaches. "
+            "Develop a new way to compute the result, rather than another weighting of the same local features. "
+            "The algorithms and experience above are starting points for ideas, not a structure you must preserve. "
+            "Consider changes in the information used, the representation, or the procedure that produces the result. "
+            "Choose an approach suited to the task and implement its main computation."
+        )
+        return "\n\n".join(blocks), instruction
+
     parent = tree.nodes[parent_id]
     if operator == "Refine":
         lineage, _ = _lineage_blocks(tree, parent_id, include_experiences=include_experiences)
@@ -151,7 +166,7 @@ def build_evolution_context(
         lineage, seen = _lineage_blocks(
             tree, parent_id, include_experiences=include_experiences, exclude=frozenset({reference_id})
         )
-        ref_card = _card(tree, reference_id, seen, include_experiences=include_experiences, code=True)
+        ref_card = _reference_card(tree, reference_id, seen, include_experiences=include_experiences)
         blocks = [
             *lineage,
             "[Other Algorithm]\nAn algorithm whose ideas may be combined with the current algorithm.\n" + ref_card,
@@ -161,24 +176,6 @@ def build_evolution_context(
             "Understand the computational ideas in both implementations and develop an algorithm that combines their useful strengths. "
             "Use their development and experimental experience to reason about how the computations fit together. "
             "If no useful combination emerges, improve the current algorithm using what the comparison reveals."
-        )
-    elif operator == "Explore":
-        blocks = []
-        if include_experiences and (root_exp := clean_text(tree.root_experience)):
-            blocks.append("[Experience from Earlier Approaches]\n" + root_exp)
-        seen: set[tuple[str, int]] = set()
-        shown = sorted({parent_id, *explore_ids}, key=lambda i: (tree.nodes[i].fitness, i))
-        cards = [
-            _card(tree, i, seen, include_experiences=include_experiences, label=f"Approach {k}")
-            for k, i in enumerate(shown, 1)
-        ]
-        blocks.append("\n\n".join(["[Existing Approaches]\nFrom best to worst fitness.", *cards]))
-        instruction = (
-            "Rethink how this task can be solved and implement an alternative whose main computation differs from the existing approaches. "
-            "Develop a new way to compute the result, rather than another weighting of the same local features. "
-            "The algorithms and experience above are starting points for ideas, not a structure you must preserve. "
-            "Consider changes in the information used, the representation, or the procedure that produces the result. "
-            "Choose an approach suited to the task and implement its main computation."
         )
     else:
         raise ValueError(f"Unsupported evolution operator: {operator!r}")

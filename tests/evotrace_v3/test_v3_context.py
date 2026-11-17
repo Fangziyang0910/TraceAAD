@@ -52,24 +52,25 @@ def test_crossover_reads_the_current_lineage_and_one_reference_card():
     assert tree == before
 
 
-def test_explore_shows_cards_without_code_and_each_experience_once():
+def test_explore_shows_cards_without_code_or_local_lineage_experiences():
     tree = TreePopulation()
     a = add(tree, 0, 9)
-    parent = add(tree, a, 8)
+    branch = add(tree, a, 8)
     other = add(tree, 0, 7)
     tree.root_experience = "ROOT_NOTE"
     tree.nodes[a].experience = "ANCESTOR_NOTE"
-    tree.nodes[parent].experience = "PARENT_NOTE"
+    tree.nodes[branch].experience = "BRANCH_NOTE"
     tree.edges[other].experience = "OTHER_EDGE_NOTE"
     tree.nodes[other].experience = "OTHER_NOTE"
     task = Task("Minimize", "def solve(x): pass", lambda s, f: f(1), 2)
-    prompt = evolution_prompt(task, tree, parent, "Explore", explore_ids=(other,))
-    assert prompt.index(f"Compute offset {other}") < prompt.index(f"Compute offset {parent}")
-    for note in ["ROOT_NOTE", "ANCESTOR_NOTE", "PARENT_NOTE", "OTHER_EDGE_NOTE", "OTHER_NOTE"]:
-        assert prompt.count(note) == 1
-    assert f"return x + {parent}" not in prompt and f"return x + {other}" not in prompt
-    bare, _ = build_evolution_context(tree, parent, "Explore")
-    assert f"Compute offset {parent}" in bare and "ANCESTOR_NOTE" in bare
+    prompt = evolution_prompt(task, tree, 0, "Explore", explore_ids=(branch, other))
+    assert prompt.index(f"Compute offset {other}") < prompt.index(f"Compute offset {branch}")
+    assert prompt.count("ROOT_NOTE") == 1
+    for local_note in ["ANCESTOR_NOTE", "BRANCH_NOTE", "OTHER_EDGE_NOTE", "OTHER_NOTE"]:
+        assert local_note not in prompt
+    assert f"return x + {branch}" not in prompt and f"return x + {other}" not in prompt
+    muted, _ = build_evolution_context(tree, 0, "Explore", explore_ids=(branch,), include_experiences=False)
+    assert f"Compute offset {branch}" in muted and "ROOT_NOTE" not in muted
 
 
 def test_refine_gives_designs_and_experience_and_code_only_for_the_current_algorithm():

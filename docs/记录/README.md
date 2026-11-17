@@ -6,11 +6,15 @@
 
 | 方法 | 批次标识 | 范围与预算 | server4 冻结源码 | 结果目录与状态 |
 | --- | --- | --- | --- | --- |
-| EvoTrace V3 | `20261116_000118_evotrace_v3_full_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_000118_evotrace_v3_full_co4` | `experiments_result/evotrace_v3_full`（北京时间 11-16 00:05 启动，运行中） |
+| EvoTrace V3 · 定型版 | `20261117_181830_evotrace_v3_clean_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_181830_evotrace_v3_clean_co4` | `experiments_result/evotrace_v3_clean`（北京时间 11-17 18:19 启动，运行中；当前默认看板实验） |
+| EvoTrace V3 · 事实反思版 | `20261117_153134_evotrace_v3_factual_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_153134_evotrace_v3_factual_co4` | `experiments_result/evotrace_v3_factual`（11-17 18:17 停止，每路 253–321 评、共 3567 评） |
+| EvoTrace V3 · 代表覆盖版 | `20261116_165500_evotrace_v3_rep_cover_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_165500_evotrace_v3_rep_cover_co4` | `experiments_result/evotrace_v3_rep_cover`（11-17 停止：FSSP/OP 跑满 1000 评，TSP/CVRP 停于 797–874 评；论文第 3 节与附录 F 当前固定前缀数据来源） |
+| EvoTrace V3 · 精简版 | `20261117_132027_evotrace_v3_lean_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_132027_evotrace_v3_lean_co4` | `experiments_result/evotrace_v3_lean`（11-17 停止并作废，每路 91–137 评；机制为提交 `1e6552b3`，论文第 2 节与附录 E 当前按此描述） |
+| EvoTrace V3（早期） | `20261116_000118_evotrace_v3_full_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_000118_evotrace_v3_full_co4` | `experiments_result/evotrace_v3_full`（已停止；提交 `a28b1ed7` 早期 40 评窗口快照） |
 | EvoTrace V1 | `20261112_165634_evotrace_v1_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_165634_evotrace_v1_co4` | `experiments_result/evotrace_v1`（已完成搜索与独立测试） |
-| TraceAAD Base | `20261031_base_schema_co6` | 六任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_schema_final` | `experiments_result/traceaad_base`（已完成搜索与独立测试） |
+| TraceAAD Base | `20261109_base_boltzmann_co6` | 六任务（看板取四任务）× 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261109_traceaad_base_v23_2` | `experiments_result/traceaad_base_boltzmann_20261109`（纯 Boltzmann 基线，已完成四任务搜索与独立测试；默认看板参照） |
 
-注：server4 在线运行的 `evotrace_v3_full` 使用提交 `a28b1ed7` 的早期冻结快照（40 评窗口留存 + 路径峰值子树投入抽样）。相对该快照，当前仓库已完成两项更新：（1）提交 `8c9533c4` 将反思提示中的 `[Comparison Catalog]` 限制为当次简化区域（消除多轮简化后的历史比较列表线性膨胀）；（2）提交 `d3cbb242` 针对在线批次观察到的非冠军异构节点过期删除、同分近邻挤占排名与探索子代继承祖先分母三项现象，将保留与父代分配统一为**覆盖代表集 + 直接开发投入计数**（`max_representatives=24`、`cover_distance=0.15`、`region_size=4`、`representative_rank_direct_sampling`）。双语论文稿 `docs/paper*.md` 的方法主干与附录已同步至当前代表集覆盖机制，第 4 节暂保留早期冻结快照作为机制诊断证据，待新版正式对照批次完成后更新主实验表。
+注：当前主线源码（提交 `190fe372`）与运行中的事实反思版 `evotrace_v3_factual` 机制一致，并进一步剥离了 V1–V3 内部工程包装（独立包不共享 `traceaad_base`）。双语论文稿 `docs/paper*.md` 第 3 节与附录 F 当前使用 `evotrace_v3_rep_cover` 固定前缀快照，第 2 节与附录 E 对应减法版（`1e6552b3`），待 `evotrace_v3_factual` 推进后统一更新正文与主实验表。
 
 ## 2. 已核实的机制边界与证伪记录（防重复试错）
 
@@ -24,3 +28,12 @@
 4. **分层或分组分配对深挖锐度的影响：** 在真实树快照上，先按 `lineage_peak` 分组再组内分配或从根沿树逐层递归选择，均大幅压低连续改进任务（如 TSP）前排个体的抽样份额。
 5. **Explore 全局概览不能仅展示路径峰值：** 节点经验可挂在非峰值分叉节点上，边经验可进入非峰值保留节点，且绝大多数保留的 `Explore` 尝试并非路径峰值；仅展示峰值在真实快照上会遗漏近半数经验载体（如 FSSP seed1 中 `13/25`）及 `98%` 已尝试的非峰值探索草稿。
 6. **路径收缩与峰值计费的耦合边界：** 路径收缩保持存活节点的 `subtree_evaluations` 原值不变；但当非全局最优的路径峰值因超出活跃窗口且非分叉点而被收缩移除后，其未改进后代会在当前保留树上重新计算路径最优祖先。
+
+## 3. 设计与筛选记录
+
+- [对比任务名单](2026-11-16-EvoTrace对比任务筛选.md)（2026-11-16）：固定主实验四项经典 AHD 任务（`tsp_construct`、`cvrp_aco`、`op_aco`、`fssp_gls`），记录其余任务排除依据。
+- [对比基线名单](2026-11-16-EvoTrace基线系统筛选.md)（2026-11-16）：固定五个外部基线（`EoH`、`ReEvo`、`MCTS-AHD`、`RefineEvo`、`PathWise`）与内部参照体系。
+- [演化轨迹上下文的设计](2026-11-17-EvoTrace演化轨迹上下文设计.md)（2026-11-17）：以经验和 design 为主体，代码只给被改写或被组合的算法，不给 diff；Explore 改为代表个体视图（提交 `1e6552b3`）。
+- [V3减法](2026-11-17-EvoTrace-V3减法.md)（2026-11-17）：边、节点反思合为一个模板，每个算法给出来源与结果、design、失败、已有经验与代码，删去代码差分与比较账本；经验写明起始计算、修改与结果，不把单次结果写成规则或禁令（提交 `1e6552b3`；`evotrace_v3_context` 批次作废）。
+- [事实反思](2026-11-17-EvoTrace-V3事实反思.md)（2026-11-17）：反思只记录计算与测得结果，不写规则或编号；Explore 挂根开始新谱系，根经验只给 Explore；上下文改用设计语言；根区域按适应度从好到差排列（`evotrace_v3_lean` 批次作废，`evotrace_v3_factual` 启动；源码并入 `190fe372`，同时移除 V1–V3 内部工程包装）。
+- [三代融合动态树设计构想](2026-11-17-EvoTrace三代融合动态树设计.md)（2026-11-17）：结合 V1 统一分差竞争与边际差异代表选择、V2 动态活跃保留核（$Q \cup A$）与自由生长、V3 挂根拓扑与分块纯事实反思/精简上下文的设计构想与待评审边界（讨论稿，不改动运行中批次）。

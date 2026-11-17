@@ -123,10 +123,9 @@ class EvoTrace:
         if prog is None or prog.evaluation is None:
             return
         op = None if attempt.operator == "Init" else attempt.operator
-        parent_id = attempt.parent_id if op in ("Refine", "Crossover") else ROOT_ID
         self.tree.add(
             Node(prog.id, prog.code, prog.design or "", prog.evaluation.fitness if prog.valid else None, prog.evaluation.failure),
-            Edge(parent_id, prog.id, op, attempt.reference_id if op == "Crossover" else None),  # type: ignore[arg-type]
+            Edge(attempt.parent_id, prog.id, op, attempt.reference_id if op == "Crossover" else None),  # type: ignore[arg-type]
             evaluations=len(attempt.evaluations),
         )
 

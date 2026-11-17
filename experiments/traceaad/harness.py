@@ -19,6 +19,9 @@ import sys
 
 def read_rows(path):
     # Match Store.rows: complete newline-terminated records are committed.
+    path=Path(path)
+    if not path.exists() and path.suffix=='.jsonl':
+        path=path.with_suffix('.jsonl.gz')
     raw=path.read_bytes()
     if path.suffix=='.gz':
         raw=gzip.decompress(raw)

@@ -2,7 +2,7 @@
 
 运行前核对[实验条件](../PROTOCOL.md)。本页的主机与服务位置用于查找；实时状态需要检查进程、日志和健康接口。
 
-北京时间11月16日00:05，早期V3冻结批次`20261116_000118_evotrace_v3_full_co4`（提交 `a28b1ed7` 快照）在server4启动，四任务TSP、CVRP、FSSP、OP各seed0/1/2，共12路，每路1000次实际评价。结果目录`evotrace_v3_full`，源码冻结于`/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_000118_evotrace_v3_full_co4`（已纳入自动同步、健康检查和默认看板，见[启动核验](../../experiments_result/evotrace_v3_full/launch_20261116_000118_evotrace_v3_full_co4/README.md)）。当前仓库主线 `evotrace_v3` 已升级为提交 `d3cbb242` 的覆盖代表集与直接投入分配机制（见[V3正式设计](../../docs/EvoTrace-v3设计.md)），其独立校准先导实验运行于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_v3_rep_cover_pilot`。
+北京时间11月16日00:05，早期V3冻结批次`20261116_000118_evotrace_v3_full_co4`（提交 `a28b1ed7` 快照）在server4启动，四任务TSP、CVRP、FSSP、OP各seed0/1/2，共12路，每路1000次实际评价。结果目录`evotrace_v3_full`，源码冻结于`/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_000118_evotrace_v3_full_co4`（见[启动核验](../../experiments_result/evotrace_v3_full/launch_20261116_000118_evotrace_v3_full_co4/README.md)）。代表覆盖版批次 `20261116_165500_evotrace_v3_rep_cover_co4`（提交 `d3cbb242` 机制）使用减法前的反思提示与生成上下文，论文第3节与附录F的数据目前来自该批次；该批次于北京时间11月17日按用户要求停止，TSP、CVRP 各路停在 797–874 次评价，FSSP、OP 已先跑满 1000 次（停止记录 `experiments_result/evotrace_v3_rep_cover/stop_20261117.json`，在 server4）。11月17日，主线经[V3减法](../../docs/记录/2026-11-17-EvoTrace-V3减法.md)（提交 `1e6552b3`）后，精简版批次 `20261117_132027_evotrace_v3_lean_co4` 在server4启动，后因反思写成规则、Explore 挂接错误于同日停止并作废（每路 91–137 次评价）。随后按[事实反思](../../docs/记录/2026-11-17-EvoTrace-V3事实反思.md)修订（源码已随 `190fe372` 合入主线），批次 `20261117_153134_evotrace_v3_factual_co4` 于北京时间11月17日15:32在server4启动（结果目录 `evotrace_v3_factual`，源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_153134_evotrace_v3_factual_co4`），跑至每路 253–321 次评价（共 3567 次）后按用户要求停止（停止记录 `experiments_result/evotrace_v3_factual/stop_20261117.json`）。同日18:19，完成根反思存活基准锚点、`Explore` 剥离局部谱系经验及分配去工程化（未提交）后，定型版批次 `20261117_181830_evotrace_v3_clean_co4` 在server4启动，四任务各seed0/1/2，共12路，每路1000次实际评价；结果目录 `evotrace_v3_clean`，源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_181830_evotrace_v3_clean_co4`，为当前默认看板实验。同日的 `20261117_114412_evotrace_v3_context_co4`（结果目录 `evotrace_v3_context`）已停止并作废，不作对照。
 
 当前保留的主对照基线批次：
 - **EvoTrace V1**：Qwen批次 `20261112_165634_evotrace_v1_co4`（四任务12路）与 DeepSeek 批次 `20261112_165634_evotrace_v1_deepseek_none_co4`（四任务各seed0），源码快照 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_165634_evotrace_v1_co4`，均已完成搜索与独立测试（[启动核验](../../experiments_result/evotrace_v1/launch_20261112_165634_evotrace_v1_co4/latest_verification.json)）。
@@ -52,11 +52,9 @@ systemctl --user status traceaad-watch.timer
 journalctl --user -u traceaad-watch.service -n 5 --no-pager
 ```
 
-## 正式 Base 批次（10月31日）
+## 正式 Base 批次（11月9日纯 Boltzmann 版）
 
-`20261031_base_schema_co6` 在server4从零启动18路，每路1000次评价。生成与修复使用明确的JSON Schema，要求 `analysis`、`design`、`code` 三个字符串并禁止额外字段；非空要求由解析器检查。提示、历史窗口、父代选择、算子、数据与评价时限沿用分析轨迹批次。
-
-源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261031_traceaad_base_schema_final`，609个文件中7个变化、602个一致，远端60项检查通过。结果入口为 `experiments_result/traceaad_base`（server4主仓库中的符号链接，指向快照内的 `traceaad_base_schema` 目录），看板和同步使用该批次。它使用11月5日修改前的 Base 代码。原 `traceaad_base`（`20261030_base_compact_co6`）改名为 `traceaad_base_compact`；此前的记录中，`experiments_result/traceaad_base` 指紧凑批次。上一批分析实验的18路已正常停止并保留结果；更早批次继续按各自状态运行。[启动记录](../../experiments_result/traceaad_base/launch_20261031/README.md)保存配置、源码核对、停止与启动证据。
+当前默认比较参照为 `20261109_base_boltzmann_co6`（结果目录 `experiments_result/traceaad_base_boltzmann_20261109`，清单 [`batch_20261109_base_boltzmann_co6.json`](../../experiments_result/traceaad_base_boltzmann_20261109/batch_20261109_base_boltzmann_co6.json)），源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261109_traceaad_base_v23_2`。该批次采用当前 Base 机制（`static_algorithm_context_v1` + `boltzmann_fitness_v1`，`selection_temperature=1.0`，每路 1000 次评价，JSON Schema 严格约束 `analysis`、`design`、`code` 三个非空字符串），四任务（TSP、CVRP、FSSP、OP）× 3 种子共 12 路均已完成搜索与独立测试。更早的 10 月 31 日排名折扣版 Base（`20261031_base_schema_co6`）保留在 `primary_runs.json` 的 `methods.traceaad_base` 历史六任务清单中，不再作为当前看板默认参照。
 
 
 ## server1 GPU1：llama.cpp
@@ -111,11 +109,11 @@ uv run --frozen python -m experiments.infra.scheduler --status
 
 `.env.server4` 设置 CPU 调度器 `TRACEAAD_SCHEDULER_SOCKET`、模型调度器 `TRACEAAD_MODEL_SCHEDULER_SOCKET`、离线模式及单线程 BLAS。两个变量均指向 `/tmp/traceaad-1003/scheduler.sock`。调度器在 tmux `traceaad_scheduler` 中运行；资源池以 `--status` 的实时输出为准。TraceAAD 使用 `--scheduler-socket`，基线入口通过上述环境变量接入。
 
-当前资源池为 128 个物理 CPU 核和 17 个模型请求槽位：server3 的 8000、8001 端点（官方 FP8）各 6 个，server1 的 8080 端点 3 个（11月15日起为下述 llama.cpp 3 槽），本机 GGUF 端点 2 个请求名额（11月14日起为 2 槽）。10月25日按用户要求恢复为 3 个独立 KV 槽，与公共调度器的 3 个请求名额一致；公共调度器未重启。原机器上的实验驱动、队列及独立调度器已停止，模型服务继续运行。用户已要求所有 GPU 来源等价：每次模型请求使用任意空闲端点，不绑定实验原来的机器、模型别名或量化；单个端点仍受自己的槽位上限约束。CPU 评价也共用同一资源池，单次 `eval_workers` 是请求上限，不是独占核心。TraceAAD/EvoTrace 的整任务评价（`experiments/traceaad/parallel_evaluation.py`）自 11月15日起每次最多申请 8 个核，实例并行，总时限按实例秒之和计量；申请时只取当前空闲的核，至少 1 个。其他绕过公共调度器的调用不受该池限制。
+当前资源池为 128 个物理 CPU 核和 17 个模型请求槽位：server3 的 8000、8001 端点（官方 FP8）各 6 个，server1 的 8080 端点（llama.cpp）3 个，本机 GGUF 端点 2 个。原机器上的实验驱动、队列及独立调度器已停止，模型服务继续运行。所有 GPU 来源等价：每次模型请求使用任意空闲端点，不绑定实验原来的机器、模型别名或量化；单个端点仍受自己的槽位上限约束。CPU 评价也共用同一资源池，单次 `eval_workers` 是请求上限，不是独占核心。TraceAAD/EvoTrace 的整任务评价（`experiments/traceaad/parallel_evaluation.py`）每次最多申请 8 个核，实例并行，总时限按实例秒之和计量；申请时只取当前空闲的核，至少 1 个。其他绕过公共调度器的调用不受该池限制。
 
-本机通过 systemd 用户服务 `traceaad-local-model-tunnel.service` 建立反向 SSH 隧道，将 server4 的 `127.0.0.1:18001` 转发到本机 `127.0.0.1:8001`。模型由 `qwen38-llama.service` 管理：关闭 MTP、关闭共享 KV、总上下文 147456、三个并发槽（单路 49152 tokens），超额请求在服务端排队。模型异常退出自动重启，隧道断开自动重连。使用 `systemctl --user status qwen38-llama.service traceaad-local-model-tunnel.service` 查询；配置位于本机 `~/.config/systemd/user/`，模型日志为 `/tmp/llama-qwen38-recovered.log`。11月14日起服务使用 llama.cpp v1.0.0（build 12359），安装在 `~/app/llama-v1.0.0`，由 service 的 `LD_LIBRARY_PATH` 加载；原 `/usr/local/bin` 中的 build 9210 保留，备份在 `~/app/llama-backup-b9210`。模型改为 unsloth `Qwen3.8-27B-UD-Q4_K_M.gguf`（`~/models/gguf/qwen3.8-27b-q4km/`），非思考模式（`--chat-template-kwargs '{"enable_thinking":false}'`），采样为温度0.7、top-p 0.8、top-k 20、min-p 0、presence 1.5（unsloth 非思考模式推荐值）。开启 MTP：`--spec-type draft-mtp`，草稿模型 `mtp-Qwen3.8-27B-Q4_0.gguf`，`--spec-draft-n-max 4`；主 KV 与草稿 KV 均为 `f8_e4m3`；`--load-mode mlock` 代替 `--no-mmap --mlock`。并发2槽、每槽65536（总131072）。显存约23.8 GB（24 GB 卡）：MTP 把循环状态缓冲放大为 (n-max+1) 倍，n-max=5 装不下。同一服务上测过 n-max 1/2/3/4 的代码生成速度：单请求79/107/122/141 tok/s，2并发每路约71/93/109/118 tok/s。两路同时 63523 token 提示可正常处理。原两个 tmux 会话已由这些服务替代。server4 的两张 GPU 尚未部署模型服务。
+本机通过 systemd 用户服务 `traceaad-local-model-tunnel.service` 建立反向 SSH 隧道，将 server4 的 `127.0.0.1:18001` 转发到本机 `127.0.0.1:8001`。模型由 `qwen38-llama.service` 管理（配置位于 `~/.config/systemd/user/`，日志 `/tmp/llama-qwen38-recovered.log`），异常退出自动重启，隧道断开自动重连，用 `systemctl --user status qwen38-llama.service traceaad-local-model-tunnel.service` 查询。当前服务运行 llama.cpp v1.0.0（build 12359，安装在 `~/app/llama-v1.0.0`，由 `LD_LIBRARY_PATH` 加载），加载 unsloth `Qwen3.8-27B-UD-Q4_K_M.gguf`（`~/models/gguf/qwen3.8-27b-q4km/`），非思考模式（`--chat-template-kwargs '{"enable_thinking":false}'`），开启 MTP（`--spec-type draft-mtp`，草稿模型 `mtp-Qwen3.8-27B-Q4_0.gguf`，`--spec-draft-n-max 4`），主 KV 与草稿 KV 均为 `f8_e4m3`，`--load-mode mlock`，并发 2 槽、每槽 65536 tokens（总 131072），显存约 23.8 GB（24 GB 卡）；实测单请求约 141 tok/s，2 并发每路约 118 tok/s，两路同时 63523 token 提示可正常处理。server4 的两张 GPU 尚未部署模型服务。
 
-需要 embedding 的基线复用 server3 的 `qwen3-embedding-4b-fp8`。server4 的 tmux `traceaad_embedding_tunnel` 将本机 `127.0.0.1:18002` 转发到 server3 的 `127.0.0.1:8002`；专用 SSH 密钥只允许该转发。`.env.server4` 的 `SHINKA_EMBEDDING_*` 指向此接口。隧道需保持运行；重启命令保存在补齐记录的 `embedding_tunnel_command.txt`。该服务与生成模型的 27 请求槽分开。
+需要 embedding 的基线复用 server3 的 `qwen3-embedding-4b-fp8`。server4 的 tmux `traceaad_embedding_tunnel` 将本机 `127.0.0.1:18002` 转发到 server3 的 `127.0.0.1:8002`；专用 SSH 密钥只允许该转发。`.env.server4` 的 `SHINKA_EMBEDDING_*` 指向此接口。隧道需保持运行；重启命令保存在补齐记录的 `embedding_tunnel_command.txt`。该服务与生成模型的 17 个请求槽分开。
 
 `/tmp/tmux-1003` 存 tmux socket，`/tmp/traceaad-1003` 存调度器 socket，清理 `/tmp` 时不能删。tmux socket 丢失后，服务进程仍在：先重建目录（权限700），再向 `tmux: server` 进程发 `SIGUSR1`。
 
@@ -193,8 +191,3 @@ TraceAAD 使用原入口、原目录和相同参数加 `--resume` 续跑。操�
 相对评分转换前的原件通常位于运行目录的 `logs/raw_search_originals/`。仅有平均相对改进，不能精确还原原始目标均值。`score_source` 区分换算与重新评价；放宽 CPU 或墙钟限制的结果保留其条件。
 
 旧格式转换、评分换算和专项归档脚本已清理。相关历史结果与处理记录保留在对应实验目录中，当前读取器按程序个体编号读取结果。
-
-
-## 全部停止，只保留已完成的 Base（11月10日）
-
-按用户要求，16:12停止server4上全部搜索与两个补位控制器（`20261109_co4_queue`、`20261110_v21_2_queue`）。Base（`20261109_base_boltzmann_co6`）四任务12路此前已完成并有主测试，无需等待。停止时各批次状态：V22.2四任务批次完成4路、停止8路；V24.1完成3路、停止9路；V23.2完成10路、停止2路；V21.2的12路全部停止。结果均保留，资源调度器与嵌入隧道继续运行。

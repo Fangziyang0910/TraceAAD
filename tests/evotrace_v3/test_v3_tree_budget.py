@@ -8,12 +8,12 @@ import pytest
 from evotrace_v3.allocation import (
     AllocationConfig,
     allocate_step,
-    eligible_reference_pool,
     parent_probabilities,
+    reference_probabilities,
     select_explore_references,
     select_parent,
 )
-from evotrace_v3.context import _path_from_root, build_evolution_context
+from evotrace_v3.context import build_evolution_context
 from evotrace_v3.models import Edge, Node, TreePopulation
 from evotrace_v3.reflection import build_reflection_prompt, reflect_and_apply
 from evotrace_v3.topology import (
@@ -151,7 +151,8 @@ def test_ties_singleton_and_empty_sampling():
 
     assert select_parent(tree, Capture(), topology_config=top) == first
     parent_id, op, _, _ = allocate_step(tree, random.Random(2), topology_config=top)
-    assert parent_id in {first, second} and op in {"Refine", "Explore", "Crossover"}
+    assert op in {"Refine", "Explore", "Crossover"}
+    assert (parent_id == 0) if op == "Explore" else (parent_id in {first, second})
 
 
 @pytest.mark.parametrize("span", [1e-300, 1e300])
@@ -219,7 +220,7 @@ def test_duplicate_program_conserves_existing_direct_effort_and_never_creates_fr
     )
     assert representatives(tree, cfg) == (original, other)
     assert set(parent_probabilities(tree, topology_config=cfg)) == {original, other}
-    assert copy_id not in eligible_reference_pool(tree, other, topology_config=cfg)
+    assert copy_id not in reference_probabilities(tree, other, topology_config=cfg)
     assert tree.nodes[original].direct_evaluations == 7
 
     regions = plan_simplification(tree, cfg)
@@ -243,7 +244,7 @@ def test_region_size_buffers_inactive_nodes_without_leaking_them_into_sampling()
 
     assert representatives(tree, cfg) == (tip, other)
     assert set(parent_probabilities(tree, topology_config=cfg)) == {tip, other}
-    assert eligible_reference_pool(tree, tip, topology_config=cfg) == [other]
+    assert reference_probabilities(tree, tip, topology_config=cfg) == {other: 1.0}
     assert plan_simplification(tree, cfg) == ()
 
     branch_on_m2 = add(tree, m2, None, code="def solve(x):\n    raise ValueError()\n")
@@ -352,21 +353,33 @@ def test_budget_and_idempotence_survive_repeated_simplification_against_original
         for nid, node in tree.nodes.items():
             assert node.direct_evaluations == sum(e for p, e in events if p == nid)
             assert tree.edges[nid].parent_id == 0 or tree.edges[nid].parent_id in tree.nodes
-        assert all(a in tree.nodes and b in tree.nodes for a, b in tree.used_crossover_pairs)
         assert TreePopulation.from_dict(json.loads(json.dumps(asdict(tree)))) == tree
     assert saw_path and saw_subtree
 
 
-def test_reference_quality_uses_equal_ranks_for_ties_and_excludes_parent_first():
+def test_reference_probabilities_weight_rank_and_distance_and_handle_ties_and_zero_distance():
     top = TopologyConfig(max_representatives=24, cover_distance=0.0)
     tree = TreePopulation()
-    for _ in range(4):
-        add(tree, 0, 1)
-    assert eligible_reference_pool(tree, 1, topology_config=top) == [2, 3, 4]
-    tree = TreePopulation()
-    add(tree, 0, 1)
-    add(tree, 0, 10)
-    assert eligible_reference_pool(tree, 1, topology_config=top) == [2]
+    parent = add(tree, 0, 1.0, code="def solve(x):\n    return x + 1\n")
+    same_ast_better = add(tree, 0, 2.0, code="def solve(x):\n    return x + 2\n")
+    same_ast_worse = add(tree, 0, 12.0, code="def solve(x):\n    return x + 3\n")
+    # When all candidates have zero AST distance to parent, fall back to rank decay.
+    probs_zero = reference_probabilities(tree, parent, AllocationConfig(rank_half_life=1.0), top)
+    assert probs_zero[same_ast_better] / probs_zero[same_ast_worse] == pytest.approx(2.0)
+
+    far_good = add(tree, 0, 2.0, code="def solve(x):\n    return sum(i * 2 for i in range(x))\n")
+    far_weak = add(tree, 0, 12.0, code="def solve(x):\n    return sum(i * 5 for i in range(x))\n")
+    assert code_distance(tree.nodes[parent].code, tree.nodes[far_good].code) == code_distance(
+        tree.nodes[parent].code, tree.nodes[far_weak].code
+    ) > 0
+    probs = reference_probabilities(tree, parent, AllocationConfig(rank_half_life=1.0), top)
+    assert probs[same_ast_better] == 0.0
+    assert probs[far_good] > probs[far_weak] > 0.0
+    assert sum(probs.values()) == pytest.approx(1.0)
+
+    alone = TreePopulation()
+    only = add(alone, 0, 1.0)
+    assert reference_probabilities(alone, only, topology_config=top) == {}
 
 
 @pytest.mark.parametrize("span", [0, -1, float("nan"), float("inf")])
@@ -399,7 +412,7 @@ def test_three_round_reflection_reuses_old_notes_and_reaches_operators_that_show
     class RoundNotes:
         def complete(self, prompt, **kwargs):
             prompts.append(prompt)
-            marker = "EDGE" if "developed from" in prompt else "NODE"
+            marker = "EDGE" if "developed from" in prompt else ("ROOT" if "designed from scratch" in prompt else "NODE")
             return json.dumps({"experience": f"{marker}_NOTE_{round_number}"})
 
     for round_number in range(3):
@@ -407,6 +420,7 @@ def test_three_round_reflection_reuses_old_notes_and_reaches_operators_that_show
         tip = add(t, mid, 1.0 / (round_number + 1), code=f"def solve(x):\n    return x + {round_number + 1}\n")
         add(t, mid, None)
         add(t, a, None)
+        add(t, 0, None)
         regions = plan_simplification(t, cfg)
         assert any(isinstance(r, PathContraction) for r in regions)
         assert any(isinstance(r, SubtreePruning) for r in regions)
@@ -416,27 +430,31 @@ def test_three_round_reflection_reuses_old_notes_and_reaches_operators_that_show
             used = "\n".join(prompts[prompt_start:])
             assert f"EDGE_NOTE_{round_number - 1}" in used
             assert f"NODE_NOTE_{round_number - 1}" in used
-        holders = {i for i, n in t.nodes.items() if f"NODE_NOTE_{round_number}" in n.experience}
-        for op, reference in [("Refine", None), ("Explore", None), ("Crossover", other)]:
-            ids = select_explore_references(t, tip, topology_config=cfg) if op == "Explore" else ()
-            context, _ = build_evolution_context(t, tip, op, reference, explore_ids=ids)
+            assert f"ROOT_NOTE_{round_number - 1}" in used
+        for op, parent, reference in [("Refine", tip, None), ("Crossover", tip, other)]:
+            context, _ = build_evolution_context(t, parent, op, reference)
             assert f"EDGE_NOTE_{round_number}" in context
-            on_paths = set().union(*(_path_from_root(t, i) for i in (tip, *ids)))
-            shown = op != "Explore" or bool(holders & on_paths)
-            assert (f"NODE_NOTE_{round_number}" in context) == shown
+            assert f"NODE_NOTE_{round_number}" in context
+            assert f"ROOT_NOTE_{round_number}" not in context
+        ids = select_explore_references(t, topology_config=cfg)
+        explore_ctx, _ = build_evolution_context(t, 0, "Explore", explore_ids=ids)
+        assert f"ROOT_NOTE_{round_number}" in explore_ctx
+        assert f"EDGE_NOTE_{round_number}" not in explore_ctx
+        assert f"NODE_NOTE_{round_number}" not in explore_ctx
         t = TreePopulation.from_dict(json.loads(json.dumps(asdict(t))))
 
 
-def test_explore_references_take_the_best_then_spread_away_from_parent_and_each_other():
+def test_explore_references_take_the_best_then_spread_away_from_each_other():
     tree = TreePopulation()
-    parent = add(tree, 0, 5.0, code="def solve(x):\n    return x + 1\n")
     best = add(tree, 0, 1.0, code="def solve(x):\n    return x + 2\n")
     near = add(tree, 0, 2.0, code="def solve(x):\n    return x * 2 + 1\n")
     far = add(tree, 0, 3.0, code="def solve(x):\n    acc = 0\n    for k in range(x):\n        acc ^= k << 1\n    return acc\n")
     weak = add(tree, 0, 4.0, code="def solve(x):\n    return sorted([x, x - 1])[0]\n")
+    extra = add(tree, 0, 5.0, code="def solve(x):\n    return x + 1\n")
     top = TopologyConfig(cover_distance=0.0)
-    assert select_explore_references(tree, parent, AllocationConfig(explore_references=2), top) == (best, far)
-    assert select_explore_references(tree, parent, AllocationConfig(), top) == (best, far, weak, near)
+    assert select_explore_references(tree, AllocationConfig(explore_references=2), top) == (best, far)
+    assert select_explore_references(tree, AllocationConfig(explore_references=4), top) == (best, far, weak, near)
+    assert extra not in select_explore_references(tree, AllocationConfig(explore_references=4), top)
     alone = TreePopulation()
     only = add(alone, 0, 1.0)
-    assert select_explore_references(alone, only, AllocationConfig(), top) == ()
+    assert select_explore_references(alone, AllocationConfig(), top) == (only,)

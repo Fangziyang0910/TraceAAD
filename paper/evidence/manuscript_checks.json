@@ -5,9 +5,7 @@
       "alphaevolve",
       "beam",
       "cladeahd",
-      "codegraphs",
       "deltaevolve",
-      "dga2d",
       "elm",
       "eoh",
       "expel",
@@ -37,9 +35,7 @@
       "alphaevolve",
       "beam",
       "cladeahd",
-      "codegraphs",
       "deltaevolve",
-      "dga2d",
       "elm",
       "eoh",
       "expel",
@@ -67,7 +63,54 @@
   },
   "math_equal": true,
   "score_cells_checked": 20,
-  "attached_nodes": 2481,
-  "retained_nodes": 747,
-  "frozen_evaluations": 2641
+  "attached_nodes": 3271,
+  "retained_nodes": 970,
+  "frozen_evaluations": 3519,
+  "representative_snapshot_sha256": "cd804e6fa973ef7894d741ec34d08b890507cf7d2353796e680aa0e5cb9d813f",
+  "archived_snapshot_sha256": "29a642d88d410c815c94802f60567d2db73e235dada0483c5448c1c05c4f26eb",
+  "naming": {
+    "method": "TREES",
+    "full_name": "Tree-structured Reflective Evolutionary Search",
+    "titles": {
+      "en": "Reflective Elimination: Accumulating Design Experience in Tree-Structured Algorithm Populations",
+      "zh": "\u53cd\u601d\u5f0f\u6dd8\u6c70\uff1a\u5728\u6811\u72b6\u7b97\u6cd5\u79cd\u7fa4\u4e2d\u79ef\u7d2f\u8bbe\u8ba1\u7ecf\u9a8c"
+    }
+  },
+  "cross_update_experience": {
+    "reflections": 490,
+    "with_prior_experience": 147,
+    "percentage_rounded": 30.0
+  },
+  "case": {
+    "seed": 2,
+    "reflection_evaluations": [
+      97,
+      104
+    ],
+    "following_attempt": 98,
+    "complete_prompt_matches": true
+  },
+  "official_template": "ICML 2027; vendored files match their recorded download hashes",
+  "figure_hashes": {
+    "12-v3-experience-cycle.png": "6d7878c2a8cd3d77f2e72cbaae55070f2e116e253eaab439a607b3a0b5c8b78d",
+    "13-v3-experience-accumulation.png": "ae63f5ab79ca13a6690ca2adeb05c518579de44cc883a6bb2bf57ab9aec1979f"
+  },
+  "layout": {
+    "en": {
+      "main_end_page": 8,
+      "appendix_start_page": 10,
+      "total_pages": 17,
+      "paper_size": "Letter",
+      "main_columns": 2,
+      "appendix_columns": 1
+    },
+    "zh": {
+      "main_end_page": 6,
+      "appendix_start_page": 9,
+      "total_pages": 15,
+      "paper_size": "Letter",
+      "main_columns": 2,
+      "appendix_columns": 1
+    }
+  }
 }

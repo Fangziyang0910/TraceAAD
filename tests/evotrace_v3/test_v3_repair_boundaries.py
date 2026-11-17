@@ -142,11 +142,15 @@ def test_virtual_root_has_no_overall_outcome():
 
 def test_designs_from_scratch_are_listed_from_best_to_worst():
     t = TreePopulation()
+    kept = add(t, 0, -14.5, "def f(): return 0")
     worse = add(t, 0, -9.4, "def f(): return 1")
     failed = add(t, 0, None, "def f(): raise ValueError()")
     better = add(t, 0, -13.2, "def f(): return 2")
     prompt, _ = build_reflection_prompt(t, SubtreePruning(0, (worse, failed, better)), PROBLEM)
-    assert "listed from best to worst fitness" in prompt
+    assert "listed from best to worst fitness (lower fitness is better)" in prompt
+    assert f"Algorithm {better}, designed from scratch: fitness = -13.2 (worse than best kept -14.5)" in prompt
+    assert f"Algorithm {worse}, designed from scratch: fitness = -9.4 (worse than best kept -14.5)" in prompt
+    assert f"Algorithm {kept}" not in prompt
     heads = [prompt.index(f"Algorithm {i}, designed from scratch") for i in (better, worse, failed)]
     assert heads == sorted(heads)
 

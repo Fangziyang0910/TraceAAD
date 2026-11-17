@@ -1,6 +1,7 @@
 """Build bilingual ICML 2027 manuscripts without refreshing frozen evidence."""
 from pathlib import Path
 import argparse
+import hashlib
 import re
 import shutil
 import subprocess
@@ -48,7 +49,7 @@ def algorithm(language):
     ]
     s = [a if language == 'en' else b for a, b in pairs]
     return r'''\begin{algorithm}[H]
-\caption{EvoTrace}\label{alg:evotrace}
+\caption{TREES}\label{alg:trees}
 \begin{algorithmic}[1]
 \REQUIRE ''' + s[0] + r'''
 \STATE ''' + s[1] + r'''
@@ -79,20 +80,22 @@ def algorithm(language):
 
 
 def convert_body(markdown, language):
-    markdown = re.sub(r'^(#{2,4}) (?:\d+(?:\.\d+)*\.|[A-D]\.\d+\.)\s+', r'\1 ', markdown, flags=re.M)
-    markdown = re.sub(r'^## (?:Appendix|附录)\s+[A-D]\.\s+', '## ', markdown, flags=re.M)
-    markdown = re.sub(r'```text\n(?:Algorithm 1: |算法1：)EvoTrace\n.*?```', 'EVOTRACEALGORITHM', markdown, flags=re.S)
+    markdown = re.sub(r'^(#{2,4}) (?:\d+(?:\.\d+)*\.|[A-Z]\.\d+\.)\s+', r'\1 ', markdown, flags=re.M)
+    markdown = re.sub(r'^## (?:Appendix|附录)\s+[A-Z]\.\s+', '## ', markdown, flags=re.M)
+    markdown = re.sub(r'```text\n(?:Algorithm 1: |算法1：)TREES\n.*?```', 'EVOTRACEALGORITHM', markdown, flags=re.S)
     graphics = []
     def figure(match):
         path, lead, tail = match.groups()
         path = {'figures/evotrace/12-v3-experience-cycle.png': 'figures/framework.png',
                 'figures/evotrace/13-v3-experience-accumulation.png': 'figures/reflective-simplification.png',
-                '../paper/figures/early-search.png': 'figures/early-search.pdf'}[path]
+                '../paper/figures/early-search.png': 'figures/early-search.pdf',
+                '../paper/figures/representative-search.png': 'figures/representative-search.pdf',
+                '../paper/figures/inheritance-case.png': 'figures/inheritance-case.pdf'}[path]
         caption = latex(lead.strip() + ' ' + tail.strip())
         number = len(graphics) + 1
         graphics.append('\\begin{figure*}[t]\n\\centering\n'
                         + f'\\includegraphics[width=\\textwidth]{{{path}}}\n'
-                        + f'\\caption{{{caption}}}\\label{{fig:evotrace-{number}}}\n'
+                        + f'\\caption{{{caption}}}\\label{{fig:trees-{Path(path).stem}}}\n'
                         + '\\end{figure*}')
         return f'EVOTRACEFIGURE{number}'
     markdown = re.sub(r'!\[[^\]]*\]\(([^)]+)\)\n\n\*\*(?:Figure \d+\.|图\d+｜)(.*?)\*\*\s*(.*?)(?=\n\n)', figure, markdown, flags=re.S)
@@ -113,6 +116,14 @@ def convert_body(markdown, language):
     markdown = re.sub(r'\*\*(?:Table 1\.|表1｜)(.*?)\*\*([^\n]*)\n\n((?:\|[^\n]+\n)+)', table, markdown)
     markdown = re.sub(r'\*\*(?:Table [2-9]\.|表[2-9]｜)(.*?)\*\*([^\n]*)\n\n(?=\|)',
                       lambda m: 'Table: ' + m[1].strip() + ' ' + m[2].strip() + '\n\n', markdown)
+    # Declare the two wide results floats when the analysis starts, so they
+    # appear beside its text rather than being delayed until the conclusion.
+    if len(graphics) == 3 and score_table:
+        heading = ('## Analysis of Experience Accumulation During Search' if language == 'en'
+                   else '## 搜索中的经验积累分析')
+        assert markdown.count(heading) == 1
+        markdown = markdown.replace('EVOTRACEFIGURE3', '').replace('EVOTRACESCORETABLE', '')
+        markdown = markdown.replace(heading, heading + '\n\nEVOTRACEFIGURE3\n\nEVOTRACESCORETABLE', 1)
     result = latex(markdown)
     for i, graphic in enumerate(graphics, 1):
         result = result.replace(f'EVOTRACEFIGURE{i}', graphic)
@@ -125,6 +136,12 @@ shutil.copy2(ROOT/'docs/paper-references.bib', P/'references.bib')
 for language, source, name in [('en', 'paper.md', 'main'), ('zh', 'paper-中文.md', 'main-zh')]:
     text = (ROOT/'docs'/source).read_text()
     title = latex(text.splitlines()[0][2:])
+    display_title = title
+    if language == 'en':
+        # Balance the long title while retaining its unbroken PDF metadata.
+        display_title = title.replace(' in Tree-Structured Algorithm Populations',
+                                      r'\\ in Tree-Structured Algorithm Populations')
+        display_title = r'\texorpdfstring{' + display_title + '}{' + title + '}'
     abstract_heading = '## Abstract\n\n' if language == 'en' else '## 摘要\n\n'
     abstract = latex(text.split(abstract_heading, 1)[1].split('\n## ', 1)[0])
     body = '## ' + text.split('\n## ', 2)[2]
@@ -140,6 +157,10 @@ for language, source, name in [('en', 'paper.md', 'main'), ('zh', 'paper-中文.
 \renewcommand{\tablename}{表}
 \renewcommand{\figurename}{图}
 \renewcommand{\abstractname}{摘要}
+\renewenvironment{abstract}
+{\centerline{\large\bf 摘要}
+ \vspace{-0.12in}\begin{quote}}
+{\par\end{quote}\vskip0.12in}
 \renewcommand{\refname}{参考文献}
 \makeatletter
 \renewcommand{\fnum@table}{表~\thetable}
@@ -165,10 +186,10 @@ for language, source, name in [('en', 'paper.md', 'main'), ('zh', 'paper-中文.
 \setmonofont{TeX Gyre Cursor}[Scale=MatchLowercase]
 \input{style.tex}
 ''' + cjk + r'''
-\icmltitlerunning{EvoTrace: Experience-Bearing Tree-Structured Populations}
+\icmltitlerunning{Reflective Elimination: Accumulating Design Experience}
 \begin{document}
 \twocolumn[
-\icmltitle{''' + title + r'''}
+\icmltitle{''' + display_title + r'''}
 \begin{icmlauthorlist}
 \icmlauthor{Anonymous Authors}{anon}
 \end{icmlauthorlist}
@@ -190,9 +211,10 @@ for language, source, name in [('en', 'paper.md', 'main'), ('zh', 'paper-中文.
 \onecolumn
 \appendix
 ''' + appendix_tex + '\n\\end{document}\n'
+    tex = '% Markdown SHA256: ' + hashlib.sha256(text.encode()).hexdigest() + '\n' + tex
     (P/(name+'.tex')).write_text(tex)
     with (P/(name+'-build.log')).open('w') as log:
         subprocess.run(['latexmk', '-xelatex', '-interaction=nonstopmode', '-halt-on-error',
                         '-outdir=build', name+'.tex'], cwd=P, check=True, stdout=log, stderr=subprocess.STDOUT)
-    shutil.copy2(P/'build'/(name+'.pdf'), P/('evotrace.pdf' if language == 'en' else 'evotrace-中文.pdf'))
+    shutil.copy2(P/'build'/(name+'.pdf'), P/('trees.pdf' if language == 'en' else 'trees-中文.pdf'))
     print(name, 'complete', flush=True)

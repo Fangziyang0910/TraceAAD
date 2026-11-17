@@ -6,7 +6,7 @@ TraceAAD Base 是不利用轨迹经验的基础演化搜索对照，用于自动
 
 程序库保存候选的分析、设计、代码、来源与评价，供追溯与研究分析使用。演化生成只读取当前算法的代码、自包含设计说明和成绩；交叉增加参考设计与成绩。初始化与修复沿用原有流程。父代按当前成绩做纯Boltzmann采样，算子按固定概率选择，不做次数惩罚、轨迹价值估计或反思。初始化提供算法起点，随后反复选择、生成与评价，直至满足停止条件。
 
-本说明对应生成协议`static_algorithm_context_v1`与选择规则`boltzmann_fitness_v1`。Base、V21.3、V22.2、V23.2、V24.1共享Base公共流程；机制2只改变生成材料、算子任务与输出协议，机制1改变预算修正与交叉参考。
+本说明对应生成协议`static_algorithm_context_v1`与选择规则`boltzmann_fitness_v1`。早期基于 Base 扩展的轨迹变体源码已移入本地封存目录 `archive/trajectory_methods_20261116/`。
 
 ```mermaid
 flowchart TD
@@ -431,5 +431,3 @@ flowchart TD
 评价预算耗尽或触发连续未评价上限后，停止新的生成与修复，完成已启动的评价，返回成绩最好的有效生成个体；没有有效个体则报告失败。记录停止原因与实际评价次数。Base 不因成绩停滞提前停止。
 
 新运行的 `run_config.json` 保存 `generation_protocol=static_algorithm_context_v1`。恢复前先核对该标识；旧 Base 日志须使用原始源码快照恢复，不能接入本版继续搜索。
-
-V23.2 为 Base 加机制1：生成侧沿用本版提示，选择侧复用 V22.2 的机制1。

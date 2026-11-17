@@ -1,6 +1,6 @@
-# EvoTrace机制图
+# TREES机制图
 
-本目录维护当前论文方法图与历史版本图示记录。当前代表集覆盖与成批反思树简化规则见[V3设计](../../EvoTrace-v3设计.md)。
+本目录维护当前论文方法图与历史版本图示记录。论文方法名为TREES（Tree-structured Reflective Evolutionary Search），核心更新为反思式淘汰（Reflective Elimination）；EvoTrace保留为内部目录与历史版本代号。当前代表集覆盖与成批反思树简化规则见[V3设计](../../EvoTrace-v3设计.md)。
 
 ## 当前 V3 论文图（11月16日重构）
 

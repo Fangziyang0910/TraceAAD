@@ -76,11 +76,11 @@ python -m traceaad_base run --task-factory my_tasks:make_task \
 | [models.py](models.py)、[config.py](config.py) | 个体、尝试记录与默认配置 |
 | [search.py](search.py) | 初始化、三算子生成、共享一次修复、评价预算与停止 |
 | [prompts.py](prompts.py) | 当前算法与交叉参考；初始化及失败反馈保持原样；修复读取本次候选和自身错误 |
-| [selection.py](selection.py) | 当前排名与实际调用成本；固定算子概率 |
+| [selection.py](selection.py) | 按当前适应度的纯 Boltzmann 父代采样与中位数参考筛选；固定算子概率 |
 | [task.py](task.py)、[evaluation.py](evaluation.py)、[runtime.py](runtime.py) | 任务适配、独立评价与总时限 |
 | [llm.py](llm.py)、[storage.py](storage.py) | OpenAI 兼容请求与追加记录 |
 
-模型依次输出 `analysis`、`design`、`code`；前两项各用两三句，最多100个英文词或200个中文字。`analysis` 随个体保存，说明本次计算变化及其依据。演化展示当前父代的完整代码、自包含设计和成绩，交叉参考展示设计和成绩。初始化保持原样，展示样例、已有初始候选及其分析与成绩，以及最近失败初始尝试的反馈。演化生成不读取祖先、子代、失败子代历史、来源和此前分析。修复保持原样，读取本次候选的代码、设计、分析、来源编号和自身错误，不查询其他节点。`ancestor_count`、`offspring_count` 仅供机制版本使用，`failure_count` 仍控制初始化失败反馈。修复更新同一个体的设计和代码，修复说明接在原分析之后，原始回复及修复前版本仍保存在记录中。父代权重为 `名次^-1.5 × 3/(3+调用数)`，子代不向父代计功；相同源码只算一个候选。程序库不去重，也不截断。
+模型依次输出 `analysis`、`design`、`code`；前两项各用两三句，最多100个英文词或200个中文字。`analysis` 随个体保存，说明本次计算变化及其依据。演化展示当前父代的完整代码、自包含设计和成绩，交叉参考展示设计和成绩。初始化保持原样，展示样例、已有初始候选及其分析与成绩，以及最近失败初始尝试的反馈。演化生成不读取祖先、子代、失败子代历史、来源和此前分析。修复保持原样，读取本次候选的代码、设计、分析、来源编号和自身错误，不查询其他节点。`ancestor_count`、`offspring_count` 保留为兼容配置项，`failure_count` 控制初始化失败反馈。修复更新同一个体的设计和代码，修复说明接在原分析之后，原始回复及修复前版本仍保存在记录中。父代对不同标准化源码的最早有效个体按 $\exp(-(f - f^*) / \tau)$ 做纯 Boltzmann 采样，不做访问次数折扣；程序库不去重，也不截断。
 
 ## 运行记录与验证
 
@@ -98,5 +98,3 @@ python -m traceaad_base run --task-factory my_tasks:make_task \
 ```bash
 uv run pytest -q tests/independent_base
 ```
-
-V23.2 为 Base 加机制1：生成侧沿用本版提示，选择侧复用 V22.2 的机制1。

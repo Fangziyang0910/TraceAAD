@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
-  "recorded_at_utc": "2026-11-16T13:41:34.832831+00:00",
+  "recorded_at_utc": "2026-11-17T06:11:20.004071+00:00",
   "generator": "built-in image_gen",
   "figures": [
     {
       "id": 1,
       "file": "12-v3-experience-cycle.png",
-      "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-7b66c044-8454-4533-8544-071953069143.png",
+      "source": "/home/fang/.codex/generated_images/01a1e820-3a3f-7ca1-a23c-621fc78d4ba8/exec-6c29a310-bf8f-4dcf-8f6b-27daf7372dd0.png",
       "generations": [
         {
           "revision": 1,
@@ -22,6 +22,16 @@
             "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-d22dcaf7-7e4a-498e-b5c0-d6627a3d9a91.png"
           ],
           "transparent_background": false
+        },
+        {
+          "revision": 3,
+          "mode": "edit",
+          "prompt": "Use case: text-localization. Edit the supplied current PNG only. Preserve its entire layout, topology, node positions, edges, dashed regions, colors, fonts, arrows, legend and EVERY other word exactly. Replace ONLY the middle phrase 'Code changes and outcomes' with 'Designs, code, outcomes'; keep the next line '+ existing experience' exactly. In right panel (c), replace the three descriptions so the two-column rows read exactly: 'Refine | Formation path + attempts', 'Crossover | Formation path + reference', 'Explore | Diverse representatives'. The | denotes existing two-column separation, DO NOT draw literal pipes. Operator names stay orange, descriptions charcoal, aligned in the same two columns. Fit descriptions on single lines with the existing typography. Do not move any nodes or change any edge or label. E_AB must stay on the A-to-B edge with edge segments on both sides. Preserve all subscripts and glyphs, all panel titles, feedback arrow, legend and remaining text. Change only these four text spans. Keep native canvas 2061x763 if possible. No postprocessing.",
+          "referenced_image_paths": [
+            "/home/fang/code/LLM4AD/TraceAAD/docs/figures/evotrace/12-v3-experience-cycle.png"
+          ],
+          "transparent_background": false,
+          "source": "/home/fang/.codex/generated_images/01a1e820-3a3f-7ca1-a23c-621fc78d4ba8/exec-6c29a310-bf8f-4dcf-8f6b-27daf7372dd0.png"
         }
       ]
     },

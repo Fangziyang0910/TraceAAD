@@ -2,7 +2,7 @@
 
 **树状种群使算法的优胜劣汰，同时成为积累和复用算法设计经验的过程。**
 
-EvoTrace以树状种群记录算法的演化关系。淘汰算法时，反思结合相关代码变化、评价结果与已有经验形成算法设计经验，并在路径收缩和子树剪枝后将经验保存在重连边与保留节点上。已有经验在后续更新中继续整合，与相关算法及其演化轨迹共同用于精化、交叉和探索。
+EvoTrace（论文方法名 **TREES**）以树状种群记录算法的演化关系。淘汰算法时，反思结合相关代码变化、评价结果与已有经验形成算法设计经验，并在路径收缩和子树剪枝后将经验保存在重连边与保留节点上。已有经验在后续更新中继续整合，与相关算法及其演化轨迹共同用于精化、交叉和探索。
 
 ## 从哪里开始
 
@@ -16,7 +16,7 @@ EvoTrace以树状种群记录算法的演化关系。淘汰算法时，反思结
 | 了解 Base 的个体表示、上下文与提示 | [Base设计](docs/TraceAAD-Base设计.md) |
 | 核对当前对照批次与已验证边界 | [实验与边界台账](docs/记录/README.md) |
 | 独立使用 EvoTrace 或接入任务与模型 | [V3](evotrace_v3/README.md)、[V2](evotrace_v2/README.md)、[V1](evotrace_v1/README.md) |
-| 运行 EvoTrace 或历史轨迹方法 | [统一入口](experiments/traceaad/README.md) |
+| 通过公共调度器运行 EvoTrace 或 Base | [统一入口](experiments/traceaad/README.md) |
 | 设计、运行或复查实验 | [V3实验方案](docs/EvoTrace-v3实验方案.md)、[实验入口](experiments/README.md) |
 | 查阅第三方提示的来源版本 | [来源记录](baselines/UPSTREAM.md) |
 

@@ -1,0 +1,225 @@
+{
+  "snapshot_sha256": "29a642d88d410c815c94802f60567d2db73e235dada0483c5448c1c05c4f26eb",
+  "scope": "Same frozen prefixes as snapshot.json; prior experience is counted in reflection inputs, not as a measure of summary quality or search benefit.",
+  "definition": "A nonempty Earlier Algorithm-Design Experience block containing at least one reflection output from a strictly earlier population update, matched after whitespace normalization.",
+  "common_horizon": 180,
+  "totals": {
+    "reflection_calls": {
+      "edge": 509,
+      "node": 887
+    },
+    "with_prior_experience": {
+      "edge": 311,
+      "node": 405
+    }
+  },
+  "reflection_calls": 1396,
+  "with_prior_experience": 716,
+  "with_prior_experience_percent": 51.289398280802295,
+  "runs": [
+    {
+      "task": "cvrp_aco",
+      "seed": 0,
+      "source": "experiments_result/evotrace_v3_revised/cvrp_aco/20261115_115206_evotrace_v3_revised_co4_cvrp_evotrace_v3_rep1/native/attempts.jsonl",
+      "source_prefix_sha256": "2ab290dca95def7e94efad61926025fc7da613ecda4d1368770be9bf77605f7d",
+      "prefix_attempts": 232,
+      "reflection_calls": {
+        "edge": 52,
+        "node": 84
+      },
+      "with_prior_experience": {
+        "edge": 34,
+        "node": 38
+      },
+      "containing_output_from_an_earlier_update": 72,
+      "last_improvement_at_or_before_common_horizon": 138
+    },
+    {
+      "task": "cvrp_aco",
+      "seed": 1,
+      "source": "experiments_result/evotrace_v3_revised/cvrp_aco/20261115_115206_evotrace_v3_revised_co4_cvrp_evotrace_v3_rep2/native/attempts.jsonl",
+      "source_prefix_sha256": "a67574c58fbac5274bf8c75baa733cbb5deb98782297a637b93e30ac04ea8f3f",
+      "prefix_attempts": 214,
+      "reflection_calls": {
+        "edge": 47,
+        "node": 74
+      },
+      "with_prior_experience": {
+        "edge": 30,
+        "node": 30
+      },
+      "containing_output_from_an_earlier_update": 60,
+      "last_improvement_at_or_before_common_horizon": 163
+    },
+    {
+      "task": "cvrp_aco",
+      "seed": 2,
+      "source": "experiments_result/evotrace_v3_revised/cvrp_aco/20261115_115206_evotrace_v3_revised_co4_cvrp_evotrace_v3_rep3/native/attempts.jsonl",
+      "source_prefix_sha256": "b9037e5ed14fcfe04f015f1b75d5025c17ebd0cc705fd176c4c1cfbdb64b9aaa",
+      "prefix_attempts": 209,
+      "reflection_calls": {
+        "edge": 56,
+        "node": 57
+      },
+      "with_prior_experience": {
+        "edge": 35,
+        "node": 21
+      },
+      "containing_output_from_an_earlier_update": 56,
+      "last_improvement_at_or_before_common_horizon": 146
+    },
+    {
+      "task": "fssp_gls",
+      "seed": 0,
+      "source": "experiments_result/evotrace_v3_revised/fssp_gls/20261115_115206_evotrace_v3_revised_co4_fssp_evotrace_v3_rep1/native/attempts.jsonl",
+      "source_prefix_sha256": "2deadd1f3f7ad7b24883327dc1608b455e24e8aced9f799081308fae82464806",
+      "prefix_attempts": 247,
+      "reflection_calls": {
+        "edge": 41,
+        "node": 102
+      },
+      "with_prior_experience": {
+        "edge": 24,
+        "node": 52
+      },
+      "containing_output_from_an_earlier_update": 76,
+      "last_improvement_at_or_before_common_horizon": 162
+    },
+    {
+      "task": "fssp_gls",
+      "seed": 1,
+      "source": "experiments_result/evotrace_v3_revised/fssp_gls/20261115_115206_evotrace_v3_revised_co4_fssp_evotrace_v3_rep2/native/attempts.jsonl",
+      "source_prefix_sha256": "4e47635c78e9c359816cefe16c24fd61e359220f2928038074e37602ca42e912",
+      "prefix_attempts": 228,
+      "reflection_calls": {
+        "edge": 38,
+        "node": 101
+      },
+      "with_prior_experience": {
+        "edge": 20,
+        "node": 59
+      },
+      "containing_output_from_an_earlier_update": 79,
+      "last_improvement_at_or_before_common_horizon": 171
+    },
+    {
+      "task": "fssp_gls",
+      "seed": 2,
+      "source": "experiments_result/evotrace_v3_revised/fssp_gls/20261115_115206_evotrace_v3_revised_co4_fssp_evotrace_v3_rep3/native/attempts.jsonl",
+      "source_prefix_sha256": "34a49d105792158c0b323dfad0967e484835bf6becdf6769fca2049d7f7d2929",
+      "prefix_attempts": 229,
+      "reflection_calls": {
+        "edge": 46,
+        "node": 96
+      },
+      "with_prior_experience": {
+        "edge": 27,
+        "node": 46
+      },
+      "containing_output_from_an_earlier_update": 73,
+      "last_improvement_at_or_before_common_horizon": 151
+    },
+    {
+      "task": "op_aco",
+      "seed": 0,
+      "source": "experiments_result/evotrace_v3_revised/op_aco/20261115_115206_evotrace_v3_revised_co4_op_evotrace_v3_rep1/native/attempts.jsonl",
+      "source_prefix_sha256": "6e007e5f5ab8a5a183dc51de19104a7ef3713ec741be99f1414bebfd257c461f",
+      "prefix_attempts": 209,
+      "reflection_calls": {
+        "edge": 38,
+        "node": 71
+      },
+      "with_prior_experience": {
+        "edge": 20,
+        "node": 30
+      },
+      "containing_output_from_an_earlier_update": 50,
+      "last_improvement_at_or_before_common_horizon": 179
+    },
+    {
+      "task": "op_aco",
+      "seed": 1,
+      "source": "experiments_result/evotrace_v3_revised/op_aco/20261115_115206_evotrace_v3_revised_co4_op_evotrace_v3_rep2/native/attempts.jsonl",
+      "source_prefix_sha256": "204fc1da55448db9be47b2a7787b35bbc9fe2eaefa0c1e9c62a0551b787b776b",
+      "prefix_attempts": 168,
+      "reflection_calls": {
+        "edge": 31,
+        "node": 57
+      },
+      "with_prior_experience": {
+        "edge": 20,
+        "node": 26
+      },
+      "containing_output_from_an_earlier_update": 46,
+      "last_improvement_at_or_before_common_horizon": 168
+    },
+    {
+      "task": "op_aco",
+      "seed": 2,
+      "source": "experiments_result/evotrace_v3_revised/op_aco/20261115_115206_evotrace_v3_revised_co4_op_evotrace_v3_rep3/native/attempts.jsonl",
+      "source_prefix_sha256": "674d1bb5591a7939f87ddd273e963782045e3ba073cc10ca1d41621b8427f220",
+      "prefix_attempts": 220,
+      "reflection_calls": {
+        "edge": 42,
+        "node": 76
+      },
+      "with_prior_experience": {
+        "edge": 25,
+        "node": 38
+      },
+      "containing_output_from_an_earlier_update": 63,
+      "last_improvement_at_or_before_common_horizon": 135
+    },
+    {
+      "task": "tsp_construct",
+      "seed": 0,
+      "source": "experiments_result/evotrace_v3_revised/tsp_construct/20261115_115206_evotrace_v3_revised_co4_tsp_evotrace_v3_rep1/native/attempts.jsonl",
+      "source_prefix_sha256": "1dd6ed57fe6e634353fbe3733635f4c4046fa3e92f6f06c333621f6fe00e2798",
+      "prefix_attempts": 171,
+      "reflection_calls": {
+        "edge": 39,
+        "node": 58
+      },
+      "with_prior_experience": {
+        "edge": 25,
+        "node": 18
+      },
+      "containing_output_from_an_earlier_update": 43,
+      "last_improvement_at_or_before_common_horizon": 109
+    },
+    {
+      "task": "tsp_construct",
+      "seed": 1,
+      "source": "experiments_result/evotrace_v3_revised/tsp_construct/20261115_115206_evotrace_v3_revised_co4_tsp_evotrace_v3_rep2/native/attempts.jsonl",
+      "source_prefix_sha256": "4f79434eb80e79a68784cac60647e2b06528645579f1a81e9a57c85c6fe88e9b",
+      "prefix_attempts": 175,
+      "reflection_calls": {
+        "edge": 42,
+        "node": 52
+      },
+      "with_prior_experience": {
+        "edge": 26,
+        "node": 22
+      },
+      "containing_output_from_an_earlier_update": 48,
+      "last_improvement_at_or_before_common_horizon": 179
+    },
+    {
+      "task": "tsp_construct",
+      "seed": 2,
+      "source": "experiments_result/evotrace_v3_revised/tsp_construct/20261115_115206_evotrace_v3_revised_co4_tsp_evotrace_v3_rep3/native/attempts.jsonl",
+      "source_prefix_sha256": "b64077678d8526c5c582db3ff2079f9fa59dc186f03f5859af487063692e3204",
+      "prefix_attempts": 179,
+      "reflection_calls": {
+        "edge": 37,
+        "node": 59
+      },
+      "with_prior_experience": {
+        "edge": 25,
+        "node": 25
+      },
+      "containing_output_from_an_earlier_update": 50,
+      "last_improvement_at_or_before_common_horizon": 166
+    }
+  ]
+}
