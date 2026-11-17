@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 import json
-import math
 from typing import Literal
 
 CANDIDATE_RESPONSE_FORMAT = {
@@ -38,7 +37,6 @@ class Node:
     failure: str | None = None
     experience: str = ""
     direct_evaluations: int = 0  # 以此个体为主父代直接消耗的实际评价次数；树简化保留存活节点的原计数。
-    observations: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -51,7 +49,6 @@ class Edge:
     reference_id: int | None = None
     experience: str = ""
     contracted: bool = False
-    observations: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -65,35 +62,13 @@ class TreePopulation:
     latest_node_id: int = 0
     used_crossover_pairs: list[tuple[int, int]] = field(default_factory=list)
     evaluations_used: int = 0
-    root_observations: list[dict] = field(default_factory=list)
 
     def add(self, node: Node, edge: Edge, *, evaluations: int) -> None:
         """Attach one evaluated algorithm and record its actual evaluation cost on its primary parent."""
-        if node.id == self.root_id or node.id <= self.latest_node_id or node.id != edge.child_id:
-            raise ValueError("New node IDs must increase and match edge.child_id")
-        if type(evaluations) is not int or evaluations < 1:
-            raise ValueError("evaluations must count at least one actual evaluation")
-        if node.fitness is not None and not math.isfinite(node.fitness):
-            raise ValueError("fitness must be finite or None")
-        reference = None
-        if edge.operator == "Crossover" and edge.reference_id is not None:
-            reference = self.nodes.get(edge.reference_id)
-            if reference is None or reference.fitness is None:
-                raise ValueError("Crossover requires a retained feasible reference")
-        if edge.parent_id == self.root_id:
-            if edge.operator is not None:
-                raise ValueError("Initial edges must have operator=None")
-        else:
-            parent = self.nodes.get(edge.parent_id)
-            if parent is None or parent.fitness is None:
-                raise ValueError("A new algorithm requires a retained feasible parent")
-            if edge.operator not in ("Refine", "Crossover", "Explore"):
-                raise ValueError("An evolutionary edge requires an operator")
-            parent.direct_evaluations += evaluations
-            if edge.operator == "Crossover" and reference is not None:
-                pair = (parent.id, edge.reference_id)
-                if pair not in self.used_crossover_pairs:
-                    self.used_crossover_pairs.append(pair)
+        if edge.parent_id != self.root_id:
+            self.nodes[edge.parent_id].direct_evaluations += evaluations
+            if edge.operator == "Crossover" and (edge.parent_id, edge.reference_id) not in self.used_crossover_pairs:
+                self.used_crossover_pairs.append((edge.parent_id, edge.reference_id))
         self.evaluations_used += evaluations
         self.nodes[node.id] = node
         self.edges[node.id] = edge

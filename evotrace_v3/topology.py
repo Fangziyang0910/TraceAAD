@@ -130,7 +130,8 @@ class SimplificationPlan:
     kept_ids: tuple[int, ...]
     path_contractions: tuple[PathContraction, ...] = ()
     subtree_prunings: tuple[SubtreePruning, ...] = ()
-    triggers: tuple[dict, ...] = ()
+    representative_ids: tuple[int, ...] = ()
+    fork_ids: tuple[int, ...] = ()
 
 
 def distinct_individuals(tree: TreePopulation) -> set[int]:
@@ -143,31 +144,18 @@ def distinct_individuals(tree: TreePopulation) -> set[int]:
     return set(first.values())
 
 
-def quality_scores(tree: TreePopulation, candidates=None) -> dict[int, float]:
-    """Population rank quality in [0, 1], with equal fitness receiving equal average rank.
-
-    Lower fitness is better. A single individual, or an all-tied population,
-    has quality 0.5.
-    """
-    ordered = sorted((i for i in (tree.nodes if candidates is None else candidates)
-                      if tree.nodes[i].fitness is not None),
-                     key=lambda i: (tree.nodes[i].fitness, i))
-    scores = {}
+def ranks(tree: TreePopulation, candidates) -> dict[int, float]:
+    """0-based fitness rank among ``candidates`` (lower fitness is better); equal fitness shares the average rank."""
+    ordered = sorted(candidates, key=lambda i: (tree.nodes[i].fitness, i))
+    result = {}
     start = 0
     while start < len(ordered):
         end = start + 1
         while end < len(ordered) and tree.nodes[ordered[end]].fitness == tree.nodes[ordered[start]].fitness:
             end += 1
-        quality = 1 - (start + end - 1) / (2 * (len(ordered) - 1)) if len(ordered) > 1 else 0.5
-        scores.update((i, quality) for i in ordered[start:end])
+        result.update((i, (start + end - 1) / 2) for i in ordered[start:end])
         start = end
-    return scores
-
-
-def champion(tree: TreePopulation) -> int | None:
-    """The best feasible individual; ties prefer the earlier node ID."""
-    return min((i for i in tree.nodes if tree.nodes[i].fitness is not None),
-               key=lambda i: (tree.nodes[i].fitness, i), default=None)
+    return result
 
 
 def representatives(
@@ -200,7 +188,6 @@ def plan_simplification(tree: TreePopulation, config: TopologyConfig = TopologyC
        ancestors (subtree prunings -> node experience).
     3. Simplify only regions that have accumulated at least ``region_size`` nodes.
     """
-    now = tree.evaluations_used
     reps = set(representatives(tree, config))
 
     children = defaultdict(list)
@@ -257,16 +244,7 @@ def plan_simplification(tree: TreePopulation, config: TopologyConfig = TopologyC
         *(i for b in prunings for i in b.removed_ids),
     }
     kept = tuple(sorted(set(tree.nodes) - removed))
-    triggers = (
-        {
-            "kind": "reflective_tree_simplification",
-            "evaluations": now,
-            "representative_ids": sorted(reps),
-            "fork_ids": sorted(forks),
-            "removed_ids": sorted(removed),
-        },
-    ) if removed else ()
-    return SimplificationPlan(kept, contractions, prunings, triggers)
+    return SimplificationPlan(kept, contractions, prunings, tuple(sorted(reps)), tuple(sorted(forks)))
 
 
 def apply_simplification(tree: TreePopulation, plan: SimplificationPlan) -> TreePopulation:
@@ -285,7 +263,6 @@ def apply_simplification(tree: TreePopulation, plan: SimplificationPlan) -> Tree
     return TreePopulation(
         root_id=tree.root_id,
         root_experience=tree.root_experience,
-        root_observations=list(tree.root_observations),
         nodes=nodes,
         edges=edges,
         latest_node_id=tree.latest_node_id,

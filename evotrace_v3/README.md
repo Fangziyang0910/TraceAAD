@@ -41,9 +41,9 @@ python3 -m evotrace_v3 --task-factory my_task:make_task \
 模块职责：
 - `models.py`：算法节点 `Node`、派生边 `Edge` 与树种群容器 `TreePopulation`；维护评价时钟与主父代 `direct_evaluations`。
 - `topology.py`：贪心覆盖代表集（`representatives`）与反思树简化（`plan_simplification` / `apply_simplification`），划分路径收缩（`PathContraction`）与子树剪枝（`SubtreePruning`）。
-- `allocation.py`：在代表集上按适应度排名和子代评价次数抽样父代（`representative_rank_direct_sampling`），并结合归一化适应度排名阈值与 AST 距离挑选交叉参考。
-- `reflection.py`：将路径收缩区域合成为边经验，将子树剪枝区域合成为节点经验；当次比较进入提示词，历史比较元数据落盘保存。
-- `context.py`：`Refine` 读取演化路径，`Crossover` 读取共同祖先及分叉双支，`Explore` 读取种群全局概览。
+- `allocation.py`：在代表集上按适应度排名和子代评价次数抽样父代（`representative_rank_direct_sampling`），并结合归一化适应度排名阈值与 AST 距离挑选交叉参考和 `Explore` 展示的代表个体。
+- `reflection.py`：路径收缩与子树剪枝共用一个反思模板；区域内每个算法给出来源与结果、`design`、失败原因、已有经验与源码，生成的经验写入收缩边或保留节点。反思失败时沿用区域内已有经验。
+- `context.py`：`Refine` 读取主父代的演化路径与从它出发的尝试；`Crossover` 在此基础上加一张参考代表卡片；`Explore` 读取主父代与所选代表的卡片。祖先、尝试与卡片只给分数、`design` 与经验，源码只给被重写或被移植的算法，不给代码差分。`ContextConfig.include_experiences = False` 是隐藏经验的消融。
 - `search.py`：生成、修复、评价、树简化更新与确定性断点恢复。
 - `task.py`、`llm.py`、`evaluation.py`、`storage.py`：独立任务封装、模型客户端、隔离评价器与原子文件存储。
 

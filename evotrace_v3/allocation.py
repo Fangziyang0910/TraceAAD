@@ -1,11 +1,11 @@
-"""Parent selection and crossover reference selection over the representative set."""
+"""Parent selection, crossover reference and Explore references over the representative set."""
 
 from dataclasses import dataclass
 import math
 import random
 
 from .models import Operator, TreePopulation
-from .topology import TopologyConfig, code_distance, identity, quality_scores, representatives
+from .topology import TopologyConfig, code_distance, ranks, representatives
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,7 @@ class AllocationConfig:
     explore_weight: float = 0.30
     crossover_weight: float = 0.25
     reference_quality_floor: float = 0.30
+    explore_references: int = 6  # Explore 展示的代表个体数
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.rank_half_life) or self.rank_half_life <= 0:
@@ -33,6 +34,7 @@ class AllocationDecision:
     reference_id: int | None
     parent_probability: float
     reference_distance: float | None = None
+    explore_ids: tuple[int, ...] = ()
 
 
 def parent_probabilities(
@@ -40,22 +42,13 @@ def parent_probabilities(
     config: AllocationConfig = AllocationConfig(),
     topology_config: TopologyConfig = TopologyConfig(),
 ) -> dict[int, float]:
-    """Normalize 2**(-rank_gap / rank_half_life) / (1 + direct_evaluations[r]) over representatives."""
-    reps = representatives(tree, topology_config)
-    quality = quality_scores(tree, reps)
-    if not quality:
-        return {}
-    best_quality = max(quality.values())
-    log_weights = {
-        i: -math.log(2) * (best_quality - quality[i]) * (len(quality) - 1)
-           / config.rank_half_life - math.log1p(tree.nodes[i].direct_evaluations)
-        for i in sorted(quality)
-    }
-    largest = max(log_weights.values())
-    weights = {i: math.exp(value - largest) for i, value in log_weights.items()}
+    """Normalize 2**(-rank / rank_half_life) / (1 + direct_evaluations) over the representatives."""
+    rank = ranks(tree, representatives(tree, topology_config))
+    best = min(rank.values(), default=0.0)  # 只做数值平移，归一化后不变
+    weights = {i: 2 ** (-(rank[i] - best) / config.rank_half_life) / (1 + tree.nodes[i].direct_evaluations)
+               for i in sorted(rank)}
     total = math.fsum(weights.values())
-    # Keep numerical underflow from becoming an eligibility rule at extreme settings.
-    return {i: max(math.ulp(0.0), weight / total) for i, weight in weights.items()}
+    return {i: weight / total for i, weight in weights.items()}
 
 
 def select_parent(
@@ -77,18 +70,14 @@ def eligible_reference_pool(
     config: AllocationConfig = AllocationConfig(),
     topology_config: TopologyConfig = TopologyConfig(),
 ) -> list[int]:
-    """Return representative crossover reference candidates ranked above ``reference_quality_floor``."""
-    if parent_id not in tree.nodes or tree.nodes[parent_id].fitness is None:
-        raise ValueError("Crossover parent must be a retained feasible node")
+    """Representatives other than the parent whose rank quality among them is at least ``reference_quality_floor``.
 
-    own = identity(tree.nodes[parent_id].code)
-    reps = representatives(tree, topology_config)
-    ordered = [
-        nid for nid in reps
-        if nid != parent_id and identity(tree.nodes[nid].code) != own
-    ]
-    quality = quality_scores(tree, ordered)
-    return [nid for nid in ordered if quality[nid] >= config.reference_quality_floor]
+    Rank quality is 1 - rank / (n - 1), and 0.5 for a single candidate.
+    """
+    pool = [i for i in representatives(tree, topology_config) if i != parent_id]
+    rank = ranks(tree, pool)
+    quality = {i: 1 - rank[i] / (len(pool) - 1) if len(pool) > 1 else 0.5 for i in pool}
+    return [i for i in pool if quality[i] >= config.reference_quality_floor]
 
 
 def select_crossover_reference(
@@ -97,34 +86,38 @@ def select_crossover_reference(
     config: AllocationConfig = AllocationConfig(),
     topology_config: TopologyConfig = TopologyConfig(),
 ) -> tuple[int | None, float | None]:
-    """Select the eligible representative reference with maximum AST structural distance from ``parent_id``."""
+    """Among eligible references, prefer pairs with the parent not yet used, then the largest AST distance."""
     pool = eligible_reference_pool(tree, parent_id, config, topology_config)
     if not pool:
         return None, None
-
-    parent_code = tree.nodes[parent_id].code
-    parent_ident = identity(parent_code)
     used = set(tree.used_crossover_pairs)
+    unused = [i for i in pool if (parent_id, i) not in used]
+    code = tree.nodes[parent_id].code
+    distance = {i: code_distance(code, tree.nodes[i].code) for i in (unused or pool)}
+    best = max(distance, key=lambda i: (distance[i], -float(tree.nodes[i].fitness), -i))  # type: ignore[arg-type]
+    return best, distance[best]
 
-    scored: list[tuple[float, int, bool]] = []
-    for cand_id in pool:
-        cand_code = tree.nodes[cand_id].code
-        if identity(cand_code) == parent_ident:
-            continue
-        dist = code_distance(parent_code, cand_code)
-        is_unused = (parent_id, cand_id) not in used
-        scored.append((dist, cand_id, is_unused))
 
-    if not scored:
-        return None, None
+def select_explore_references(
+    tree: TreePopulation,
+    parent_id: int,
+    config: AllocationConfig = AllocationConfig(),
+    topology_config: TopologyConfig = TopologyConfig(),
+) -> tuple[int, ...]:
+    """From the representatives other than the parent, take the best one, then repeatedly add the one
+    whose smallest AST distance to the parent and the already chosen ones is largest.
 
-    unused_candidates = [(dist, cid) for dist, cid, is_unused in scored if is_unused]
-    active = unused_candidates if unused_candidates else [(dist, cid) for dist, cid, _ in scored]
-    best_dist, best_id = max(
-        active,
-        key=lambda item: (item[0], -float(tree.nodes[item[1]].fitness), -item[1]),  # type: ignore[arg-type]
-    )
-    return best_id, best_dist
+    No quality floor applies: for Explore, a weak approach and its outcome are also informative.
+    """
+    pool = [i for i in representatives(tree, topology_config) if i != parent_id]
+    chosen = sorted(pool, key=lambda i: (tree.nodes[i].fitness, i))[:min(1, config.explore_references)]  # type: ignore[arg-type]
+    while len(chosen) < min(config.explore_references, len(pool)):
+        chosen.append(max(
+            (i for i in pool if i not in chosen),
+            key=lambda i: (min(code_distance(tree.nodes[j].code, tree.nodes[i].code) for j in (parent_id, *chosen)),
+                           -float(tree.nodes[i].fitness), -i),  # type: ignore[arg-type]
+        ))
+    return tuple(chosen)
 
 
 def allocate_step(
@@ -133,14 +126,16 @@ def allocate_step(
     config: AllocationConfig = AllocationConfig(),
     topology_config: TopologyConfig = TopologyConfig(),
 ) -> AllocationDecision:
-    """Select one representative parent, one evolution operator, and optional crossover reference."""
+    """Select one representative parent, one evolution operator, and its crossover reference or Explore references."""
     parent_id, probability = select_parent(tree, rng, config, topology_config)
     operators: list[Operator] = ["Refine", "Explore", "Crossover"]
     operator = rng.choices(operators, weights=[config.refine_weight, config.explore_weight,
                                              config.crossover_weight], k=1)[0]
-    ref_id, ref_dist = None, None
+    ref_id, ref_dist, explore_ids = None, None, ()
     if operator == "Crossover":
         ref_id, ref_dist = select_crossover_reference(tree, parent_id, config, topology_config)
         if ref_id is None:
             operator = "Refine"
-    return AllocationDecision(parent_id, operator, ref_id, probability, ref_dist)
+    elif operator == "Explore":
+        explore_ids = select_explore_references(tree, parent_id, config, topology_config)
+    return AllocationDecision(parent_id, operator, ref_id, probability, ref_dist, explore_ids)

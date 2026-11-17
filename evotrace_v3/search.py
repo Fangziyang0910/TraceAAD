@@ -18,8 +18,18 @@ from .models import Attempt, Candidate, FormatError, ModelReply, Program, Search
 from .allocation import AllocationConfig, allocate_step
 from .context import ContextConfig, EvoTracePromptBuilder
 from .models import CANDIDATE_RESPONSE_FORMAT, Edge, Node, TreePopulation
-from .reflection import reflect_and_apply
+from .reflection import EXPERIENCE_SCHEMA, clean_prompt_text, problem_header, reflect_and_apply
 from .topology import TopologyConfig, plan_simplification
+
+
+def with_output_format(model: Any, schema: dict, *, role: bool = False) -> Any:
+    """The same model with a JSON output schema; ``role`` gives a scheduled model a separate request label."""
+    if role and hasattr(model, "for_role"):
+        return model.for_role(schema)
+    if hasattr(model, "request_options"):
+        model = copy(model)
+        model.request_options = {**model.request_options, "response_format": schema}
+    return model
 
 
 def deserialize_tree(data: dict[str, Any]) -> TreePopulation:
@@ -39,7 +49,6 @@ class EvoTrace:
     method = "evotrace_v3"
     selection_rule = "representative_rank_direct_sampling"
     generation_protocol = "tree_population_context"
-    reference_rule = "quality_pool_max_ast_distance"
     mechanisms = (
         "tree_population",
         "reflective_tree_simplification",
@@ -56,7 +65,6 @@ class EvoTrace:
         topology_config: TopologyConfig | None = None,
         allocation_config: AllocationConfig | None = None,
         context_config: ContextConfig | None = None,
-        reflection_model: Any = "same",
         reflection_temperature: float = 0.3,
         reflection_max_tokens: int = 1536,
         run_dir: str | Path | None = None,
@@ -72,22 +80,10 @@ class EvoTrace:
         self.reflection_temperature = reflection_temperature
         self.reflection_max_tokens = reflection_max_tokens
 
-        gen_model = model
-        if hasattr(model, "request_options"):
-            gen_model = copy(model)
-            gen_model.request_options = {
-                **model.request_options,
-                "response_format": CANDIDATE_RESPONSE_FORMAT,
-            }
-
-        self.reflection_model = model if reflection_model == "same" else reflection_model
-
         self.tree = TreePopulation()
-        self.simplifications_count = 0
-        self.reflection_calls_count = 0
-
+        self.model = with_output_format(model, CANDIDATE_RESPONSE_FORMAT)
+        self.reflection_model = with_output_format(model, EXPERIENCE_SCHEMA, role=True)
         self.task = task
-        self.model = gen_model
         self.config = config
         self.store = Store(run_dir)
         self.prompts = EvoTracePromptBuilder(task, config)
@@ -110,7 +106,7 @@ class EvoTrace:
         else:
             self.store.write("run_config.json", {
                 **self._run_settings(),
-                "model": getattr(gen_model, "model", type(gen_model).__name__),
+                "model": getattr(self.model, "model", type(self.model).__name__),
             })
 
     def _run_settings(self) -> dict[str, Any]:
@@ -120,13 +116,10 @@ class EvoTrace:
             "task": self.task.description(),
             "selection_rule": self.selection_rule,
             "generation_protocol": self.generation_protocol,
-            "reference_rule": self.reference_rule,
             "mechanisms": list(self.mechanisms),
             "topology": asdict(self.topology_config),
             "allocation": asdict(self.allocation_config),
             "context": asdict(self.context_config),
-            "reflection_enabled": self.reflection_model is not None,
-            "reflection_representation": "node_and_edge_experience",
             "reflection_temperature": self.reflection_temperature,
             "reflection_max_tokens": self.reflection_max_tokens,
         }
@@ -146,8 +139,6 @@ class EvoTrace:
         prog = self.archive.get(attempt.program_id)
         if prog is None or prog.evaluation is None:
             return
-        from .reflection import clean_prompt_text
-
         op = None if attempt.operator == "Init" else attempt.operator
         parent_id = self.tree.root_id if op is None else attempt.parent_id
         node = Node(
@@ -169,11 +160,6 @@ class EvoTrace:
         self._attach_evaluated_attempt(attempt)
         if snapshot is not None:
             self.tree = deserialize_tree(snapshot)
-            self.simplifications_count += 1
-            self.reflection_calls_count += sum(
-                bool(record["prompt_chars"])
-                for record in attempt.record["simplification"]["reflection_calls"]
-            )
 
     def _update_population(self, attempt: Attempt) -> None:
         self._attach_evaluated_attempt(attempt)
@@ -185,45 +171,25 @@ class EvoTrace:
         plan = plan_simplification(self.tree, self.topology_config)
         if not plan.path_contractions and not plan.subtree_prunings:
             return
-        new_tree, records = reflect_and_apply(
+        self.tree, calls = reflect_and_apply(
             self.tree,
             plan,
             model=self.reflection_model,
-            task_description=self.task.task_description,
-            score_definition=self.task.score_definition,
-            function_template=self.task.function_template,
+            problem=problem_header(self.task.task_description, self.task.score_definition,
+                                   self.task.function_template),
             temperature=self.reflection_temperature,
             max_tokens=self.reflection_max_tokens,
             timeout=min(self.config.model_timeout, 180.0),
         )
-        self.tree = new_tree
-        self.simplifications_count += 1
-        llm_reflections = sum(1 for r in records if r.prompt_chars > 0)
-        self.reflection_calls_count += llm_reflections
-
-        aux_entries = [
-            {
-                "role": "reflection",
-                "kind": r.kind,
-                "target_id": r.target_id,
-                "status": "fallback" if r.used_fallback else "success",
-                "requests": 1,
-                "errors": int(r.used_fallback),
-                "usage": dict(r.usage),
-            }
-            for r in records
-            if r.prompt_chars > 0
-        ]
-        if aux_entries:
-            attempt.record.setdefault("aux", []).extend(aux_entries)
-
+        attempt.record.setdefault("aux", []).extend(
+            {"role": "reflection", "kind": c.kind, "target_id": c.target_id,
+             "status": "error" if c.error else "success", "requests": 1, "errors": int(c.error is not None),
+             "usage": dict(c.usage)}
+            for c in calls
+        )
         attempt.record["simplification"] = {
-            "cycle": self.simplifications_count,
-            "kept_ids": list(plan.kept_ids),
-            "triggers": list(plan.triggers),
-            "path_contractions": [asdict(c) for c in plan.path_contractions],
-            "subtree_prunings": [asdict(b) for b in plan.subtree_prunings],
-            "reflection_calls": [asdict(r) for r in records],
+            **asdict(plan),
+            "reflection_calls": [asdict(c) for c in calls],
         }
 
     @property
@@ -322,12 +288,13 @@ class EvoTrace:
             attempt.record["allocation"] = {
                 "rule": self.selection_rule,
                 **asdict(decision),
+                "explore_ids": list(decision.explore_ids),  # JSON 往返后保持同一形式
                 "parent_direct_evaluations": self.tree.nodes[decision.parent_id].direct_evaluations,
             }
             prompt, view = self.prompts.evolution_from_tree(
                 self.tree, decision.parent_id, decision.operator,
                 decision.reference_id, self.context_config,
-                count_tokens=getattr(self.model, "count_prompt_tokens", None),
+                explore_ids=decision.explore_ids,
             )
             attempt.record["context"] = view
         self.attempts.append(attempt)

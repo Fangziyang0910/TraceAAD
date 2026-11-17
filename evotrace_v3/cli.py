@@ -99,8 +99,6 @@ def main(argv=None):
                 "reflection_temperature": saved["reflection_temperature"],
                 "reflection_max_tokens": saved["reflection_max_tokens"],
             }
-            if not saved["reflection_enabled"]:
-                settings["reflection_model"] = None
         if args.rank_half_life is not None:
             allocation = dict(saved["allocation"]) if args.resume else {}
             allocation["rank_half_life"] = args.rank_half_life

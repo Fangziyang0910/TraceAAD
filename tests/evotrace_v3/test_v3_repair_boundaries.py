@@ -1,6 +1,10 @@
+import json
+
 from evotrace_v3.models import Edge, Node, TreePopulation
-from evotrace_v3.reflection import build_edge_reflection_prompt, build_node_reflection_prompt, reflect_and_apply
+from evotrace_v3.reflection import build_reflection_prompt, reflect_and_apply
 from evotrace_v3.topology import PathContraction, SimplificationPlan, SubtreePruning
+
+PROBLEM = '[Problem]\nMinimize.\nScore: lower is better.'
 
 
 def add(tree, parent, score, code, op='Refine'):
@@ -10,27 +14,40 @@ def add(tree, parent, score, code, op='Refine'):
     return nid
 
 
+class Reply:
+    def __init__(self, text):
+        self.content, self.usage = text, {'prompt_tokens': 1}
+
+
+def fixed(text, prompts=None):
+    class Model:
+        def complete(self, prompt, **kwargs):
+            if prompts is not None:
+                prompts.append(prompt)
+            return Reply(json.dumps({'experience': text}))
+    return Model()
+
+
+class Down:
+    def complete(self, *args, **kwargs):
+        raise TimeoutError('endpoint down')
+
+
 def test_negative_scores_are_compared_by_program_and_persisted_on_the_edge():
-    import json
     tree = TreePopulation()
     start = add(tree, 0, -14.848125, 'def solve(x): return x')
     middle = add(tree, start, -14.696875, 'def solve(x): return x + 1', 'Explore')
     end = add(tree, middle, -11.508125, 'def solve(x): return x * 2', 'Explore')
     region = PathContraction(start, end, (middle,))
-    prompt = build_edge_reflection_prompt(tree, region, task_description='Minimize negative reward')
-    assert 'Overall measured outcome: regressed' in prompt
-    assert f'Step 1 [Explore] (Intermediate), comparison {start}->{middle}: regressed' in prompt
-    assert f'Step 2 [Explore] (Endpoint), comparison {middle}->{end}: regressed' in prompt
-    assert f'{start}->{end} [overall path; net development]' in prompt
-    class Model:
-        def complete(self, *args, **kwargs):
-            return json.dumps({'experience': 'The computation changed from identity to multiplication.'})
-    new, records = reflect_and_apply(
-        tree, SimplificationPlan((start, end), (region,)), model=Model())
-    assert not records[0].used_fallback
-    assert new.edges[end].experience == 'The computation changed from identity to multiplication.'
-    fact = next(f for f in new.edges[end].observations if f["comparison_id"] == f"{start}->{end}")
-    assert (fact['parent_fitness'], fact['fitness']) == (-14.848125, -11.508125)
+    prompt, _ = build_reflection_prompt(tree, region, PROBLEM)
+    assert 'overall -14.8481 -> -11.5081 (regressed)' in prompt
+    assert f'Algorithm {middle} <- Algorithm {start} (Explore): -14.8481 -> -14.6969 (regressed)' in prompt
+    assert f'Algorithm {end} (retained) <- Algorithm {middle} (Explore): -14.6969 -> -11.5081 (regressed)' in prompt
+    new, calls = reflect_and_apply(tree, SimplificationPlan((start, end), (region,)), model=fixed('Identity to doubling.'),
+                                   problem=PROBLEM)
+    assert calls[0].error is None and calls[0].usage == {'prompt_tokens': 1}
+    assert new.edges[end].experience == 'Identity to doubling.'
+    assert new.edges[end].contracted and new.edges[end].parent_id == start
 
 
 def test_representative_cover_excludes_worse_nearby_offspring_and_resets_direct_effort_on_novel_or_improving_child():
@@ -58,138 +75,101 @@ def test_representative_cover_excludes_worse_nearby_offspring_and_resets_direct_
     assert probs[novel] > probs[c] > 0
 
 
-def test_observations_keep_original_comparison_while_reflection_prompt_stays_bounded():
-    import json
-    from dataclasses import asdict
-    from evotrace_v3.search import deserialize_tree
-    t = TreePopulation()
-    a = add(t, 0, -10, 'def f(): return 0')
-    b = add(t, a, -8, 'def f(): return 1')
-    x = add(t, b, -9, 'def f(): return 2')
-    prompts = []
-    class Model:
-        def complete(self, prompt, **kwargs):
-            prompts.append(prompt)
-            return json.dumps({'experience': 'Changed the return value.', 'parent_fitness': 999, 'fitness': 999})
-    first = SubtreePruning(b, (x,))
-    t, records = reflect_and_apply(t, SimplificationPlan((a, b), subtree_prunings=(first,)), model=Model())
-    assert not records[0].used_fallback
-    fact = t.nodes[b].observations[0]
-    assert (fact['parent_id'], fact['child_id'], fact['parent_fitness'], fact['fitness']) == (b, x, -8, -9)
-    second = SubtreePruning(a, (b,))
-    t, records = reflect_and_apply(t, SimplificationPlan((a,), subtree_prunings=(second,)), model=Model())
-    assert not records[0].used_fallback
-    facts = {f['comparison_id']: f for f in t.nodes[a].observations}
-    assert (facts[f'{b}->{x}']['parent_fitness'], facts[f'{b}->{x}']['fitness']) == (-8, -9)
-    assert (facts[f'{a}->{b}']['parent_fitness'], facts[f'{a}->{b}']['fitness']) == (-10, -8)
-    assert 'Comparison' not in t.nodes[a].experience
-    assert 'Changed the return value.' in prompts[-1]
-    # Historical deleted comparison IDs stay in node.observations on disk, NOT re-dumped into prompt catalog!
-    assert f'{b}->{x}' not in prompts[-1]
-    assert deserialize_tree(json.loads(json.dumps(asdict(t)))) == t
-
-    # Verify across 12 successive prunings into node `a` that prompt length stays O(current region), not growing!
-    lengths = []
-    for step in range(12):
-        k1 = add(t, a, -7 + step, f'def f(): return {10 + step}')
-        k2 = add(t, a, -6 + step, f'def f(): return {30 + step}')
-        pruning = SubtreePruning(a, (k1, k2))
-        t, recs = reflect_and_apply(t, SimplificationPlan((a,), subtree_prunings=(pruning,)), model=Model())
-        lengths.append(recs[0].prompt_chars)
-    assert len(t.nodes[a].observations) == 2 + 24
-    assert max(lengths) - min(lengths) < 60
-
-
-def test_region_sources_are_automatic_and_empty_experience_falls_back():
-    import json
-    from evotrace_v3.reflection import _bind_experience, EDGE_EXPERIENCE_SCHEMA
-    t = TreePopulation()
-    a = add(t, 0, 10, 'def f(): return 0')
-    b = add(t, a, 15, 'def f(): return 1')
-    c = add(t, b, 12, 'def f(): return 2')
-    region = PathContraction(a, c, (b,))
-    note, facts = _bind_experience({'experience': 'A useful algorithmic insight.',
-                                    'comparison_ids': ['99->100'], 'fitness': -999}, t, region)
-    assert note == 'A useful algorithmic insight.'
-    assert {f['comparison_id'] for f in facts} == {f'{a}->{b}', f'{b}->{c}', f'{a}->{c}'}
-    assert next(f for f in facts if f['comparison_id'] == f'{a}->{c}')['fitness'] == 12
-    assert EDGE_EXPERIENCE_SCHEMA['json_schema']['schema']['required'] == ['experience']
-    class Empty:
-        def complete(self, *args, **kwargs):
-            return json.dumps({'experience': '  '})
-    new, records = reflect_and_apply(t, SimplificationPlan((a, c), (region,)), model=Empty())
-    assert records[0].used_fallback
-    assert 'nonempty' in records[0].error
-    assert f'{a}->{c}: 10 -> 12 (regressed)' in new.edges[c].experience
-    assert f'{b}->{c}: 15 -> 12 (improved)' in new.edges[c].experience
-
-
-def test_virtual_root_is_not_a_net_comparison():
-    from evotrace_v3.reflection import comparison_catalog, render_observations
-    t = TreePopulation()
-    a = add(t, 0, 15, 'def f(): return 1')
-    b = add(t, a, 12, 'def f(): return 2')
-    region = PathContraction(0, b, (a,))
-    catalog, current, net = comparison_catalog(t, region)
-    assert net is None and f'0->{b}' not in catalog
-    assert f'{a}->{b}' in current
-    prompt = build_edge_reflection_prompt(t, region, task_description='Minimize')
-    assert 'no overall relative outcome exists' in prompt
-    observation = dict(catalog[f'0->{a}'])
-    text = render_observations([observation])
-    assert f'Evaluation {a}; no parent comparison' in text
-    assert 'Comparison 0->' not in text
-
-
-def test_one_note_can_combine_comparisons_and_outage_keeps_its_sources():
-    import json
-    t = TreePopulation()
-    a = add(t, 0, 10, 'def f(): return 0')
-    b = add(t, a, 8, 'def f(): return 1')
-    c = add(t, a, 12, 'def f(): return 2')
-    note = 'The two changes offered different tradeoffs under the same starting computation.'
-    class Model:
-        def complete(self, *args, **kwargs):
-            return json.dumps(dict(experience=note))
-    t, records = reflect_and_apply(t, SimplificationPlan((a,), subtree_prunings=(SubtreePruning(a, (b, c)),)), model=Model())
-    assert not records[0].used_fallback
-    assert t.nodes[a].experience == note
-    assert len(t.nodes[a].observations) == 2
-    d = add(t, a, None, 'def f(): raise ValueError()')
-    region = SubtreePruning(a, (d,))
-    prompt = build_node_reflection_prompt(t, region, task_description='Minimize')
-    assert note in prompt
-    t, records = reflect_and_apply(t, SimplificationPlan((a,), subtree_prunings=(region,)), model=None)
-    assert records[0].used_fallback and note in t.nodes[a].experience
-    assert {o['comparison_id'] for o in t.nodes[a].observations} == {f'{a}->{b}', f'{a}->{c}', f'{a}->{d}'}
-
-
-def test_reflection_has_same_start_reference_without_champion_code_or_other_experience():
-    from dataclasses import asdict
-    t = TreePopulation()
-    a = add(t, 0, 10, 'def f(): return 0')
-    b = add(t, a, 12, 'def f(): return 1')
-    better = add(t, a, 8, 'def f(): return 12345')
-    other = add(t, a, 9, 'def f(): return 2')
-    unrelated = add(t, 0, 1, 'def f(): return 54321')
-    t.nodes[better].design = 'Joint routing and capacity model'
-    t.nodes[better].experience = 'Unrelated notes should stay on their owner.'
-    before = asdict(t)
-    prompt = build_node_reflection_prompt(t, SubtreePruning(a, (b,)), task_description='Minimize')
-    related = prompt.split('[Related Results]')[1].split('[Earlier Algorithm-Design Experience]')[0].split('[Comparison Catalog]')[0]
-    assert 'fitness=8' in related and t.nodes[better].design in related
-    assert 'fitness=9' not in related and 'fitness=1;' not in related
-    assert '12345' not in related and '54321' not in related
-    assert t.nodes[better].experience not in prompt
-    assert asdict(t) == before
-
-
-def test_contracted_branch_attempt_keeps_measured_scores_beside_its_diff():
+def test_each_algorithm_appears_once_with_design_and_code_and_no_diff():
     t = TreePopulation()
     a = add(t, 0, 10, 'def f(): return 0')
     b = add(t, a, 11, 'def f(): return 1')
     c = add(t, b, 8, 'def f(): return 2')
     x = add(t, b, 12, 'def f(): return 3')
-    region = PathContraction(a, c, (b,), (x,))
-    prompt = build_edge_reflection_prompt(t, region, task_description='Minimize')
-    assert f'comparison {b}->{x}: 11 -> 12 (regressed)' in prompt
+    prompt, _ = build_reflection_prompt(t, PathContraction(a, c, (b,), (x,)), PROBLEM)
+    for i in (a, b, c, x):
+        assert prompt.count(f'Design: Design {i}') == 1
+        assert prompt.count(f'return {i - 1}') == 1
+    assert f'Algorithm {x} <- Algorithm {b} (Refine): 11 -> 12 (regressed)' in prompt
+    assert '```diff' not in prompt and '[Related Results]' not in prompt and 'Comparison' not in prompt
+
+
+def test_new_experience_replaces_the_region_experience_and_prompt_size_follows_the_region():
+    t = TreePopulation()
+    a = add(t, 0, -10, 'def f(): return 0')
+    b = add(t, a, -8, 'def f(): return 1')
+    x = add(t, b, -9, 'def f(): return 2')
+    prompts = []
+    model = fixed('Changed the return value.', prompts)
+    t, _ = reflect_and_apply(t, SimplificationPlan((a, b), subtree_prunings=(SubtreePruning(b, (x,)),)),
+                             model=model, problem=PROBLEM)
+    assert t.nodes[b].experience == 'Changed the return value.'
+    # Pruning b into a: b's own experience is read once and replaced by the new note on a.
+    t, _ = reflect_and_apply(t, SimplificationPlan((a,), subtree_prunings=(SubtreePruning(a, (b,)),)),
+                             model=model, problem=PROBLEM)
+    assert prompts[-1].count('Changed the return value.') == 1
+    assert t.nodes[a].experience == 'Changed the return value.'
+    lengths = []
+    for step in range(12):
+        k1 = add(t, a, -7 + step, f'def f(): return {10 + step}')
+        k2 = add(t, a, -6 + step, f'def f(): return {30 + step}')
+        t, calls = reflect_and_apply(t, SimplificationPlan((a,), subtree_prunings=(SubtreePruning(a, (k1, k2)),)),
+                                     model=model, problem=PROBLEM)
+        lengths.append(len(calls[0].prompt))
+    assert max(lengths) - min(lengths) < 60
+
+
+def test_failed_reflection_carries_the_region_experience_forward():
+    t = TreePopulation()
+    a = add(t, 0, 10, 'def f(): return 0')
+    b = add(t, a, 15, 'def f(): return 1')
+    c = add(t, b, 12, 'def f(): return 2')
+    t.edges[b].experience = 'Stage note on b.'
+    t.nodes[b].experience = 'Attempts at b.'
+    t.nodes[a].experience = 'Attempts at a stay on a.'
+    region = PathContraction(a, c, (b,))
+    new, calls = reflect_and_apply(t, SimplificationPlan((a, c), (region,)), model=fixed('  '), problem=PROBLEM)
+    assert 'empty' in calls[0].error
+    assert new.edges[c].experience == 'Stage note on b. Attempts at b.'
+    assert new.nodes[a].experience == 'Attempts at a stay on a.'
+    new, calls = reflect_and_apply(t, SimplificationPlan((a, c), (region,)), model=Down(), problem=PROBLEM)
+    assert calls[0].error.startswith('TimeoutError') and new.edges[c].experience == 'Stage note on b. Attempts at b.'
+
+
+def test_virtual_root_has_no_overall_outcome():
+    t = TreePopulation()
+    a = add(t, 0, 15, 'def f(): return 1')
+    b = add(t, a, 12, 'def f(): return 2')
+    prompt, _ = build_reflection_prompt(t, PathContraction(0, b, (a,)), PROBLEM)
+    assert f'Algorithm {b} developed from the initial population' in prompt
+    assert 'overall' not in prompt
+    assert f'Algorithm {a} (initial population): fitness = 15' in prompt
+
+
+def test_outage_keeps_the_parent_note_while_pruning_proceeds():
+    t = TreePopulation()
+    a = add(t, 0, 10, 'def f(): return 0')
+    b = add(t, a, 8, 'def f(): return 1')
+    c = add(t, a, 12, 'def f(): return 2')
+    note = 'The two changes offered different tradeoffs under the same starting computation.'
+    t, _ = reflect_and_apply(t, SimplificationPlan((a,), subtree_prunings=(SubtreePruning(a, (b, c)),)),
+                             model=fixed(note), problem=PROBLEM)
+    assert t.nodes[a].experience == note
+    d = add(t, a, None, 'def f(): raise ValueError()')
+    region = SubtreePruning(a, (d,))
+    prompt, _ = build_reflection_prompt(t, region, PROBLEM)
+    assert note in prompt and 'Failure:' in prompt
+    t, calls = reflect_and_apply(t, SimplificationPlan((a,), subtree_prunings=(region,)), model=Down(), problem=PROBLEM)
+    assert calls[0].error and t.nodes[a].experience == note and d not in t.nodes
+
+
+def test_reflection_reads_only_the_region_and_its_anchors():
+    from dataclasses import asdict
+    t = TreePopulation()
+    a = add(t, 0, 10, 'def f(): return 0')
+    b = add(t, a, 12, 'def f(): return 1')
+    better = add(t, a, 8, 'def f(): return 12345')
+    unrelated = add(t, 0, 1, 'def f(): return 54321')
+    t.nodes[better].design = 'Joint routing and capacity model'
+    t.nodes[better].experience = 'Notes on another branch stay on their owner.'
+    before = asdict(t)
+    prompt, _ = build_reflection_prompt(t, SubtreePruning(a, (b,)), PROBLEM)
+    assert f'Algorithm {a} (retained): fitness = 10' in prompt
+    assert '12345' not in prompt and '54321' not in prompt
+    assert t.nodes[better].design not in prompt and t.nodes[better].experience not in prompt
+    assert asdict(t) == before

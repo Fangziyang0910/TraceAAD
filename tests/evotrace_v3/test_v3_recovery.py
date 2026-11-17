@@ -27,6 +27,10 @@ class Model:
                            'code': f"def solve(x):\n    return {100-self.state['count']}\n", 'design': 'Constant offset'})
 
 
+def simplifications(search):
+    return sum('simplification' in a.record for a in search.attempts)
+
+
 def make_search(model, path):
     task = Task('Minimize', 'def solve(x):\n    pass\n', lambda src, fn: fn(1), 2)
     return EvoTrace(task, model, config=Config(initial_size=1, evaluation_budget=24, seed=3),
@@ -47,10 +51,6 @@ def make_search(model, path):
     ('selection_rule', 'rank_decay_subtree_sampling'),
     ('selection_rule', 'rank_decay_direct_sampling'),
     ('selection_rule', 'rank_decay_lineage_sampling'),
-    ('reflection_representation', 'unbound_prose'),
-    ('reflection_representation', 'comparison_observations'),
-    ('reflection_representation', 'research_note_with_comparisons'),
-    ('reflection_representation', 'algorithm_design_experience'),
     ('selection_rule', 'individual_tree_allocation'),
     ('selection_rule', 'rank_subtree_sampling'),
     ('allocation', {'quality_ratio': 10.0}),
@@ -63,7 +63,7 @@ def test_resume_matches_uninterrupted_search_and_rejects_old_policy(tmp_path, fi
     search = make_search(model, tmp_path/'resumed')
     for _ in range(14):
         search.step()
-    assert search.simplifications_count > 0
+    assert simplifications(search) > 0
     before = dict(model.state)
     restored = EvoTrace(search.task, model, config=search.config, topology_config=search.topology_config,
                         run_dir=tmp_path/'resumed', resume=True)
@@ -133,10 +133,11 @@ def test_model_outage_does_not_age_tree_and_reflection_failure_keeps_experience(
         add(t, 0, i+1)
     class Broken:
         complete = staticmethod(outage)
+    t.root_experience = 'Earlier root note.'
     plan = plan_simplification(t)
-    new, records = reflect_and_apply(t, plan, model=Broken())
-    assert records and all(r.used_fallback and r.error for r in records)
-    assert new.root_experience
+    new, records = reflect_and_apply(t, plan, model=Broken(), problem='[Problem]')
+    assert records and all(r.error for r in records)
+    assert new.root_experience == 'Earlier root note.' and len(new.nodes) < len(t.nodes)
 
 
 def test_two_hundred_evaluations_resume_with_identical_trees_and_logged_probabilities(tmp_path):
@@ -168,4 +169,4 @@ def test_two_hundred_evaluations_resume_with_identical_trees_and_logged_probabil
     assert model.state == calls
     assert advance(restored, 100) == expected[100:]
     assert restored.evaluations_used == full.evaluations_used == 200
-    assert restored.simplifications_count == full.simplifications_count > 0
+    assert simplifications(restored) == simplifications(full) > 0

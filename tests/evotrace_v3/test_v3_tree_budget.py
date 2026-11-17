@@ -10,9 +10,10 @@ from evotrace_v3.allocation import (
     allocate_step,
     eligible_reference_pool,
     parent_probabilities,
+    select_explore_references,
     select_parent,
 )
-from evotrace_v3.context import build_evolution_context
+from evotrace_v3.context import _path_from_root, build_evolution_context
 from evotrace_v3.models import Edge, Node, TreePopulation
 from evotrace_v3.reflection import reflect_and_apply
 from evotrace_v3.search import deserialize_tree
@@ -21,12 +22,26 @@ from evotrace_v3.topology import (
     SubtreePruning,
     TopologyConfig,
     apply_simplification,
-    champion,
     code_distance,
     plan_simplification,
-    quality_scores,
+    ranks,
     representatives,
 )
+
+
+class Notes:
+    """Reflection model that returns a fixed note."""
+
+    def __init__(self, text="NOTE"):
+        self.text = text
+
+    def complete(self, prompt, **kwargs):
+        return json.dumps({"experience": self.text})
+
+
+class Down:
+    def complete(self, prompt, **kwargs):
+        raise TimeoutError("endpoint down")
 
 
 DISTINCT_BODIES = [
@@ -86,7 +101,7 @@ def test_population_ranks_ignore_units_and_respect_ties():
     tree = TreePopulation()
     for fit in [-20, -20, -10, 0]:
         add(tree, 0, fit)
-    assert quality_scores(tree) == pytest.approx({1: 5 / 6, 2: 5 / 6, 3: 1 / 3, 4: 0})
+    assert ranks(tree, tree.nodes) == {1: 0.5, 2: 0.5, 3: 2, 4: 3}
     top = TopologyConfig(max_representatives=24, cover_distance=0.0)
     before = select_parent(tree, random.Random(4), topology_config=top)
     for node in tree.nodes.values():
@@ -94,10 +109,10 @@ def test_population_ranks_ignore_units_and_respect_ties():
     assert select_parent(tree, random.Random(4), topology_config=top) == before
     for node in tree.nodes.values():
         node.fitness = 10
-    assert set(quality_scores(tree).values()) == {0.5}
+    assert set(ranks(tree, tree.nodes).values()) == {1.5}
     tree = TreePopulation()
     add(tree, 0, 10)
-    assert quality_scores(tree) == {1: 0.5}
+    assert ranks(tree, tree.nodes) == {1: 0}
 
 
 def test_quality_pressure_and_direct_effort_have_explicit_odds():
@@ -150,8 +165,8 @@ def test_extreme_rank_span_and_ties_stay_finite(span):
         add(tree, 0, fit)
     probabilities = parent_probabilities(tree, AllocationConfig(rank_half_life=span), top)
     assert sum(probabilities.values()) == pytest.approx(1)
-    assert all(0 < probability <= 1 for probability in probabilities.values())
-    assert probabilities[1] == probabilities[2]
+    assert all(0 <= probability <= 1 for probability in probabilities.values())
+    assert probabilities[1] == probabilities[2] > 0
     for node in tree.nodes.values():
         node.fitness = 1
     assert list(parent_probabilities(tree, AllocationConfig(rank_half_life=span), top).values()) == [1 / 3] * 3
@@ -197,8 +212,8 @@ def test_representative_cover_collapses_clones_supersedes_constants_and_frees_ex
     # `champ` is still retained as LCA fork connecting `better_const` and `novel`, WITHOUT blocking `better_const`!
     plan = plan_simplification(tree, cfg)
     assert champ in plan.kept_ids
-    assert champ in plan.triggers[0]["fork_ids"]
-    assert champ not in plan.triggers[0]["representative_ids"]
+    assert champ in plan.fork_ids
+    assert champ not in plan.representative_ids
 
 
 def test_duplicate_program_conserves_existing_direct_effort_and_never_creates_fresh_weight():
@@ -222,10 +237,10 @@ def test_duplicate_program_conserves_existing_direct_effort_and_never_creates_fr
 
     plan = plan_simplification(tree, cfg)
     assert copy_id not in plan.kept_ids
-    new, _ = reflect_and_apply(tree, plan, model=None)
+    new, _ = reflect_and_apply(tree, plan, model=Notes(), problem="[Problem]")
     assert set(parent_probabilities(new, topology_config=cfg)) == {original, other}
     assert new.nodes[original].direct_evaluations == 7
-    assert new.nodes[other].experience
+    assert new.nodes[other].experience == "NOTE"
 
 
 def test_region_size_buffers_inactive_nodes_without_leaking_them_into_sampling():
@@ -245,7 +260,7 @@ def test_region_size_buffers_inactive_nodes_without_leaking_them_into_sampling()
     assert eligible_reference_pool(tree, tip, topology_config=cfg) == [other]
 
     plan = plan_simplification(tree, cfg)
-    assert not plan.path_contractions and not plan.subtree_prunings and not plan.triggers
+    assert not plan.path_contractions and not plan.subtree_prunings
     assert set(plan.kept_ids) == set(tree.nodes)
 
     # Adding one more failed branch on m2 brings path region to 4 -> triggers PathContraction!
@@ -254,15 +269,8 @@ def test_region_size_buffers_inactive_nodes_without_leaking_them_into_sampling()
     assert plan.path_contractions == (PathContraction(fork, tip, (m1, m2), (branch_on_m1, branch_on_m2)),)
     assert not plan.subtree_prunings
     assert worse_clone in plan.kept_ids
-    assert plan.triggers == (
-        {
-            "kind": "reflective_tree_simplification",
-            "evaluations": tree.evaluations_used,
-            "representative_ids": sorted([tip, other]),
-            "fork_ids": [fork],
-            "removed_ids": sorted([m1, m2, branch_on_m1, branch_on_m2]),
-        },
-    )
+    assert plan.representative_ids == tuple(sorted([tip, other])) and plan.fork_ids == (fork,)
+    assert set(tree.nodes) - set(plan.kept_ids) == {m1, m2, branch_on_m1, branch_on_m2}
     tree = apply_simplification(tree, plan)
     edge = tree.edges[tip]
     assert edge.parent_id == fork and edge.contracted and edge.operator is None and edge.reference_id is None
@@ -291,12 +299,13 @@ def test_experience_transfers_to_node_and_edge_without_inflating_descendant_effo
     assert plan.kept_ids == (a, d, other)
     (contraction,) = plan.path_contractions
     assert contraction.removed_ids == (b, c) and contraction.branch_ids == (branch,)
-    new, _ = reflect_and_apply(tree, plan, model=None)
+    new, calls = reflect_and_apply(tree, plan, model=Down(), problem="[Problem]")
     assert tree == before
     assert new.nodes[d].direct_evaluations == 0
     assert new.nodes[a].direct_evaluations == 2
-    for text in ["OLDER_NODE_EVIDENCE", "OLDER_EDGE_EVIDENCE", "BAD_BRANCH"]:
-        assert text in new.edges[d].experience
+    # The failed reflection still saw the failure; the earlier experience survives the elimination.
+    assert "BAD_BRANCH" in calls[0].prompt
+    assert new.edges[d].experience == "OLDER_NODE_EVIDENCE OLDER_EDGE_EVIDENCE"
     assert new.nodes[a].experience == ""
     add(new, d, None, evaluations=2)
     assert new.nodes[d].direct_evaluations == 2
@@ -359,7 +368,8 @@ def test_budget_and_idempotence_survive_repeated_simplification_against_original
         removed += [nid for b in plan.subtree_prunings for nid in b.removed_ids]
         assert len(removed) == len(set(removed))
         assert set(removed) == set(tree.nodes) - set(plan.kept_ids)
-        best = champion(tree)
+        best = min((i for i in tree.nodes if tree.nodes[i].fitness is not None),
+                   key=lambda i: (tree.nodes[i].fitness, i), default=None)
         if best is not None:
             assert best in plan.kept_ids and best == reps_before[0]
         tree = apply_simplification(tree, plan)
@@ -367,7 +377,7 @@ def test_budget_and_idempotence_survive_repeated_simplification_against_original
         assert representatives(tree, cfg) == reps_before
         assert parent_probabilities(tree, topology_config=cfg) == pytest.approx(probs_before)
         again = plan_simplification(tree, cfg)
-        assert not again.path_contractions and not again.subtree_prunings and not again.triggers
+        assert not again.path_contractions and not again.subtree_prunings
         assert again.kept_ids == tuple(sorted(tree.nodes))
         assert tree.evaluations_used == sum(cost for _, cost in events)
         for nid, node in tree.nodes.items():
@@ -409,7 +419,7 @@ def test_cover_distance_must_be_finite_number_in_unit_interval(value):
         TopologyConfig(cover_distance=value)  # type: ignore[arg-type]
 
 
-def test_three_round_reflection_reuses_old_notes_and_reaches_all_operators():
+def test_three_round_reflection_reuses_old_notes_and_reaches_operators_that_show_them():
     cfg = TopologyConfig(max_representatives=8, cover_distance=0.15, region_size=1)
     t = TreePopulation()
     a = add(t, 0, 10.0, code="def solve(x):\n    return x + 10\n")
@@ -417,10 +427,10 @@ def test_three_round_reflection_reuses_old_notes_and_reaches_all_operators():
     tip = a
     prompts = []
 
-    class Notes:
+    class RoundNotes:
         def complete(self, prompt, **kwargs):
             prompts.append(prompt)
-            marker = "EDGE" if "[Path Evidence]" in prompt else "NODE"
+            marker = "EDGE" if "developed from" in prompt else "NODE"
             return json.dumps({"experience": f"{marker}_NOTE_{round_number}"})
 
     for round_number in range(3):
@@ -431,13 +441,33 @@ def test_three_round_reflection_reuses_old_notes_and_reaches_all_operators():
         plan = plan_simplification(t, cfg)
         assert plan.path_contractions and plan.subtree_prunings
         prompt_start = len(prompts)
-        t, _ = reflect_and_apply(t, plan, model=Notes())
+        t, _ = reflect_and_apply(t, plan, model=RoundNotes(), problem="[Problem]")
         if round_number:
             used = "\n".join(prompts[prompt_start:])
             assert f"EDGE_NOTE_{round_number - 1}" in used
             assert f"NODE_NOTE_{round_number - 1}" in used
+        holders = {i for i, n in t.nodes.items() if f"NODE_NOTE_{round_number}" in n.experience}
         for op, reference in [("Refine", None), ("Explore", None), ("Crossover", other)]:
-            context, _, _, _ = build_evolution_context(t, tip, op, reference)
+            ids = select_explore_references(t, tip, topology_config=cfg) if op == "Explore" else ()
+            context, _, _, _ = build_evolution_context(t, tip, op, reference, explore_ids=ids)
             assert f"EDGE_NOTE_{round_number}" in context
-            assert f"NODE_NOTE_{round_number}" in context
+            # Explore reads the experience along the development of the individuals it shows.
+            on_paths = set().union(*(_path_from_root(t, i) for i in (tip, *ids)))
+            shown = op != "Explore" or bool(holders & on_paths)
+            assert (f"NODE_NOTE_{round_number}" in context) == shown
         t = deserialize_tree(json.loads(json.dumps(asdict(t))))
+
+
+def test_explore_references_take_the_best_then_spread_away_from_parent_and_each_other():
+    tree = TreePopulation()
+    parent = add(tree, 0, 5.0, code="def solve(x):\n    return x + 1\n")
+    best = add(tree, 0, 1.0, code="def solve(x):\n    return x + 2\n")  # same structure as the parent
+    near = add(tree, 0, 2.0, code="def solve(x):\n    return x * 2 + 1\n")
+    far = add(tree, 0, 3.0, code="def solve(x):\n    acc = 0\n    for k in range(x):\n        acc ^= k << 1\n    return acc\n")
+    weak = add(tree, 0, 4.0, code="def solve(x):\n    return sorted([x, x - 1])[0]\n")  # kept: no quality floor
+    top = TopologyConfig(cover_distance=0.0)
+    assert select_explore_references(tree, parent, AllocationConfig(explore_references=2), top) == (best, far)
+    assert select_explore_references(tree, parent, AllocationConfig(), top) == (best, far, weak, near)
+    alone = TreePopulation()
+    only = add(alone, 0, 1.0)
+    assert select_explore_references(alone, only, AllocationConfig(), top) == ()

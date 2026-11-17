@@ -49,12 +49,9 @@ class Model:
     request_options = {}
     def complete(self, prompt, **settings):
         schema = self.request_options["response_format"]["json_schema"]["name"]
-        if schema == "evotrace_edge_experience":
+        if schema == "evotrace_experience":
             state["reflections"] += 1
-            payload = {"experience": "Adjusted the offset."}
-        elif schema == "evotrace_node_experience":
-            state["reflections"] += 1
-            payload = {"experience": "Changed the constant."}
+            payload = {"experience": "Changed the constant offset."}
         else:
             state["calls"] += 1
             n = state["calls"]
@@ -70,7 +67,7 @@ topology = TopologyConfig(max_representatives=8, cover_distance=0.15, region_siz
 search = EvoTrace(task, Model(), config=config, topology_config=topology, run_dir="run")
 for _ in range(8):
     assert search.step() is not None
-assert search.simplifications_count and state["reflections"]
+assert any("simplification" in a.record for a in search.attempts) and state["reflections"]
 assert search.attempts[0].repair_used and search.attempts[1].repair_used
 assert [e["status"] for e in search.attempts[1].evaluations] == ["error", "success"]
 tree = asdict(search.tree)
@@ -239,6 +236,6 @@ def test_experiment_adapter_uses_evotrace_owned_runtime(tmp_path, monkeypatch, c
         run.main(["--method", "evotrace.v3", "--task", "tsp_construct", "--run-name", "owned",
                   "--batch", "owned", "--budget", "7", "--initial-size", "3",
                   "--scheduler-socket", "/fake", "--skip-heldout", "--resume", "--max-representatives", "13"])
-    assert public['reference_code'] == saved['context']['include_reference_code'] is True
+    assert public['reference_code'] is True and saved['context'] == {'include_experiences': True}
     summary = json.loads((directory / "summary.json").read_text())
     assert summary["evaluation_calls"] == 7 and summary["status"] == "finished"
