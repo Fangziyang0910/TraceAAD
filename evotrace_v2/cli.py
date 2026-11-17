@@ -1,17 +1,16 @@
-"""Run EvoTrace with an external task and an OpenAI-compatible endpoint."""
+"""Run EvoTrace v2 with an external task and an OpenAI-compatible endpoint."""
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, fields
 import importlib
 import json
 import os
 from pathlib import Path
 import sys
 
-from .config import Config
-from .context import ContextConfig
 from .allocation import AllocationConfig
 from .llm import OpenAIClient
+from .models import Config
 from .search import EvoTrace
 from .task import Task
 from .topology import TopologyConfig
@@ -38,6 +37,13 @@ def load_task(*, name=None, factory=None, options=None) -> Task:
         raise ValueError("Use --task-factory module:function")
     value = getattr(importlib.import_module(module), attribute)(**(options or {}))
     return value if isinstance(value, Task) else Task.from_evaluator(value)
+
+
+def _merge(cls, base: dict, overrides: dict, label: str):
+    try:
+        return cls(**{**base, **overrides})
+    except TypeError as exc:
+        raise ValueError(f"Incompatible {label}; resume with its original frozen source") from exc
 
 
 def main(argv=None):
@@ -69,34 +75,25 @@ def main(argv=None):
         if not args.resume and (directory / "run_config.json").exists():
             parser.error("Run already exists; use --resume")
         saved = json.loads((directory / "run_config.json").read_text()) if args.resume else {}
-        values = dict(saved["config"]) if args.resume else asdict(Config())
-        for key in values:
-            value = getattr(args, key, None)
-            if value is not None:
-                values[key] = value
-        settings = {}
-        if args.resume:
-            if "cold_evaluations" not in saved["topology"]:
-                raise ValueError("This run uses the earlier tree policy; resume it with its frozen source")
-            settings = {
-                "topology_config": TopologyConfig(**saved["topology"]),
-                "allocation_config": AllocationConfig(**saved["allocation"]),
-                "context_config": ContextConfig(**saved["context"]),
-                "reflection_temperature": saved["reflection_temperature"],
-                "reflection_max_tokens": saved["reflection_max_tokens"],
-            }
-            if not saved["reflection_enabled"]:
-                settings["reflection_model"] = None
+        cfg_args = {f.name: getattr(args, f.name, None) for f in fields(Config)
+                    if getattr(args, f.name, None) is not None}
+        config = _merge(Config, saved.get("config", {}), cfg_args, "config")
+        topology = _merge(TopologyConfig, saved.get("topology", {}), {}, "topology")
+        allocation = _merge(AllocationConfig, saved.get("allocation", {}), {}, "allocation")
         task = load_task(name=args.task, factory=args.task_factory, options=options)
         if args.no_example:
             task.example_code = task.example_design = None
         model = OpenAIClient(args.base_url, args.model, api_key=os.getenv(args.api_key_env, ""))
-        search = EvoTrace(task, model, config=Config(**values), run_dir=directory,
-                          resume=args.resume, **settings)
+        search = EvoTrace(
+            task, model, config=config, topology_config=topology, allocation_config=allocation,
+            include_experiences=saved.get("include_experiences", True),
+            include_reference_code=saved.get("include_reference_code", True),
+            run_dir=directory, resume=args.resume,
+        )
         result = search.run()
         print(json.dumps(asdict(result), ensure_ascii=False, allow_nan=False, indent=2))
         return 0 if result.status == "finished" else 1
-    except (ValueError, OSError, ImportError, AttributeError) as exc:
+    except (ValueError, OSError, ImportError, AttributeError, KeyError) as exc:
         parser.error(str(exc))
 
 

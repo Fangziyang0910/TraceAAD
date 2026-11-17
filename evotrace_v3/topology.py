@@ -1,13 +1,13 @@
-"""反思树简化（Reflective Tree Simplification）：路径收缩与子树剪枝。"""
+"""覆盖代表集与树简化区域划分：路径收缩与子树剪枝。"""
 
 import ast
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from functools import lru_cache
 import hashlib
-import math
 
-from .models import TreePopulation
+from .models import ROOT_ID, TreePopulation
 
 
 def _strip_docstrings(code: str) -> ast.AST:
@@ -20,14 +20,21 @@ def _strip_docstrings(code: str) -> ast.AST:
     return tree
 
 
+def bare_code(code: str) -> str:
+    """去除文档字符串后的标准化源码。"""
+    try:
+        return ast.unparse(_strip_docstrings(code))
+    except (SyntaxError, ValueError):
+        return code.strip()
+
+
 @lru_cache(maxsize=4096)
 def ast_shingles(code: str, k: int = 2) -> tuple[tuple[object, int], ...]:
-    """提取对局部变量名与数值常数不敏感的 AST 父子结构边与节点序列二元组特征。"""
+    """提取对局部变量名与数值常数不敏感的 AST 父子边与遍历二元组特征。"""
     try:
         tree = _strip_docstrings(code)
     except (SyntaxError, ValueError):
-        counts = Counter(code.split())
-        return tuple(sorted(counts.items()))
+        return tuple(sorted(Counter(code.split()).items()))
 
     tokens: list[str] = []
     counts: Counter[object] = Counter()
@@ -61,7 +68,7 @@ def ast_shingles(code: str, k: int = 2) -> tuple[tuple[object, int], ...]:
 
 @lru_cache(maxsize=4096)
 def identity(code: str) -> str:
-    """Same parsed source, ignoring layout, comments and docstrings."""
+    """忽略排版、注释与文档字符串后的语法树哈希。"""
     try:
         text = ast.dump(_strip_docstrings(code), include_attributes=False)
     except (SyntaxError, ValueError):
@@ -70,44 +77,29 @@ def identity(code: str) -> str:
 
 
 def code_distance(code_a: str, code_b: str) -> float:
-    """计算两段代码的归一化 AST 多重集 Jaccard 距离，取值 [0.0, 1.0]。"""
+    """两段代码的 AST 多重集 Jaccard 距离，取值 [0.0, 1.0]。"""
     if code_a == code_b:
         return 0.0
-    sh_a = dict(ast_shingles(code_a))
-    sh_b = dict(ast_shingles(code_b))
-    if not sh_a and not sh_b:
-        return 0.0
+    sh_a, sh_b = dict(ast_shingles(code_a)), dict(ast_shingles(code_b))
     keys = sh_a.keys() | sh_b.keys()
-    inter = sum(min(sh_a.get(k, 0), sh_b.get(k, 0)) for k in keys)
     union = sum(max(sh_a.get(k, 0), sh_b.get(k, 0)) for k in keys)
-    return 1.0 - (inter / union) if union else 0.0
+    if not union:
+        return 0.0
+    inter = sum(min(sh_a.get(k, 0), sh_b.get(k, 0)) for k in keys)
+    return 1.0 - inter / union
 
 
 @dataclass(frozen=True)
 class TopologyConfig:
-    """Representative coverage and batch size for reflective tree simplification.
-
-    max_representatives: maximum number of mutually uncovered feasible representatives.
-    cover_distance: AST shingle Jaccard distance below which a better representative
-        covers a later candidate.
-    region_size: minimum number of non-skeleton nodes accumulated in a path or subtree
-        region before that region is simplified into edge or node experience.
-    """
-
     max_representatives: int = 24
     cover_distance: float = 0.15
     region_size: int = 4
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         for name in ("max_representatives", "region_size"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"{name} must be an integer >= 1")
-        if (
-            isinstance(self.cover_distance, bool)
-            or not isinstance(self.cover_distance, (int, float))
-            or not math.isfinite(self.cover_distance)
-            or not (0.0 <= self.cover_distance <= 1.0)
-        ):
+        if type(self.cover_distance) not in (int, float) or not (0.0 <= self.cover_distance <= 1.0):
             raise ValueError("cover_distance must be a finite number in [0, 1]")
 
 
@@ -125,18 +117,12 @@ class SubtreePruning:
     removed_ids: tuple[int, ...]
 
 
-@dataclass(frozen=True)
-class SimplificationPlan:
-    kept_ids: tuple[int, ...]
-    path_contractions: tuple[PathContraction, ...] = ()
-    subtree_prunings: tuple[SubtreePruning, ...] = ()
-    representative_ids: tuple[int, ...] = ()
-    fork_ids: tuple[int, ...] = ()
+Region = PathContraction | SubtreePruning
 
 
 def distinct_individuals(tree: TreePopulation) -> set[int]:
-    """Collapse identical normalized source and measured score to the earliest retained node."""
-    first = {}
+    """标准化源码与实测分数均相同的可行个体，只保留最早节点。"""
+    first: dict[tuple[str, float], int] = {}
     for i in sorted(tree.nodes):
         node = tree.nodes[i]
         if node.fitness is not None:
@@ -145,9 +131,9 @@ def distinct_individuals(tree: TreePopulation) -> set[int]:
 
 
 def ranks(tree: TreePopulation, candidates) -> dict[int, float]:
-    """0-based fitness rank among ``candidates`` (lower fitness is better); equal fitness shares the average rank."""
+    """候选集合内的 0 起适应度名次（越小越优，并列共享平均名次）。"""
     ordered = sorted(candidates, key=lambda i: (tree.nodes[i].fitness, i))
-    result = {}
+    result: dict[int, float] = {}
     start = 0
     while start < len(ordered):
         end = start + 1
@@ -158,15 +144,9 @@ def ranks(tree: TreePopulation, candidates) -> dict[int, float]:
     return result
 
 
-def representatives(
-    tree: TreePopulation,
-    config: TopologyConfig = TopologyConfig(),
-) -> tuple[int, ...]:
-    """Select up to ``max_representatives`` mutually uncovered feasible individuals in fitness order."""
-    ordered = sorted(
-        distinct_individuals(tree),
-        key=lambda i: (tree.nodes[i].fitness, i),  # type: ignore[arg-type]
-    )
+def representatives(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> tuple[int, ...]:
+    """按 (fitness, id) 贪心选取至多 max_representatives 个互不覆盖的代表个体。"""
+    ordered = sorted(distinct_individuals(tree), key=lambda i: (tree.nodes[i].fitness, i))  # type: ignore[arg-type]
     selected: list[int] = []
     for i in ordered:
         code_i = tree.nodes[i].code
@@ -178,95 +158,74 @@ def representatives(
     return tuple(selected)
 
 
-def plan_simplification(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> SimplificationPlan:
-    """Plan batched path contractions and subtree prunings on the evolutionary tree.
-
-    1. Select the representative set ``R`` via greedy fitness-ordered coverage and close
-       ``R`` under pairwise LCAs so branching structure between retained lineages is preserved.
-    2. Partition remaining nodes into intermediate chains between retained endpoints
-       (path contractions -> edge experience) and unretained subtrees under retained
-       ancestors (subtree prunings -> node experience).
-    3. Simplify only regions that have accumulated at least ``region_size`` nodes.
-    """
+def plan_simplification(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> tuple[Region, ...]:
+    """补齐代表集的最近公共祖先骨架，返回达到 region_size 的路径收缩与子树剪枝区域。"""
     reps = set(representatives(tree, config))
-
     children = defaultdict(list)
     for i in sorted(tree.edges):
         children[tree.edges[i].parent_id].append(i)
-    # A parent always has a smaller ID than its child, so reverse ID order visits children first.
     used = set(reps)
     for i in sorted(tree.nodes, reverse=True):
         if i in used:
             used.add(tree.edges[i].parent_id)
-    forks = {i for i in used if i != tree.root_id and sum(c in used for c in children[i]) >= 2}
-    retained_skeleton = reps | forks
-    inactive = set(tree.nodes) - retained_skeleton
+    forks = {i for i in used if i != ROOT_ID and sum(c in used for c in children[i]) >= 2}
+    skeleton = reps | forks
 
-    raw_contractions = []
-    contracted_to_idx: dict[int, int] = {}
-    for child in sorted(retained_skeleton):
+    chains: list[tuple[int, int, tuple[int, ...]]] = []
+    chain_of: dict[int, int] = {}
+    for child in sorted(skeleton):
         parent = tree.edges[child].parent_id
-        removed_chain = []
-        while parent != tree.root_id and parent not in retained_skeleton:
-            removed_chain.append(parent)
+        mid: list[int] = []
+        while parent != ROOT_ID and parent not in skeleton:
+            mid.append(parent)
             parent = tree.edges[parent].parent_id
-        if not removed_chain:
-            continue
-        removed_chain.reverse()
-        idx = len(raw_contractions)
-        raw_contractions.append((parent, child, tuple(removed_chain)))
-        for mid in removed_chain:
-            contracted_to_idx[mid] = idx
+        if mid:
+            mid.reverse()
+            idx = len(chains)
+            chains.append((parent, child, tuple(mid)))
+            for m in mid:
+                chain_of[m] = idx
 
-    path_branches: dict[int, list[int]] = defaultdict(list)
+    branches: dict[int, list[int]] = defaultdict(list)
     subtrees: dict[int, list[int]] = defaultdict(list)
-    for i in sorted(inactive - set(contracted_to_idx)):
+    for i in sorted(tree.nodes.keys() - skeleton - chain_of.keys()):
         anc = tree.edges[i].parent_id
-        while anc != tree.root_id and anc not in retained_skeleton and anc not in contracted_to_idx:
+        while anc != ROOT_ID and anc not in skeleton and anc not in chain_of:
             anc = tree.edges[anc].parent_id
-        if anc in contracted_to_idx:
-            path_branches[contracted_to_idx[anc]].append(i)
+        if anc in chain_of:
+            branches[chain_of[anc]].append(i)
         else:
             subtrees[anc].append(i)
 
-    contractions = tuple(
-        PathContraction(p, c, rem, tuple(path_branches.get(idx, ())))
-        for idx, (p, c, rem) in enumerate(raw_contractions)
-        if len(rem) + len(path_branches.get(idx, ())) >= config.region_size
+    contractions = (
+        PathContraction(p, c, rem, tuple(branches.get(idx, ())))
+        for idx, (p, c, rem) in enumerate(chains)
+        if len(rem) + len(branches.get(idx, ())) >= config.region_size
     )
-    prunings = tuple(
+    prunings = (
         SubtreePruning(p, tuple(ids))
         for p, ids in sorted(subtrees.items())
         if len(ids) >= config.region_size
     )
+    return (*contractions, *prunings)
+
+
+def apply_simplification(tree: TreePopulation, regions: Sequence[Region]) -> TreePopulation:
+    """移除简化区域中的节点，重连收缩边并保留存活节点的评价投入计数。"""
     removed = {
-        *(i for c in contractions for i in (*c.removed_ids, *c.branch_ids)),
-        *(i for b in prunings for i in b.removed_ids),
+        i for r in regions
+        for i in ((*r.removed_ids, *r.branch_ids) if isinstance(r, PathContraction) else r.removed_ids)
     }
-    kept = tuple(sorted(set(tree.nodes) - removed))
-    return SimplificationPlan(kept, contractions, prunings, tuple(sorted(reps)), tuple(sorted(forks)))
-
-
-def apply_simplification(tree: TreePopulation, plan: SimplificationPlan) -> TreePopulation:
-    """Apply planned path contractions and subtree prunings while keeping surviving effort counts."""
-    kept = set(plan.kept_ids)
-    contractions = {c.child_id: c for c in plan.path_contractions}
-    nodes = {i: replace(tree.nodes[i]) for i in plan.kept_ids}
-    edges = {}
-    for i in plan.kept_ids:
-        edge = tree.edges[i]
-        if i in contractions:
-            c = contractions[i]
-            edges[i] = replace(edge, parent_id=c.parent_id, operator=None, reference_id=None, contracted=True)
-        else:
-            edges[i] = replace(edge)
+    kept = sorted(tree.nodes.keys() - removed)
+    kept_set = set(kept)
+    rewired = {r.child_id: r.parent_id for r in regions if isinstance(r, PathContraction)}
     return TreePopulation(
-        root_id=tree.root_id,
         root_experience=tree.root_experience,
-        nodes=nodes,
-        edges=edges,
-        latest_node_id=tree.latest_node_id,
-        used_crossover_pairs=[pair for pair in tree.used_crossover_pairs
-                              if pair[0] in kept and pair[1] in kept],
-        evaluations_used=tree.evaluations_used,
+        nodes={i: replace(tree.nodes[i]) for i in kept},
+        edges={
+            i: (replace(tree.edges[i], parent_id=rewired[i], operator=None, reference_id=None, contracted=True)
+                if i in rewired else replace(tree.edges[i]))
+            for i in kept
+        },
+        used_crossover_pairs=[pair for pair in tree.used_crossover_pairs if pair[0] in kept_set and pair[1] in kept_set],
     )

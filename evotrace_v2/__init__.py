@@ -1,6 +1,8 @@
 """EvoTrace v2: independent tree-population algorithm design."""
 
-from .config import Config
-from .task import Task
 from .llm import OpenAIClient
+from .models import Config
 from .search import EvoTrace
+from .task import Task
+
+__all__ = ["Config", "EvoTrace", "OpenAIClient", "Task"]

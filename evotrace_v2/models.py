@@ -1,30 +1,63 @@
-"""树状种群的节点、边与容器。"""
+"""树状种群、候选解析与搜索记录模型。"""
 
 from dataclasses import dataclass, field
 import json
-import math
 from typing import Literal
 
-CANDIDATE_RESPONSE_FORMAT = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "traceaad_candidate",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "analysis": {"type": "string"},
-                "code": {"type": "string"},
-                "design": {"type": "string"},
-            },
-            "required": ["analysis", "code", "design"],
-            "additionalProperties": False,
-        },
-    },
-}
-
+ROOT_ID = 0
 Operator = Literal["Init", "Refine", "Crossover", "Explore"]
 Status = Literal["success", "error", "timeout"]
+
+
+def json_schema(name: str, *fields: str) -> dict:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": name,
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {f: {"type": "string"} for f in fields},
+                "required": list(fields),
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
+CANDIDATE_RESPONSE_FORMAT = json_schema("traceaad_candidate", "analysis", "code", "design")
+
+_CTRL_REPAIR = str.maketrans({"\x08": r"\b", "\x0c": r"\f", "\r": " ", "\t": " "})
+
+
+def clean_text(text: str | None) -> str:
+    """修复 JSON 误转义的 LaTeX 控制字符（\\b、\\f）并折叠空白。"""
+    if not text:
+        return ""
+    repaired = text.translate(_CTRL_REPAIR)
+    repaired = "".join(ch for ch in repaired if ch == "\n" or ord(ch) >= 32)
+    return " ".join(repaired.split())
+
+
+def outcome_text(parent_fit: float | None, child_fit: float | None, *, include_scores: bool = True) -> str:
+    if child_fit is None:
+        return "failed"
+    if parent_fit is None:
+        return f"fitness={child_fit:.6g}" if include_scores else "evaluated (no algorithm parent)"
+    word = "improved" if child_fit < parent_fit else "tied" if child_fit == parent_fit else "regressed"
+    return f"{parent_fit:.6g} -> {child_fit:.6g} ({word})" if include_scores else word
+
+
+@dataclass(frozen=True)
+class Config:
+    evaluation_budget: int = 1000
+    initial_size: int = 5
+    temperature: float = 1.0
+    max_tokens: int = 16384
+    model_timeout: float = 600.0
+    seed: int = 0
+    failure_count: int = 2
+    max_unevaluated: int = 10
 
 
 @dataclass
@@ -34,12 +67,16 @@ class Node:
     id: int
     code: str
     design: str
-    fitness: float | None  # None 表示不可行个体。
+    fitness: float | None
     failure: str | None = None
     selection_experience: str = ""
-    children_count: int = 0  # 同路线开发尝试数（Refine / Crossover 主父代受评尝试）。
-    direction_id: int | None = None  # 入树时确定；原始方向起点被压缩后仍保持。
-    last_used: int = 0  # 出生或作为同路线主父代开发时的评价时钟。
+    children_count: int = 0
+    direction_id: int | None = None
+    last_used: int = 0
+
+    def __post_init__(self) -> None:
+        self.design = clean_text(self.design)
+        self.selection_experience = clean_text(self.selection_experience)
 
 
 @dataclass
@@ -48,60 +85,34 @@ class Edge:
 
     parent_id: int
     child_id: int
-    operator: Operator | None  # 虚拟根连接初始算法时为 None。
+    operator: Operator | None
     reference_id: int | None = None
     variation_experience: str = ""
     contracted: bool = False
 
+    def __post_init__(self) -> None:
+        self.variation_experience = clean_text(self.variation_experience)
+
 
 @dataclass
 class TreePopulation:
-    """虚拟根单独表示；算法节点按 id 索引，入边按 child_id 索引。"""
+    """虚拟根编号固定为 ROOT_ID=0；算法节点与入边均按节点 id 索引。"""
 
-    root_id: int = 0
     root_selection_experience: str = ""
     nodes: dict[int, Node] = field(default_factory=dict)
     edges: dict[int, Edge] = field(default_factory=dict)
-    latest_node_id: int = 0
-    direction_evaluations: dict[int, int] = field(default_factory=dict)
     used_crossover_pairs: list[tuple[int, int]] = field(default_factory=list)
     evaluations_used: int = 0
 
     def direction_of(self, node_id: int) -> int:
-        """Return the original Init/Explore direction ID, including removed origins."""
-        direction = self.nodes[node_id].direction_id
-        if direction is None:
-            raise ValueError("Use TreePopulation.add to assign a node's direction")
-        return direction
+        return int(self.nodes[node_id].direction_id)  # type: ignore[arg-type]
 
-    def add(self, node: Node, edge: Edge, *, evaluations: int) -> None:
-        """Attach one evaluated version, counting its actual evaluations including repairs.
-
-        Node IDs increase across consolidations. Each new Explore starts its own
-        evaluation count; Refine and Crossover contribute to their parent's direction.
-        """
-        if node.id == self.root_id or node.id <= self.latest_node_id or node.id != edge.child_id:
-            raise ValueError("New node IDs must increase and match edge.child_id")
-        if type(evaluations) is not int or evaluations < 1:
-            raise ValueError("evaluations must count at least one actual evaluation")
-        if node.fitness is not None and not math.isfinite(node.fitness):
-            raise ValueError("fitness must be finite or None")
-        reference = None
-        if edge.operator == "Crossover" and edge.reference_id is not None:
-            reference = self.nodes.get(edge.reference_id)
-            if reference is None or reference.fitness is None:
-                raise ValueError("Crossover requires a retained feasible reference")
+    def add(self, node: Node, edge: Edge, *, evaluations: int = 1) -> None:
         clock = self.evaluations_used + evaluations
-        if edge.parent_id == self.root_id:
-            if edge.operator is not None:
-                raise ValueError("Initial edges must have operator=None")
+        if edge.parent_id == ROOT_ID:
             direction = node.id
         else:
-            parent = self.nodes.get(edge.parent_id)
-            if parent is None or parent.fitness is None:
-                raise ValueError("A new algorithm requires a retained feasible parent")
-            if edge.operator not in ("Refine", "Crossover", "Explore"):
-                raise ValueError("An evolutionary edge requires an operator")
+            parent = self.nodes[edge.parent_id]
             if edge.operator == "Explore":
                 direction = node.id
             else:
@@ -117,8 +128,16 @@ class TreePopulation:
         self.evaluations_used = clock
         self.nodes[node.id] = node
         self.edges[node.id] = edge
-        self.latest_node_id = node.id
-        self.direction_evaluations[direction] = self.direction_evaluations.get(direction, 0) + evaluations
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TreePopulation":
+        return cls(
+            root_selection_experience=clean_text(data.get("root_selection_experience", "")),
+            nodes={int(i): Node(**n) for i, n in data["nodes"].items()},
+            edges={int(i): Edge(**e) for i, e in data["edges"].items()},
+            used_crossover_pairs=[(p, r) for p, r in data.get("used_crossover_pairs", ())],
+            evaluations_used=int(data.get("evaluations_used", 0)),
+        )
 
 
 @dataclass(frozen=True)
@@ -172,7 +191,7 @@ class Candidate:
         for name in ("analysis", "design", "code"):
             if not isinstance(value.get(name), str) or not value[name].strip():
                 raise FormatError(f"Field {name!r} must be a nonempty string")
-        return cls(analysis=value["analysis"], design=value["design"], code=value["code"])
+        return cls(analysis=value["analysis"], design=clean_text(value["design"]), code=value["code"])
 
 
 @dataclass(frozen=True)
@@ -186,11 +205,6 @@ class ModelReply:
 
 @dataclass
 class Attempt:
-    """One generation attempt: its model calls, evaluations and final program.
-
-    ``record`` holds method-specific information, such as trajectory allocation
-    and the material shown to the model.
-    """
     id: int
     parent_id: int
     operator: Operator

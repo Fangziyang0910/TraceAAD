@@ -8,10 +8,9 @@ import os
 from pathlib import Path
 import sys
 
-from .config import Config
-from .context import ContextConfig
 from .allocation import AllocationConfig
 from .llm import OpenAIClient
+from .models import Config
 from .search import EvoTrace
 from .task import Task
 from .topology import TopologyConfig
@@ -40,6 +39,13 @@ def load_task(*, name=None, factory=None, options=None) -> Task:
     return value if isinstance(value, Task) else Task.from_evaluator(value)
 
 
+def _merge(cls, base: dict, overrides: dict, label: str):
+    try:
+        return cls(**{**base, **overrides})
+    except TypeError as exc:
+        raise ValueError(f"Incompatible {label}; resume with its original frozen source") from exc
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Independent EvoTrace v3 search")
     task_args = parser.add_mutually_exclusive_group(required=True)
@@ -57,14 +63,10 @@ def main(argv=None):
     parser.add_argument("--temperature", type=float)
     parser.add_argument("--max-tokens", type=int)
     parser.add_argument("--model-timeout", type=float)
-    parser.add_argument("--rank-half-life", type=float,
-                        help="Representative rank difference that halves quality weight (default: 10)")
-    parser.add_argument("--max-representatives", type=int,
-                        help="Maximum number of mutually uncovered representatives (default: 24)")
-    parser.add_argument("--cover-distance", type=float,
-                        help="AST shingle distance below which a better representative covers a candidate (default: 0.15)")
-    parser.add_argument("--region-size", type=int,
-                        help="Minimum non-skeleton nodes in a path or subtree region before simplification (default: 4)")
+    parser.add_argument("--rank-half-life", type=float)
+    parser.add_argument("--max-representatives", type=int)
+    parser.add_argument("--cover-distance", type=float)
+    parser.add_argument("--region-size", type=int)
     parser.add_argument("--no-example", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -77,47 +79,27 @@ def main(argv=None):
         if not args.resume and (directory / "run_config.json").exists():
             parser.error("Run already exists; use --resume")
         saved = json.loads((directory / "run_config.json").read_text()) if args.resume else {}
-        values = dict(saved["config"]) if args.resume else asdict(Config())
-        for key in values:
-            value = getattr(args, key, None)
-            if value is not None:
-                values[key] = value
-        settings = {}
-        if args.resume:
-            if saved.get("method") != "evotrace_v3":
-                raise ValueError("This is not a V3 run; resume it with its original frozen source")
-            if saved.get("selection_rule") != EvoTrace.selection_rule:
-                raise ValueError("Incompatible selection_rule; resume with its original frozen source")
-            try:
-                topology = TopologyConfig(**saved["topology"])
-            except TypeError as exc:
-                raise ValueError("Incompatible topology; resume with its original frozen source") from exc
-            settings = {
-                "topology_config": topology,
-                "allocation_config": AllocationConfig(**saved["allocation"]),
-                "context_config": ContextConfig(**saved["context"]),
-                "reflection_temperature": saved["reflection_temperature"],
-                "reflection_max_tokens": saved["reflection_max_tokens"],
-            }
-        if args.rank_half_life is not None:
-            allocation = dict(saved["allocation"]) if args.resume else {}
-            allocation["rank_half_life"] = args.rank_half_life
-            settings["allocation_config"] = AllocationConfig(**allocation)
-        topology_args = {f.name: getattr(args, f.name) for f in fields(TopologyConfig)
-                         if getattr(args, f.name) is not None}
-        if topology_args:
-            topology = dict(saved["topology"]) if args.resume else {}
-            settings["topology_config"] = TopologyConfig(**{**topology, **topology_args})
+        cfg_args = {f.name: getattr(args, f.name, None) for f in fields(Config)
+                    if getattr(args, f.name, None) is not None}
+        top_args = {f.name: getattr(args, f.name) for f in fields(TopologyConfig)
+                    if getattr(args, f.name) is not None}
+        alloc_args = {"rank_half_life": args.rank_half_life} if args.rank_half_life is not None else {}
+        config = _merge(Config, saved.get("config", {}), cfg_args, "config")
+        topology = _merge(TopologyConfig, saved.get("topology", {}), top_args, "topology")
+        allocation = _merge(AllocationConfig, saved.get("allocation", {}), alloc_args, "allocation")
         task = load_task(name=args.task, factory=args.task_factory, options=options)
         if args.no_example:
             task.example_code = task.example_design = None
         model = OpenAIClient(args.base_url, args.model, api_key=os.getenv(args.api_key_env, ""))
-        search = EvoTrace(task, model, config=Config(**values), run_dir=directory,
-                          resume=args.resume, **settings)
+        search = EvoTrace(
+            task, model, config=config, topology_config=topology, allocation_config=allocation,
+            include_experiences=saved.get("include_experiences", True),
+            run_dir=directory, resume=args.resume,
+        )
         result = search.run()
         print(json.dumps(asdict(result), ensure_ascii=False, allow_nan=False, indent=2))
         return 0 if result.status == "finished" else 1
-    except (ValueError, OSError, ImportError, AttributeError) as exc:
+    except (ValueError, OSError, ImportError, AttributeError, KeyError) as exc:
         parser.error(str(exc))
 
 

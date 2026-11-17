@@ -1,16 +1,64 @@
-"""Whole-task evaluation: assembly, task execution, score validation and timeout."""
+"""Whole-task evaluation: assembly, task execution, score validation, timeout, and failure formatting."""
 
 import importlib.util
 import linecache
 import math
 import numbers
-import random
 from pathlib import Path
+import random
+import re
 import sys
 
 from .models import Evaluation
 from .runtime import ProcessFailure, ProcessTimeout, isolated_call
 from .task import Task
+
+TIMEOUT_PREFIX = "Evaluation exceeded"
+
+
+def _parse_failure(failure: str):
+    """The exception message and the traceback blocks that lie in the candidate's own code."""
+    lines = failure.strip().splitlines()
+    start = len(lines) - 1
+    for i, line in enumerate(lines):
+        if line and not line[0].isspace() and not line.startswith("Traceback"):
+            start = i
+    message = re.sub(r"^(?:\w+\.)+(?=\w+(?::|$))", "", "\n".join(lines[start:]))
+    blocks, keep = [], False
+    for line in lines[:start]:
+        if line.lstrip().startswith('File "'):
+            keep = "<candidate>" in line or "<string>" in line
+            if keep:
+                blocks.append([line.strip()])
+        elif keep and line.startswith("  "):
+            blocks[-1].append(line)
+        else:
+            keep = False
+    return re.sub(r"\d+(?:\.\d+)?", "N", message), blocks
+
+
+def failure_feedback(failure: str) -> str:
+    """Candidate traceback lines plus normalized exception message for repair."""
+    message, blocks = _parse_failure(failure)
+    return "\n".join([*(line for block in blocks for line in block), message])
+
+
+def compact_failure(failure_text: str | None) -> str:
+    """Short one-line failure reason with offending candidate source line."""
+    text = (failure_text or "").strip()
+    if not text:
+        return "infeasible (unknown error)"
+    if text.startswith(TIMEOUT_PREFIX):
+        return "timeout (exceeded evaluation time limit)"
+    message, blocks = _parse_failure(text)
+    if blocks:
+        source = next(
+            (line.strip() for line in blocks[-1][1:] if line.strip() and set(line.strip()) - set("~^ ")),
+            None,
+        )
+        if source:
+            return f"{message} at `{source[:80]}`"
+    return message[:120]
 
 
 def _execute(task: Task, code: str):
@@ -63,8 +111,7 @@ class Evaluator:
         except ProcessTimeout:
             return Evaluation(
                 "timeout",
-                failure=f"Evaluation exceeded the total time limit of {self.task.time_limit:g} seconds.",
+                failure=f"{TIMEOUT_PREFIX} the total time limit of {self.task.time_limit:g} seconds.",
             )
         except (ProcessFailure, OSError) as exc:
             return Evaluation("error", failure=str(exc))
-

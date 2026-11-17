@@ -34,9 +34,7 @@ def write_json(path, value):
 
 
 def capture(args):
-    from evotrace_v2.models import Attempt, Edge, Node, Program, TreePopulation
-    from evotrace_v2.reflection import clean_prompt_text
-    from evotrace_v2.search import deserialize_tree
+    from evotrace_v2.models import Attempt, Edge, Node, Program, TreePopulation, clean_text
 
     out = Path(args.out)
     frozen={p.stem:json.loads(p.read_text()) for p in (out/'cases').glob('*.json')}
@@ -95,7 +93,7 @@ def capture(args):
                 p = Program.from_dict(row['program']) if row['program'] else None
                 if p:
                     archive[p.id] = p
-                    tree.add(Node(p.id, p.code, clean_prompt_text(p.design or ''),
+                    tree.add(Node(p.id, p.code, clean_text(p.design),
                                   p.evaluation.fitness if p.valid else None, p.evaluation.failure),
                              Edge(a.parent_id, p.id, None if a.operator=='Init' else a.operator, a.reference_id),
                              evaluations=len(a.evaluations))
@@ -108,7 +106,7 @@ def capture(args):
                         candidates.append({**base, 'role': call['kind'], 'phase': 'reflection',
                             'tree': asdict(tree), 'region': region, 'plan': {k:v for k,v in c.items() if k!='reflection_calls'},
                             'original_call': call, 'tree_after': row['tree_after']})
-                    tree = deserialize_tree(row['tree_after'])
+                    tree = TreePopulation.from_dict(row['tree_after'])
         # Fixed early seed; later cases chosen by evidence availability, never fitness.
         chosen = []
         for role in ['Init','Refine','Crossover','Explore']:
@@ -159,12 +157,10 @@ def capture(args):
 
 
 def render(args):
-    from evotrace_v2.config import Config
-    from evotrace_v2.context import ContextConfig, EvoTracePromptBuilder
-    from evotrace_v2.models import Program, CANDIDATE_RESPONSE_FORMAT
-    from evotrace_v2.reflection import build_selection_prompt, build_variation_prompt, SELECTION_SCHEMA, VARIATION_SCHEMA
-    from evotrace_v2.search import deserialize_tree
-    from evotrace_v2.task import Task
+    from evotrace_v2 import Config, Task
+    from evotrace_v2.context import evolution_prompt, init_prompt, repair_format_prompt, repair_program_prompt
+    from evotrace_v2.models import CANDIDATE_RESPONSE_FORMAT, Program, TreePopulation
+    from evotrace_v2.reflection import SELECTION_SCHEMA, VARIATION_SCHEMA, build_selection_prompt, build_variation_prompt
     from evotrace_v2.topology import BranchConsolidation, PathContraction
 
     out=Path(args.out)
@@ -173,26 +169,23 @@ def render(args):
         c=json.loads(path.read_text())
         if not re.search(args.match,c['case']):
             continue
-        tree=deserialize_tree(c['tree']) if 'tree' in c else None
+        tree=TreePopulation.from_dict(c['tree']) if 'tree' in c else None
         task=Task(evaluate_program=lambda _:None,**c['task']['task_definition'])
+        cfg=Config(**c['settings']['config'])
         if c['phase']=='repair':
-            builder=EvoTracePromptBuilder(task,Config(**c['settings']['config']))
-            prompt=(builder.repair_format(c['repair_response'],c['format_failure']) if c['role']=='Repair_format'
-                    else builder.repair_program(Program.from_dict(c['failed_program'])))
+            prompt=(repair_format_prompt(task,c['repair_response'],c['format_failure']) if c['role']=='Repair_format'
+                    else repair_program_prompt(task,Program.from_dict(c['failed_program'])))
             schema=CANDIDATE_RESPONSE_FORMAT
         elif c['phase']=='generation':
-            builder=EvoTracePromptBuilder(task,Config(**c['settings']['config']))
             if c['role']=='Init':
-                prompt=builder.initialization({int(i):Program.from_dict(p) for i,p in c['archive'].items()})
+                prompt=init_prompt(task,{int(i):Program.from_dict(p) for i,p in c['archive'].items()},cfg.failure_count)
             else:
-                # Reproduce recorded window reductions without invoking the tokenizer.
-                cfg=ContextConfig(**c['settings']['context'])
-                for change in c['context'].get('input_window',{}).get('reductions',[]):
-                    from dataclasses import replace
-                    cfg=replace(cfg,**{change['field']:change['retained']})
-                from evotrace_v2.context import build_evolution_context
-                text,instruction,scores,_=build_evolution_context(tree,c['parent_id'],c['role'],c['reference_id'],cfg)
-                prompt=builder._render(text,instruction,has_scores=scores)
+                ctx_cfg=c['settings'].get('context',{})
+                prompt=evolution_prompt(
+                    task,tree,c['parent_id'],c['role'],c['reference_id'],
+                    include_experiences=ctx_cfg.get('include_experiences',c['settings'].get('include_experiences',True)),
+                    include_reference_code=ctx_cfg.get('include_reference_code',c['settings'].get('include_reference_code',True)),
+                )
             schema=CANDIDATE_RESPONSE_FORMAT
         else:
             kw=dict(task_description=task.task_description,score_definition=task.score_definition,
@@ -216,13 +209,11 @@ def render(args):
 
 def handoff(args):
     """Replay actual consolidation with one fresh summary, then render its consumer."""
-    from evotrace_v2.config import Config
-    from evotrace_v2.context import ContextConfig, EvoTracePromptBuilder, build_evolution_context
-    from evotrace_v2.models import CANDIDATE_RESPONSE_FORMAT
+    from evotrace_v2 import Task
+    from evotrace_v2.context import evolution_prompt
+    from evotrace_v2.models import CANDIDATE_RESPONSE_FORMAT, TreePopulation
     from evotrace_v2.reflection import reflect_and_apply
-    from evotrace_v2.search import deserialize_tree
-    from evotrace_v2.task import Task
-    from evotrace_v2.topology import ConsolidationPlan, PathContraction, BranchConsolidation
+    from evotrace_v2.topology import BranchConsolidation, PathContraction
 
     class RecordedModel:
         def __init__(self, replies):
@@ -248,13 +239,13 @@ def handoff(args):
         replies=[response['response'] if x['kind']==c['role'] and x['target_id']==c['original_call']['target_id']
                  else x['response'] for x in original['reflection_calls']]
         p=c['plan']
-        plan=ConsolidationPlan(tuple(p['kept_ids']),tuple(PathContraction(**v) for v in p['path_contractions']),
-                               tuple(BranchConsolidation(**v) for v in p['branch_consolidations']),tuple(p['triggers']))
+        regions=(*(PathContraction(**v) for v in p['path_contractions']),
+                 *(BranchConsolidation(**v) for v in p['branch_consolidations']))
         task=Task(evaluate_program=lambda _:None,**c['task']['task_definition'])
-        tree,records=reflect_and_apply(deserialize_tree(c['tree']),plan,model=RecordedModel(replies),
+        tree,records=reflect_and_apply(TreePopulation.from_dict(c['tree']),regions,model=RecordedModel(replies),
             task_description=task.task_description,score_definition=task.score_definition,
             function_template=task.function_template)
-        assert all(not r.used_fallback for r in records)
+        assert all(not r['error'] for r in records)
         target=c['original_call']['target_id']
         if c['role']=='variation':
             parent=target
@@ -265,13 +256,17 @@ def handoff(args):
         else:
             parent=target
             role='Refine'
-        body,instruction,scores,view=build_evolution_context(tree,parent,role,config=ContextConfig(**c['settings']['context']))
-        prompt=EvoTracePromptBuilder(task,Config(**c['settings']['config']))._render(body,instruction,has_scores=scores)
-        selected=next(r.experience for r in records if r.kind==c['role'] and r.target_id==target)
+        ctx_cfg=c['settings'].get('context',{})
+        prompt=evolution_prompt(
+            task,tree,parent,role,
+            include_experiences=ctx_cfg.get('include_experiences',c['settings'].get('include_experiences',True)),
+            include_reference_code=ctx_cfg.get('include_reference_code',c['settings'].get('include_reference_code',True)),
+        )
+        selected=next(r['experience'] for r in records if r['kind']==c['role'] and r['target_id']==target)
         assert selected in prompt, f'Fresh experience did not reach consumer: {c["case"]}'
         arm=args.arm+'_handoff'
-        write_json(out/'handoffs'/arm/f'{c["case"]}.json',{'tree':asdict(tree),'reflection_records':[asdict(r) for r in records],
-                   'consumer':view,'prompt':prompt,'response_source':str(response_path)})
+        write_json(out/'handoffs'/arm/f'{c["case"]}.json',{'tree':asdict(tree),'reflection_records':records,
+                   'consumer':{'parent_id':parent,'operator':role},'prompt':prompt,'response_source':str(response_path)})
         jobs.append({'case':c['case'],'phase':'generation','role':role,'prompt':prompt,'schema':CANDIDATE_RESPONSE_FORMAT,
                      'task':c['task'],'arm':arm,'reflection_source':str(response_path)})
     write_json(out/f'inputs_{args.arm}_handoff.json',jobs)
@@ -348,12 +343,10 @@ def full_step(job):
     from contextlib import contextmanager, nullcontext
     from evotrace_v2 import Config, EvoTrace, Task
     from evotrace_v2.allocation import AllocationConfig
-    from evotrace_v2.context import ContextConfig
     from evotrace_v2.evaluation import Evaluator
-    from evotrace_v2.models import Attempt, ModelReply, Program, CANDIDATE_RESPONSE_FORMAT
-    from evotrace_v2.search import deserialize_tree
+    from evotrace_v2.models import Attempt, CANDIDATE_RESPONSE_FORMAT, ModelReply, Program, TreePopulation
     from evotrace_v2.topology import TopologyConfig
-    from experiments.traceaad.scheduling import ScheduledModel, ScheduledEvaluator
+    from experiments.traceaad.scheduling import ScheduledEvaluator, ScheduledModel
     import evotrace_v2
 
     out=Path(out)
@@ -405,23 +398,22 @@ def full_step(job):
             return reply
 
     model=CachedFirst()
+    ctx_cfg=settings.get('context',{})
     search=EvoTrace(task,model,config=Config(**settings['config']),
         topology_config=TopologyConfig(**settings['topology']),allocation_config=AllocationConfig(**settings['allocation']),
-        context_config=ContextConfig(**settings['context']),reflection_model=live,
-        reflection_temperature=settings['reflection_temperature'],reflection_max_tokens=settings['reflection_max_tokens'])
+        include_experiences=ctx_cfg.get('include_experiences',settings.get('include_experiences',True)),
+        include_reference_code=ctx_cfg.get('include_reference_code',settings.get('include_reference_code',True)))
+    search.reflection_model=live
     prefix=out/'prefixes'/Path(case['run']).name/'attempts.jsonl.gz'
     trace=prefix if prefix.exists() else Path(case['run'])/'native/attempts.jsonl'
     for row in read_rows(trace):
         if row['attempt']['id']>=case['attempt_id']:
             break
         search.attempts.append(Attempt(**row['attempt']))
-        if c:=row['attempt']['record'].get('consolidation'):
-            search.consolidations_count+=1
-            search.reflection_calls_count+=sum(bool(r['prompt_chars']) for r in c['reflection_calls'])
         if row['program']:
             program=Program.from_dict(row['program'])
             search.archive[program.id]=program
-    search.tree=deserialize_tree(case['tree'])
+    search.tree=TreePopulation.from_dict(case['tree'])
     assert search.evaluations_used==case['evaluations_before']
     search.evaluator=ScheduledEvaluator(task,socket,'evotrace-harness-step-eval',evaluator_factory=Evaluator)
     best_before=search.best.evaluation.fitness
@@ -432,7 +424,7 @@ def full_step(job):
         'calls':model.calls,'best_before':best_before,'best_after':search.best.evaluation.fitness,
         'evaluation':asdict(program.evaluation) if program else {'status':'error','failure':'No evaluated program'},
         'evaluation_budget_spent':len(attempt.evaluations),
-        'reflection_fallbacks':sum(r['used_fallback'] for r in attempt.record.get('consolidation',{}).get('reflection_calls',[])),
+        'reflection_fallbacks':sum(r['status']=='fallback' for r in attempt.record.get('aux',[]) if r.get('role')=='reflection'),
         'source_sha256':source_hash,
         'prompt_sha256':hashlib.sha256(item['prompt'].encode()).hexdigest()}
     write_json(dest,result)

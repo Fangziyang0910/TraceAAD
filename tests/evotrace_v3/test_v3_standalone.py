@@ -1,14 +1,11 @@
 """EvoTrace must run with only its own package and the Python standard library."""
 
-from dataclasses import asdict
-
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
-import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -67,7 +64,7 @@ topology = TopologyConfig(max_representatives=8, cover_distance=0.15, region_siz
 search = EvoTrace(task, Model(), config=config, topology_config=topology, run_dir="run")
 for _ in range(8):
     assert search.step() is not None
-assert any("simplification" in a.record for a in search.attempts) and state["reflections"]
+assert any("aux" in a.record for a in search.attempts) and state["reflections"]
 assert search.attempts[0].repair_used and search.attempts[1].repair_used
 assert [e["status"] for e in search.attempts[1].evaluations] == ["error", "success"]
 tree = asdict(search.tree)
@@ -79,7 +76,6 @@ assert asdict(restored.tree) == tree
 assert restored.evaluations_used == search.evaluations_used
 result = restored.run()
 assert result.evaluations == 12 and result.best.valid
-assert restored.tree.evaluations_used == 12
 for name in ("calls.jsonl", "attempts.jsonl"):
     for line in (Path("run") / name).read_text().splitlines():
         json.loads(line)
@@ -236,6 +232,6 @@ def test_experiment_adapter_uses_evotrace_owned_runtime(tmp_path, monkeypatch, c
         run.main(["--method", "evotrace.v3", "--task", "tsp_construct", "--run-name", "owned",
                   "--batch", "owned", "--budget", "7", "--initial-size", "3",
                   "--scheduler-socket", "/fake", "--skip-heldout", "--resume", "--max-representatives", "13"])
-    assert public['reference_code'] is True and saved['context'] == {'include_experiences': True}
+    assert public['reference_code'] is True and saved['include_experiences'] is True
     summary = json.loads((directory / "summary.json").read_text())
     assert summary["evaluation_calls"] == 7 and summary["status"] == "finished"

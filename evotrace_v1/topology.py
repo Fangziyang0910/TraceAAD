@@ -2,11 +2,13 @@
 
 import ast
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from difflib import unified_diff
 from functools import lru_cache
 import hashlib
 
-from .models import Edge, Node, Operator, TreePopulation
+from .models import Operator, ROOT_ID, TreePopulation
 
 
 def _strip_docstrings(code: str) -> ast.AST:
@@ -19,14 +21,28 @@ def _strip_docstrings(code: str) -> ast.AST:
     return tree
 
 
+def bare_code(code: str) -> str:
+    """去除文档字符串后的标准化源码。"""
+    try:
+        return ast.unparse(_strip_docstrings(code))
+    except (SyntaxError, ValueError):
+        return code.strip()
+
+
+def compact_diff(old_code: str, new_code: str) -> str:
+    """计算两段标准化源码的紧凑 unified diff。"""
+    a, b = bare_code(old_code).splitlines(), bare_code(new_code).splitlines()
+    if a == b:
+        return "(normalized code unchanged)"
+    return "\n".join("..." if line.startswith("@@") else line for line in list(unified_diff(a, b, lineterm="", n=2))[2:])
+
+
 @lru_cache(maxsize=4096)
 def ast_shingles(code: str, k: int = 2) -> tuple[tuple[object, int], ...]:
-    """提取对局部变量名与数值常数不敏感的 AST 父子结构边与节点序列二元组特征。"""
     try:
         tree = _strip_docstrings(code)
     except (SyntaxError, ValueError):
-        counts = Counter(code.split())
-        return tuple(sorted(counts.items()))
+        return tuple(sorted(Counter(code.split()).items()))
 
     tokens: list[str] = []
     counts: Counter[object] = Counter()
@@ -60,39 +76,27 @@ def ast_shingles(code: str, k: int = 2) -> tuple[tuple[object, int], ...]:
 
 @lru_cache(maxsize=4096)
 def identity(code: str) -> str:
-    """Same parsed source, ignoring layout, comments and docstrings."""
     try:
-        tree = ast.parse(code)
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
-                first = node.body[0]
-                if (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
-                        and isinstance(first.value.value, str)):
-                    node.body = node.body[1:]
-        text = ast.dump(tree, include_attributes=False)
+        text = ast.dump(_strip_docstrings(code), include_attributes=False)
     except (SyntaxError, ValueError):
         text = code.strip()
     return hashlib.sha256(text.encode()).hexdigest()
 
 
 def code_distance(code_a: str, code_b: str) -> float:
-    """计算两段代码的归一化 AST 多重集 Jaccard 距离，取值 [0.0, 1.0]。"""
     if code_a == code_b:
         return 0.0
-    sh_a = dict(ast_shingles(code_a))
-    sh_b = dict(ast_shingles(code_b))
-    if not sh_a and not sh_b:
-        return 0.0
+    sh_a, sh_b = dict(ast_shingles(code_a)), dict(ast_shingles(code_b))
     keys = sh_a.keys() | sh_b.keys()
-    inter = sum(min(sh_a.get(k, 0), sh_b.get(k, 0)) for k in keys)
     union = sum(max(sh_a.get(k, 0), sh_b.get(k, 0)) for k in keys)
-    return 1.0 - (inter / union) if union else 0.0
+    if not union:
+        return 0.0
+    inter = sum(min(sh_a.get(k, 0), sh_b.get(k, 0)) for k in keys)
+    return 1.0 - inter / union
 
 
 @dataclass(frozen=True)
 class TopologyConfig:
-    """Population capacity and the shared quality/diversity selection rule."""
-
     base_capacity: int = 32
     trigger_capacity: int = 64
     quality_floor: float = 0.30
@@ -117,8 +121,6 @@ class TopologyConfig:
 
 @dataclass(frozen=True)
 class PathContraction:
-    """Connect retained endpoints across removed intermediate versions."""
-
     parent_id: int
     child_id: int
     removed_ids: tuple[int, ...]
@@ -128,82 +130,101 @@ class PathContraction:
 
 @dataclass(frozen=True)
 class BranchConsolidation:
-    """Removed side branches owned by their nearest retained ancestor."""
-
     parent_id: int
     removed_ids: tuple[int, ...]
 
 
-@dataclass(frozen=True)
-class ConsolidationPlan:
-    """One retained set, its selection reasons, and the regions to reflect on."""
-
-    kept_ids: tuple[int, ...]
-    selected_ids: tuple[int, ...]
-    lca_anchor_ids: tuple[int, ...]
-    direction_anchor_ids: tuple[int, ...]
-    protected_ids: tuple[int, ...] = ()
-    protection_capacity_skips: tuple[int, ...] = ()
-    path_contractions: tuple[PathContraction, ...] = ()
-    branch_consolidations: tuple[BranchConsolidation, ...] = ()
+Region = PathContraction | BranchConsolidation
 
 
 def needs_consolidation(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> bool:
     return len(tree.nodes) >= config.trigger_capacity
 
 
-class _TreeIndex:
-    def __init__(self, tree: TreePopulation):
-        self.tree = tree
-        self.children: dict[int, list[int]] = defaultdict(list)
-        self.paths: dict[int, tuple[int, ...]] = {}
-        self.direction: dict[int, int] = {}
-        if set(tree.nodes) != set(tree.edges) or tree.root_id in tree.nodes:
-            raise ValueError("Each algorithm must have one incoming edge; the root is virtual")
-        if tree.nodes and tree.latest_node_id < max(tree.nodes):
-            raise ValueError("Use TreePopulation.add to record node IDs and actual evaluations")
-        for i in sorted(tree.nodes):
-            edge = tree.edges[i]
-            p = edge.parent_id
-            if edge.child_id != i or (p != tree.root_id and p not in self.paths):
-                raise ValueError("Parent nodes must precede their children")
-            if p != tree.root_id and tree.nodes[p].fitness is None:
-                raise ValueError("Infeasible algorithms must remain leaves")
-            self.children[p].append(i)
-            self.paths[i] = (() if p == tree.root_id else self.paths[p]) + (i,)
-            self.direction[i] = tree.direction_of(i)
-        sizes = Counter(self.direction.values())
-        if set(sizes) != set(tree.direction_evaluations) or any(
-            tree.direction_evaluations[d] < count for d, count in sizes.items()
-        ):
-            raise ValueError("Direction counts must include every actual evaluation, including removed versions")
+def plan_consolidation(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> tuple[Region, ...]:
+    """在统一容量上限下选择代表个体、补齐 LCA 与根入口骨架，并划分路径收缩与旁支区域。"""
+    children: dict[int, list[int]] = defaultdict(list)
+    paths: dict[int, tuple[int, ...]] = {}
+    for i in sorted(tree.nodes):
+        p = tree.edges[i].parent_id
+        children[p].append(i)
+        paths[i] = (() if p == ROOT_ID else paths[p]) + (i,)
 
-    def closure(self, selected: set[int]) -> tuple[set[int], set[int], set[int]]:
-        used = {self.tree.root_id}
-        for i in selected:
-            used.update(self.paths[i])
-        lcas = {i for i in used if i != self.tree.root_id
-                and sum(c in used for c in self.children[i]) >= 2}
-        boundaries: set[int] = set()
-        for i in used - {self.tree.root_id}:
-            edge = self.tree.edges[i]
-            if edge.parent_id == self.tree.root_id:
-                boundaries.add(i)
-        return selected | lcas | boundaries, lcas, boundaries
+    def closure(selected: set[int]) -> set[int]:
+        used = {ROOT_ID, *(n for i in selected for n in paths[i])}
+        lcas = {i for i in used if i != ROOT_ID and sum(c in used for c in children[i]) >= 2}
+        boundaries = {i for i in used - {ROOT_ID} if tree.edges[i].parent_id == ROOT_ID}
+        return selected | lcas | boundaries
 
+    feasible = sorted((i for i, n in tree.nodes.items() if n.fitness is not None),
+                      key=lambda i: (tree.nodes[i].fitness, i))  # type: ignore[arg-type]
+    if len(feasible) <= config.base_capacity:
+        kept = closure(set(feasible))
+    else:
+        denom = max(1, len(feasible) - 1)
+        quality = {i: 1.0 - rank / denom for rank, i in enumerate(feasible)}
+        kept = closure({feasible[0]})
 
-def _partition(
-    tree: TreePopulation, index: _TreeIndex, kept: set[int], selected: set[int],
-    protected: list[int], capacity_skips: list[int],
-) -> ConsolidationPlan:
-    _, lcas, boundaries = index.closure(kept)
-    contractions = []
+        reps: dict[int, int] = {}
+        for i in feasible:
+            reps.setdefault(tree.direction_of(i), i)
+        cutoff = tree.latest_node_id - config.recent_node_window
+        young = sorted(
+            (i for d, i in reps.items()
+             if d != paths[i][0] and d >= cutoff and tree.direction_evaluations[d] < config.min_protected_evaluations),
+            key=lambda i: (-quality[i], i),
+        )
+        protected = 0
+        for cand in young:
+            if protected >= config.protected_new_directions:
+                break
+            nxt = closure(kept | {cand})
+            if len(nxt) <= config.base_capacity:
+                kept = nxt
+                protected += 1
+
+        distances: dict[tuple[int, int], float] = {}
+
+        def dist(a: int, b: int) -> float:
+            if a == b:
+                return 0.0
+            key = (min(a, b), max(a, b))
+            if key not in distances:
+                distances[key] = code_distance(tree.nodes[a].code, tree.nodes[b].code)
+            return distances[key]
+
+        candidates = {i for i, q in quality.items() if q >= config.quality_floor} - kept
+        nearest = {i: min(dist(i, j) for j in kept) for i in candidates}
+        while len(kept) < config.base_capacity:
+            winner, winner_set, winner_score = None, None, -1.0
+            for i in sorted(candidates):
+                if nearest[i] < config.clone_distance:
+                    continue
+                if config.same_fitness_clone_distance > config.clone_distance:
+                    fi = float(tree.nodes[i].fitness)  # type: ignore[arg-type]
+                    if any(abs(float(tree.nodes[j].fitness) - fi) <= 1e-9  # type: ignore[arg-type]
+                           and dist(i, j) < config.same_fitness_clone_distance for j in kept):
+                        continue
+                score = quality[i] * (0.65 + 0.35 * nearest[i])
+                if score > winner_score:
+                    nxt = closure(kept | {i})
+                    if len(nxt) <= config.base_capacity:
+                        winner, winner_set, winner_score = i, nxt, score
+            if winner is None or winner_set is None:
+                break
+            added = winner_set - kept
+            kept = winner_set
+            candidates -= kept
+            for i in candidates:
+                nearest[i] = min(nearest[i], *(dist(i, j) for j in added))
+
+    contractions: list[PathContraction] = []
     contracted: set[int] = set()
     for child in sorted(kept):
         chain = [tree.edges[child]]
-        removed = []
+        removed: list[int] = []
         parent = tree.edges[child].parent_id
-        while parent != tree.root_id and parent not in kept:
+        while parent != ROOT_ID and parent not in kept:
             removed.append(parent)
             chain.append(tree.edges[parent])
             parent = tree.edges[parent].parent_id
@@ -211,151 +232,44 @@ def _partition(
             chain.reverse()
             removed.reverse()
             crossovers = [e for e in chain if e.operator == "Crossover" or e.reference_id is not None]
-            if index.direction[parent] != index.direction[child]:
-                operator = "Explore"
-            else:
-                operator = "Crossover" if crossovers else "Refine"
-            reference = crossovers[-1].reference_id if crossovers else None
-            contractions.append(PathContraction(parent, child, tuple(removed), operator, reference))
+            op: Operator | None = (
+                None if parent == ROOT_ID
+                else "Explore" if tree.direction_of(parent) != tree.direction_of(child)
+                else "Crossover" if crossovers else "Refine"
+            )
+            ref = crossovers[-1].reference_id if crossovers else None
+            contractions.append(PathContraction(parent, child, tuple(removed), op, ref))
             contracted.update(removed)
+
     sides: dict[int, list[int]] = defaultdict(list)
-    for i in sorted(set(tree.nodes) - kept - contracted):
+    for i in sorted(tree.nodes.keys() - kept - contracted):
         parent = tree.edges[i].parent_id
-        while parent != tree.root_id and parent not in kept:
+        while parent != ROOT_ID and parent not in kept:
             parent = tree.edges[parent].parent_id
         sides[parent].append(i)
-    return ConsolidationPlan(
-        kept_ids=tuple(sorted(kept)), selected_ids=tuple(sorted(selected)),
-        lca_anchor_ids=tuple(sorted(lcas)), direction_anchor_ids=tuple(sorted(boundaries)),
-        protected_ids=tuple(sorted(protected)), protection_capacity_skips=tuple(capacity_skips),
-        path_contractions=tuple(contractions),
-        branch_consolidations=tuple(BranchConsolidation(p, tuple(ids)) for p, ids in sorted(sides.items())),
-    )
+
+    return (*contractions, *(BranchConsolidation(p, tuple(ids)) for p, ids in sorted(sides.items())))
 
 
-def plan_consolidation(
-    tree: TreePopulation,
-    config: TopologyConfig = TopologyConfig(),
-) -> ConsolidationPlan:
-    """Select algorithms and their required structure under one capacity limit.
-
-    Internal versions and leaves use the same quality/distance rule. Structural
-    nodes participate in subsequent distance comparisons. This function is pure;
-    actual evaluation counts are maintained by TreePopulation.add.
-    """
-    index = _TreeIndex(tree)
-    feasible = sorted((i for i, n in tree.nodes.items() if n.fitness is not None),
-                      key=lambda i: (tree.nodes[i].fitness, i))
-    denominator = max(1, len(feasible) - 1)
-    quality = {i: 1.0 - rank / denominator for rank, i in enumerate(feasible)}
-    protected: list[int] = []
-    capacity_skips: list[int] = []
-    if len(feasible) <= config.base_capacity:
-        selected = set(feasible)
-        kept, _, _ = index.closure(selected)
-        return _partition(tree, index, kept, selected, protected, capacity_skips)
-
-    champion = feasible[0]
-    selected = {champion}
-    kept, _, _ = index.closure(selected)
-    # Retention protection delays removal; it does not reserve evaluation budget.
-    representatives: dict[int, int] = {}
-    for i in feasible:
-        representatives.setdefault(index.direction[i], i)
-    cutoff = tree.latest_node_id - config.recent_node_window
-    young = sorted(
-        (i for d, i in representatives.items()
-         if d != index.paths[i][0] and d >= cutoff
-         and tree.direction_evaluations[d] < config.min_protected_evaluations),
-        key=lambda i: (-quality[i], i),
-    )
-    for candidate in young:
-        if len(protected) >= config.protected_new_directions:
-            break
-        result, _, _ = index.closure(kept | {candidate})
-        if len(result) > config.base_capacity:
-            capacity_skips.append(candidate)
-            continue
-        protected.append(candidate)
-        selected.add(candidate)
-        kept = result
-
-    distances: dict[tuple[int, int], float] = {}
-
-    def distance(a: int, b: int) -> float:
-        if a == b:
-            return 0.0
-        key = (min(a, b), max(a, b))
-        if key not in distances:
-            distances[key] = code_distance(tree.nodes[a].code, tree.nodes[b].code)
-        return distances[key]
-
-    candidates = {i for i in quality if quality[i] >= config.quality_floor} - kept
-    nearest = {i: min(distance(i, j) for j in kept) for i in candidates}
-    while len(kept) < config.base_capacity:
-        winner = None
-        winner_set = None
-        winner_score = -1.0
-        for i in sorted(candidates):
-            if nearest[i] < config.clone_distance:
-                continue
-            if config.same_fitness_clone_distance > config.clone_distance:
-                fi = float(tree.nodes[i].fitness)  # type: ignore[arg-type]
-                if any(
-                    abs(float(tree.nodes[j].fitness) - fi) <= 1e-9  # type: ignore[arg-type]
-                    and distance(i, j) < config.same_fitness_clone_distance
-                    for j in kept
-                ):
-                    continue
-            score = quality[i] * (0.65 + 0.35 * nearest[i])
-            if score <= winner_score:
-                continue
-            result, _, _ = index.closure(kept | {i})
-            if len(result) <= config.base_capacity:
-                winner, winner_set, winner_score = i, result, score
-        if winner is None:
-            break
-        added = winner_set - kept
-        selected.add(winner)
-        kept = winner_set
-        candidates -= kept
-        for i in candidates:
-            nearest[i] = min(nearest[i], *(distance(i, j) for j in added))
-    return _partition(tree, index, kept, selected, protected, capacity_skips)
-
-
-def apply_consolidation(tree: TreePopulation, plan: ConsolidationPlan) -> TreePopulation:
-    """Reconnect retained versions, carrying forward experience and evaluation counts."""
-    kept = set(plan.kept_ids)
-    contractions = {c.child_id: c for c in plan.path_contractions}
-    nodes = {i: replace(tree.nodes[i]) for i in plan.kept_ids}
-    edges = {}
-    for i in plan.kept_ids:
-        edge = tree.edges[i]
-        if i in contractions:
-            c = contractions[i]
-            edges[i] = replace(edge, parent_id=c.parent_id, operator=c.merged_operator,
-                               reference_id=c.merged_reference_id, contracted=True)
-        else:
-            edges[i] = replace(edge)
-    active_directions = {node.direction_id for node in nodes.values()}
+def apply_consolidation(tree: TreePopulation, regions: Sequence[Region]) -> TreePopulation:
+    """移除简化区域中的节点，重连收缩边并保留存活方向的评价计数。"""
+    removed = {i for r in regions for i in r.removed_ids}
+    kept = sorted(tree.nodes.keys() - removed)
+    kept_set = set(kept)
+    contractions = {r.child_id: r for r in regions if isinstance(r, PathContraction)}
+    nodes = {i: replace(tree.nodes[i]) for i in kept}
+    edges = {
+        i: (replace(tree.edges[i], parent_id=contractions[i].parent_id, operator=contractions[i].merged_operator,
+                    reference_id=contractions[i].merged_reference_id, contracted=True)
+            if i in contractions else replace(tree.edges[i]))
+        for i in kept
+    }
+    active_directions = {n.direction_id for n in nodes.values()}
     return TreePopulation(
-        root_id=tree.root_id, root_selection_experience=tree.root_selection_experience,
-        nodes=nodes, edges=edges, latest_node_id=tree.latest_node_id,
-        direction_evaluations={
-            d: count for d, count in tree.direction_evaluations.items()
-            if d in active_directions
-        },
-        used_crossover_pairs=[
-            pair for pair in tree.used_crossover_pairs if pair[0] in kept and pair[1] in kept
-        ],
+        root_selection_experience=tree.root_selection_experience,
+        nodes=nodes,
+        edges=edges,
+        latest_node_id=tree.latest_node_id,
+        direction_evaluations={d: c for d, c in tree.direction_evaluations.items() if d in active_directions},
+        used_crossover_pairs=[pair for pair in tree.used_crossover_pairs if pair[0] in kept_set and pair[1] in kept_set],
     )
-
-
-def consolidate_topology(
-    tree: TreePopulation,
-    config: TopologyConfig = TopologyConfig(),
-) -> tuple[TreePopulation, ConsolidationPlan]:
-    """Select and reconnect; reflective_simplify additionally updates experience."""
-    plan = plan_consolidation(tree, config)
-    return apply_consolidation(tree, plan), plan

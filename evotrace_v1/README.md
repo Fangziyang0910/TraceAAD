@@ -25,8 +25,6 @@ result = search.run()
 
 初始化默认得到5个可行算法。已评价的失败尝试也入树，`fitness=None`，直到重构时整理；示例代码不入树。每次尝试最多使用一次格式修复或程序修复，修复重评计入评价预算。生成与修复统一输出 `analysis → code → design`：分别说明本次计算选择、完整实现和客观的实现概述。两类反思统一返回单字段 `experience`，作为后续生成的经历材料。
 
-只检查初始化时，从 `evotrace_v1.initialization` 导入 `initialize`，调用 `initialize(task, model, config=..., run_dir=...)`。它运行同一搜索循环并在获得指定数量的可行初始个体时停止，返回树、停止原因、实际评价次数和模型调用次数。
-
 ## 独立命令入口
 
 将本目录复制为独立工作目录下的 `evotrace_v1/` 即可使用，也可通过 `pip install ./evotrace_v1` 安装。外部任务文件实现 `make_task()` 并返回 `Task`：
@@ -54,7 +52,7 @@ python -m evotrace_v1 \
 | [reflection.py](reflection.py) | 路径与旁支的证据、反思调用和经验合并 |
 | [task.py](task.py)、[evaluation.py](evaluation.py)、[runtime.py](runtime.py) | 任务接口、合法性检查、进程隔离与超时清理 |
 | [llm.py](llm.py)、[storage.py](storage.py) | 模型请求与用量、运行记录与完整行恢复 |
-| [cli.py](cli.py)、[initialization.py](initialization.py) | 独立命令与仅初始化入口 |
+| [cli.py](cli.py) | 独立命令入口 |
 
 树节点保存当前可用的算法和选择经验，边保存派生关系与变异经验。方向编号、累计评价数、累计子代数和存活配对跨重构保留。原始程序与尝试日志支持历史复查和恢复。
 
@@ -64,11 +62,11 @@ python -m evotrace_v1 \
 - `TopologyConfig`：容量、质量与差异阈值、新方向保护，见[V1种群选择](../docs/EvoTrace-v1设计.md)。
 - `AllocationConfig`：父代质量系数、算子比例与参考池。
 - `ContextConfig`：展示窗口、经验展示和参考源码开关。
-- `reflection_model`：默认复用生成模型；`None` 使用确定性摘要。经验展示与反思调用分别控制。
+- `reflection_model`：默认复用生成模型；设为 `None` 使用确定性摘要。经验展示与反思调用分别控制。
 
 辅助接口直接从所属模块导入，例如 `evotrace_v1.reflection.reflective_simplify`。反思输入输出见[V1反思简化](../docs/EvoTrace-v1设计.md)。
 
-`run_config.json` 统一记录搜索、种群、分配、上下文与反思配置。`attempts.jsonl` 保存已完成尝试、反思材料和对应的重构快照，是恢复的唯一状态记录；`calls.jsonl` 保存生成请求与响应。`tree_latest.json` 是最近一次已提交重构的便捷视图，不参与恢复。
+`run_config.json` 统一记录搜索、种群、分配与上下文配置。`attempts.jsonl` 保存已完成尝试、辅助反思调用和对应的重构快照，是恢复的唯一状态记录；`calls.jsonl` 保存生成请求与响应。
 
 Python接口用原配置创建 `EvoTrace(..., resume=True)`；命令入口自动读取原配置。运行条件不一致会拒绝恢复。使用旧记录格式的批次继续由其冻结源码恢复。
 

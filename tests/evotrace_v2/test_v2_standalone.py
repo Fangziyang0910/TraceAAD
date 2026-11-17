@@ -1,7 +1,5 @@
 """EvoTrace must run with only its own package and the Python standard library."""
 
-from dataclasses import asdict
-
 import json
 import os
 from pathlib import Path
@@ -68,7 +66,7 @@ topology = TopologyConfig(cold_evaluations=2)
 search = EvoTrace(task, Model(), config=config, topology_config=topology, run_dir="run")
 for _ in range(8):
     assert search.step() is not None
-assert search.consolidations_count and state["reflections"]
+assert any("aux" in a.record for a in search.attempts) and state["reflections"]
 assert search.attempts[0].repair_used and search.attempts[1].repair_used
 assert [e["status"] for e in search.attempts[1].evaluations] == ["error", "success"]
 tree = asdict(search.tree)
@@ -80,7 +78,7 @@ assert asdict(restored.tree) == tree
 assert restored.evaluations_used == search.evaluations_used
 result = restored.run()
 assert result.evaluations == 12 and result.best.valid
-assert sum(restored.tree.direction_evaluations.values()) == 12
+assert restored.tree.evaluations_used == 12
 for name in ("calls.jsonl", "attempts.jsonl"):
     for line in (Path("run") / name).read_text().splitlines():
         json.loads(line)
