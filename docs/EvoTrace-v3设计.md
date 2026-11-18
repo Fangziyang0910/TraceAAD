@@ -4,7 +4,7 @@ EvoTrace V3 通过**反思式淘汰（Reflective Elimination）**，使树状种
 
 两类区域回答不同的设计问题。收缩路径形成的**边经验**记录一个保留算法如何从祖先演化而来。剪去旁支形成的**节点经验**记录从同一出发点还尝试过哪些改法。以后承载经验的节点或边若也被移除，这些观察会与新尝试一起进入下一次反思。由此，更新后的树既提供可供继续开发的代表算法，也提供与它们有关的演化经历。预算在代表之间分配，生成算子沿相应的路径、旁支或全局代表读取设计材料。
 
-论文使用方法名 **TREES（Tree-structured Reflective Evolutionary Search）**，题为 *Reflective Elimination: Accumulating Design Experience in Tree-Structured Algorithm Populations*。EvoTrace V3 为本版实现名。[论文引言](../paper/paper-中文.md#1-引言) · [实验方案](EvoTrace-v3实验方案.md)
+论文使用方法名 **TREES（Tree-structured Reflective Evolutionary Search）**，题为 *Reflective Elimination: Accumulating Design Experience in Tree-Structured Algorithm Populations*。EvoTrace V3 为本版实现名。[论文引言](../paper/paper-中文.md#1-引言)
 
 ## 1. 树上个体、代表与派生关系
 

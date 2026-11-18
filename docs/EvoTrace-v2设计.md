@@ -95,11 +95,11 @@ $\sigma$ 为 sigmoid 函数。$s$ 取代表适应度的中位数绝对偏差（m
 预算耗尽或触发停止条件时，从完整档案选出训练最优程序。
 ```
 
-本文对应 2026 年 11 月 14 日修复并冻结的 `20261114_103407_evotrace_v2_repaired_co4`。默认总预算 1000 次程序评价，包括初始化、失败评价和修复重评。一次尝试至多执行一次格式或运行修复，修复前后共用算法编号，预算耗尽即停止重评。连续 10 次尝试未产生程序评价时提前结束。生成温度为 1.0，输出上限 16384 tokens。反思温度为 0.3，输出上限 1536 tokens。完整档案中训练适应度最优、同分时编号较早的可行程序进入独立测试。[冻结批次](../experiments_result/evotrace_v2_repaired/launch_20261114_103407_evotrace_v2_repaired_co4/README.md)
+本文对应 2026 年 11 月 14 日修复并冻结的 `20261114_103407_evotrace_v2_repaired_co4`。默认总预算 1000 次程序评价，包括初始化、失败评价和修复重评。一次尝试至多执行一次格式或运行修复，修复前后共用算法编号，预算耗尽即停止重评。连续 10 次尝试未产生程序评价时提前结束。生成温度为 1.0，输出上限 16384 tokens。反思温度为 0.3，输出上限 1536 tokens。完整档案中训练适应度最优、同分时编号较早的可行程序进入独立测试。[冻结批次](../experiments_result/evotrace_v2/launch_20261114_103407_evotrace_v2_repaired_co4/README.md)
 
 **抽样与输入预算。** 冻结实现用对数权重归一化父代概率，并以最小正浮点数处理概率下溢。正式 Qwen 配置用服务端分词器计数，三类演化算子的输入上限为 30000 tokens，独立客户端缺少计数器时用 UTF-8 字节数作保守估计。提示超限时，每轮从路径、可行或失败子尝试、路线和路线经验中选出释放空间最多的一项，按完整条目缩减。路径优先保留入口及近期阶段，路线优先保留近期代表。必要材料仍超限时，该次提示报错。
 
-每次完成的尝试与对应的树更新一并保存，恢复时直接读取已提交的反思结果。冻结代码可按机制查阅。[搜索循环](../experiments_result/evotrace_v2_repaired/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/search.py) · [节点与评价时钟](../experiments_result/evotrace_v2_repaired/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/models.py) · [保留与区域划分](../experiments_result/evotrace_v2_repaired/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/topology.py) · [区域反思](../experiments_result/evotrace_v2_repaired/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/reflection.py) · [父代与参考](../experiments_result/evotrace_v2_repaired/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/allocation.py) · [路线与输入窗口](../experiments_result/evotrace_v2_repaired/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/context.py)
+每次完成的尝试与对应的树更新一并保存，恢复时直接读取已提交的反思结果。冻结代码可按机制查阅。[搜索循环](../experiments_result/evotrace_v2/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/search.py) · [节点与评价时钟](../experiments_result/evotrace_v2/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/models.py) · [保留与区域划分](../experiments_result/evotrace_v2/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/topology.py) · [区域反思](../experiments_result/evotrace_v2/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/reflection.py) · [父代与参考](../experiments_result/evotrace_v2/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/allocation.py) · [路线与输入窗口](../experiments_result/evotrace_v2/launch_20261114_103407_evotrace_v2_repaired_co4/source/evotrace_v2/context.py)
 
 ### 与 V1 的机制对应
 

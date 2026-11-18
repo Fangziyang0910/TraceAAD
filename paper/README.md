@@ -14,7 +14,7 @@
 | --- | --- |
 | 双语PDF | [英文](trees.pdf)、[中文](trees-中文.pdf) |
 | 可编辑正文 | [英文Markdown](paper.md)、[中文Markdown](paper-中文.md) |
-| V3 机制与实验 | [V3实现设计](../docs/EvoTrace-v3设计.md)、[V3实验方案](../docs/EvoTrace-v3实验方案.md) |
+| V3 机制 | [V3实现设计](../docs/EvoTrace-v3设计.md) |
 | 完整源码与PDF | [TREES材料包](TREES-paper-source.zip) |
 | 生成的LaTeX | [英文](main.tex)、[中文](main-zh.tex) |
 | 参考文献 | [共享BibTeX](references.bib) |

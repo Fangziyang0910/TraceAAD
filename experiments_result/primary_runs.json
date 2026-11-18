@@ -473,9 +473,6 @@
       "op_aco/20261109_base_boltzmann_co6_op_traceaad_base_rep3"
     ],
     "evotrace_v1": [
-      "tsp_construct/20261112_165634_evotrace_v1_co4_tsp_evotrace_v1_rep1",
-      "tsp_construct/20261112_165634_evotrace_v1_co4_tsp_evotrace_v1_rep2",
-      "tsp_construct/20261112_165634_evotrace_v1_co4_tsp_evotrace_v1_rep3",
       "cvrp_aco/20261112_165634_evotrace_v1_co4_cvrp_evotrace_v1_rep1",
       "cvrp_aco/20261112_165634_evotrace_v1_co4_cvrp_evotrace_v1_rep2",
       "cvrp_aco/20261112_165634_evotrace_v1_co4_cvrp_evotrace_v1_rep3",
@@ -484,81 +481,13 @@
       "fssp_gls/20261112_165634_evotrace_v1_co4_fssp_evotrace_v1_rep3",
       "op_aco/20261112_165634_evotrace_v1_co4_op_evotrace_v1_rep1",
       "op_aco/20261112_165634_evotrace_v1_co4_op_evotrace_v1_rep2",
-      "op_aco/20261112_165634_evotrace_v1_co4_op_evotrace_v1_rep3"
+      "op_aco/20261112_165634_evotrace_v1_co4_op_evotrace_v1_rep3",
+      "tsp_construct/20261112_165634_evotrace_v1_co4_tsp_evotrace_v1_rep1",
+      "tsp_construct/20261112_165634_evotrace_v1_co4_tsp_evotrace_v1_rep2",
+      "tsp_construct/20261112_165634_evotrace_v1_co4_tsp_evotrace_v1_rep3"
     ],
-    "evotrace_v1_deepseek": [
-      "tsp_construct/20261112_165634_evotrace_v1_deepseek_none_co4_tsp_construct_rep1",
-      "cvrp_aco/20261112_165634_evotrace_v1_deepseek_none_co4_cvrp_aco_rep1",
-      "fssp_gls/20261112_165634_evotrace_v1_deepseek_none_co4_fssp_gls_rep1",
-      "op_aco/20261112_165634_evotrace_v1_deepseek_none_co4_op_aco_rep1"
-    ],
-    "evotrace_v2_full": [
-      "fssp_gls/20261113_233010_evotrace_v2_full_co4_fssp_evotrace_v2_rep1",
-      "op_aco/20261113_233010_evotrace_v2_full_co4_op_evotrace_v2_rep1",
-      "op_aco/20261113_233010_evotrace_v2_full_co4_op_evotrace_v2_rep2",
-      "op_aco/20261113_233010_evotrace_v2_full_co4_op_evotrace_v2_rep3"
-    ],
-    "evotrace_v2_repaired": [],
-    "evotrace_v3_full": [
-      "tsp_construct/20261116_000118_evotrace_v3_full_co4_tsp_evotrace_v3_rep1",
-      "tsp_construct/20261116_000118_evotrace_v3_full_co4_tsp_evotrace_v3_rep2",
-      "tsp_construct/20261116_000118_evotrace_v3_full_co4_tsp_evotrace_v3_rep3",
-      "cvrp_aco/20261116_000118_evotrace_v3_full_co4_cvrp_evotrace_v3_rep1",
-      "cvrp_aco/20261116_000118_evotrace_v3_full_co4_cvrp_evotrace_v3_rep2",
-      "cvrp_aco/20261116_000118_evotrace_v3_full_co4_cvrp_evotrace_v3_rep3",
-      "fssp_gls/20261116_000118_evotrace_v3_full_co4_fssp_evotrace_v3_rep1",
-      "fssp_gls/20261116_000118_evotrace_v3_full_co4_fssp_evotrace_v3_rep2",
-      "fssp_gls/20261116_000118_evotrace_v3_full_co4_fssp_evotrace_v3_rep3",
-      "op_aco/20261116_000118_evotrace_v3_full_co4_op_evotrace_v3_rep1",
-      "op_aco/20261116_000118_evotrace_v3_full_co4_op_evotrace_v3_rep2",
-      "op_aco/20261116_000118_evotrace_v3_full_co4_op_evotrace_v3_rep3"
-    ],
-    "evotrace_v3_rep_cover": [
-      "tsp_construct/20261116_165500_evotrace_v3_rep_cover_co4_tsp_evotrace_v3_rep1",
-      "tsp_construct/20261116_165500_evotrace_v3_rep_cover_co4_tsp_evotrace_v3_rep2",
-      "tsp_construct/20261116_165500_evotrace_v3_rep_cover_co4_tsp_evotrace_v3_rep3",
-      "cvrp_aco/20261116_165500_evotrace_v3_rep_cover_co4_cvrp_evotrace_v3_rep1",
-      "cvrp_aco/20261116_165500_evotrace_v3_rep_cover_co4_cvrp_evotrace_v3_rep2",
-      "cvrp_aco/20261116_165500_evotrace_v3_rep_cover_co4_cvrp_evotrace_v3_rep3",
-      "fssp_gls/20261116_165500_evotrace_v3_rep_cover_co4_fssp_evotrace_v3_rep1",
-      "fssp_gls/20261116_165500_evotrace_v3_rep_cover_co4_fssp_evotrace_v3_rep2",
-      "fssp_gls/20261116_165500_evotrace_v3_rep_cover_co4_fssp_evotrace_v3_rep3",
-      "op_aco/20261116_165500_evotrace_v3_rep_cover_co4_op_evotrace_v3_rep1",
-      "op_aco/20261116_165500_evotrace_v3_rep_cover_co4_op_evotrace_v3_rep2",
-      "op_aco/20261116_165500_evotrace_v3_rep_cover_co4_op_evotrace_v3_rep3"
-    ],
-    "evotrace_v3_lean": [
-      "tsp_construct/20261117_132027_evotrace_v3_lean_co4_tsp_evotrace_v3_rep1",
-      "tsp_construct/20261117_132027_evotrace_v3_lean_co4_tsp_evotrace_v3_rep2",
-      "tsp_construct/20261117_132027_evotrace_v3_lean_co4_tsp_evotrace_v3_rep3",
-      "cvrp_aco/20261117_132027_evotrace_v3_lean_co4_cvrp_evotrace_v3_rep1",
-      "cvrp_aco/20261117_132027_evotrace_v3_lean_co4_cvrp_evotrace_v3_rep2",
-      "cvrp_aco/20261117_132027_evotrace_v3_lean_co4_cvrp_evotrace_v3_rep3",
-      "fssp_gls/20261117_132027_evotrace_v3_lean_co4_fssp_evotrace_v3_rep1",
-      "fssp_gls/20261117_132027_evotrace_v3_lean_co4_fssp_evotrace_v3_rep2",
-      "fssp_gls/20261117_132027_evotrace_v3_lean_co4_fssp_evotrace_v3_rep3",
-      "op_aco/20261117_132027_evotrace_v3_lean_co4_op_evotrace_v3_rep1",
-      "op_aco/20261117_132027_evotrace_v3_lean_co4_op_evotrace_v3_rep2",
-      "op_aco/20261117_132027_evotrace_v3_lean_co4_op_evotrace_v3_rep3"
-    ],
-    "evotrace_v3_factual": [
-      "tsp_construct/20261117_153134_evotrace_v3_factual_co4_tsp_evotrace_v3_rep1",
-      "tsp_construct/20261117_153134_evotrace_v3_factual_co4_tsp_evotrace_v3_rep2",
-      "tsp_construct/20261117_153134_evotrace_v3_factual_co4_tsp_evotrace_v3_rep3",
-      "cvrp_aco/20261117_153134_evotrace_v3_factual_co4_cvrp_evotrace_v3_rep1",
-      "cvrp_aco/20261117_153134_evotrace_v3_factual_co4_cvrp_evotrace_v3_rep2",
-      "cvrp_aco/20261117_153134_evotrace_v3_factual_co4_cvrp_evotrace_v3_rep3",
-      "fssp_gls/20261117_153134_evotrace_v3_factual_co4_fssp_evotrace_v3_rep1",
-      "fssp_gls/20261117_153134_evotrace_v3_factual_co4_fssp_evotrace_v3_rep2",
-      "fssp_gls/20261117_153134_evotrace_v3_factual_co4_fssp_evotrace_v3_rep3",
-      "op_aco/20261117_153134_evotrace_v3_factual_co4_op_evotrace_v3_rep1",
-      "op_aco/20261117_153134_evotrace_v3_factual_co4_op_evotrace_v3_rep2",
-      "op_aco/20261117_153134_evotrace_v3_factual_co4_op_evotrace_v3_rep3"
-    ],
-    "evotrace_v3_clean": [
-      "tsp_construct/20261117_181830_evotrace_v3_clean_co4_tsp_evotrace_v3_rep1",
-      "tsp_construct/20261117_181830_evotrace_v3_clean_co4_tsp_evotrace_v3_rep2",
-      "tsp_construct/20261117_181830_evotrace_v3_clean_co4_tsp_evotrace_v3_rep3",
+    "evotrace_v2": [],
+    "evotrace_v3": [
       "cvrp_aco/20261117_181830_evotrace_v3_clean_co4_cvrp_evotrace_v3_rep1",
       "cvrp_aco/20261117_181830_evotrace_v3_clean_co4_cvrp_evotrace_v3_rep2",
       "cvrp_aco/20261117_181830_evotrace_v3_clean_co4_cvrp_evotrace_v3_rep3",
@@ -567,10 +496,13 @@
       "fssp_gls/20261117_181830_evotrace_v3_clean_co4_fssp_evotrace_v3_rep3",
       "op_aco/20261117_181830_evotrace_v3_clean_co4_op_evotrace_v3_rep1",
       "op_aco/20261117_181830_evotrace_v3_clean_co4_op_evotrace_v3_rep2",
-      "op_aco/20261117_181830_evotrace_v3_clean_co4_op_evotrace_v3_rep3"
+      "op_aco/20261117_181830_evotrace_v3_clean_co4_op_evotrace_v3_rep3",
+      "tsp_construct/20261117_181830_evotrace_v3_clean_co4_tsp_evotrace_v3_rep1",
+      "tsp_construct/20261117_181830_evotrace_v3_clean_co4_tsp_evotrace_v3_rep2",
+      "tsp_construct/20261117_181830_evotrace_v3_clean_co4_tsp_evotrace_v3_rep3"
     ]
   },
-  "default_experiment": "evotrace_v3_clean",
+  "default_experiment": "evotrace_v3",
   "labels": {
     "traceaad_v12_0": "TraceAAD V12.0",
     "traceaad_v12_1": "TraceAAD V12.1",
@@ -597,20 +529,9 @@
     "refineevo": "RefineEvo",
     "shinka_evo": "ShinkaEvolve",
     "traceaad_base_boltzmann_20261109": "Base（Boltzmann）",
-    "evotrace_v1": "EvoTrace V1",
-    "evotrace_v1_deepseek": "EvoTrace V1 · DeepSeek（无思考）",
-    "evotrace_v2": "EvoTrace V2 · 旧版",
-    "evotrace_v2_dynamic": "EvoTrace V2 · 动态简化",
-    "evotrace_v2_subtree": "EvoTrace V2 · 子树视角",
-    "evotrace_v2_full": "EvoTrace V2 · 完整版",
-    "evotrace_v2_repaired": "EvoTrace V2 · 完整版修复后",
-    "evotrace_v3": "EvoTrace V3",
-    "evotrace_v3_revised": "EvoTrace V3 · 修订后",
-    "evotrace_v3_full": "EvoTrace V3 · 谱系旧版",
-    "evotrace_v3_rep_cover": "EvoTrace V3 · 代表覆盖版",
-    "evotrace_v3_lean": "EvoTrace V3 · 精简版",
-    "evotrace_v3_factual": "EvoTrace V3 · 事实反思版",
-    "evotrace_v3_clean": "EvoTrace V3 · 定型版"
+    "evotrace_v1": "V1",
+    "evotrace_v2": "V2",
+    "evotrace_v3": "V3"
   },
   "visualization_batches": {
     "traceaad_v12_0": "20261013_qwen_co6",
@@ -623,32 +544,11 @@
     "traceaad_v19_4": "20261102f_v19_4_co6_main",
     "traceaad_base_boltzmann_20261109": "20261109_base_boltzmann_co6",
     "evotrace_v1": "20261112_165634_evotrace_v1_co4",
-    "evotrace_v1_deepseek": "20261112_165634_evotrace_v1_deepseek_none_co4",
-    "evotrace_v2": "20261112_234114_evotrace_v2_co4",
-    "evotrace_v2_dynamic": "20261113_114716_evotrace_v2_dynamic_co4",
-    "evotrace_v2_subtree": "20261113_162932_evotrace_v2_subtree_co4",
-    "evotrace_v2_full": "20261113_233010_evotrace_v2_full_co4",
-    "evotrace_v2_repaired": "20261114_103407_evotrace_v2_repaired_co4",
-    "evotrace_v3": "20261115_011117_evotrace_v3_co4",
-    "evotrace_v3_revised": "20261115_115206_evotrace_v3_revised_co4",
-    "evotrace_v3_full": "20261116_000118_evotrace_v3_full_co4",
-    "evotrace_v3_rep_cover": "20261116_165500_evotrace_v3_rep_cover_co4",
-    "evotrace_v3_lean": "20261117_132027_evotrace_v3_lean_co4",
-    "evotrace_v3_factual": "20261117_153134_evotrace_v3_factual_co4",
-    "evotrace_v3_clean": "20261117_181830_evotrace_v3_clean_co4"
+    "evotrace_v2": "20261114_103407_evotrace_v2_repaired_co4",
+    "evotrace_v3": "20261117_181830_evotrace_v3_clean_co4"
   },
   "visualization_methods": [
-    "evotrace_v3_clean",
-    "evotrace_v3_factual",
-    "evotrace_v3_lean",
-    "evotrace_v3_rep_cover",
-    "evotrace_v3_full",
-    "evotrace_v3_revised",
     "evotrace_v3",
-    "evotrace_v2_repaired",
-    "evotrace_v2_full",
-    "evotrace_v2_subtree",
-    "evotrace_v2_dynamic",
     "evotrace_v2",
     "evotrace_v1",
     "traceaad_base_boltzmann_20261109",
@@ -685,69 +585,7 @@
       "fssp_gls",
       "op_aco"
     ],
-    "evotrace_v2_dynamic": [
-      "tsp_construct",
-      "cvrp_aco",
-      "fssp_gls",
-      "op_aco"
-    ],
-    "evotrace_v2_subtree": [
-      "tsp_construct",
-      "cvrp_aco",
-      "fssp_gls",
-      "op_aco"
-    ],
-    "evotrace_v2_full": [
-      "tsp_construct",
-      "cvrp_aco",
-      "fssp_gls",
-      "op_aco"
-    ],
-    "evotrace_v2_repaired": [
-      "tsp_construct",
-      "cvrp_aco",
-      "fssp_gls",
-      "op_aco",
-      "graph_colouring",
-      "jssp_construct"
-    ],
     "evotrace_v3": [
-      "tsp_construct",
-      "cvrp_aco",
-      "fssp_gls",
-      "op_aco"
-    ],
-    "evotrace_v3_revised": [
-      "tsp_construct",
-      "cvrp_aco",
-      "fssp_gls",
-      "op_aco"
-    ],
-    "evotrace_v3_full": [
-      "tsp_construct",
-      "cvrp_aco",
-      "fssp_gls",
-      "op_aco"
-    ],
-    "evotrace_v3_rep_cover": [
-      "tsp_construct",
-      "cvrp_aco",
-      "fssp_gls",
-      "op_aco"
-    ],
-    "evotrace_v3_lean": [
-      "tsp_construct",
-      "cvrp_aco",
-      "fssp_gls",
-      "op_aco"
-    ],
-    "evotrace_v3_factual": [
-      "tsp_construct",
-      "cvrp_aco",
-      "fssp_gls",
-      "op_aco"
-    ],
-    "evotrace_v3_clean": [
       "tsp_construct",
       "cvrp_aco",
       "fssp_gls",
@@ -768,7 +606,6 @@
       2
     ],
     "runs_per_method": 12,
-    "controller_session": [],
-    "note": "Finalized clean V3 batch: anchored root reflection (worse than best kept baseline), Explore isolated to root_experience + existing design cards without local lineage notes, operator-first allocation without phantom Explore parent, soft rank*distance Crossover reference sampling without used_crossover_pairs. Replaces evotrace_v3_factual (stopped at 253-321 evaluations/run)."
+    "controller_session": []
   }
 }

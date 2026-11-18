@@ -2,12 +2,7 @@
 
 运行前核对[实验条件](../PROTOCOL.md)。本页的主机与服务位置用于查找；实时状态需要检查进程、日志和健康接口。
 
-北京时间11月16日00:05，早期V3冻结批次`20261116_000118_evotrace_v3_full_co4`（提交 `a28b1ed7` 快照）在server4启动，四任务TSP、CVRP、FSSP、OP各seed0/1/2，共12路，每路1000次实际评价。结果目录`evotrace_v3_full`，源码冻结于`/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_000118_evotrace_v3_full_co4`（见[启动核验](../../experiments_result/evotrace_v3_full/launch_20261116_000118_evotrace_v3_full_co4/README.md)）。代表覆盖版批次 `20261116_165500_evotrace_v3_rep_cover_co4`（提交 `d3cbb242` 机制）使用减法前的反思提示与生成上下文，论文第3节与附录F的数据目前来自该批次；该批次于北京时间11月17日按用户要求停止，TSP、CVRP 各路停在 797–874 次评价，FSSP、OP 已先跑满 1000 次（停止记录 `experiments_result/evotrace_v3_rep_cover/stop_20261117.json`，在 server4）。11月17日，主线经V3减法（提交 `1e6552b3`）后，精简版批次 `20261117_132027_evotrace_v3_lean_co4` 在server4启动，后因反思写成规则、Explore 挂接错误于同日停止并作废（每路 91–137 次评价）。随后按事实反思修订（源码已随 `190fe372` 合入主线），批次 `20261117_153134_evotrace_v3_factual_co4` 于北京时间11月17日15:32在server4启动（结果目录 `evotrace_v3_factual`，源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_153134_evotrace_v3_factual_co4`），跑至每路 253–321 次评价（共 3567 次）后按用户要求停止（停止记录 `experiments_result/evotrace_v3_factual/stop_20261117.json`）。同日18:19，完成根反思存活基准锚点、`Explore` 剥离局部谱系经验及分配去工程化（未提交）后，定型版批次 `20261117_181830_evotrace_v3_clean_co4` 在server4启动，四任务各seed0/1/2，共12路，每路1000次实际评价；结果目录 `evotrace_v3_clean`，源码冻结于 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_181830_evotrace_v3_clean_co4`，为当前默认看板实验。同日的 `20261117_114412_evotrace_v3_context_co4`（结果目录 `evotrace_v3_context`）已停止并作废，不作对照。
-
-当前保留的主对照基线批次：
-- **EvoTrace V1**：Qwen批次 `20261112_165634_evotrace_v1_co4`（四任务12路）与 DeepSeek 批次 `20261112_165634_evotrace_v1_deepseek_none_co4`（四任务各seed0），源码快照 `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_165634_evotrace_v1_co4`，均已完成搜索与独立测试（[启动核验](../../experiments_result/evotrace_v1/launch_20261112_165634_evotrace_v1_co4/latest_verification.json)）。
-- **TraceAAD Base**：详见下方“正式 Base 批次”。
-- 已停止的中间迭代批次（`evotrace_v3_revised`、`evotrace_v3` 及各历史 `evotrace_v2*`）均已退出进程并移出活动同步名单，原始结果目录与 `stop_*.json` 保留于本地 `experiments_result/`，阶段记录封存于本地 `archive/`。
+V1、V2、V3 的定型批次与完成状态见[实验与边界台账](../../docs/记录/README.md)。V3 定型版为默认看板实验。TraceAAD Base 的运行信息见下方“正式 Base 批次”。
 
 ## 查询状态
 
@@ -40,7 +35,7 @@ uv run python -m experiments.visualization --host 0.0.0.0 --port 8765
 
 看板地址为 `http://10.150.68.218:8765/`，本机也可访问 `http://127.0.0.1:8765/`。本地数据只反映已同步的状态。生成预算读取事件与恢复点，不用有效程序数代替。文件说明见[结果格式](SEARCH_FORMAT.md)。
 
-看板展示由主实验名单中的`visualization_methods`单独控制；当前默认展示“EvoTrace V3”的四任务、三种子12路实验，同时保留V1、V2及其他历史入口。`visualization_reference`指定Base为默认比较参照。展示范围不删除历史运行，也不改变同步/检查使用的`methods`清单。浏览器时间统一为北京时间，刷新提示表示读取本地同步副本。
+看板展示由主实验名单中的 `visualization_methods` 控制。EvoTrace V1–V3 各展示对应定型批次，`visualization_reference` 指定 Base 为默认比较参照。同步与检查读取 `methods` 清单。浏览器时间统一为北京时间，刷新提示表示读取本地同步副本。
 
 本机看板由 systemd 用户服务 `traceaad-dashboard.service` 启动；结果同步由 `traceaad-results-sync.service` 按[主实验名单](../../experiments_result/primary_runs.json)每60秒从server4拉取。两个服务开机后自动启动。
 

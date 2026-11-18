@@ -17,7 +17,7 @@ EvoTrace（论文方法名 **TREES**）以树状种群记录算法的演化关�
 | 核对当前对照批次与已验证边界 | [实验与边界台账](docs/记录/README.md) |
 | 独立使用 EvoTrace 或接入任务与模型 | [V4](evotrace_v4/README.md)、[V3](evotrace_v3/README.md)、[V2](evotrace_v2/README.md)、[V1](evotrace_v1/README.md) |
 | 通过公共调度器运行 EvoTrace 或 Base | [统一入口](experiments/traceaad/README.md) |
-| 设计、运行或复查实验 | [V3实验方案](docs/EvoTrace-v3实验方案.md)、[实验入口](experiments/README.md) |
+| 设计、运行或复查实验 | [实验入口](experiments/README.md) |
 | 查阅第三方提示的来源版本 | [来源记录](baselines/UPSTREAM.md) |
 
 ## 代码与环境

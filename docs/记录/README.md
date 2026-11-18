@@ -1,20 +1,17 @@
 # 当前实验与已验证边界台账
 
-本页记录对照批次、任务与基线筛选依据，以及经代码或真实树数据核实的机制边界。下表状态为 2026 年 11 月 17 日记录。
+本页记录对照批次、任务与基线筛选依据，以及经代码或真实树数据核实的机制边界。下表状态核于北京时间 2026 年 11 月 18 日。
 
 ## 1. 已记录的对照批次
 
 | 方法 | 批次标识 | 范围与预算 | server4 冻结源码 | 结果目录与状态 |
 | --- | --- | --- | --- | --- |
-| EvoTrace V3 · 定型版 | `20261117_181830_evotrace_v3_clean_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_181830_evotrace_v3_clean_co4` | `experiments_result/evotrace_v3_clean`（北京时间 11-17 18:19 启动，运行中；当前默认看板实验） |
-| EvoTrace V3 · 事实反思版 | `20261117_153134_evotrace_v3_factual_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_153134_evotrace_v3_factual_co4` | `experiments_result/evotrace_v3_factual`（11-17 18:17 停止，每路 253–321 评、共 3567 评） |
-| EvoTrace V3 · 代表覆盖版 | `20261116_165500_evotrace_v3_rep_cover_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_165500_evotrace_v3_rep_cover_co4` | `experiments_result/evotrace_v3_rep_cover`（11-17 停止：FSSP/OP 跑满 1000 评，TSP/CVRP 停于 797–874 评；论文第 3 节与附录 F 当前固定前缀数据来源） |
-| EvoTrace V3 · 精简版 | `20261117_132027_evotrace_v3_lean_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_132027_evotrace_v3_lean_co4` | `experiments_result/evotrace_v3_lean`（11-17 停止并作废，每路 91–137 评；机制为提交 `1e6552b3`，论文第 2 节与附录 E 当前按此描述） |
-| EvoTrace V3（早期） | `20261116_000118_evotrace_v3_full_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261116_000118_evotrace_v3_full_co4` | `experiments_result/evotrace_v3_full`（已停止；提交 `a28b1ed7` 早期 40 评窗口快照） |
 | EvoTrace V1 | `20261112_165634_evotrace_v1_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_165634_evotrace_v1_co4` | `experiments_result/evotrace_v1`（已完成搜索与独立测试） |
+| EvoTrace V2 | `20261114_103407_evotrace_v2_repaired_co4` | 四任务 × 3 种子，预算 1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261114_103407_evotrace_v2_repaired_co4` | `experiments_result/evotrace_v2`（12 路在 313–646 评之间停止） |
+| EvoTrace V3 | `20261117_181830_evotrace_v3_clean_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_181830_evotrace_v3_clean_co4` | `experiments_result/evotrace_v3`（12 路均跑满，11 路独立测试成功，TSP seed 2 超时） |
 | TraceAAD Base | `20261109_base_boltzmann_co6` | 六任务（看板取四任务）× 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261109_traceaad_base_v23_2` | `experiments_result/traceaad_base_boltzmann_20261109`（纯 Boltzmann 基线，已完成四任务搜索与独立测试；默认看板参照） |
 
-事实反思版机制对应提交 `190fe372`。[论文稿](../../paper/README.md)的第 3 节与附录 F 使用代表覆盖版固定前缀数据，第 2 节与附录 E 描述减法版机制（`1e6552b3`）。
+V1–V3 的原始结果目录保留上表三批。论文第 3 节和附录 F 的统计与案例来自早期代表覆盖版，论文目录保有当时提取的证据。[论文数据来源](../../paper/README.md#当前分析材料)
 
 ## 2. 已核实的机制边界与证伪记录（防重复试错）
 
