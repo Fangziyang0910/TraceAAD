@@ -104,15 +104,10 @@ class TrainingHistory:
             self.result = self._build()
             return self.result
 
-    def timing_snapshot(self):
+    def snapshot(self):
         with self.lock:
-            self.read()
-            return dict(self.clock)
-
-    def progress_snapshot(self):
-        with self.lock:
-            self.read()
-            return dict(self.progress)
+            curve = self.read()[0]
+            return curve, dict(self.progress), dict(self.clock)
 
     def node(self, identifier, *, by_node=False):
         with self.lock:

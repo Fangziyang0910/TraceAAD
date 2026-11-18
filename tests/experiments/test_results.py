@@ -15,6 +15,7 @@ from experiments.infra import batch_status, evaluate
 from experiments.infra.artifacts import pick_best_sample
 from experiments.infra.result_storage import Programs
 from experiments.visualization import ResultsMonitor
+from experiments.visualization.data import cohort_mean_curve
 from experiments.visualization.server import make_request_handler
 from experiments.infra.storage import rows, seal_calls, write_json
 from experiments.traceaad.reporting import Reporter
@@ -104,6 +105,28 @@ def test_comparison_never_averages_across_models(tmp_path):
     assert cohorts == {"eoh@qwen3.8-27b": 2, "eoh@deepseek-v4.1-flash": 1}
     compared = monitor.compare(["eoh@qwen3.8-27b"])["tasks"][0]["cohorts"][0]["runs"]
     assert sorted(run["name"] for run in compared) == ["rep1", "rep2"]
+
+
+def test_training_mean_keeps_all_three_repeats_at_the_same_budget():
+    runs = [
+        {"seed": seed, "budget_used": end, "x_label": "评价次数", "score_unit": "负收益",
+         "curve": [{"evaluation": x, "fitness": f} for x, f in points]}
+        for seed, (end, points) in enumerate([
+            (9, [(1, -2), (5, -5), (9, -7)]),
+            (7, [(2, -4), (2, -6), (4, -8)]),
+            (6, [(3, -4)]),
+        ])
+    ]
+    curve = cohort_mean_curve(runs)
+    assert (curve["common_start"], curve["common_end"]) == (3, 6)
+    assert [p["x"] for p in curve["points"]] == [3, 4, 5, 6]
+    assert [p["mean"] for p in curve["points"]] == pytest.approx([-4, -14/3, -17/3, -17/3])
+    assert curve["points"][0]["sd"] == pytest.approx(2)
+
+    assert not cohort_mean_curve(runs[:2])["points"]
+    assert not cohort_mean_curve([*runs[:2], {**runs[2], "curve": []}])["points"]
+    assert not cohort_mean_curve([*runs[:2], {**runs[2], "seed": 1}])["points"]
+    assert not cohort_mean_curve([*runs[:2], {**runs[2], "x_label": "样本次数"}])["points"]
 
 
 def dashboard_run(directory, *, seed=0, model='qwen3.8-27b-awq', status='finished'):

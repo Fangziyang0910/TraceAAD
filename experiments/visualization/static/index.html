@@ -27,19 +27,38 @@
     <div class="kpi"><div class="k">运行完成</div><div class="v" id="k-runs">–</div><div class="seg" id="k-seg"></div><div class="n" id="k-runs-n">–</div></div>
     <div class="kpi"><div class="k">搜索预算</div><div class="v" id="k-budget">–</div><div class="seg"><i class="running" id="k-budget-bar" style="width:0"></i></div><div class="n" id="k-budget-n">–</div></div>
     <div class="kpi"><div class="k">预计搜索剩余</div><div class="v" id="k-eta">–</div><div class="n" id="k-eta-n">–</div></div>
-    <div class="kpi"><div class="k">有效候选</div><div class="v" id="k-nodes">–</div><div class="n" id="k-nodes-n">–</div></div>
   </section>
   <div class="error" id="error" hidden></div>
   <section class="tasks" id="tasks"><div class="skeleton"></div><div class="skeleton"></div></section>
  </div>
  <div id="view-compare" hidden>
   <section class="panel">
-    <div class="panel-head"><h2 title="★ 为参照，默认使用 Base；Δ 为相对参照的改善百分比。训练显示当前最好成绩，搜索结束后固定；测试只评价固定后的程序。各格为各路均值 ± 标准差。">对比对象</h2></div>
+    <div class="panel-head">
+      <h2>对比方法</h2>
+      <div class="cmp-presets">
+        <button type="button" class="ctl preset" data-preset="evotrace_base">EvoTrace + Base</button>
+        <button type="button" class="ctl preset" data-preset="evotrace">仅 EvoTrace</button>
+        <button type="button" class="ctl preset" data-preset="clear">清空</button>
+      </div>
+    </div>
     <div class="chips" id="cmp-chips"></div>
   </section>
   <div class="error" id="cmp-error" hidden></div>
-  <section class="panel" id="cmp-summary"><div class="skeleton" style="height:120px;border:0"></div></section>
-  <section class="cmp-tasks" id="cmp-tasks"></section>
+  <section class="panel trend-panel" id="cmp-chart" aria-label="三路均值改进曲线" hidden>
+    <div class="trend-toolbar">
+      <div class="trend-tabs" id="cmp-task-tabs" role="group" aria-label="对比任务"></div>
+      <div class="segctl small" role="group" aria-label="对比进度">
+        <button type="button" data-progress="full" aria-pressed="true">完整进度</button>
+        <button type="button" data-progress="common" aria-pressed="false">共同进度</button>
+      </div>
+    </div>
+    <div id="cmp-trends"></div>
+  </section>
+  <details class="results-details" id="cmp-results" hidden>
+    <summary>成绩明细</summary>
+    <section class="panel" id="cmp-summary"></section>
+    <section class="cmp-tasks" id="cmp-tasks"></section>
+  </details>
  </div>
 </main>
 

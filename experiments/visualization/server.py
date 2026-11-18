@@ -58,7 +58,8 @@ def make_request_handler(monitor: ResultsMonitor) -> type[BaseHTTPRequestHandler
                 content_type = "text/css" if parsed.path.endswith(".css") else "text/javascript"
                 return self._serve_asset(HTML_FILE.with_name(parsed.path[1:]), content_type)
             if parsed.path == "/api/batches":
-                return self._send_json({"batches": monitor.batches(), "default_batch": monitor.default_batch()})
+                batches = monitor.batches()
+                return self._send_json({"batches": batches, "default_batch": monitor.default_batch(batches)})
             if parsed.path == "/api/state":
                 batch = params.get("batch", [None])[0]
                 body, _ = cache.get_or_build(

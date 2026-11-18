@@ -17,7 +17,7 @@ const tip = $("tip");
 const S = {
   batch: "",
   view: "monitor", data: null, fetchedAt: 0, structure: "", charts: new Map(), run: null, detail: null,
-  timer: null, inflight: false, request: null,
+  timer: null, request: null,
 };
 
 /* ---------- formatting ---------- */
@@ -61,19 +61,11 @@ const toneVar = {ok: "--ok", bad: "--bad", warn: "--warn", neutral: "--faint"};
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const seriesColor = i => `var(--s${i % 8 + 1})`;
 
-/* "Rep n", plus the backend when another run of the task has the same label. */
 function runLabel(task, run) {
   const base = r => r.repeat == null ? r.name : `Rep ${r.repeat}`;
   const shared = task.runs.filter(r => base(r) === base(run)).length > 1;
-  return shared && run.backend ? `${base(run)} · ${run.backend}` : base(run);
+  return shared && run.seed != null ? `${base(run)} · seed ${run.seed}` : base(run);
 }
-/* The model with the most runs in a task; its runs make the task mean. */
-function mainModel(runs) {
-  const count = new Map();
-  for (const r of runs) count.set(r.model, (count.get(r.model) || 0) + 1);
-  return [...count].sort((a, b) => b[1] - a[1])[0]?.[0];
-}
-
 /* Every displayed score is a minimized objective. */
 function bestFitness(run) {
   const last = run.curve?.at(-1);
@@ -94,8 +86,9 @@ function writeHash() {
   if (S.run) params.set("r", `${S.run.task}/${S.run.name}`);
   if (S.view === "compare") {
     params.set("v", "compare");
-    if (CMP.ids.length) params.set("c", CMP.ids.join(","));
+    if (CMP.customSelection || CMP.ids.length) params.set("c", CMP.ids.join(","));
     if (CMP.ref && CMP.ref !== CMP.ids[0]) params.set("ref", CMP.ref);
+    if (CMP.task) params.set("t", CMP.task);
   }
   history.replaceState(null, "", `#${params}`);
 }
@@ -141,10 +134,10 @@ async function refresh({force = false} = {}) {
     catch (error) { setLive("err", "连接失败"); showError(`读取失败：${error.message}`); return; }
     if (!S.batch) { setLive("", "暂无批次"); return; }
   }
-  if (S.inflight && S.request?.batch === S.batch && !force) return;
+  if (S.request?.batch === S.batch && !force) return;
   S.request?.controller.abort();
   const request = {batch: S.batch, controller: new AbortController()};
-  S.request = request; S.inflight = true;
+  S.request = request;
   const batch = request.batch;
   $("refresh").classList.add("spin");
   try {
@@ -161,7 +154,7 @@ async function refresh({force = false} = {}) {
     }
   } finally {
     if (S.request === request) {
-      S.inflight = false; S.request = null;
+      S.request = null;
       $("refresh").classList.remove("spin");
     }
   }
@@ -192,9 +185,7 @@ function renderKPIs(data) {
   const etas = (data.tasks || []).flatMap(task => task.runs)
     .filter(r => r.status === "running" && r.timing?.state === "estimated").map(r => r.timing.eta_seconds);
   $("k-eta").textContent = t?.state === "partial" && etas.length ? `≥ ${dur(Math.max(...etas))}` : eta(t);
-  $("k-eta-n").textContent = t?.eta_at ? `约 ${clock(t.eta_at)} · 按最慢一路` : t?.pending_runs ? `${t.eta_runs}/${t.pending_runs} 路可估算` : "仅搜索阶段，不含独立测试";
-  $("k-nodes").textContent = (s.valid_nodes ?? 0).toLocaleString();
-  $("k-nodes-n").textContent = s.valid_rate != null ? `记录有效率 ${(s.valid_rate * 100).toFixed(1)}% · ${s.valid_candidate_count}/${s.candidate_count}` : "暂无候选记录";
+  $("k-eta-n").textContent = t?.eta_at ? `约 ${clock(t.eta_at)}` : "";
   const alerts = (data.tasks || []).flatMap(task => task.runs).filter(r =>
     (r.status === "running" && r.timing?.state === "stale") || (r.budget && r.budget_used > r.budget)).length;
   document.title = `${alerts ? `⚠${alerts} · ` : ""}${s.finished ?? 0}/${runs} · ${pct.toFixed(0)}% · TraceAAD`;
@@ -202,6 +193,7 @@ function renderKPIs(data) {
 
 function buildTasks(tasks, structure) {
   S.structure = structure;
+  for (const chart of S.charts.values()) resizer.unobserve(chart.canvas.parentElement);
   S.charts.clear();
   const root = $("tasks");
   if (!tasks.length) { root.innerHTML = '<div class="empty">该批次没有运行</div>'; return; }
@@ -211,22 +203,21 @@ function buildTasks(tasks, structure) {
         <div><h2>${esc(task.label)}</h2><div class="dir">${esc(task.unit)} · 越低越好</div></div>
         <div class="agg" data-agg></div>
       </header>
-      <div class="chart-box"><canvas aria-label="${esc(task.label)} 各 rep 历史最优曲线"></canvas></div>
+      <div class="chart-box"><canvas aria-label="${esc(task.label)} 三路均值和单路历史最优"></canvas></div>
       <div class="runs">
-        <div class="run-head"><span>重复</span><span>状态</span><span>进度</span><span>搜索最优</span><span>后端</span></div>
+        <div class="run-head"><span>单路</span><span>状态</span><span>进度</span><span>最优</span></div>
         ${task.runs.map((run, i) => `
           <button class="run" type="button" data-run="${esc(run.name)}" style="--c:${seriesColor(i)}">
             <span class="rep"><span class="sw"></span>${run.repeat == null ? esc(run.name) : `Rep ${esc(run.repeat)}`}</span>
             <span class="pill" data-status></span>
             <span class="prog"><span class="track"><i data-bar></i></span><span class="pm"><span data-used></span><span data-eta></span></span></span>
             <span class="r-num" data-best></span>
-            <span class="r-be">${esc(run.backend || "–")}</span>
           </button>`).join("")}
       </div>
     </article>`).join("");
   for (const card of root.querySelectorAll(".task")) {
     const canvas = card.querySelector("canvas");
-    const chart = {canvas, card, key: card.dataset.task, series: [], hover: null, sig: ""};
+    const chart = {canvas, key: card.dataset.task, series: [], sig: "", ticks: true};
     S.charts.set(chart.key, chart);
     bindOverlayHover(chart);
     resizer.observe(canvas.parentElement);
@@ -245,7 +236,7 @@ function updateTask(task) {
     const pill = row.querySelector("[data-status]");
     pill.className = `pill ${stale ? "stale" : run.status}`;
     pill.textContent = stale ? "停滞" : STATUS[run.status] || run.status;
-    pill.title = stale ? "长时间未见新候选：后端可能中断或卡在慢评价" : "";
+    pill.title = stale ? "长时间未见新候选" : "";
     row.querySelector("[data-bar]").style.width = `${pct}%`;
     const over = run.budget && run.budget_used > run.budget;
     row.querySelector("[data-used]").innerHTML = over
@@ -253,28 +244,29 @@ function updateTask(task) {
     row.querySelector("[data-eta]").textContent = run.status === "running"
       ? (t?.state === "estimated" ? `剩 ${dur(t.eta_seconds)}` : speed(t)) : "";
     row.querySelector("[data-best]").textContent = fmt(bestFitness(run));
-    row.title = `${run.name}\nseed ${run.seed ?? "–"} · 有效候选 ${run.valid_nodes} · ${speed(t)}`;
   });
-  const model = mainModel(task.runs);
-  const mixed = task.runs.some(r => r.model !== model);
-  const bests = task.runs.filter(r => r.model === model).map(bestFitness).filter(v => v != null);
-  const agg = card.querySelector("[data-agg]");
-  if (bests.length) {
-    const mean = bests.reduce((a, b) => a + b, 0) / bests.length;
-    const sd = bests.length > 1 ? Math.sqrt(bests.reduce((a, b) => a + (b - mean) ** 2, 0) / (bests.length - 1)) : 0;
-    const better = Math.min(...bests);
-    agg.innerHTML = `<b>${fmt(mean)} <span style="font-weight:500;color:var(--muted);font-size:12px">± ${fmt(sd, 3)}</span></b>${mixed ? `${esc(model || "未记录模型")} · ` : ""}最好 ${fmt(better)}`;
-    agg.title = mixed ? `均值只含 ${model || "未记录模型"} 的 ${bests.length} 路` : "";
-  } else agg.textContent = "暂无有效候选";
+  const mc = task.mean_curve;
+  const last = mc?.points?.at(-1);
+  card.querySelector("[data-agg]").innerHTML = last
+    ? `三路均值<b>${fmt(last.mean)}</b><span>第 ${last.x} 次</span>`
+    : esc(mc?.reason || "");
   const chart = S.charts.get(task.key);
-  const sig = JSON.stringify(task.runs.map(r => [r.name, r.status, r.budget, r.budget_used, r.x_label, r.curve]));
+  const sig = JSON.stringify([mc, task.runs.map(r => [r.name, r.status, r.budget, r.budget_used, r.x_label, r.curve])]);
   if (chart && chart.sig !== sig) {
     chart.sig = sig;
+    chart.domain = undefined;
+    if (chart.hoverX != null) { chart.hoverX = null; hideTip(); }
     chart.series = task.runs.map((run, i) => ({
       name: runLabel(task, run), color: i,
-      live: run.status === "running",
+      live: run.status === "running", faint: Boolean(last),
       points: (run.curve || []).filter(p => Number.isFinite(p.fitness)).map(p => ({x: p.evaluation, f: p.fitness, p})),
     }));
+    if (last) {
+      chart.series.push({
+        name: "三路均值", mean: true, colorVar: "--mean", endDot: true,
+        points: mc.points.map(p => ({x: p.x, f: p.mean, sd: p.sd})),
+      });
+    }
     chart.maxX = Math.max(1, ...task.runs.map(r => Math.max(r.budget || 0, r.budget_used || 0, r.curve?.at(-1)?.evaluation || 0)));
     chart.xLabel = task.runs[0]?.x_label || "已记录序号";
     drawChart(chart);
@@ -285,7 +277,7 @@ function updateTask(task) {
 const resizer = new ResizeObserver(entries => {
   for (const entry of entries) {
     const canvas = entry.target.querySelector("canvas");
-    const chart = [...S.charts.values(), S.detailChart].find(c => c && c.canvas === canvas);
+    const chart = [...S.charts.values(), ...CMP.trendCharts, S.detailChart].find(c => c?.canvas === canvas);
     if (chart) drawChart(chart);
   }
 });
@@ -299,22 +291,40 @@ function stepAt(points, x) {
   return found;
 }
 
-/* Robust y-range: ignore the early warm-up (first 8% of budget) so late-stage
-   differences between reps stay visible; early values above the range are clipped. */
-function yDomain(series, maxX) {
-  const all = series.flatMap(s => s.points);
-  if (!all.length) return null;
-  const cut = maxX * 0.08;
-  const late = series.flatMap(s => {
+function valueAt(series, x) {
+  return series.points.at(-1)?.x >= x ? stepAt(series.points, x) : null;
+}
+
+function yDomain(series, minX) {
+  const end = Math.max(minX, ...series.map(s => s.points.at(-1)?.x ?? minX));
+  const cut = minX + (end - minX) * .08;
+  const points = series.flatMap(s => {
+    const last = s.points.at(-1);
+    if (!last) return [];
+    if (last.x < cut) return [last];
     const start = stepAt(s.points, cut);
     return [...(start ? [start] : []), ...s.points.filter(p => p.x > cut)];
   });
-  const vals = (late.length ? late : all).map(p => p.f);
-  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (!points.length) return null;
+  let lo = Infinity, hi = -Infinity;
+  for (const p of points) {
+    lo = Math.min(lo, p.f);
+    hi = Math.max(hi, p.f);
+  }
   const pad = (hi - lo) * 0.1 || Math.max(Math.abs(hi) * 0.01, 1e-6);
   lo -= pad; hi += pad;
   return {lo, hi};
 }
+
+function traceSteps(ctx, points, x, y) {
+  ctx.moveTo(x(points[0].x), y(points[0]));
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(x(points[i].x), y(points[i - 1]));
+    ctx.lineTo(x(points[i].x), y(points[i]));
+  }
+}
+
+const curveColorVar = s => s.colorVar || `--s${s.color % 8 + 1}`;
 
 function drawChart(chart) {
   const {canvas} = chart;
@@ -326,16 +336,19 @@ function drawChart(chart) {
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  const colors = {grid: cssVar("--grid"), text: cssVar("--faint"), ink: cssVar("--ink"), panel: cssVar("--panel")};
-  const dom = yDomain(chart.series, chart.maxX);
+  const colors = {grid: cssVar("--grid"), text: cssVar("--muted"), panel: cssVar("--panel")};
+  const minX = chart.minX ?? 0;
+  if (chart.domain === undefined) chart.domain = yDomain(chart.series, minX);
+  const dom = chart.domain;
   ctx.font = "11px Inter, system-ui, sans-serif";
   if (!dom) {
+    chart.geom = null;
     ctx.fillStyle = colors.text; ctx.textAlign = "center";
     ctx.fillText("暂无有效候选", W / 2, H / 2);
     return;
   }
-  const L = 58, R = 14, T = 10, B = 22;
-  const x = v => L + v / chart.maxX * (W - L - R);
+  const L = 58, R = 14, T = 10, B = chart.ticks ? 36 : 22;
+  const x = v => L + (v - minX) / (chart.maxX - minX) * (W - L - R);
   const y = v => T + (dom.hi - v) / (dom.hi - dom.lo) * (H - T - B);
   chart.geom = {L, R, T, B, W, H, x, y, dom};
   // grid + axis labels
@@ -348,25 +361,40 @@ function drawChart(chart) {
     ctx.fillText(axisFmt(f, dom.hi - dom.lo), L - 7, py);
   }
   ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
-  ctx.fillText("0", L, H - 6);
-  ctx.textAlign = "right"; ctx.fillText(String(chart.maxX), W - R, H - 6);
+  const tickY = H - B + 15;
+  ctx.fillText(String(minX), L, tickY);
+  ctx.textAlign = "right"; ctx.fillText(String(chart.maxX), W - R, tickY);
+  if (chart.ticks && chart.maxX - minX > 3) {
+    ctx.textAlign = "center";
+    for (let i = 1; i < 4; i++) {
+      const value = Math.round(minX + (chart.maxX - minX) * i / 4);
+      const px = x(value);
+      ctx.strokeStyle = colors.grid;
+      ctx.beginPath(); ctx.moveTo(px, T); ctx.lineTo(px, H - B); ctx.stroke();
+      ctx.fillText(String(value), px, tickY);
+    }
+  }
   ctx.textAlign = "center"; ctx.fillText(chart.xLabel || "已记录序号", (L + W - R) / 2, H - 6);
   // series
   ctx.save();
   ctx.beginPath(); ctx.rect(L, T - 2, W - L - R + 2, H - T - B + 4); ctx.clip();
-  const single = chart.series.length === 1;
-  chart.series.forEach(s => {
+  const single = chart.series.length === 1 && !chart.series[0].mean && !chart.series[0].faint;
+  const highlight = chart.series.find(s => chart.focusId && s.id === chart.focusId);
+  const series = highlight ? [...chart.series.filter(s => s !== highlight), highlight] : chart.series;
+  series.forEach(s => {
     if (!s.points.length) return;
-    const color = cssVar(`--s${s.color % 8 + 1}`);
-    const dim = chart.focus != null && chart.focus !== s.color;
-    ctx.globalAlpha = dim ? 0.25 : 1;
-    ctx.strokeStyle = color; ctx.lineWidth = single ? 2 : 1.8; ctx.lineJoin = "round";
+    const color = cssVar(curveColorVar(s));
+    const focused = chart.focus != null && !s.mean && chart.focus === s.color;
+    const dim = highlight ? s !== highlight : chart.focus != null && !s.mean && !focused;
+    const opacity = s.faint ? (focused ? .86 : dim ? .26 : .5) : (dim ? .2 : 1);
+    const width = s.mean ? (s === highlight ? 4.5 : 3.4) : s.faint ? (focused ? 2 : 1.5) : single ? 2 : 1.8;
+    ctx.globalAlpha = opacity;
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round";
+    ctx.setLineDash(s.faint ? [4, 3] : s.dash || []);
     ctx.beginPath();
-    s.points.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(x(p.x), y(p.f));
-      else { ctx.lineTo(x(p.x), y(s.points[i - 1].f)); ctx.lineTo(x(p.x), y(p.f)); }
-    });
+    traceSteps(ctx, s.points, x, p => y(p.f));
     ctx.stroke();
+    ctx.setLineDash([]);
     if (single) {
       const grad = ctx.createLinearGradient(0, T, 0, H - B);
       grad.addColorStop(0, color + "33"); grad.addColorStop(1, color + "00");
@@ -378,9 +406,15 @@ function drawChart(chart) {
       }
     }
     const last = s.points.at(-1);
-    if (s.live) {
+    if (s.endDot || (s.live && (!s.faint || focused))) {
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(x(last.x), y(last.f), 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = colors.panel; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    const at = s.id && chart.hoverX != null ? valueAt(s, chart.hoverX) : null;
+    if (at && chart.hoverX !== last.x) {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x(chart.hoverX), y(at.f), 4, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = colors.panel; ctx.lineWidth = 1.5; ctx.stroke();
     }
   });
@@ -414,14 +448,21 @@ function bindOverlayHover(chart) {
       if (!g) return;
       const rect = chart.canvas.getBoundingClientRect();
       const px = event.clientX - rect.left;
-      if (px < g.L || px > g.W - g.R) { chart.hoverX = null; drawChart(chart); hideTip(); return; }
-      const xv = Math.round((px - g.L) / (g.W - g.L - g.R) * chart.maxX);
+      if (px < g.L || px > g.W - g.R) {
+        if (chart.hoverX != null) { chart.hoverX = null; drawChart(chart); }
+        hideTip();
+        return;
+      }
+      const minX = chart.minX ?? 0;
+      const xv = Math.round(minX + (px - g.L) / (g.W - g.L - g.R) * (chart.maxX - minX));
+      if (xv === chart.hoverX && !tip.hidden) { placeTip(event); return; }
       chart.hoverX = xv;
       drawChart(chart);
-      const rows = chart.series.map(s => {
-        const end = s.points.at(-1);
-        const at = end && xv <= end.x ? stepAt(s.points, xv) : null;
-        return `<div class="row"><span><i class="sw" style="--c:${seriesColor(s.color)}"></i>${esc(s.name)}</span><strong>${at ? fmt(at.f) : "–"}</strong></div>`;
+      const tooltipSeries = [...chart.series.filter(s => s.mean), ...chart.series.filter(s => !s.mean)];
+      const rows = tooltipSeries.map(s => {
+        const at = valueAt(s, xv);
+        const value = at ? fmt(at.f) + (s.mean ? ` ± ${fmt(at.sd, 3)}` : "") : "–";
+        return `<div class="row ${s.faint ? "rep-value" : ""}"><span><i class="sw" style="--c:var(${curveColorVar(s)})"></i>${esc(s.name)}</span><strong>${value}</strong></div>`;
       }).join("");
       tip.innerHTML = `<h4>${esc(chart.xLabel || "已记录序号")} ${xv}</h4>${rows}`;
       placeTip(event);
@@ -429,7 +470,8 @@ function bindOverlayHover(chart) {
   });
   chart.canvas.addEventListener("pointerleave", () => {
     cancelAnimationFrame(frame);
-    chart.hoverX = null; drawChart(chart); hideTip();
+    if (chart.hoverX != null) { chart.hoverX = null; drawChart(chart); }
+    hideTip();
   });
 }
 
@@ -538,7 +580,7 @@ function renderDetail(run) {
   };
   const ops = Object.entries(run.operators || {}).sort((a, b) => b[1] - a[1]);
   const opMax = Math.max(1, ...ops.map(([, n]) => n));
-  $("d-sub").innerHTML = `<span class="pill ${esc(run.status)}">${STATUS[run.status] || esc(run.status)}</span>${run.backend ? ` · ${esc(run.backend)}` : ""} · seed ${esc(run.seed ?? "–")} · ${esc(run.name)}`;
+  $("d-sub").innerHTML = `<span class="pill ${esc(run.status)}">${STATUS[run.status] || esc(run.status)}</span> · seed ${esc(run.seed ?? "–")}`;
   const tile = (k, v) => `<div class="tile"><small>${k}</small><strong>${v}</strong></div>`;
   body.innerHTML = `
     <div class="tiles">
@@ -602,9 +644,13 @@ function renderDetail(run) {
 }
 
 /* ---------- cross-batch comparison ---------- */
-const CMP = {cohorts: [], ids: [], ref: null, data: null, col: {}};
+const CMP = {
+  cohorts: [], ids: [], ref: null, data: null, col: {}, customSelection: false,
+  trendCharts: [], task: "", common: false, focusId: null,
+};
 const GROUP = {train: "训练", test: "测试 · 训练规模", gen: "泛化 · 其他规模"};
 const isTrace = c => c.batch.startsWith("traceaad");
+const isEvoTrace = c => c.batch.startsWith("evotrace_");
 
 async function loadCohorts() {
   const {data} = await getJSON("/api/cohorts");
@@ -619,16 +665,19 @@ async function loadCohorts() {
   const canonical = id => known.has(id) ? id : preferred(CMP.cohorts.filter(c =>
     c.batch === String(id || "").split("::")[0].split("@")[0] && !c.variant))?.id;
   const defaultRef = canonical(data.default_reference);
+  CMP.defaultRef = defaultRef;
   CMP.ids = CMP.ids.map(canonical)
     .filter((id, i, a) => id && a.indexOf(id) === i);
   CMP.ref = canonical(CMP.ref);
-  if (!CMP.ids.length) {
+  if (!CMP.ids.length && !CMP.customSelection) {
     // Default: the configured controls first, then the related methods.
     const viewed = CMP.cohorts.filter(c => c.batch === S.batch && isTrace(c));
     const current = preferred(viewed.length ? viewed : CMP.cohorts.filter(c => isTrace(c) && c.batch === CMP.cohorts.find(isTrace)?.batch));
     const versions = CMP.cohorts.filter(c => isTrace(c) && !c.variant && (!main || c.model_name === main)).map(c => c.id);
     const baselines = CMP.cohorts.filter(c => !isTrace(c) && (!main || c.model_name === main)).map(c => c.id);
-    CMP.ids = [defaultRef, ...versions, current?.id, ...baselines].filter((id, i, a) => id && known.has(id) && a.indexOf(id) === i);
+    const evo = CMP.cohorts.filter(c => isEvoTrace(c) && !c.variant && (!main || c.model_name === main)).map(c => c.id);
+    const defaults = evo.length ? [defaultRef, ...evo] : [defaultRef, ...versions, current?.id, ...baselines];
+    CMP.ids = defaults.filter((id, i, a) => id && known.has(id) && a.indexOf(id) === i);
   }
   if (!CMP.ids.includes(CMP.ref)) CMP.ref = CMP.ids.includes(defaultRef) ? defaultRef : CMP.ids[0] || null;
 }
@@ -641,9 +690,9 @@ function renderChips() {
       <button type="button" data-remove="${esc(id)}" title="移除" aria-label="移除 ${esc(byId.get(id)?.label || id)}">×</button></span>`).join("");
   const rest = CMP.cohorts.filter(c => !CMP.ids.includes(c.id));
   const group = (label, items) => items.length ? `<optgroup label="${label}">${items.map(c =>
-    `<option value="${esc(c.id)}">${esc(c.label)}${c.heldout_tasks.length ? ` · 测试 ${c.heldout_tasks.length} 个任务` : " · 无测试"}</option>`).join("")}</optgroup>` : "";
+    `<option value="${esc(c.id)}">${esc(c.label)}</option>`).join("")}</optgroup>` : "";
   const html = chips + (rest.length ? `<select class="ctl chip-add" id="cmp-add" aria-label="添加对比对象">
-    <option value="">＋ 添加对比对象…</option>${group("TraceAAD", rest.filter(isTrace))}${group("相关方法", rest.filter(c => !isTrace(c)))}</select>` : "");
+    <option value="">＋ 添加对比对象…</option>${group("EvoTrace", rest.filter(isEvoTrace))}${group("TraceAAD", rest.filter(isTrace))}${group("相关方法", rest.filter(c => !isTrace(c) && !isEvoTrace(c)))}</select>` : "");
   if (html !== CMP.chipsHTML) { CMP.chipsHTML = html; $("cmp-chips").innerHTML = html; }
 }
 
@@ -653,13 +702,24 @@ async function loadCompare() {
   CMP.request = request;
   renderChips();
   writeHash();
-  if (!CMP.ids.length) { CMP.data = null; CMP.text = null; renderCompare(); return; }
+  if (!CMP.ids.length) {
+    $("cmp-error").hidden = true;
+    CMP.data = null;
+    CMP.text = null;
+    renderTrends();
+    return;
+  }
   const url = `/api/compare?cohorts=${encodeURIComponent(CMP.ids.join(","))}`;
   try {
     const {data, text} = await getJSON(url, {signal: request.signal});
     if (CMP.request !== request || url !== `/api/compare?cohorts=${encodeURIComponent(CMP.ids.join(","))}`) return;
     $("cmp-error").hidden = true;
-    if (text !== CMP.text || !CMP.data) { CMP.text = text; CMP.data = data; renderCompare(); }
+    if (text !== CMP.text || !CMP.data) {
+      CMP.text = text;
+      CMP.data = data;
+      renderTrends();
+      renderOpenResults();
+    }
   } catch (error) {
     if (error.name === "AbortError" || CMP.request !== request) return;
     $("cmp-error").hidden = false;
@@ -789,11 +849,97 @@ function renderCompare() {
 }
 
 function drawAllDots() {
-  if (!CMP.data) return;
+  if (!CMP.data || !$("cmp-results").open) return;
   for (const task of CMP.data.tasks) {
     const card = document.querySelector(`.cmp-task[data-task="${CSS.escape(task.key)}"]`);
     if (card) drawDots(card.querySelector("svg.dots"), task, CMP.col[task.key]);
   }
+}
+
+function renderOpenResults() {
+  if (!$("cmp-results").open || !CMP.data?.tasks.length) return;
+  if (CMP.resultsData === CMP.data && CMP.resultsRef === CMP.ref) {
+    drawAllDots();
+    return;
+  }
+  renderCompare();
+  CMP.resultsData = CMP.data;
+  CMP.resultsRef = CMP.ref;
+}
+
+function clipSteps(points, start, end) {
+  const inside = points.filter(p => p.x >= start && p.x <= end);
+  const first = stepAt(points, start);
+  const last = stepAt(points, end);
+  if (first && first.x < start) inside.unshift({...first, x: start});
+  if (last && last.x < end) inside.push({...last, x: end});
+  return inside;
+}
+
+function renderTrends() {
+  for (const chart of CMP.trendCharts) resizer.unobserve(chart.canvas.parentElement);
+  CMP.trendCharts = [];
+  hideTip();
+  const root = $("cmp-trends");
+  root.replaceChildren();
+  const tasks = CMP.data?.tasks || [];
+  $("cmp-chart").hidden = !tasks.length;
+  $("cmp-results").hidden = !tasks.length;
+  if (!tasks.length) return;
+  const task = tasks.find(t => t.key === CMP.task) || tasks[0];
+  CMP.task = task.key;
+  const tabs = tasks.map(t => `<button type="button" data-trend-task="${esc(t.key)}" aria-pressed="${t === task}">${esc(t.label)}</button>`).join("");
+  if (tabs !== CMP.tabsHTML) {
+    CMP.tabsHTML = tabs;
+    $("cmp-task-tabs").innerHTML = tabs;
+  }
+  const labels = new Map(CMP.data.cohorts.map(c => [c.id, c.label]));
+  const groups = new Map();
+  const missing = [];
+  for (const cohort of task.cohorts) {
+    const mc = cohort.mean_curve;
+    if (!mc?.points.length) {
+      if (mc) missing.push(`${labels.get(cohort.id) || cohort.id} · ${mc.reason}`);
+      continue;
+    }
+    const key = JSON.stringify([mc.x_label, mc.unit]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(cohort);
+  }
+  for (const cohorts of groups.values()) {
+    const curves = cohorts.map(c => c.mean_curve);
+    const {x_label: xLabel, unit} = curves[0];
+    const start = CMP.common ? Math.max(...curves.map(c => c.common_start)) : 0;
+    const end = CMP.common ? Math.min(...curves.map(c => c.common_end)) : Math.max(...curves.map(c => c.common_end));
+    const group = document.createElement("section");
+    group.className = "cmp-trend-wrap";
+    group.innerHTML = `<h3>${esc(unit)} <span>↓</span>${groups.size > 1 ? ` · ${esc(xLabel)}` : ""}</h3>`;
+    root.append(group);
+    if (end < start) {
+      group.insertAdjacentHTML("beforeend", '<p class="trend-note">所选方法暂无共同进度</p>');
+      continue;
+    }
+    const series = cohorts.map(({id, mean_curve: mc}) => {
+      const color = CMP.ids.indexOf(id);
+      const dash = [[], [7, 4], [2, 4]][Math.floor(color / 8) % 3];
+      const points = mc.points.map(p => ({x: p.x, f: p.mean, sd: p.sd}));
+      return {id, name: labels.get(id) || id, color, dash, mean: true, endDot: true,
+        points: CMP.common ? clipSteps(points, start, end) : points};
+    });
+    const legend = series.map(s => `<button type="button" class="leg-item" data-trend-focus="${esc(s.id)}" aria-pressed="${CMP.focusId === s.id}">
+      <i class="trend-swatch ${s.dash.length ? "dashed" : ""}" style="--c:var(${curveColorVar(s)})"></i>${esc(s.name)}
+    </button>`).join("");
+    group.insertAdjacentHTML("beforeend", `<div class="trend-legend">${legend}</div><div class="trend-box"><canvas aria-label="${esc(task.label)} 三路均值曲线 · ${esc(xLabel)}"></canvas></div>`);
+    const canvas = group.querySelector("canvas");
+    const chart = {
+      canvas, xLabel, minX: start === end ? Math.max(0, start - 1) : start, maxX: Math.max(1, end), ticks: true,
+      focusId: CMP.focusId, series,
+    };
+    CMP.trendCharts.push(chart);
+    bindOverlayHover(chart);
+    resizer.observe(canvas.parentElement);
+  }
+  if (missing.length) root.insertAdjacentHTML("beforeend", `<p class="trend-note">${missing.map(esc).join(" · ")}</p>`);
 }
 
 function drawDots(svg, task, colKey) {
@@ -846,17 +992,59 @@ function setView(view) {
     });
   } else {
     refresh();
-    for (const chart of S.charts.values()) drawChart(chart);
   }
   writeHash();
 }
 
 /* ---------- events ---------- */
 document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+document.querySelectorAll("[data-preset]").forEach(button => button.addEventListener("click", () => {
+  const preset = button.dataset.preset;
+  const evo = CMP.cohorts.filter(c => isEvoTrace(c) && !c.variant).map(c => c.id);
+  const ids = {
+    evotrace_base: [CMP.defaultRef, ...evo].filter(Boolean),
+    evotrace: evo,
+    clear: [],
+  };
+  CMP.customSelection = true;
+  CMP.ids = [...new Set(ids[preset])];
+  CMP.ref = CMP.ids.includes(CMP.defaultRef) ? CMP.defaultRef : CMP.ids[0] || null;
+  loadCompare();
+}));
+const progressButtons = document.querySelectorAll("[data-progress]");
+progressButtons.forEach(button => button.addEventListener("click", () => {
+  CMP.common = button.dataset.progress === "common";
+  progressButtons.forEach(b => b.setAttribute("aria-pressed", String(b === button)));
+  renderTrends();
+}));
+$("cmp-task-tabs").addEventListener("click", event => {
+  const button = event.target.closest("[data-trend-task]");
+  if (button && CMP.task !== button.dataset.trendTask) {
+    CMP.task = button.dataset.trendTask;
+    renderTrends();
+    writeHash();
+    $("cmp-task-tabs").querySelector('[aria-pressed="true"]')?.focus({preventScroll: true});
+  }
+});
+$("cmp-trends").addEventListener("click", event => {
+  const button = event.target.closest("[data-trend-focus]");
+  if (!button) return;
+  const id = button.dataset.trendFocus;
+  CMP.focusId = CMP.focusId === id ? null : id;
+  for (const b of $("cmp-trends").querySelectorAll("[data-trend-focus]")) {
+    b.setAttribute("aria-pressed", String(b.dataset.trendFocus === CMP.focusId));
+  }
+  for (const chart of CMP.trendCharts) {
+    chart.focusId = CMP.focusId;
+    drawChart(chart);
+  }
+});
+$("cmp-results").addEventListener("toggle", renderOpenResults);
 $("cmp-chips").addEventListener("click", event => {
   const star = event.target.closest("[data-ref]"), remove = event.target.closest("[data-remove]");
-  if (star) { CMP.ref = star.dataset.ref; renderChips(); writeHash(); renderCompare(); }
+  if (star) { CMP.ref = star.dataset.ref; renderChips(); writeHash(); renderOpenResults(); }
   if (remove) {
+    CMP.customSelection = true;
     CMP.ids = CMP.ids.filter(id => id !== remove.dataset.remove);
     if (!CMP.ids.includes(CMP.ref)) CMP.ref = CMP.ids[0] || null;
     loadCompare();
@@ -864,6 +1052,7 @@ $("cmp-chips").addEventListener("click", event => {
 });
 $("cmp-chips").addEventListener("change", event => {
   if (event.target.id !== "cmp-add" || !event.target.value) return;
+  CMP.customSelection = true;
   CMP.ids.push(event.target.value);
   if (!CMP.ref) CMP.ref = CMP.ids[0];
   loadCompare();
@@ -918,9 +1107,13 @@ function applyTheme(theme) {
   if (theme === "auto") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = theme;
   $("theme").title = `主题：${{auto: "跟随系统", light: "浅色", dark: "深色"}[theme]}`;
-  for (const chart of S.charts.values()) drawChart(chart);
-  if (S.detailChart) drawChart(S.detailChart);
-  if (S.view === "compare") drawAllDots();
+  if (S.view === "compare") {
+    for (const chart of CMP.trendCharts) drawChart(chart);
+    drawAllDots();
+  } else {
+    for (const chart of S.charts.values()) drawChart(chart);
+    if (S.detailChart) drawChart(S.detailChart);
+  }
 }
 let theme = (() => { try { return localStorage.getItem("monitor.theme") || "auto"; } catch { return "auto"; } })();
 $("theme").addEventListener("click", () => {
@@ -940,13 +1133,17 @@ function startPolling() {
   // Comparison data changes slowly (finished runs, new held-out files): poll 4x less often.
   S.poll = setInterval(async () => {
     ticks++;
+    if (S.view === "compare") {
+      if (ticks % 4 === 0) {
+        try { await loadCohorts(); } catch {}
+        if (S.view === "compare") loadCompare();
+      }
+      return;
+    }
     if (ticks % 4 === 0 || !S.batch) {
       try { await loadBatches(); } catch {}
     }
-    if (S.view === "compare") {
-      if (ticks % 4 === 0) { try { await loadCohorts(); } catch {} loadCompare(); }
-    }
-    else refresh();
+    if (S.view === "monitor") refresh();
   }, REFRESH_MS);
 }
 function stopPolling() { clearInterval(S.timer); clearInterval(S.poll); }
@@ -961,7 +1158,9 @@ document.addEventListener("visibilitychange", () => {
     await loadBatches();
     const hash = hashParams();
     CMP.ids = (hash.get("c") || "").split(",").filter(Boolean);
+    CMP.customSelection = hash.get("c") === "";
     CMP.ref = hash.get("ref") || CMP.ids[0] || null;
+    CMP.task = hash.get("t") || "";
     if (hash.get("v") === "compare") setView("compare");
     else {
       S.view = "monitor";

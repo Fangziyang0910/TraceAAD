@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
+import math
 import re
 import time
 
@@ -95,29 +96,95 @@ def _candidate_summary(runs):
             "valid_rate": valid / count if count else None}
 
 
-def _compact_curve(points, cap: int = 200):
-    """Thin a run-best curve for list payloads, keeping endpoints and records."""
-    if not isinstance(points, list) or len(points) <= cap:
-        return points
-    keep: set[int] = {0, len(points) - 1}
-    for index, point in enumerate(points):
-        if isinstance(point, dict) and point.get("kind") in {"initial", "breakthrough"}:
-            keep.add(index)
-    step = len(points) / cap
-    cursor = 0.0
-    while cursor < len(points):
-        keep.add(round(cursor))
-        cursor += step
-    return [points[index] for index in sorted(keep)]
-
-
-LIST_POINT_FIELDS = ("evaluation", "fitness", "kind", "gain", "candidate", "operator")
-
-
 def _list_curve(points):
-    """Overview curves carry only what the sparkline and its tooltip need."""
-    return [{key: point.get(key) for key in LIST_POINT_FIELDS if point.get(key) is not None}
-            for point in (_compact_curve(points) or []) if isinstance(point, dict)]
+    """Keep every improvement and the final progress point for the overview."""
+    fields = ("evaluation", "fitness", "kind", "gain", "candidate", "operator")
+    return [{key: point[key] for key in fields if point.get(key) is not None} for point in points]
+
+
+def _step_series(run):
+    """Sorted unique-x incumbent points ``[(x, f), ...]`` and ending evaluation."""
+    by_x = {}
+    for point in run.get("curve") or ():
+        if not isinstance(point, dict):
+            continue
+        x = point.get("evaluation")
+        f = finite(point.get("fitness"))
+        if x is None or f is None:
+            continue
+        xi = int(x)
+        if xi not in by_x or f < by_x[xi]:
+            by_x[xi] = f
+    if not by_x:
+        return [], int(run.get("budget_used") or 0)
+    pts = sorted(by_x.items())
+    end = max(pts[-1][0], int(run.get("budget_used") or 0))
+    return pts, end
+
+
+def cohort_mean_curve(runs):
+    """Average three repeat trajectories over their shared observed budget."""
+    total_runs = len(runs)
+    series = [_step_series(run) for run in runs]
+    covered = sum(bool(pts) for pts, _ in series)
+    axes = {run["x_label"] for run in runs}
+    units = {run["score_unit"] for run in runs}
+    curve = {
+        "total_runs": total_runs,
+        "covered_runs": covered,
+        "x_label": next(iter(axes)) if len(axes) == 1 else None,
+        "unit": next(iter(units)) if len(units) == 1 else None,
+        "points": [],
+    }
+    if len(axes) != 1 or len(units) != 1:
+        return {**curve, "reason": "口径混合"}
+    # Older records may identify the repetition by repeat rather than seed.
+    identity = "seed" if all(run.get("seed") is not None for run in runs) else "repeat"
+    ids = {run.get(identity) for run in runs}
+    if total_runs != 3 or len(ids) != 3 or None in ids:
+        return {**curve, "reason": "需要三路独立重复"}
+    if covered != 3:
+        return {**curve, "reason": "等待各路获得有效成绩"}
+
+    common_start = max(pts[0][0] for pts, _ in series)
+    common_end = min(end for _, end in series)
+    if common_start > common_end:
+        return {**curve, "reason": "三路暂无共同进度"}
+
+    xs = {common_start, common_end}
+    xs.update(x for pts, _ in series for x, _ in pts if common_start <= x <= common_end)
+
+    cursors = [0] * total_runs
+    points = []
+    for x in sorted(xs):
+        vals = []
+        for idx, (pts, _) in enumerate(series):
+            cur = cursors[idx]
+            while cur + 1 < len(pts) and pts[cur + 1][0] <= x:
+                cur += 1
+            cursors[idx] = cur
+            vals.append(pts[cur][1])
+        mean = sum(vals) / total_runs
+        sd = math.sqrt(sum((v - mean) ** 2 for v in vals) / (total_runs - 1))
+        points.append({
+            "x": x,
+            "mean": mean,
+            "sd": sd,
+        })
+    return {
+        **curve,
+        "common_start": common_start,
+        "common_end": common_end,
+        "points": points,
+    }
+
+
+def _main_model_runs(runs):
+    if not runs:
+        return []
+    counts = Counter(run.get("model") for run in runs)
+    main = max(counts, key=lambda model: (counts[model], model or ""))
+    return [run for run in runs if run.get("model") == main]
 
 
 @lru_cache(maxsize=512)
@@ -164,9 +231,8 @@ class ResultsMonitor:
         self.default_experiment = experiment
         self.batch_filter = batch
 
-    def _config_paths(self, directory):
+    def _config_paths(self, directory, primary):
         paths = _run_config_paths(directory)
-        primary = read_json(self.results_root / 'primary_runs.json')
         if primary is None:
             return paths
         if not isinstance(primary, dict) or primary.get('schema') != 1 or not isinstance(primary.get('methods'), dict):
@@ -201,30 +267,40 @@ class ResultsMonitor:
         except OSError:
             return False
 
-    def batches(self) -> list[dict[str, str]]:
+    def _batch_configs(self, experiments=None):
         entries = []
         if not self.results_root.is_dir():
             return entries
-        primary = read_object(self.results_root / 'primary_runs.json')
-        visible = primary.get('visualization_methods')
+        primary = read_json(self.results_root / 'primary_runs.json')
+        if primary is not None and not isinstance(primary, dict):
+            raise ValueError('invalid primary experiment index')
+        visible = (primary or {}).get('visualization_methods')
+        labels = (primary or {}).get('labels', {})
         for directory in self.results_root.iterdir():
-            if visible is not None and directory.name not in visible:
+            name = directory.name
+            if experiments is not None and name not in experiments:
                 continue
-            if directory.is_dir() and not directory.is_symlink() and self._config_paths(directory):
-                entries.append((self._latest_activity(directory), directory.name))
+            if visible is not None and name not in visible:
+                continue
+            if directory.is_dir() and not directory.is_symlink():
+                paths = self._config_paths(directory, primary)
+                if paths:
+                    entries.append(({"id": name, "label": labels.get(name, name)}, paths))
         if visible is None:
-            entries.sort(reverse=True)
+            entries.sort(key=lambda entry: (self._latest_activity(entry[1]), entry[0]["id"]), reverse=True)
         else:
-            entries.sort(key=lambda entry: visible.index(entry[1]))
-        labels = primary.get('labels', {})
-        return [{"id": name, "label": labels.get(name, name)} for _, name in entries]
+            entries.sort(key=lambda entry: visible.index(entry[0]["id"]))
+        return entries
+
+    def batches(self) -> list[dict[str, str]]:
+        return [batch for batch, _ in self._batch_configs()]
 
     def comparison_reference(self):
         return read_object(self.results_root / 'primary_runs.json').get('visualization_reference')
 
-    def _latest_activity(self, directory: Path) -> float:
+    def _latest_activity(self, paths) -> float:
         latest = 0.0
-        for config in self._config_paths(directory):
+        for config in paths:
             journal = config.parent / "events.jsonl"
             try:
                 latest = max(latest, journal.stat().st_mtime)
@@ -232,8 +308,9 @@ class ResultsMonitor:
                 pass
         return latest
 
-    def default_batch(self):
-        batches = self.batches()
+    def default_batch(self, batches=None):
+        if batches is None:
+            batches = self.batches()
         preferred = self.default_experiment or read_object(self.results_root / 'primary_runs.json').get('default_experiment')
         if preferred in {item["id"] for item in batches}:
             return preferred
@@ -244,7 +321,8 @@ class ResultsMonitor:
         experiment = experiment or self.default_batch()
         directory = self.results_root / experiment if experiment else self.results_root
         stamps, unfinished = [], False
-        for path in self._config_paths(directory) if experiment else []:
+        primary = read_json(self.results_root / 'primary_runs.json')
+        for path in self._config_paths(directory, primary) if experiment else []:
             run_dir = path.parent
             stamps.append((str(run_dir.relative_to(directory)), _run_stamp(run_dir)))
             unfinished |= read_object(run_dir / "summary.json").get("status") != "finished"
@@ -287,21 +365,25 @@ class ResultsMonitor:
                 rows[(task, name)] = {**row, 'batch_status': status}
         return rows
 
-    def _runs(self, experiment: str, task_filter=None, name_filter=None):
-        if experiment not in {item["id"] for item in self.batches()}:
-            return []
+    def _runs(self, experiment: str, task_filter=None, name_filter=None, *, configs=None):
+        if configs is None:
+            batches = self._batch_configs({experiment})
+            if not batches:
+                return []
+            _, paths = batches[0]
+            configs = {
+                path: read_object(path) for path in paths
+                if (not task_filter or path.parent.parent.name == task_filter)
+                and (not name_filter or path.parent.name == name_filter)
+            }
         rows = []
         manifest_runs = self._manifest_runs(experiment)
         now = time.time()
-        for config_path in self._config_paths(self.results_root / experiment):
+        for config_path, config in configs.items():
             run_dir = config_path.parent
-            if ((task_filter and run_dir.parent.name != task_filter)
-                    or (name_filter and run_dir.name != name_filter)):
-                continue
             metadata = manifest_runs.get((run_dir.parent.name, run_dir.name), {})
             if self.batch_filter and not metadata:
                 continue
-            config = read_object(config_path)
             summary = read_object(run_dir / "summary.json")
             raw_status = summary.get("status")
             journal_hot = self._journal_is_hot(run_dir)
@@ -343,9 +425,7 @@ class ResultsMonitor:
                     and config.get('revision') != 'research-protocol-v6-20261012-raw-objective'
                     and summary.get('raw_search', {}).get('status') not in ('complete', 'complete_with_missing')):
                 score_unit = '参考偏差 %'
-            history = _history(run_dir)
-            curve = history.read()[0]
-            progress = history.progress_snapshot()
+            curve, progress, clock = _history(run_dir).snapshot()
             if progress.get("candidate_count"):
                 nodes = progress["valid_nodes"]
                 if status != "finished" or not used:
@@ -362,15 +442,15 @@ class ResultsMonitor:
                 "budget_used": int(used or 0), "valid_nodes": int(nodes or 0),
                 "best_fitness": score,
                 "score_unit": score_unit,
-                "updated_at": summary.get("finished_at") or history.clock.get("completed_at") or metadata.get("started_at"), "run_dir": run_dir,
+                "updated_at": summary.get("finished_at") or clock.get("completed_at") or metadata.get("started_at"), "run_dir": run_dir,
                 "error": None if status == "running" else summary.get("error") or metadata.get("last_error"),
                 "curve": _list_curve(curve),
                 **{k: progress.get(k, 0) for k in ("candidate_count", "valid_candidate_count")},
                 "valid_rate": progress.get("valid_rate"),
-                "x_label": progress.get("x_label", "已记录序号"),
+                "x_label": progress.get("x_label", config.get("budget_axis", "候选尝试")),
             }
             timing_summary = {**summary, "started_at": summary.get("started_at") or metadata.get("started_at")}
-            row["timing"] = search_timing(row, timing_summary, _history(run_dir).timing_snapshot(),
+            row["timing"] = search_timing(row, timing_summary, clock,
                                            unit={"候选尝试": "候选", "样本次数": "样本", "预算槽位": "预算槽",
                                                  "候选序号": "候选"}.get(row["x_label"], "评价"), now=now)
             rows.append(row)
@@ -386,7 +466,9 @@ class ResultsMonitor:
             if task_runs:
                 units = {row['score_unit'] for row in task_runs}
                 groups.append({"key": task, **meta,
-                    "unit": next(iter(units)) if len(units) == 1 else '评分口径混合', "runs": [
+                    "unit": next(iter(units)) if len(units) == 1 else '评分口径混合',
+                    "mean_curve": cohort_mean_curve(_main_model_runs(task_runs)),
+                    "runs": [
                     {key: value for key, value in row.items() if key != "run_dir"}
                     for row in task_runs
                 ]})
@@ -410,23 +492,15 @@ class ResultsMonitor:
 
     # ---------- cross-batch comparison ----------
 
-    def _run_models(self, directory: Path):
-        """Model of each run in a batch, keyed by (task directory, run name)."""
-        return {(path.parent.parent.name, path.parent.name): model_name(read_object(path))
-                for path in self._config_paths(directory)}
-
-    def cohorts(self):
-        """Comparable result sets: one per batch, held-out variant and model.
-
-        Runs of different models never share a mean; a batch that mixes models
-        yields one cohort per model.
-        """
-        items = []
-        for batch in self.batches():
-            directory = self.results_root / batch["id"]
-            variants = load_batch_heldout(directory)
-            names = [""] if (self.results_root / 'primary_runs.json').exists() else sorted(variants) or [""]
-            run_models = self._run_models(directory)
+    def _comparison_batches(self, experiments=None):
+        primary_only = (self.results_root / 'primary_runs.json').exists()
+        for batch, paths in self._batch_configs(experiments):
+            items = []
+            variants = load_batch_heldout(self.results_root / batch["id"])
+            names = [""] if primary_only else sorted(variants) or [""]
+            configs = {path: read_object(path) for path in paths}
+            run_models = {(p.parent.parent.name, p.parent.name): model_name(config)
+                          for p, config in configs.items()}
             models = Counter(run_models.values())
             split = len(models) > 1
             for variant in names:
@@ -443,7 +517,11 @@ class ResultsMonitor:
                         "label": f"{label} · {model or '未记录模型'}" if split else label,
                         "heldout_tasks": tasks,
                     })
-        return items
+            yield batch["id"], configs, variants, items
+
+    def cohorts(self):
+        """Comparable result sets: one per batch, held-out variant and model."""
+        return [item for _, _, _, items in self._comparison_batches() for item in items]
 
     def compare_signature(self, cohort_ids):
         batches = sorted({split_cohort(cohort)[0] for cohort in cohort_ids})
@@ -452,10 +530,17 @@ class ResultsMonitor:
                      for batch in batches)
 
     def compare(self, cohort_ids):
-        known = {item["id"]: item for item in self.cohorts()}
+        cohort_ids = list(cohort_ids)
+        requested = set(cohort_ids)
+        experiments = {split_cohort(cohort)[0] for cohort in requested}
+        known, rows_by_batch, heldout_by_batch = {}, {}, {}
+        for batch, configs, variants, items in self._comparison_batches(experiments):
+            selected = {item["id"]: item for item in items if item["id"] in requested}
+            if selected:
+                known.update(selected)
+                rows_by_batch[batch] = self._runs(batch, configs=configs)
+                heldout_by_batch[batch] = variants
         chosen = [known[cohort] for cohort in cohort_ids if cohort in known]
-        rows_by_batch = {item["batch"]: self._runs(item["batch"]) for item in chosen}
-        heldout_by_batch = {item["batch"]: load_batch_heldout(self.results_root / item["batch"]) for item in chosen}
         tasks = []
         for task, meta in TASKS.items():
             entries = []
@@ -463,11 +548,11 @@ class ResultsMonitor:
                 heldout = heldout_by_batch[item["batch"]].get(item["variant"], {}).get(task, {})
                 named = heldout.get("runs", {})
                 rows = [row for row in rows_by_batch[item["batch"]] if row["task"] == task
-                        and (not item["model"] or row["model"] == item["model"])]
+                        and row["model"] == item["model_name"]]
                 if item["variant"]:
                     rows = [row for row in rows if row["name"] in named]
                 runs = []
-                for row in rows:
+                for row in sorted(rows, key=lambda r: (r["repeat"] is None, r["repeat"] or 0, r["name"])):
                     runs.append({
                         "name": row["name"], "rep": row["repeat"],
                         "status": row.get("status"),
@@ -478,8 +563,12 @@ class ResultsMonitor:
                         "heldout": {str(k): v for k, v in named.get(row["name"], {}).items()},
                     })
                 if runs:
-                    runs.sort(key=lambda run: (run["rep"] is None, run["rep"] or 0, run["name"]))
-                    entries.append({"id": item["id"], "source": heldout.get("source"), "runs": runs})
+                    entries.append({
+                        "id": item["id"],
+                        "source": heldout.get("source"),
+                        "mean_curve": cohort_mean_curve(rows),
+                        "runs": runs,
+                    })
             if entries:
                 tasks.append({"key": task, **meta, "cohorts": entries, "scales": [
                     {"key": str(scale), "label": str(scale), "test": scale in TEST_SCALES[task]}
