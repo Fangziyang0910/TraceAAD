@@ -9,9 +9,15 @@
 | EvoTrace V1 | `20261112_165634_evotrace_v1_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261112_165634_evotrace_v1_co4` | `experiments_result/evotrace_v1`（已完成搜索与独立测试） |
 | EvoTrace V2 | `20261114_103407_evotrace_v2_repaired_co4` | 四任务 × 3 种子，预算 1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261114_103407_evotrace_v2_repaired_co4` | `experiments_result/evotrace_v2`（12 路在 313–646 评之间停止） |
 | EvoTrace V3 | `20261117_181830_evotrace_v3_clean_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261117_181830_evotrace_v3_clean_co4` | `experiments_result/evotrace_v3`（12 路均跑满，11 路独立测试成功，TSP seed 2 超时） |
+| EvoTrace V4 | `20261118_204342_evotrace_v4_methods_co4` | 四任务 × 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261118_204342_evotrace_v4_methods_co4` | `experiments_result/evotrace_v4`（运行中。在 cards 批基础上：探索指令改为短指令，并举出通用计算方式（估计选择的后续影响、构造并改进暂定解、求解有用的子问题）；探索与交叉指令写明源码说明实际计算什么，即使设计简述不准；形成路径与尝试列表按生成意图标注各步（旨在改进、旨在换一种核心计算、旨在与另一算法组合）；探索卡片总长以 9 万字符为限；初始化的已有方案按成绩排序） |
+| EvoTrace V4（已停） | `20261118_195758_evotrace_v4_cards_co4` | 四任务 × 3 种子，各路 60–92 评后停止 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261118_195758_evotrace_v4_cards_co4` | `experiments_result/evotrace_v4`（已保留。上下文由形成路径与个体卡片组成：精化读形成路径、近期尝试与父代源码；交叉另读参考个体卡片（设计、自身经验与源码）；探索读父代与 5 个按名次衰减乘最小 AST 距离抽样的异质代表卡片，各含设计、自身经验与源码，不读形成路径与尝试列表，指令不含计算方式示例；根部子树区直接剪去，不写根部经验；算子先验精化 0.50、交叉 0.30、探索 0.20，排名半衰期 6） |
+| EvoTrace V4（已停） | `20261118_191513_evotrace_v4_layered_co4` | 四任务 × 3 种子，各路 59–76 评后停止 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261118_191513_evotrace_v4_layered_co4` | `experiments_result/evotrace_v4`（已保留。探索只读概念层：设计简述、成绩与经验，不读源码与逐次尝试；探索指令含 V1/V2 的计算方式示例；算子先验精化 0.45、交叉 0.25、探索 0.30，排名半衰期 10） |
+| EvoTrace V4（已停） | `20261118_175341_evotrace_v4_aad_co4` | 四任务 × 3 种子，各路 127–158 评后停止 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261118_175341_evotrace_v4_aad_co4` | `experiments_result/evotrace_v4`（已保留。生成前分析计算会偏向哪些选择，以及这些选择为何可能改善最终解；探索读取父代源码与逐次尝试） |
+| EvoTrace V4（已停） | `20261118_172242_evotrace_v4_analysis_co4` | 四任务 × 3 种子，各路 46–64 评后停止 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261118_172242_evotrace_v4_analysis_co4` | `experiments_result/evotrace_v4`（已保留。恢复 `analysis → code → design`，放宽精化与探索指令） |
+| EvoTrace V4（已停） | `20261118_162510_evotrace_v4_co4` | 四任务 × 3 种子，各路 99–194 评后停止 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261118_162510_evotrace_v4_co4` | `experiments_result/evotrace_v4`（只输出 `code → design`；生成协议有缺陷，不作对照） |
 | TraceAAD Base | `20261109_base_boltzmann_co6` | 六任务（看板取四任务）× 3 种子，1000 评/路 | `/home/fzy/code/LLM4AD/TraceAAD_runs/20261109_traceaad_base_v23_2` | `experiments_result/traceaad_base_boltzmann_20261109`（纯 Boltzmann 基线，已完成四任务搜索与独立测试；默认看板参照） |
 
-V1–V3 的原始结果目录保留上表三批。论文第 3 节和附录 F 的统计与案例来自早期代表覆盖版，论文目录保有当时提取的证据。[论文数据来源](../../paper/README.md#当前分析材料)
+V1–V4 的原始结果目录保留上表各批。论文第 3 节和附录 F 的统计与案例来自早期代表覆盖版，论文目录保有当时提取的证据。[论文数据来源](../../paper/README.md#当前分析材料)
 
 ## 2. 已核实的机制边界与证伪记录（防重复试错）
 
@@ -25,6 +31,8 @@ V1–V3 的原始结果目录保留上表三批。论文第 3 节和附录 F 的
 4. **分层或分组分配对深挖锐度的影响：** 在真实树快照上，先按 `lineage_peak` 分组再组内分配或从根沿树逐层递归选择，均大幅压低连续改进任务（如 TSP）前排个体的抽样份额。
 5. **Explore 全局概览不能仅展示路径峰值：** 节点经验可挂在非峰值分叉节点上，边经验可进入非峰值保留节点，且绝大多数保留的 `Explore` 尝试并非路径峰值；仅展示峰值在真实快照上会遗漏近半数经验载体（如 FSSP seed1 中 `13/25`）及 `98%` 已尝试的非峰值探索草稿。
 6. **路径收缩与峰值计费的耦合边界：** 路径收缩保持存活节点的 `subtree_evaluations` 原值不变；但当非全局最优的路径峰值因超出活跃窗口且非分叉点而被收缩移除后，其未改进后代会在当前保留树上重新计算路径最优祖先。
+7. **首个 V4 批次的 TSP 候选频繁复现最近邻。** 该批只输出 `code → design`，Refine 还要求保持核心计算。TSP 三路在约 100 评内都停在模板最近邻的 6.823969（同分程序中有 768/768 步决策与最近邻相同），前 120 评有 353/360 个程序是加权局部打分。V1–V3 的输出顺序为 `analysis → code → design`，同一时段约一半程序是模拟补全、外圈优先、2-opt 等结构性方法，并在 5–30 评内越过最近邻。V1/V2 的 Explore 同样读取父代源码，也能从最近邻父代生成 NN rollout。第二批 V4 恢复了写代码前的分析，并放宽精化与探索指令。种子 1 和 2 在停跑前均优于最近邻。两项改动各自的作用仍待单独检验。
+8. **V3/V4 的 TSP 前期变慢，来自生成侧失去换思路的来源，不来自预算分配。** V1–V3 前 90 评中，TSP 低于 6.5 的程序都是全路线模拟一类的结构性方法，局部加权打分最好只到 6.52。V1/V2 的 Explore 指令含 “estimate downstream consequences, construct and improve a tentative solution, or solve useful subproblems”，按设计简述归类，模拟类占 58–73%；V1 前 40 次尝试的 30 次 Explore 回复中 29 次提到模拟或补全。V3 删去该句，靠只读设计概览的根部探索保持约 20%，前 100 评 20 次非初始化新最优中 10 次来自根部探索。aad 批 V4 的探索读取父代源码与逐次尝试，模拟类约 7%，且没有真正的贪心补全；另有约 43% 是“局部打分 + 末段穷举”。同期 V4 选中的父代离最优更近（差距中位数 3.8%，V3 为 10.7%），子代优于父代的比例与 V3 相同（精化均为 35%）。CVRP、OP 第 80 评在 V1–V3 范围内。V1/V2 约九成调用走 AWQ 端点，V3/V4 走 FP8 端点。layered 批据此让探索只读概念层并恢复该句，后因该句可能是任务相关先验、上下文组织也未从各算子所需的信息推出而停止。`20261118_195758_evotrace_v4_cards_co4` 改为让探索读取种群中不同算法的完整卡片（设计、经验与源码），指令只要求主要计算与它们都不同。cards 批前 60–92 评中，TSP 只有种子 1 在第 28 评由探索找到模拟补全余程的算法（后续精化与交叉做到 5.985），另两个种子停在 6.51 与 6.97；`20261118_204342_evotrace_v4_methods_co4` 因此在探索指令中加回计算方式示例。
 
 ## 3. 任务与基线筛选
 

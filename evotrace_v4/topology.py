@@ -229,7 +229,6 @@ def apply_simplification(tree: TreePopulation, regions: Sequence[Region]) -> Tre
     kept = sorted(tree.nodes.keys() - removed)
     rewired = {r.child_id: r.parent_id for r in regions if isinstance(r, PathContraction)}
     return TreePopulation(
-        root_experience=tree.root_experience,
         nodes={i: replace(tree.nodes[i]) for i in kept},
         edges={
             i: (replace(tree.edges[i], parent_id=rewired[i], operator=None, reference_id=None, contracted=True)

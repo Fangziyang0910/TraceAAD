@@ -1,4 +1,4 @@
-"""全树可行节点上的父代预算分配、交叉参考抽样与探索异质概览选择。"""
+"""全树可行节点上的父代预算分配、交叉参考抽样与探索代表抽样。"""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -23,7 +23,7 @@ OPERATOR_WEIGHTS = (0.50, 0.30, 0.20)
 @dataclass(frozen=True)
 class AllocationConfig:
     rank_half_life: float = 6.0
-    explore_references: int = 6
+    explore_references: int = 5
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.rank_half_life) or self.rank_half_life <= 0:
@@ -95,12 +95,18 @@ def reference_probabilities(
 def select_explore_references(
     tree: TreePopulation,
     parent_id: int,
+    rng: random.Random,
     config: AllocationConfig = AllocationConfig(),
     topology_config: TopologyConfig = TopologyConfig(),
     *,
     reps: Sequence[int] | None = None,
 ) -> tuple[int, ...]:
-    """在 S \\ {p} 非空时先取最优代表，再按相对 p 与已选集合的最大最小 AST 距离选出至多 M 个代表。"""
+    """从 S \\ {p}（去除与 p 源码相同者）中不放回依次抽取至多 M 个代表。
+
+    候选 q 的权重为池内名次衰减 2**(-r(q) / h) 乘以 q 到 {p} 与已选代表的最小 AST 距离；
+    名次衰减每轮以剩余候选中的最优名次为基准（不改变抽样分布，只避免极小 h 下的浮点下溢）。
+    距离为零的候选不参与抽样，没有正距离候选时提前停止。
+    """
     if config.explore_references == 0:
         return ()
     parent_ident = identity(tree.nodes[parent_id].code)
@@ -108,17 +114,19 @@ def select_explore_references(
     pool = [i for i in core if i != parent_id and identity(tree.nodes[i].code) != parent_ident]
     if not pool:
         return ()
-    chosen = [min(pool, key=lambda i: (tree.nodes[i].fitness, i))]  # type: ignore[arg-type]
-    while len(chosen) < min(config.explore_references, len(pool)):
-        anchors = (parent_id, *chosen)
-        chosen.append(max(
-            (i for i in pool if i not in chosen),
-            key=lambda i: (
-                min(code_distance(tree.nodes[j].code, tree.nodes[i].code) for j in anchors),
-                -float(tree.nodes[i].fitness),  # type: ignore[arg-type]
-                -i,
-            ),
-        ))
+    rank = ranks(tree, pool)
+    nearest = {i: code_distance(tree.nodes[parent_id].code, tree.nodes[i].code) for i in pool}
+    chosen: list[int] = []
+    while len(chosen) < config.explore_references:
+        remaining = [i for i in pool if i not in chosen and nearest[i] > 0.0]
+        if not remaining:
+            break
+        best = min(rank[i] for i in remaining)
+        weights = [2.0 ** (-(rank[i] - best) / config.rank_half_life) * nearest[i] for i in remaining]
+        pick = rng.choices(remaining, weights=weights, k=1)[0]
+        chosen.append(pick)
+        for i in pool:
+            nearest[i] = min(nearest[i], code_distance(tree.nodes[pick].code, tree.nodes[i].code))
     return tuple(chosen)
 
 
@@ -128,7 +136,7 @@ def allocate_step(
     config: AllocationConfig = AllocationConfig(),
     topology_config: TopologyConfig = TopologyConfig(),
 ) -> tuple[int, Operator, int | None, tuple[int, ...]]:
-    """先在全树可行节点上抽样主父代 p，再按先验选择算子并配对交叉参考或探索概览代表。"""
+    """先在全树可行节点上抽样主父代 p，再按先验选择算子并配对交叉参考或探索代表。"""
     parent_id = select_parent(tree, rng, config)
     operator = rng.choices(OPERATORS, weights=OPERATOR_WEIGHTS, k=1)[0]
     if operator == "Refine":
@@ -140,4 +148,6 @@ def allocate_step(
             return parent_id, "Refine", None, ()
         ref_id = rng.choices(list(ref_probs), weights=list(ref_probs.values()), k=1)[0]
         return parent_id, "Crossover", ref_id, ()
-    return parent_id, "Explore", None, select_explore_references(tree, parent_id, config, topology_config, reps=reps)
+    return parent_id, "Explore", None, select_explore_references(
+        tree, parent_id, rng, config, topology_config, reps=reps
+    )

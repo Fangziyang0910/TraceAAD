@@ -1,4 +1,4 @@
-"""树状种群、候选解析（code + design）与搜索记录模型。"""
+"""树状种群、候选解析（analysis + code + design）与搜索记录模型。"""
 
 from dataclasses import dataclass, field
 import json
@@ -25,7 +25,7 @@ def json_schema(name: str, *fields: str) -> dict:
     }
 
 
-CANDIDATE_RESPONSE_FORMAT = json_schema("evotrace_candidate", "code", "design")
+CANDIDATE_RESPONSE_FORMAT = json_schema("evotrace_candidate", "analysis", "code", "design")
 
 _CTRL_REPAIR = str.maketrans({"\x08": r"\b", "\x0c": r"\f", "\r": " ", "\t": " "})
 
@@ -96,7 +96,6 @@ class Edge:
 class TreePopulation:
     """虚拟根编号固定为 ROOT_ID=0；算法节点与入边均按节点 id 索引。"""
 
-    root_experience: str = ""
     nodes: dict[int, Node] = field(default_factory=dict)
     edges: dict[int, Edge] = field(default_factory=dict)
 
@@ -109,7 +108,6 @@ class TreePopulation:
     @classmethod
     def from_dict(cls, data: dict) -> "TreePopulation":
         return cls(
-            root_experience=clean_text(data.get("root_experience", "")),
             nodes={int(i): Node(**n) for i, n in data["nodes"].items()},
             edges={int(i): Edge(**e) for i, e in data["edges"].items()},
         )
@@ -131,6 +129,7 @@ class Program:
     parent_id: int | None
     reference_id: int | None
     evaluation: Evaluation | None
+    analysis: str | None = None
 
     @property
     def valid(self) -> bool:
@@ -145,11 +144,12 @@ class Program:
 
 
 class FormatError(ValueError):
-    """The model reply does not contain the code/design JSON object."""
+    """The model reply does not contain the analysis/code/design JSON object."""
 
 
 @dataclass(frozen=True)
 class Candidate:
+    analysis: str
     code: str
     design: str
 
@@ -161,12 +161,12 @@ class Candidate:
             raise FormatError(str(exc)) from exc
         if not isinstance(value, dict):
             raise FormatError(f"Expected a JSON object, got {type(value).__name__}")
-        if tuple(value) != ("code", "design"):
-            raise FormatError('Expected JSON keys ("code", "design") in exact order without extra fields')
-        for name in ("code", "design"):
+        if tuple(value) != ("analysis", "code", "design"):
+            raise FormatError('Expected JSON keys ("analysis", "code", "design") in exact order without extra fields')
+        for name in ("analysis", "code", "design"):
             if not isinstance(value.get(name), str) or not value[name].strip():
                 raise FormatError(f"Field {name!r} must be a nonempty string")
-        return cls(code=value["code"], design=clean_text(value["design"]))
+        return cls(analysis=value["analysis"], code=value["code"], design=clean_text(value["design"]))
 
 
 @dataclass(frozen=True)

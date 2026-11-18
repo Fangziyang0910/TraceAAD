@@ -41,7 +41,7 @@ class ScriptedModel:
             body = "raise ValueError('bad computation')"
         else:
             body = f"return (x + {n}) if x >= 0 else {n}"
-        return json.dumps({"code": f"def solve(x):\n    {body}\n", "design": f"Offset computation {n}"})
+        return json.dumps({"analysis": "Plan", "code": f"def solve(x):\n    {body}\n", "design": f"Offset computation {n}"})
 
 
 def test_last_evaluation_never_overshoots_budget_on_failed_candidate(tmp_path):
@@ -73,7 +73,7 @@ def test_initialization_completion_computes_core_set_and_simplifies_excess_init_
         search.step()
     assert search._initialized_count == 2
     assert len(search.core_ids) == 2
-    assert search.tree.root_experience == "Summarized factual computations and outcomes."
+    assert model.state["reflections"] == 0  # Root regions are removed without reflection.
     assert len(search.tree.nodes) == 2  # The 4 failed init nodes were pruned on init completion!
 
 
@@ -149,7 +149,7 @@ class Model:
         if n == 1:
             return ModelReply("{broken", usage={"total_tokens": 2})
         body = "raise ValueError('bad')" if n == 3 else f"return {50 - n}"
-        return ModelReply(json.dumps({"code": f"def solve(x):\n    {body}\n", "design": f"Design {n}"}), usage={"total_tokens": 4})
+        return ModelReply(json.dumps({"analysis": "Plan", "code": f"def solve(x):\n    {body}\n", "design": f"Design {n}"}), usage={"total_tokens": 4})
 
 task = Task("Minimize", "def solve(x):\n    pass\n", lambda src, fn: fn(1), 2)
 search = EvoTrace(task, Model(), config=Config(initial_size=2, evaluation_budget=10),
@@ -179,7 +179,7 @@ def make_task():
 
         def do_POST(self):
             requests.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
-            candidate = json.dumps({"code": "def solve(x):\n    return 1\n", "design": "Return one"})
+            candidate = json.dumps({"analysis": "Plan", "code": "def solve(x):\n    return 1\n", "design": "Return one"})
             body = json.dumps({"choices": [{"message": {"content": candidate}, "finish_reason": "stop"}],
                                "usage": {"total_tokens": 9}}).encode()
             self.send_response(200)
@@ -202,7 +202,7 @@ def make_task():
         thread.join()
         server.server_close()
     assert len(requests) == 2
-    assert requests[0]["response_format"]["json_schema"]["schema"]["required"] == ["code", "design"]
+    assert requests[0]["response_format"]["json_schema"]["schema"]["required"] == ["analysis", "code", "design"]
 
     # Also test unified experiment runner with evotrace.v4!
     from experiments.traceaad import run
@@ -225,7 +225,7 @@ def make_task():
                 state["reflections"] += 1
                 return json.dumps({"experience": "Condensed attempt outcomes."})
             state["calls"] += 1
-            return json.dumps({"code": f"def solve(x):\n    return {state['calls']}\n", "design": f"Constant {state['calls']}"})
+            return json.dumps({"analysis": "Plan", "code": f"def solve(x):\n    return {state['calls']}\n", "design": f"Constant {state['calls']}"})
 
     monkeypatch.setattr(run, "ROOT", tmp_path)
     monkeypatch.setattr(run, "load_environment", lambda *_: None)
@@ -262,7 +262,7 @@ def test_early_unevaluated_stop_marks_run_stopped_and_resumes_cleanly(tmp_path, 
             mode["calls"] += 1
             if mode["broken"] and mode["calls"] > 1:
                 raise TimeoutError("endpoint temporarily unavailable")
-            return json.dumps({"code": f"def solve(x):\n    return {mode['calls']}\n", "design": f"Const {mode['calls']}"})
+            return json.dumps({"analysis": "Plan", "code": f"def solve(x):\n    return {mode['calls']}\n", "design": f"Const {mode['calls']}"})
 
     monkeypatch.setattr(run, "ROOT", tmp_path)
     monkeypatch.setattr(run, "load_environment", lambda *_: None)

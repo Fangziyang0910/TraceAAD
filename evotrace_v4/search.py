@@ -2,7 +2,7 @@
 
 from contextlib import nullcontext
 from copy import copy
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 import random
@@ -46,7 +46,7 @@ class EvoTrace:
 
     method = "evotrace_v4"
     selection_rule = "tree_population_rank_direct_sampling"
-    generation_protocol = "tree_population_code_design"
+    generation_protocol = "tree_population_lineage_cards_analysis_code_design"
     mechanisms = (
         "tree_population",
         "reflective_elimination",
@@ -246,7 +246,7 @@ class EvoTrace:
             attempt.program_id = max(self.archive, default=0) + 1
         program = Program(
             attempt.program_id, candidate.code, candidate.design, attempt.operator,
-            attempt.parent_id, attempt.reference_id, evaluation,
+            attempt.parent_id, attempt.reference_id, evaluation, analysis=candidate.analysis,
         )
         self.archive[program.id] = program
         attempt.evaluations.append({
@@ -294,7 +294,8 @@ class EvoTrace:
                     response = self._call(attempt, prompt, program.evaluation.status)
                     repaired = self._parse(attempt, response) if response is not None else None
                     if repaired is not None and self.evaluations_used < self.config.evaluation_budget:
-                        self._evaluate(attempt, repaired)
+                        analysis = f"{program.analysis}\nRepair: {repaired.analysis}"
+                        self._evaluate(attempt, replace(repaired, analysis=analysis))
         simplified = self._update_population(attempt)
         attempt.finished_at = time.time()
         program = self.archive.get(attempt.program_id)

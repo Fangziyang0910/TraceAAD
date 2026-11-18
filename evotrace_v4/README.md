@@ -1,6 +1,8 @@
 # EvoTrace v4
 
-V4 以**树状种群（Tree-Structured Population）**统一组织候选算法、派生脉络与设计经验：虚拟根仅负责初始个体的出生，后续精化（`Refine`）、交叉（`Crossover`）与探索（`Explore`）均从在树可行个体 $p$ 派生子代 $v$ 建立新生边 $p \to v$，当前树上全部存活可行个体共同构成现役种群。每步在全树可行节点上按适应度排名与同一谱系位置已投入评价次数抽样主父代；当相邻骨架节点间的路径区或各骨架节点下的合并子树区累积达到局部阈值 $m$ 时，执行事实反思与同胚树归约，分别凝练为收缩边上的边经验（`edge.experience`）与保留骨架节点上的节点经验（`node.experience` 及虚拟根 $v_0$ 的 `root_experience`）。完整规范见 [V4 设计文档](../docs/EvoTrace-v4设计.md)。
+V4 以**树状种群（Tree-Structured Population）**统一组织候选算法、派生脉络与设计经验：虚拟根仅负责初始个体的出生，后续精化（`Refine`）、交叉（`Crossover`）与探索（`Explore`）均从在树可行个体 $p$ 派生子代 $v$ 建立新生边 $p \to v$，当前树上全部存活可行个体共同构成现役种群。每步在全树可行节点上按适应度排名与同一谱系位置已投入评价次数抽样主父代；当相邻骨架节点间的路径区或各骨架节点下的合并子树区累积达到局部阈值 $m$ 时，执行事实反思与同胚树归约，分别凝练为收缩边上的边经验（`edge.experience`）与保留算法节点上的节点经验（`node.experience`）；虚拟根下的子树区直接剪去。完整规范见 [V4 设计文档](../docs/EvoTrace-v4设计.md)。
+
+生成上下文由形成路径与个体卡片组成：精化读取主父代的形成路径、近期尝试与源码；交叉另读参考个体的卡片（设计、经验与源码）；探索读取主父代与至多 5 个异质代表的卡片，构思与它们都不同的计算，指令举出估计后续影响、构造并改进暂定解、求解子问题等通用计算方式。形成路径按生成意图标注各步，实际改动由设计简述与实测结果说明。默认算子先验为精化 0.50、交叉 0.30、探索 0.20，排名半衰期 $h=6$。
 
 本包仅依赖 Python 标准库，不依赖 V1–V3 或仓库内其他模块。
 
@@ -20,7 +22,7 @@ search = EvoTrace(
     task,
     model,
     config=Config(evaluation_budget=1000, initial_size=5),
-    allocation_config=AllocationConfig(rank_half_life=6.0, explore_references=6),
+    allocation_config=AllocationConfig(rank_half_life=6.0, explore_references=5),
     topology_config=TopologyConfig(max_representatives=24, cover_distance=0.15, region_size=4),
     run_dir="runs/example_v4",
 )

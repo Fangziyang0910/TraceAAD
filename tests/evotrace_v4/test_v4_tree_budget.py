@@ -183,7 +183,9 @@ def test_five_close_initial_algorithms_handle_empty_core_complement_in_explore_a
     inits = [add(tree, 0, float(k + 1), code=f"def solve(x):\n    return x + {k + 1}\n") for k in range(5)]
     p = inits[0]
     assert representatives(tree, cfg) == (p,)
-    assert select_explore_references(tree, p, alloc, cfg) == ()
+    assert select_explore_references(tree, p, random.Random(0), alloc, cfg) == ()
+    # A parent outside S whose only core member differs by constants (AST distance 0) gets no reference card.
+    assert select_explore_references(tree, inits[1], random.Random(0), alloc, cfg) == ()
     ref_probs = reference_probabilities(tree, p, alloc, cfg)
     assert set(ref_probs) == set(inits[1:])
     assert sum(ref_probs.values()) == pytest.approx(1.0)
@@ -198,6 +200,63 @@ def test_five_close_initial_algorithms_handle_empty_core_complement_in_explore_a
         parent_id, op, ref_id, _ = allocate_step(clone_tree, random.Random(seed), alloc, cfg)
         assert parent_id in {only, twin}
         assert op in {"Refine", "Explore"} and ref_id is None
+
+
+def test_explore_references_sample_distinct_core_members_without_replacement():
+    """复核探索代表抽样：从 S \\ {p} 不放回抽取至多 M 个互异代表，排除与 p 同码者，同一随机种子结果可复现。"""
+    cfg = TopologyConfig(max_representatives=24, cover_distance=0.15, region_size=4)
+    alloc = AllocationConfig(rank_half_life=6.0, explore_references=5)
+    tree = TreePopulation()
+    ids = [add(tree, 0, float(k + 1), code=distinct_code(k)) for k in range(9)]
+    p = ids[0]
+    reps = representatives(tree, cfg)
+    assert p in reps and len(reps) > 6
+    twin = add(tree, p, 0.5, code="# same computation\n" + tree.nodes[p].code)
+    pool = (*reps, twin)  # The twin enters the passed pool and must be filtered by source identity.
+    seen = set()
+    for seed in range(30):
+        chosen = select_explore_references(tree, p, random.Random(seed), alloc, cfg, reps=pool)
+        assert len(chosen) == 5 and len(set(chosen)) == 5
+        assert p not in chosen and twin not in chosen and set(chosen) <= set(reps)
+        assert chosen == select_explore_references(tree, p, random.Random(seed), alloc, cfg, reps=pool)
+        seen.update(chosen)
+    assert len(seen) > 5  # Sampling, not a fixed greedy set.
+    wide = AllocationConfig(rank_half_life=6.0, explore_references=24)
+    assert set(select_explore_references(tree, p, random.Random(0), wide, cfg, reps=pool)) == set(reps) - {p}
+
+
+def test_explore_reference_weights_use_pool_ranks_and_nearest_distance():
+    """复核每轮权重：池内名次衰减乘以到 {p} 与已选代表的最小 AST 距离。"""
+    cfg = TopologyConfig(max_representatives=24, cover_distance=0.15, region_size=4)
+    alloc = AllocationConfig(rank_half_life=6.0, explore_references=2)
+    tree = TreePopulation()
+    ids = [add(tree, 0, float(k + 1), code=distinct_code(k)) for k in range(6)]
+    p = ids[2]  # A parent in the middle of the ranking: pool ranks must exclude it.
+    reps = representatives(tree, cfg)
+
+    class Recorder:
+        def __init__(self):
+            self.rounds = []
+
+        def choices(self, population, weights, k=1):
+            self.rounds.append(dict(zip(population, weights)))
+            return [population[-1]]
+
+    rng = Recorder()
+    chosen = select_explore_references(tree, p, rng, alloc, cfg, reps=reps)
+    pool = [i for i in reps if i != p]
+    rank = ranks(tree, pool)
+    code = {i: tree.nodes[i].code for i in reps}
+    first, second = rng.rounds
+    best = min(rank.values())
+    assert first == pytest.approx({i: 2 ** (-(rank[i] - best) / 6.0) * code_distance(code[p], code[i]) for i in pool})
+    pick = chosen[0]
+    rest = [i for i in pool if i != pick]
+    best = min(rank[i] for i in rest)
+    assert second == pytest.approx({
+        i: 2 ** (-(rank[i] - best) / 6.0) * min(code_distance(code[p], code[i]), code_distance(code[pick], code[i]))
+        for i in rest
+    })
 
 
 @pytest.mark.parametrize(

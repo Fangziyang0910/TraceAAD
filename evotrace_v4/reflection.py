@@ -1,4 +1,4 @@
-"""反思式淘汰：被移除的路径区域凝练为边经验，子树区域凝练为骨架节点的节点经验（含 v_0）。"""
+"""反思式淘汰：被移除的路径区域凝练为边经验，算法节点下的子树区域凝练为该节点的节点经验；虚拟根下的子树区域直接移除。"""
 
 from collections.abc import Sequence
 from contextlib import nullcontext
@@ -39,21 +39,18 @@ def _origin(edge: Edge) -> str:
     if edge.contracted:
         return f"developed from Algorithm {edge.parent_id} over several steps"
     if edge.operator == "Crossover":
-        return f"combining Algorithm {edge.parent_id} with another algorithm"
+        return f"generated from Algorithm {edge.parent_id} aiming to combine it with another algorithm"
     if edge.operator == "Explore":
-        return f"rethinking the core computation from Algorithm {edge.parent_id}"
-    return f"modified from Algorithm {edge.parent_id}"
+        return f"generated from Algorithm {edge.parent_id} aiming at a different core computation"
+    return f"generated from Algorithm {edge.parent_id} aiming to improve it"
 
 
 def _record(
-    tree: TreePopulation, node_id: int, earlier: list[str], *,
-    retained: bool = False, attempts: bool = True, best_kept: float | None = None,
+    tree: TreePopulation, node_id: int, earlier: list[str], *, retained: bool = False, attempts: bool = True,
 ) -> str:
     node, edge = tree.nodes[node_id], tree.edges[node_id]
     parent = tree.nodes.get(edge.parent_id)
     result = outcome_text(None if parent is None else parent.fitness, node.fitness)
-    if parent is None and node.fitness is not None and best_kept is not None and node.fitness > best_kept:
-        result += f" (worse than best kept {best_kept:.6g})"
     name = f"Algorithm {node_id}" + (" (kept)" if retained else "")
     lines = [f"{name}, {_origin(edge)}: {result}", f"Design: {node.design}"]
     if node.fitness is None:
@@ -98,28 +95,14 @@ def build_reflection_prompt(tree: TreePopulation, region: Region, problem: str) 
                          "Side attempts along the way are included.")
     else:
         p = region.parent_id
+        if p == ROOT_ID:
+            raise ValueError("Subtree regions under the virtual root are removed without reflection")
         removed = sorted(region.removed_ids)
-        removed_set = set(removed)
-        best_kept = None
-        if p == ROOT_ID:
-            removed.sort(key=lambda i: (tree.nodes[i].fitness is None, tree.nodes[i].fitness or 0.0))
-            best_kept = min(
-                (n.fitness for k, n in tree.nodes.items() if k not in removed_set and n.fitness is not None),
-                default=None,
-            )
-        anchors = sorted({tree.edges[i].parent_id for i in removed} - removed_set - {ROOT_ID, p})
-        records = [] if p == ROOT_ID else [_anchor(tree, p, earlier, attempts=True)]
+        anchors = sorted({tree.edges[i].parent_id for i in removed} - set(removed) - {p})
+        records = [_anchor(tree, p, earlier, attempts=True)]
         records += [_anchor(tree, i, earlier) for i in anchors]
-        records += [_record(tree, i, earlier, best_kept=best_kept) for i in removed]
-        if p == ROOT_ID:
-            situation = ("The algorithms below were designed from scratch, together with any attempts made from "
-                         "them, listed from best to worst fitness (lower fitness is better).")
-            if root_exp := clean_text(tree.root_experience):
-                earlier.append(root_exp)
-                records.insert(0, "Earlier observations: " + root_exp)
-        else:
-            situation = (f"The algorithms below are attempts that started from Algorithm {p}, directly or from "
-                         "one another.")
+        records += [_record(tree, i, earlier) for i in removed]
+        situation = f"The algorithms below are attempts that started from Algorithm {p}, directly or from one another."
     prompt = PROMPT_TEMPLATE.format(problem=problem, situation=situation, records="\n\n".join(records))
     return prompt, list(dict.fromkeys(earlier))
 
@@ -134,11 +117,16 @@ def reflect_and_apply(
     max_tokens: int = 1536,
     timeout: float = 180.0,
 ) -> tuple[TreePopulation, list[dict]]:
-    """在同一更新前树状态上对各满块区域执行反思，写回边经验或骨架节点的节点经验（含 v_0）。"""
+    """在同一更新前树状态上对各满块区域执行反思，写回边经验或骨架节点的节点经验。
+
+    虚拟根下的子树区域只移除、不反思，因为虚拟根不是可供后续算子读取的算法个体。
+    """
     new_tree = apply_simplification(tree, regions)
     records: list[dict] = []
     for region in regions:
         is_edge = isinstance(region, PathContraction)
+        if not is_edge and region.parent_id == ROOT_ID:
+            continue
         prompt, earlier = build_reflection_prompt(tree, region, problem)
         usage, error = {}, None
         try:
@@ -154,8 +142,6 @@ def reflect_and_apply(
             experience = " ".join(earlier)
         if is_edge:
             new_tree.edges[region.child_id].experience = experience
-        elif region.parent_id == ROOT_ID:
-            new_tree.root_experience = experience
         else:
             new_tree.nodes[region.parent_id].experience = experience
         records.append({
