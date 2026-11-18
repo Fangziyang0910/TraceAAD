@@ -32,7 +32,7 @@ The population is a rooted tree $T=(\mathcal N\cup\{v_0\},\mathcal E)$. Nodes ho
 
 This representation gives population updates a role in organizing design experience. Paths record how algorithms develop through successive changes; branches record different developments from a shared ancestor. TREES reflects on these histories when their algorithms are eliminated, retaining edge experience $E_{u\to v}$ and node experience $E_u$ within the resulting tree. The figures abbreviate $E_{u\to v}$ as $E_{uv}$. Figure 1 shows how this experience returns to subsequent generation.
 
-![TREES population update and search](figures/evotrace/12-v3-experience-cycle.png)
+![TREES population update and search](figures/framework.png)
 
 **Figure 1. Reflective elimination connects population turnover to experience accumulation and reuse.** (a) Retaining $A$, $B$, $C$, and the virtual root divides the other nodes into a path region ($b_1,b_2,b_3,x$) and a subtree region ($s_1$–$s_4$). (b) Elimination and reflection condense the former into edge experience $E_{AB}$ and the latter into node experience $E_A$. Both regions meet the illustrated threshold $m=4$. (c) Representatives receive evaluation budget. Refinement and crossover read how the current algorithm was formed; exploration reads the designs and experience of different representatives. The evaluated offspring $N$ enters the next update.
 
@@ -48,7 +48,7 @@ Experience remains available for further consolidation as the population changes
 
 **Reflection.** Both operations use one reflection prompt. Each algorithm in the region appears once, as a record of its origin and outcome relative to its parent, its design description, its failure if any, the experience it carries, and its code. Retained parents outside the region appear with design and code as baselines. Designs let reflection write at the level of computational ideas, the level at which generation later reads experience; code exposes implementation defects that a design description omits. The prompt asks each finding to state the starting computation, the change tried, and the measured outcome, and to carry forward relevant earlier experience. A single eliminated trial confounds an idea with one implementation of it, so the prompt asks reflection not to turn such a trial into a general rule or prohibition. Appendix E.5 gives the prompt.
 
-![Experience accumulation across successive updates](figures/evotrace/13-v3-experience-accumulation.png)
+![Experience accumulation across successive updates](figures/reflective-simplification.png)
 
 **Figure 2. Design experience persists through successive population updates.** (a) Removing $D$ and $u_1$–$u_3$ integrates existing edge experience $E_{AD}$ with the subsequent development into $E_{AG}$. The endpoints $A$ and $G$ remain. (b) Pruning $y_1$–$y_4$ integrates their designs and outcomes with the existing node experience $E_A$. In both examples, previously formed experience enters the later reflection; the original algorithm nodes need not remain in the population.
 
@@ -162,7 +162,7 @@ Each reflected region contains 4–12 newly removed algorithms, with a median of
 
 ### 3.4. Population Turnover and Search Progress
 
-![Best training fitness and number of retained algorithms](../paper/figures/representative-search.png)
+![Best training fitness and number of retained algorithms](figures/representative-search.png)
 
 **Figure 3. Training fitness and population size under reflective elimination.** Upper panels show best training fitness; lower panels show the number of algorithm nodes after each evaluated attempt. Curves represent seeds 0–2 over the same first 240 program evaluations. All runs use the representative-cover and region-batching rules in Section 2.
 
@@ -207,7 +207,7 @@ This work studies automated algorithm design. Its potential benefits include red
 
 ## References
 
-References are rendered from `paper-references.bib` in the accompanying PDF.
+References are rendered from `references.bib` in the accompanying PDF.
 
 ## Appendix A. Background and Related Approaches
 
@@ -407,7 +407,7 @@ We select the earliest TSP update that incorporates an earlier edge summary, rem
 
 Two developments share ancestor $v_{17}$. One follows $v_{17}\to v_{19}\to v_{36}\to v_{70}$, moving from recursive lookahead to outgoing-edge estimates and then MST-based completion estimates, with exact enumeration for small remainders. Another follows $v_{17}\to v_{20}\to v_{66}$. It replaces a static completion estimate with an explicit remaining path, built by nearest neighbor and refined by limited 2-opt moves. Both branches already exist before the first reflection.
 
-![Recorded lineage fitness and reflection times](../paper/figures/inheritance-case.png)
+![Recorded lineage fitness and reflection times](figures/inheritance-case.png)
 
 **Figure 4. Two recorded TSP developments and subsequent experience inheritance.** Points show training fitness when the selected programs were evaluated; connecting lines follow their original parent relations. Vertical lines mark the later reflection updates. The complete removed regions also include side branches specified in Appendix F.2. The creation of $v_{66}$ precedes both reflections; $v_{98}$ is generated afterward.
 

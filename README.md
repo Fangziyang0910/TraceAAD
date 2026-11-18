@@ -8,9 +8,9 @@ EvoTrace（论文方法名 **TREES**）以树状种群记录算法的演化关�
 
 | 你想做什么 | 阅读入口 |
 | --- | --- |
-| 理解研究问题与核心思路 | [树状种群与反思简化](docs/树状种群与反思简化.md) |
+| 理解研究问题与核心思路 | [论文引言](paper/paper-中文.md#1-引言) |
 | 核对当前 V4 的规则、公式与参数 | [V4 设计](docs/EvoTrace-v4设计.md) |
-| 阅读完整研究稿、PDF与复现材料 | [论文与PDF](paper/README.md)、[英文主稿](docs/paper.md)、[中文对照](docs/paper-中文.md) |
+| 阅读完整研究稿、PDF与复现材料 | [论文与PDF](paper/README.md)、[英文主稿](paper/paper.md)、[中文对照](paper/paper-中文.md) |
 | 撰写论文或选择投稿场合 | [顶会顶刊论文写作指南](docs/顶会顶刊论文写作指南.md) |
 | 复查历史版本的设计 | [V1](docs/EvoTrace-v1设计.md)、[V2](docs/EvoTrace-v2设计.md)、[V3](docs/EvoTrace-v3设计.md) |
 | 了解 Base 的个体表示、上下文与提示 | [Base设计](docs/TraceAAD-Base设计.md) |

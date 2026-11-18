@@ -1,5 +1,5 @@
-% Markdown SHA256: 229771e1a97ca857edaf2b2fcd4e8fc52b21bf1d21745a6f1d919e1011552459
-% Generated from docs/ by paper/build.py. Edit the Markdown source.
+% Markdown SHA256: b307fd6a162d736a48e6bc8d207e5a112ec96580b7ebcb9f45d3b5e4541c3765
+% Generated from the Markdown manuscript by paper/build.py.
 \documentclass{article}
 \makeatletter
 \def\input@path{{vendor/icml2027/}}
@@ -115,32 +115,38 @@
 
 设 \(\mathcal P\) 为树上的可行节点。对标准化源码与适应度均相同的重复节点，仅以最早节点作为候选，得到 \(\mathcal D\)。将候选按适应度升序排列，同分按节点编号排序，记为 \((v_1,\ldots,v_{|\mathcal D|})\)。从 \(R_0=\varnothing\) 开始选择至多 \(K\) 个代表：
 
-\[\begin{aligned}
+\[
+\begin{aligned}
 R_k &= R_{k-1} \cup \bigl\{v_k : |R_{k-1}| < K,\\
 &\qquad d(v_k,u)\geq\delta\quad\forall u\in R_{k-1}\bigr\},\\
 R &= R_{|\mathcal D|}.
 \end{aligned}
-\tag{1}\]
+\tag{1}
+\]
 
 其中 \(d\) 为抽象语法树（abstract syntax tree，AST）特征的多重集Jaccard距离。若排序更早的代表与候选的语法结构足够接近，阈值 \(\delta\) 阻止该候选进入 \(R\)。最优可行算法进入 \(R\)，同分按节点编号确定。代码表示与默认设置见附录E。
 
 令 \(\operatorname{LCA}_T(R)\) 表示代表两两之间的最近公共祖先（lowest common ancestor，LCA）。额外分叉节点集 \(F\) 补齐保留骨架 \(\mathcal H\)：
 
-\[\begin{aligned}
+\[
+\begin{aligned}
 F &= \operatorname{LCA}_T(R)\setminus(R\cup\{v_0\}),\\
 \mathcal H &= \{v_0\}\cup R\cup F.
 \end{aligned}
-\tag{2}\]
+\tag{2}
+\]
 
 若两个骨架节点之间的路径内部没有其他骨架节点，则称它们沿该路径相邻。每条非空中间链及其沿途分支组成一个路径区域；其余非骨架分支按最近骨架祖先归集为子树区域。保留LCA使这些区域互不相交，每个非骨架节点恰好归入一个区域。
 
 TREES在区域包含至少 \(m\) 个非骨架节点时才执行简化，使一次反思能够结合多个新移除算法。设区域划分为 \(\mathcal C\)，移除节点的并集为 \(\mathcal U\)，保留节点集为 \(\mathcal K\)：
 
-\[\begin{aligned}
+\[
+\begin{aligned}
 \mathcal U &= \bigcup_{C\in\mathcal C:\,|C|\geq m} C,\\
 \mathcal K &= (\mathcal N\cup\{v_0\})\setminus\mathcal U.
 \end{aligned}
-\tag{3}\]
+\tag{3}
+\]
 
 全部反思读取更新前的树。随后收缩达到阈值的路径区域、剪除达到阈值的子树区域，并按第2.2节所述保存经验；较小区域暂留在树上。仅 \(R\) 中的节点参与父代抽样，分叉节点与暂留区域提供结构和上下文。
 
@@ -152,11 +158,13 @@ TREES在区域包含至少 \(m\) 个非骨架节点时才执行简化，使一�
 
 \(n_r\) 统计以代表 \(r\) 为主父代生成子代时消耗的评价次数，包括失败与修复后的再次评价。令 \(\bar\rho_R(r)\) 为其平均适应度名次，同分取平均名次，\(\Delta\bar\rho_R(r)=\bar\rho_R(r)-\min_{u\in R}\bar\rho_R(u)\)。定义
 
-\[\begin{aligned}
+\[
+\begin{aligned}
 w(r) &= \frac{2^{-\Delta\bar\rho_R(r)/H}}{1+n_r},\\
 P(r) &= \frac{w(r)}{\sum_{u\in R}w(u)}.
 \end{aligned}
-\tag{4}\]
+\tag{4}
+\]
 
 半衰期 \(H\) 控制权重随适应度名次下降的速度，\(1/(1+n_r)\) 随子代评价次数累积降低权重。新节点从 \(n_r=0\) 起计，简化保持存活节点的计数不变。因此，新加入的代表依据自身的搜索投入获得权重，而祖先轨迹与经验仍可用于生成。
 

@@ -2,7 +2,7 @@
 from pathlib import Path
 import hashlib,json,re,statistics,subprocess
 P=Path(__file__).resolve().parent;R=P.parent
-texts=[(R/'docs'/f).read_text() for f in ['paper.md','paper-中文.md']]
+texts=[(P/f).read_text() for f in ['paper.md','paper-中文.md']]
 titles={
  'en':'Reflective Elimination: Accumulating Design Experience in Tree-Structured Algorithm Populations',
  'zh':'反思式淘汰：在树状算法种群中积累设计经验',
@@ -67,21 +67,17 @@ assert case['earlier']['target_id'] in case['later']['region']['branch_ids']
 assert case['following']['context']['parent_id']==case['later']['target_id']==66
 assert case['following']['program']['evaluation']['fitness']>next(p['evaluation']['fitness'] for p in case['programs'] if p['id']==66)
 report['case']={'seed':case['seed'],'reflection_evaluations':[97,104],'following_attempt':98,'complete_prompt_matches':True}
-assert (P/'references.bib').read_bytes()==(R/'docs/paper-references.bib').read_bytes()
-
 template=P/'vendor/icml2027'
 provenance=json.loads((template/'SOURCE.json').read_text())
 for file,digest in provenance['files'].items():
  assert hashlib.sha256((template/file).read_bytes()).hexdigest()==digest,file
 report['official_template']='ICML 2027; vendored files match their recorded download hashes'
 
-record=json.loads((R/'docs/figures/evotrace/current-generation-record.json').read_text())
+record=json.loads((P/'figures/current-generation-record.json').read_text())
 report['figure_hashes']={}
 for figure in record['figures']:
- original=R/'docs/figures/evotrace'/figure['file']
- copy=R/figure['paper_copy']
- digest=hashlib.sha256(original.read_bytes()).hexdigest()
- assert digest==figure['sha256']==hashlib.sha256(copy.read_bytes()).hexdigest()
+ digest=hashlib.sha256((R/figure['file']).read_bytes()).hexdigest()
+ assert digest==figure['sha256'],figure['file']
  report['figure_hashes'][figure['file']]=digest
 
 report['layout']={}

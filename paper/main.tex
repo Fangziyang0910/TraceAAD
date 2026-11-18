@@ -1,5 +1,5 @@
-% Markdown SHA256: f9713bf8328a1e86ff764ebf249772f146d92879e2f196aa8a79f3d010553a51
-% Generated from docs/ by paper/build.py. Edit the Markdown source.
+% Markdown SHA256: 57841fc2e160875cf83262c43a7bcaf53679fe4487bec38c3e1b7ed8fab430f2
+% Generated from the Markdown manuscript by paper/build.py.
 \documentclass{article}
 \makeatletter
 \def\input@path{{vendor/icml2027/}}
@@ -98,32 +98,38 @@ The update must retain algorithms for further generation and the branching relat
 
 Let \(\mathcal P\) be the feasible nodes in \(T\). Deduplicate identical normalized source and fitness by retaining the earliest node as a candidate, yielding \(\mathcal D\). Order these candidates by increasing fitness, breaking ties by node ID, as \((v_1,\ldots,v_{|\mathcal D|})\). Starting from \(R_0=\varnothing\), select at most \(K\) representatives:
 
-\[\begin{aligned}
+\[
+\begin{aligned}
 R_k &= R_{k-1} \cup \bigl\{v_k : |R_{k-1}| < K,\\
 &\qquad d(v_k,u)\geq\delta\quad\forall u\in R_{k-1}\bigr\},\\
 R &= R_{|\mathcal D|}.
 \end{aligned}
-\tag{1}\]
+\tag{1}
+\]
 
 Here \(d\) is multiset Jaccard distance over abstract syntax tree (AST) features. The threshold \(\delta\) prevents a candidate from entering \(R\) when an earlier representative has sufficiently similar syntax. The best feasible algorithm enters \(R\), with ties resolved by node ID. Appendix E specifies the code representation and defaults.
 
 Let \(\operatorname{LCA}_T(R)\) denote the pairwise lowest common ancestors (LCAs) of representatives. Additional branching nodes \(F\) complete the retained skeleton \(\mathcal H\):
 
-\[\begin{aligned}
+\[
+\begin{aligned}
 F &= \operatorname{LCA}_T(R)\setminus(R\cup\{v_0\}),\\
 \mathcal H &= \{v_0\}\cup R\cup F.
 \end{aligned}
-\tag{2}\]
+\tag{2}
+\]
 
 Two skeleton nodes are adjacent along a path when no other skeleton node lies strictly between them. Each nonempty intervening chain, together with its off-chain branches, forms a path region. All remaining non-skeleton branches form subtree regions grouped at their nearest skeleton ancestor. Retaining the LCAs makes these regions disjoint and assigns every non-skeleton node to exactly one region.
 
 TREES defers simplification until a region contains at least \(m\) non-skeleton nodes, allowing each reflection to consider several newly removed algorithms. For region partition \(\mathcal C\), the removed union \(\mathcal U\) and retained set \(\mathcal K\) are
 
-\[\begin{aligned}
+\[
+\begin{aligned}
 \mathcal U &= \bigcup_{C\in\mathcal C:\,|C|\geq m} C,\\
 \mathcal K &= (\mathcal N\cup\{v_0\})\setminus\mathcal U.
 \end{aligned}
-\tag{3}\]
+\tag{3}
+\]
 
 All reflections use the pre-update tree. Eligible paths are then contracted and eligible subtrees pruned, with their experience attached as described in Section 2.2. Smaller regions remain in the tree. Only nodes in \(R\) participate in parent sampling; branching nodes and deferred regions provide structure and context.
 
@@ -135,11 +141,13 @@ The maintained population supports two connected decisions: which algorithm rece
 
 Let \(n_r\) count evaluations spent generating offspring with representative \(r\) as the primary parent, including failures and re-evaluations after repair. Let \(\bar\rho_R(r)\) be its average fitness rank, with average ranks for ties, and \(\Delta\bar\rho_R(r)=\bar\rho_R(r)-\min_{u\in R}\bar\rho_R(u)\). Define
 
-\[\begin{aligned}
+\[
+\begin{aligned}
 w(r) &= \frac{2^{-\Delta\bar\rho_R(r)/H}}{1+n_r},\\
 P(r) &= \frac{w(r)}{\sum_{u\in R}w(u)}.
 \end{aligned}
-\tag{4}\]
+\tag{4}
+\]
 
 The half-life \(H\) controls the decrease in weight with fitness rank; \(1/(1+n_r)\) reduces the weight as offspring evaluations accumulate. A new node starts at \(n_r=0\), and simplification preserves surviving counts. A newly inserted representative therefore receives weight based on its own search history, while its ancestral trajectory and experience remain available for generation.
 

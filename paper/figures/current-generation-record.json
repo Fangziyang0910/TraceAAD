@@ -6,7 +6,7 @@
   "figures": [
     {
       "id": 1,
-      "file": "12-v3-experience-cycle.png",
+      "file": "paper/figures/framework.png",
       "source": "/home/fang/.codex/generated_images/01a1e820-3a3f-7ca1-a23c-621fc78d4ba8/exec-6c29a310-bf8f-4dcf-8f6b-27daf7372dd0.png",
       "size": [
         2061,
@@ -16,8 +16,6 @@
       "mode": "RGB",
       "bytes": 1717602,
       "sha256": "6d7878c2a8cd3d77f2e72cbaae55070f2e116e253eaab439a607b3a0b5c8b78d",
-      "paper_copy": "paper/figures/framework.png",
-      "paper_copy_sha256": "6d7878c2a8cd3d77f2e72cbaae55070f2e116e253eaab439a607b3a0b5c8b78d",
       "accepted_revision": 3,
       "generation_count": 3,
       "postprocessing": "None; byte-for-byte copy of the selected built-in imagegen output.",
@@ -42,7 +40,7 @@
     },
     {
       "id": 2,
-      "file": "13-v3-experience-accumulation.png",
+      "file": "paper/figures/reflective-simplification.png",
       "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-7c394960-3583-4e12-a753-bdcb15fa004d.png",
       "size": [
         1920,
@@ -52,8 +50,6 @@
       "mode": "RGB",
       "bytes": 1289376,
       "sha256": "ae63f5ab79ca13a6690ca2adeb05c518579de44cc883a6bb2bf57ab9aec1979f",
-      "paper_copy": "paper/figures/reflective-simplification.png",
-      "paper_copy_sha256": "ae63f5ab79ca13a6690ca2adeb05c518579de44cc883a6bb2bf57ab9aec1979f",
       "accepted_revision": 2,
       "generation_count": 2,
       "postprocessing": "None; byte-for-byte copy of the selected built-in imagegen output.",

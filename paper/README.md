@@ -13,11 +13,12 @@
 | 材料 | 入口 |
 | --- | --- |
 | 双语PDF | [英文](trees.pdf)、[中文](trees-中文.pdf) |
-| 可编辑正文 | [英文Markdown](../docs/paper.md)、[中文Markdown](../docs/paper-中文.md) |
-| 叙事与机制 | [研究概述](../docs/树状种群与反思简化.md)、[V3实现设计](../docs/EvoTrace-v3设计.md) |
+| 可编辑正文 | [英文Markdown](paper.md)、[中文Markdown](paper-中文.md) |
+| V3 机制与实验 | [V3实现设计](../docs/EvoTrace-v3设计.md)、[V3实验方案](../docs/EvoTrace-v3实验方案.md) |
 | 完整源码与PDF | [TREES材料包](TREES-paper-source.zip) |
 | 生成的LaTeX | [英文](main.tex)、[中文](main-zh.tex) |
-| 参考文献 | [共享BibTeX](../docs/paper-references.bib) |
+| 参考文献 | [共享BibTeX](references.bib) |
+| 机制图来源 | [生成记录与校验](figures/current-generation-record.json)、[生成提示](figures/current-generation-prompts.json) |
 | 已确定的任务与对照方法 | [四项任务及五个外部对照](../docs/记录/2026-11-16-EvoTrace对比任务筛选.md) |
 
 论文标题突出反思式淘汰如何在树状算法种群中积累设计经验；TREES用于指称完整搜索方法。EvoTrace仍是运行包、数据目录与历史记录的内部代号。论文PDF和材料包统一使用TREES文件名。

@@ -7,14 +7,9 @@ import zipfile
 P = Path(__file__).resolve().parent
 ROOT = P.parent
 files = [
-    'docs/paper.md', 'docs/paper-中文.md', 'docs/paper-references.bib',
-    'docs/树状种群与反思简化.md', 'docs/EvoTrace-v3设计.md', 'docs/EvoTrace-v3实验方案.md',
+    'paper/paper.md', 'paper/paper-中文.md',
+    'docs/EvoTrace-v3设计.md', 'docs/EvoTrace-v3实验方案.md',
     'docs/记录/2026-11-16-EvoTrace对比任务筛选.md', 'docs/记录/README.md',
-    'docs/figures/evotrace/README.md',
-    'docs/figures/evotrace/12-v3-experience-cycle.png',
-    'docs/figures/evotrace/13-v3-experience-accumulation.png',
-    'docs/figures/evotrace/current-generation-prompts.json',
-    'docs/figures/evotrace/current-generation-record.json',
     'paper/README.md', 'paper/build.py', 'paper/validate.py', 'paper/package.py',
     'paper/requirements.txt', 'paper/style.tex', 'paper/references.bib',
     'paper/main.tex', 'paper/main-zh.tex',

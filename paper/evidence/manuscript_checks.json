@@ -92,8 +92,8 @@
   },
   "official_template": "ICML 2027; vendored files match their recorded download hashes",
   "figure_hashes": {
-    "12-v3-experience-cycle.png": "6d7878c2a8cd3d77f2e72cbaae55070f2e116e253eaab439a607b3a0b5c8b78d",
-    "13-v3-experience-accumulation.png": "ae63f5ab79ca13a6690ca2adeb05c518579de44cc883a6bb2bf57ab9aec1979f"
+    "paper/figures/framework.png": "6d7878c2a8cd3d77f2e72cbaae55070f2e116e253eaab439a607b3a0b5c8b78d",
+    "paper/figures/reflective-simplification.png": "ae63f5ab79ca13a6690ca2adeb05c518579de44cc883a6bb2bf57ab9aec1979f"
   },
   "layout": {
     "en": {

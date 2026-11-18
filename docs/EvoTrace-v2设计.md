@@ -112,4 +112,4 @@ $\sigma$ 为 sigmoid 函数。$s$ 取代表适应度的中位数绝对偏差（m
 | 探索从路线中读到哪些经验 | 入口边经验与保留节点的选择经验 | 同时读取路线内部边上的变异经验 |
 | 上下文展示到什么范围 | 路径、子尝试和方向分别设数量窗口 | 先组织完整材料，仅在超过输入预算时缩减 |
 
-该修复批次的选择、输入材料及反思偏差另有固定状态记录。[V1 设计](EvoTrace-v1设计.md) · [V2 实现说明](../evotrace_v2/README.md) · [V2 修复与回放](../archive/documents_20261116_history/记录/2026-11-14-V2最小修复与回放.md) · [历史核对材料](../experiments_result/analysis/evotrace_design_documents_20261113/) · [论文引言](paper-中文.md#1-引言) · [V3 设计](EvoTrace-v3设计.md)
+该修复批次的选择、输入材料及反思偏差另有固定状态记录。[V1 设计](EvoTrace-v1设计.md) · [V2 实现说明](../evotrace_v2/README.md) · [V2 修复与回放](../archive/documents_20261116_history/记录/2026-11-14-V2最小修复与回放.md) · [历史核对材料](../experiments_result/analysis/evotrace_design_documents_20261113/) · [论文引言](../paper/paper-中文.md#1-引言) · [V3 设计](EvoTrace-v3设计.md)

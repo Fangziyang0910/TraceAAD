@@ -7,7 +7,6 @@ import shutil
 import subprocess
 
 P = Path(__file__).resolve().parent
-ROOT = P.parent
 parser = argparse.ArgumentParser()
 parser.add_argument('--pandoc')
 args = parser.parse_args()
@@ -86,11 +85,9 @@ def convert_body(markdown, language):
     graphics = []
     def figure(match):
         path, lead, tail = match.groups()
-        path = {'figures/evotrace/12-v3-experience-cycle.png': 'figures/framework.png',
-                'figures/evotrace/13-v3-experience-accumulation.png': 'figures/reflective-simplification.png',
-                '../paper/figures/early-search.png': 'figures/early-search.pdf',
-                '../paper/figures/representative-search.png': 'figures/representative-search.pdf',
-                '../paper/figures/inheritance-case.png': 'figures/inheritance-case.pdf'}[path]
+        path = {'figures/early-search.png': 'figures/early-search.pdf',
+                'figures/representative-search.png': 'figures/representative-search.pdf',
+                'figures/inheritance-case.png': 'figures/inheritance-case.pdf'}.get(path, path)
         caption = latex(lead.strip() + ' ' + tail.strip())
         number = len(graphics) + 1
         graphics.append('\\begin{figure*}[t]\n\\centering\n'
@@ -132,9 +129,8 @@ def convert_body(markdown, language):
     return result.replace('EVOTRACEALGORITHM', algorithm(language))
 
 
-shutil.copy2(ROOT/'docs/paper-references.bib', P/'references.bib')
 for language, source, name in [('en', 'paper.md', 'main'), ('zh', 'paper-中文.md', 'main-zh')]:
-    text = (ROOT/'docs'/source).read_text()
+    text = (P/source).read_text()
     title = latex(text.splitlines()[0][2:])
     display_title = title
     if language == 'en':
@@ -168,7 +164,7 @@ for language, source, name in [('en', 'paper.md', 'main'), ('zh', 'paper-中文.
 \makeatother
 \floatname{algorithm}{算法}
 ''' if language == 'zh' else '')
-    tex = r'''% Generated from docs/ by paper/build.py. Edit the Markdown source.
+    tex = r'''% Generated from the Markdown manuscript by paper/build.py.
 \documentclass{article}
 \makeatletter
 \def\input@path{{vendor/icml2027/}}

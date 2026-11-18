@@ -5,7 +5,7 @@
   "figures": [
     {
       "id": 1,
-      "file": "12-v3-experience-cycle.png",
+      "file": "paper/figures/framework.png",
       "source": "/home/fang/.codex/generated_images/01a1e820-3a3f-7ca1-a23c-621fc78d4ba8/exec-6c29a310-bf8f-4dcf-8f6b-27daf7372dd0.png",
       "generations": [
         {
@@ -37,7 +37,7 @@
     },
     {
       "id": 2,
-      "file": "13-v3-experience-accumulation.png",
+      "file": "paper/figures/reflective-simplification.png",
       "source": "/home/fang/.codex/generated_images/01a1e3fa-f800-7371-8974-8c64294a2da9/exec-7c394960-3583-4e12-a753-bdcb15fa004d.png",
       "generations": [
         {

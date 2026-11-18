@@ -4,7 +4,7 @@ EvoTrace V3 通过**反思式淘汰（Reflective Elimination）**，使树状种
 
 两类区域回答不同的设计问题。收缩路径形成的**边经验**记录一个保留算法如何从祖先演化而来。剪去旁支形成的**节点经验**记录从同一出发点还尝试过哪些改法。以后承载经验的节点或边若也被移除，这些观察会与新尝试一起进入下一次反思。由此，更新后的树既提供可供继续开发的代表算法，也提供与它们有关的演化经历。预算在代表之间分配，生成算子沿相应的路径、旁支或全局代表读取设计材料。
 
-论文使用方法名 **TREES（Tree-structured Reflective Evolutionary Search）**，题为 *Reflective Elimination: Accumulating Design Experience in Tree-Structured Algorithm Populations*。EvoTrace V3 为本版实现名。[论文引言](paper-中文.md#1-引言) · [实验方案](EvoTrace-v3实验方案.md)
+论文使用方法名 **TREES（Tree-structured Reflective Evolutionary Search）**，题为 *Reflective Elimination: Accumulating Design Experience in Tree-Structured Algorithm Populations*。EvoTrace V3 为本版实现名。[论文引言](../paper/paper-中文.md#1-引言) · [实验方案](EvoTrace-v3实验方案.md)
 
 ## 1. 树上个体、代表与派生关系
 
@@ -76,7 +76,7 @@ $$
 |\mathcal V|\le (2K-1)+(4K-1)(m-1)=4Km-2K-m.
 $$
 
-默认 $K=24,m=4$ 时上界为 332。简化保留代表集与存活节点间的祖先关系，在相同状态再次简化得到同一棵树，即单次更新幂等。上述上界只计树中算法节点。完整日志另行归档，源码和经验文本长度另受各自生成条件影响。[论文附录 C 的推导](paper-中文.md#附录-c-反思式淘汰的结构性质)
+默认 $K=24,m=4$ 时上界为 332。简化保留代表集与存活节点间的祖先关系，在相同状态再次简化得到同一棵树，即单次更新幂等。上述上界只计树中算法节点。完整日志另行归档，源码和经验文本长度另受各自生成条件影响。[论文附录 C 的推导](../paper/paper-中文.md#附录-c-反思式淘汰的结构性质)
 
 **评价与复现。** 同一次生成至多修复一次，格式修复与运行修复共用机会，最终受评实现入树。实际执行的评价均计费，包括失败和修复重评。纯模型请求单独记录。默认总预算为 1000 次程序评价。预算耗尽或连续 10 次尝试均未产生程序评价时，从完整档案选出适应度最好的可行实现，同分取较早编号。生成返回 `analysis`、`code` 和 `design`。演化上下文按完整条目展示，V3 不按输入长度裁剪，实际输入词元数写入调用记录。超过服务端窗口时，该次请求记为错误。
 
