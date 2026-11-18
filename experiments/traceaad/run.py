@@ -17,6 +17,11 @@ from benchmarks.tasks import ALL_TASKS, PRIMARY_SPLITS, heldout_task, scale_of_s
 import evotrace_v1
 import evotrace_v2
 import evotrace_v3
+import evotrace_v4
+from evotrace_v4.allocation import AllocationConfig as V4AllocationConfig
+from evotrace_v4.topology import TopologyConfig as V4TopologyConfig
+from evotrace_v4.cli import load_task as load_evotrace_v4_task
+from evotrace_v4.evaluation import Evaluator as EvoTraceV4Evaluator
 from evotrace_v3.allocation import AllocationConfig as V3AllocationConfig
 from evotrace_v3.topology import TopologyConfig as V3TopologyConfig
 from evotrace_v3.cli import load_task as load_evotrace_v3_task
@@ -37,10 +42,14 @@ from .scheduling import EVALUATION_WORKERS, REQUEST_OPTIONS, ScheduledEvaluator,
 ROOT = Path(__file__).resolve().parents[2]
 MEMORY_BYTES = 2 << 30
 TOPOLOGY_FIELDS = tuple(f.name for f in fields(V3TopologyConfig))
+ALLOCATION_FIELDS = tuple(f.name for f in fields(V4AllocationConfig))
+EVOTRACE_METHODS = {"evotrace_v1", "evotrace_v2", "evotrace_v3", "evotrace_v4"}
+TREE_PARAM_METHODS = {"evotrace_v3", "evotrace_v4"}
 METHODS = {"base": ("traceaad_base", traceaad_base.TraceAAD),
            "evotrace.v1": ("evotrace_v1", evotrace_v1.EvoTrace), "evotrace_v1": ("evotrace_v1", evotrace_v1.EvoTrace),
            "evotrace.v2": ("evotrace_v2", evotrace_v2.EvoTrace), "evotrace_v2": ("evotrace_v2", evotrace_v2.EvoTrace),
-           "evotrace.v3": ("evotrace_v3", evotrace_v3.EvoTrace), "evotrace_v3": ("evotrace_v3", evotrace_v3.EvoTrace)}
+           "evotrace.v3": ("evotrace_v3", evotrace_v3.EvoTrace), "evotrace_v3": ("evotrace_v3", evotrace_v3.EvoTrace),
+           "evotrace.v4": ("evotrace_v4", evotrace_v4.EvoTrace), "evotrace_v4": ("evotrace_v4", evotrace_v4.EvoTrace)}
 
 
 def configure_time_budget(task, seconds_per_instance):
@@ -64,7 +73,7 @@ def selection_rule_for(method):
 
 def request_options(method):
     module = {"evotrace_v1": evotrace_v1, "evotrace_v2": evotrace_v2,
-              "evotrace_v3": evotrace_v3}.get(METHODS[method][0])
+              "evotrace_v3": evotrace_v3, "evotrace_v4": evotrace_v4}.get(METHODS[method][0])
     if module is not None:
         return {**REQUEST_OPTIONS, "response_format": module.models.CANDIDATE_RESPONSE_FORMAT}
     return REQUEST_OPTIONS
@@ -81,9 +90,9 @@ def metadata_for(args, task, config, model):
         "selection_rule": selection_rule_for(args.method),
         "mechanisms": list(METHODS[args.method][1].mechanisms),
         "generation_protocol": METHODS[args.method][1].generation_protocol
-                               + ("+reference_code" if args.reference_code and METHODS[args.method][0] not in {"evotrace_v1", "evotrace_v2", "evotrace_v3"} else ""),
+                               + ("+reference_code" if args.reference_code and METHODS[args.method][0] not in EVOTRACE_METHODS else ""),
         "trajectory_reference_embedding": False,
-        "reference_code": args.reference_code or METHODS[args.method][0] == "evotrace_v3",
+        "reference_code": args.reference_code or METHODS[args.method][0] in TREE_PARAM_METHODS,
         "started_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
         "source_snapshot": str(ROOT), "task_definition": task.description(),
         "task_eval": task.metadata["settings"],
@@ -112,12 +121,14 @@ def evaluate_heldout(directory, name, best, scheduler, *, evaluation_seed,
     results = []
     for split in PRIMARY_SPLITS[name]:
         external = heldout_task(name, split, workers=1)
-        task_type = {"evotrace_v1": evotrace_v1.Task, "evotrace_v2": evotrace_v2.Task, "evotrace_v3": evotrace_v3.Task}.get(condition, Task)
+        task_type = {"evotrace_v1": evotrace_v1.Task, "evotrace_v2": evotrace_v2.Task,
+                     "evotrace_v3": evotrace_v3.Task, "evotrace_v4": evotrace_v4.Task}.get(condition, Task)
         task = task_type.from_evaluator(external, use_template_example=False)
         configure_time_budget(task, seconds_per_instance)
         task.evaluation_seed = evaluation_seed
         task.memory_limit_bytes = MEMORY_BYTES
-        evaluator_type = {"evotrace_v1": EvoTraceEvaluator, "evotrace_v2": EvoTraceV2Evaluator, "evotrace_v3": EvoTraceV3Evaluator}.get(condition, Evaluator)
+        evaluator_type = {"evotrace_v1": EvoTraceEvaluator, "evotrace_v2": EvoTraceV2Evaluator,
+                          "evotrace_v3": EvoTraceV3Evaluator, "evotrace_v4": EvoTraceV4Evaluator}.get(condition, Evaluator)
         evaluator = (ScheduledEvaluator(task, scheduler, directory.name + ":heldout",
                                         evaluator_factory=evaluator_type)
                      if scheduler else evaluator_type(task))
@@ -164,10 +175,11 @@ def main(argv=None):
     parser.add_argument("--model-timeout", type=float, default=600)
     parser.add_argument("--selection-temperature", type=float, default=1.0,
                         help="Boltzmann parent temperature in fitness units")
-    parser.add_argument("--rank-half-life", type=float, help="V3 quality weight half-life in representative ranks")
-    parser.add_argument("--max-representatives", type=int, help="V3 maximum mutually uncovered representatives")
-    parser.add_argument("--cover-distance", type=float, help="V3 AST shingle distance covered by a better representative")
-    parser.add_argument("--region-size", type=int, help="V3 minimum nodes per simplified path or subtree region")
+    parser.add_argument("--rank-half-life", type=float, help="V3/V4 quality weight half-life in ranks")
+    parser.add_argument("--explore-references", type=int, help="V3/V4 maximum diverse Explore overview cards")
+    parser.add_argument("--max-representatives", type=int, help="V3/V4 maximum mutually uncovered core representatives")
+    parser.add_argument("--cover-distance", type=float, help="V3/V4 AST shingle distance covered by a better representative")
+    parser.add_argument("--region-size", type=int, help="V3/V4 minimum nodes per simplified path or subtree region")
     parser.add_argument("--reference-code", action="store_true",
                         help="Crossover also shows the reference algorithm source")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
@@ -179,10 +191,10 @@ def main(argv=None):
     parser.add_argument("--skip-heldout", action="store_true")
     args = parser.parse_args(argv)
     args.experiment = args.experiment or METHODS[args.method][0]
-    for name in ("rank_half_life", *TOPOLOGY_FIELDS):
-        if getattr(args, name) is not None and METHODS[args.method][0] != "evotrace_v3":
-            parser.error(f"{name.replace('_', '-')} applies to EvoTrace V3 only")
-    if args.reference_code and METHODS[args.method][0] not in {"evotrace_v1", "evotrace_v2", "evotrace_v3"}:
+    for name in (*ALLOCATION_FIELDS, *TOPOLOGY_FIELDS):
+        if getattr(args, name) is not None and METHODS[args.method][0] not in TREE_PARAM_METHODS:
+            parser.error(f"{name.replace('_', '-')} applies to EvoTrace V3/V4 only")
+    if args.reference_code and METHODS[args.method][0] not in EVOTRACE_METHODS:
         parser.error("--reference-code applies to EvoTrace only")
     if not args.scheduler_socket and args.backend == "scheduled":
         parser.error("A resource scheduler socket is required")
@@ -198,18 +210,22 @@ def main(argv=None):
     method_id = METHODS[args.method][0]
     allocation_config = None
     topology_config = None
-    if method_id == "evotrace_v3":
-        allocation_config = V3AllocationConfig(
-            **({"rank_half_life": args.rank_half_life} if args.rank_half_life is not None else {}))
-        topology_config = V3TopologyConfig(**{
+    if method_id in TREE_PARAM_METHODS:
+        alloc_cls = V4AllocationConfig if method_id == "evotrace_v4" else V3AllocationConfig
+        topo_cls = V4TopologyConfig if method_id == "evotrace_v4" else V3TopologyConfig
+        allocation_config = alloc_cls(**{
+            key: getattr(args, key) for key in ALLOCATION_FIELDS if getattr(args, key) is not None})
+        topology_config = topo_cls(**{
             key: getattr(args, key) for key in TOPOLOGY_FIELDS if getattr(args, key) is not None})
-    evotrace = {"evotrace_v1": evotrace_v1, "evotrace_v2": evotrace_v2, "evotrace_v3": evotrace_v3}.get(method_id)
+    evotrace = {"evotrace_v1": evotrace_v1, "evotrace_v2": evotrace_v2,
+                "evotrace_v3": evotrace_v3, "evotrace_v4": evotrace_v4}.get(method_id)
     is_evotrace = evotrace is not None
     config_type = evotrace.Config if is_evotrace else Config
     config = config_type(evaluation_budget=args.budget, initial_size=args.initial_size,
                          seed=args.seed, max_tokens=args.max_tokens, model_timeout=args.model_timeout,
                          **({} if is_evotrace else {"selection_temperature": args.selection_temperature}))
-    task_loader = {"evotrace_v1": load_evotrace_task, "evotrace_v2": load_evotrace_v2_task, "evotrace_v3": load_evotrace_v3_task}.get(method_id, load_task)
+    task_loader = {"evotrace_v1": load_evotrace_task, "evotrace_v2": load_evotrace_v2_task,
+                   "evotrace_v3": load_evotrace_v3_task, "evotrace_v4": load_evotrace_v4_task}.get(method_id, load_task)
     task = task_loader(name=args.task)
     configure_time_budget(task, args.seconds_per_instance)
     task.memory_limit_bytes = MEMORY_BYTES
@@ -230,19 +246,22 @@ def main(argv=None):
     if args.resume and (directory / "run_config.json").exists():
         metadata = json.loads((directory / "run_config.json").read_text())
     if args.resume and allocation_config is not None:
+        alloc_cls = V4AllocationConfig if method_id == "evotrace_v4" else V3AllocationConfig
+        topo_cls = V4TopologyConfig if method_id == "evotrace_v4" else V3TopologyConfig
         native = json.loads((directory / "native" / "run_config.json").read_text())
-        if native.get("selection_rule") != evotrace_v3.EvoTrace.selection_rule:
+        if native.get("selection_rule") != METHODS[args.method][1].selection_rule:
             raise ValueError("Incompatible selection_rule; resume with the original frozen source")
         allocation = dict(native["allocation"])
-        if args.rank_half_life is not None:
-            allocation["rank_half_life"] = args.rank_half_life
-        allocation_config = V3AllocationConfig(**allocation)
+        for key in ALLOCATION_FIELDS:
+            if getattr(args, key) is not None:
+                allocation[key] = getattr(args, key)
+        allocation_config = alloc_cls(**allocation)
         topology = dict(native["topology"])
         for key in TOPOLOGY_FIELDS:
             if getattr(args, key) is not None:
                 topology[key] = getattr(args, key)
         try:
-            topology_config = V3TopologyConfig(**topology)
+            topology_config = topo_cls(**topology)
         except TypeError as exc:
             raise ValueError("Incompatible topology; resume with the original frozen source") from exc
     if allocation_config is not None:
@@ -261,11 +280,11 @@ def main(argv=None):
                               **({"allocation_config": allocation_config} if allocation_config is not None else {}),
                               **({"topology_config": topology_config} if topology_config is not None else {}),
                               **({"reference_code": True}
-                                 if args.reference_code and method_id != "evotrace_v3" else {}))
+                                 if args.reference_code and method_id not in TREE_PARAM_METHODS else {}))
     search.evaluator = ScheduledEvaluator(
         task, args.scheduler_socket, args.run_name + ":search",
         **({"evaluator_factory": {"evotrace_v1": EvoTraceEvaluator, "evotrace_v2": EvoTraceV2Evaluator,
-                                "evotrace_v3": EvoTraceV3Evaluator}[method_id]}
+                                "evotrace_v3": EvoTraceV3Evaluator, "evotrace_v4": EvoTraceV4Evaluator}[method_id]}
            if is_evotrace else {}),
     )
     reporter = Reporter(directory, metadata)

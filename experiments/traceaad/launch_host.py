@@ -16,7 +16,19 @@ from benchmarks.tasks import CO_TASKS, TASK_SHORT
 from experiments.infra.launcher import is_session_alive
 from traceaad_base.storage import write_json
 from traceaad_base.selection import SELECTION_RULE
-from .run import METHODS, TOPOLOGY_FIELDS, V3AllocationConfig, V3TopologyConfig, request_options, selection_rule_for
+from .run import (
+    ALLOCATION_FIELDS,
+    EVOTRACE_METHODS,
+    METHODS,
+    TOPOLOGY_FIELDS,
+    TREE_PARAM_METHODS,
+    V3AllocationConfig,
+    V3TopologyConfig,
+    V4AllocationConfig,
+    V4TopologyConfig,
+    request_options,
+    selection_rule_for,
+)
 from .scheduling import EVALUATION_WORKERS, scheduler_status
 
 
@@ -29,23 +41,24 @@ def _slug(method):
 
 def build_plan(args):
     plan = []
-    rank_half_life = getattr(args, "rank_half_life", None)
+    method_id = METHODS[args.method][0]
+    allocation = {key: getattr(args, key) for key in ALLOCATION_FIELDS
+                  if getattr(args, key, None) is not None}
     topology = {key: getattr(args, key) for key in TOPOLOGY_FIELDS
                 if getattr(args, key, None) is not None}
     if topology:
-        if METHODS[args.method][0] != "evotrace_v3":
-            raise ValueError("Topology triggers apply to EvoTrace V3 only")
-        V3TopologyConfig(**topology)
-    if rank_half_life is not None:
-        if METHODS[args.method][0] != "evotrace_v3":
-            raise ValueError("rank-half-life applies to EvoTrace V3 only")
-        V3AllocationConfig(rank_half_life=rank_half_life)
+        if method_id not in TREE_PARAM_METHODS:
+            raise ValueError("Topology triggers apply to EvoTrace V3/V4 only")
+        (V4TopologyConfig if method_id == "evotrace_v4" else V3TopologyConfig)(**topology)
+    if allocation:
+        if method_id not in TREE_PARAM_METHODS:
+            raise ValueError("Allocation triggers apply to EvoTrace V3/V4 only")
+        (V4AllocationConfig if method_id == "evotrace_v4" else V3AllocationConfig)(**allocation)
     slug = _slug(args.method)
     tasks = args.tasks if args.tasks is not None else CO_TASKS
     if not tasks or len(set(tasks)) != len(tasks) or any(task not in CO_TASKS for task in tasks):
         raise ValueError("tasks must be distinct members of co6")
     for task in tasks:
-        method_id = METHODS[args.method][0]
         for seed in range(args.repeats):
             name = f"{args.batch}_{TASK_SHORT[task]}_{method_id}_rep{seed + 1}"
             session = f"{args.batch}_{TASK_SHORT[task]}_{slug}_r{seed + 1}"
@@ -56,10 +69,10 @@ def build_plan(args):
                        "--budget", str(args.budget),
                        "--initial-size", str(args.initial_size), "--max-tokens", str(args.max_tokens),
                        "--model-timeout", str(args.model_timeout)]
-            if method_id not in {"evotrace_v1", "evotrace_v2", "evotrace_v3"}:
+            if method_id not in EVOTRACE_METHODS:
                 command += ["--selection-temperature", str(args.selection_temperature)]
-            if rank_half_life is not None:
-                command += ["--rank-half-life", str(rank_half_life)]
+            for key, value in allocation.items():
+                command += ["--" + key.replace("_", "-"), str(value)]
             for key, value in topology.items():
                 command += ["--" + key.replace("_", "-"), str(value)]
             if args.scheduler_socket:
@@ -111,10 +124,11 @@ def main(argv=None):
     parser.add_argument("--model-timeout", type=float, default=600)
     parser.add_argument("--selection-temperature", type=float, default=1.0,
                         help="Boltzmann parent temperature in fitness units")
-    parser.add_argument("--rank-half-life", type=float, help="V3 quality weight half-life in representative ranks")
-    parser.add_argument("--max-representatives", type=int, help="V3 maximum mutually uncovered representatives")
-    parser.add_argument("--cover-distance", type=float, help="V3 AST shingle distance covered by a better representative")
-    parser.add_argument("--region-size", type=int, help="V3 minimum non-skeleton nodes per simplified region")
+    parser.add_argument("--rank-half-life", type=float, help="V3/V4 quality weight half-life in ranks")
+    parser.add_argument("--explore-references", type=int, help="V3/V4 maximum diverse Explore overview cards")
+    parser.add_argument("--max-representatives", type=int, help="V3/V4 maximum mutually uncovered core representatives")
+    parser.add_argument("--cover-distance", type=float, help="V3/V4 AST shingle distance covered by a better representative")
+    parser.add_argument("--region-size", type=int, help="V3/V4 minimum non-skeleton nodes per simplified region")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
                         help="Time allowance per instance; their sum is the whole-task deadline")
     parser.add_argument("--scheduler-socket")
@@ -157,12 +171,15 @@ def main(argv=None):
         "pipeline": "search -> freeze training best -> independent held-out evaluation",
         "status": "planned", "plan": plan,
     }
-    if METHODS[args.method][0] in {"evotrace_v1", "evotrace_v2", "evotrace_v3"}:
+    method_id = METHODS[args.method][0]
+    if method_id in EVOTRACE_METHODS:
         manifest.pop("selection_temperature")
-    if METHODS[args.method][0] == "evotrace_v3":
-        manifest["allocation"] = asdict(V3AllocationConfig(
-            **({"rank_half_life": args.rank_half_life} if args.rank_half_life is not None else {})))
-        manifest["topology"] = asdict(V3TopologyConfig(**{
+    if method_id in TREE_PARAM_METHODS:
+        alloc_cls = V4AllocationConfig if method_id == "evotrace_v4" else V3AllocationConfig
+        topo_cls = V4TopologyConfig if method_id == "evotrace_v4" else V3TopologyConfig
+        manifest["allocation"] = asdict(alloc_cls(**{
+            key: getattr(args, key) for key in ALLOCATION_FIELDS if getattr(args, key) is not None}))
+        manifest["topology"] = asdict(topo_cls(**{
             key: getattr(args, key) for key in TOPOLOGY_FIELDS if getattr(args, key) is not None}))
     if not args.launch and not args.enqueue:
         print(json.dumps({"manifest": str(path), **manifest}, ensure_ascii=False, indent=2))

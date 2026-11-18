@@ -1,10 +1,11 @@
 # TraceAAD 统一实验入口
 
-保留 Base、EvoTrace V1–V3。使用 `--method` 选择；默认 `base`。EvoTrace 支持点号与下划线两种写法。V21–V24 源码、测试和旧入口已移入本地 `archive/trajectory_methods_20261116/`。
+保留 Base、EvoTrace V1–V4。使用 `--method` 选择；默认 `base`。EvoTrace 支持点号与下划线两种写法。V21–V24 源码、测试和旧入口已移入本地 `archive/trajectory_methods_20261116/`。
 
 | 方法 | 搜索实现 |
 | --- | --- |
 | `base` | Base 基础演化对照。 |
+| `evotrace.v4` | 独立EvoTrace v4：全树可行个体按排名与同一谱系位置投入抽样主父代，三算子统一建立真实父子派生边，局部满块路径收缩与合并子树剪枝凝练经验；[设计与用法](../../evotrace_v4/README.md)。 |
 | `evotrace.v3` | 独立EvoTrace v3：在贪心覆盖代表集上按名次质量与直接投入抽样父代，通过路径收缩与子树剪枝成批凝练边经验与节点经验；[设计与用法](../../evotrace_v3/README.md)。 |
 | `evotrace.v2` | 独立EvoTrace v2：按最近使用与质量差异一次选择，补齐必要分叉后联合剪枝和路径收缩；[设计与用法](../../evotrace_v2/README.md)。 |
 | `evotrace.v1` | 独立EvoTrace v1：自有搜索、任务、模型与评价实现，使用树状种群、反思简化、加权分配与三尺度上下文。 |

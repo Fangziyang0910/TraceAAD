@@ -9,13 +9,13 @@ EvoTrace（论文方法名 **TREES**）以树状种群记录算法的演化关�
 | 你想做什么 | 阅读入口 |
 | --- | --- |
 | 理解研究问题与核心思路 | [树状种群与反思简化](docs/树状种群与反思简化.md) |
-| 核对当前V3规则、公式与参数 | [V3正式设计](docs/EvoTrace-v3设计.md) |
+| 核对当前 V4 的规则、公式与参数 | [V4 设计](docs/EvoTrace-v4设计.md) |
 | 阅读完整研究稿、PDF与复现材料 | [论文与PDF](paper/README.md)、[英文主稿](docs/paper.md)、[中文对照](docs/paper-中文.md) |
 | 撰写论文或选择投稿场合 | [顶会顶刊论文写作指南](docs/顶会顶刊论文写作指南.md) |
 | 复查V1容量触发基线 | [V1正式设计](docs/EvoTrace-v1设计.md) |
 | 了解 Base 的个体表示、上下文与提示 | [Base设计](docs/TraceAAD-Base设计.md) |
 | 核对当前对照批次与已验证边界 | [实验与边界台账](docs/记录/README.md) |
-| 独立使用 EvoTrace 或接入任务与模型 | [V3](evotrace_v3/README.md)、[V2](evotrace_v2/README.md)、[V1](evotrace_v1/README.md) |
+| 独立使用 EvoTrace 或接入任务与模型 | [V4](evotrace_v4/README.md)、[V3](evotrace_v3/README.md)、[V2](evotrace_v2/README.md)、[V1](evotrace_v1/README.md) |
 | 通过公共调度器运行 EvoTrace 或 Base | [统一入口](experiments/traceaad/README.md) |
 | 设计、运行或复查实验 | [V3实验方案](docs/EvoTrace-v3实验方案.md)、[实验入口](experiments/README.md) |
 | 查阅第三方提示的来源版本 | [来源记录](baselines/UPSTREAM.md) |
@@ -24,6 +24,7 @@ EvoTrace（论文方法名 **TREES**）以树状种群记录算法的演化关�
 
 | 目录 | 内容 |
 | --- | --- |
+| `evotrace_v4/` | 独立EvoTrace v4：树即种群（全树存活可行节点竞争评价预算），统一父子生长（含探索基于主父代重构），局部满块反思式淘汰与可追溯派生上下文（仅输出 `design` + `code`）。 |
 | `evotrace_v3/` | 独立EvoTrace v3：选择覆盖代表集，依据适应度排名与子代评价次数抽样父代；结合反思执行路径收缩和子树剪枝，并按演化轨迹组织生成上下文。 |
 | `evotrace_v2/` | 独立EvoTrace v2：新算法经评价后加入树中并更新保留集合，对待移除区域执行反思，将经验保存在保留节点和边上。 |
 | `evotrace_v1/` | 独立EvoTrace v1：搜索循环、树状种群、反思简化、预算分配与三尺度生成，自带模型、评价和记录恢复。 |

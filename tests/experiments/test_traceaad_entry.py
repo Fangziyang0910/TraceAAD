@@ -29,6 +29,7 @@ def entry_environment(monkeypatch):
     monkeypatch.setattr(run, "load_evotrace_task", task)
     monkeypatch.setattr(run, "load_evotrace_v2_task", task)
     monkeypatch.setattr(run, "load_evotrace_v3_task", task)
+    monkeypatch.setattr(run, "load_evotrace_v4_task", task)
     monkeypatch.setattr(run, "ScheduledModel", Scheduled)
     monkeypatch.setattr(run, "load_environment", lambda _path: None)
 
@@ -39,6 +40,7 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         "evotrace.v1": ["tree_population", "reflective_simplification", "shinka_allocation", "multiscale_context"],
         "evotrace.v2": ["tree_population", "dynamic_reflective_simplification", "shinka_allocation", "multiscale_context"],
         "evotrace.v3": ["tree_population", "reflective_tree_simplification", "representative_cover_allocation", "tree_context"],
+        "evotrace.v4": ["tree_population", "reflective_elimination", "tree_node_allocation", "traceable_lineage_context"],
     }
     assert set(run.METHODS) == set(combinations) | {m.replace(".", "_") for m in combinations}
     arguments = ["--task", "tsp_construct", "--run-name", "test", "--batch", "test",
@@ -56,6 +58,12 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         assert metadata["method"] == metadata["experiment"] == directory
         if directory == "evotrace_v3":
             assert metadata["selection_rule"] == "representative_rank_direct_sampling"
+            assert metadata["allocation"] == {"rank_half_life": 10.0, "explore_references": 6}
+        if directory == "evotrace_v4":
+            assert metadata["selection_rule"] == "tree_population_rank_direct_sampling"
+            assert metadata["allocation"] == {"rank_half_life": 6.0, "explore_references": 6}
+            schema = metadata["llm"]["sampling"]["response_format"]["json_schema"]["schema"]
+            assert schema["required"] == ["design", "code"]
         mechanisms = combinations[method.replace("_", ".")]
         assert metadata["mechanisms"] == mechanisms
         assert metadata["trajectory_reference_embedding"] == (1 in mechanisms)
@@ -63,7 +71,7 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         for key in ("budget", "evaluation_execution", "task_eval",
                     "model_routing", "final_selection"):
             assert metadata[key] == base[key]
-        if directory in {"evotrace_v1", "evotrace_v2", "evotrace_v3"}:
+        if directory in {"evotrace_v1", "evotrace_v2", "evotrace_v3", "evotrace_v4"}:
             from evotrace_v1 import Config
             from dataclasses import asdict
             expected = asdict(Config())
@@ -135,35 +143,36 @@ def test_enqueue_saves_the_subset_without_starting_workers(tmp_path, monkeypatch
     assert not any(Path(row["run_dir"]).exists() for row in manifest["plan"])
 
 
-def test_v3_parameters_are_recorded_and_other_methods_reject_them(entry_environment, capsys):
+def test_v3_and_v4_parameters_are_recorded_and_other_methods_reject_them(entry_environment, capsys):
     args = ['--task', 'tsp_construct', '--run-name', 'span', '--batch', 'span',
-            '--scheduler-socket', '/fake', '--dry-run', '--rank-half-life', '5',
+            '--scheduler-socket', '/fake', '--dry-run', '--rank-half-life', '5', '--explore-references', '4',
             '--max-representatives', '16', '--cover-distance', '0.2', '--region-size', '3']
-    run.main(['--method', 'evotrace.v3', *args])
-    metadata = json.loads(capsys.readouterr().out)
-    assert metadata['allocation']['rank_half_life'] == 5
-    assert metadata['topology'] == {'max_representatives': 16, 'cover_distance': 0.2, 'region_size': 3}
+    for method in ('evotrace.v3', 'evotrace.v4'):
+        run.main(['--method', method, *args])
+        metadata = json.loads(capsys.readouterr().out)
+        assert metadata['allocation'] == {'rank_half_life': 5, 'explore_references': 4}
+        assert metadata['topology'] == {'max_representatives': 16, 'cover_distance': 0.2, 'region_size': 3}
     with pytest.raises(SystemExit):
         run.main(['--method', 'evotrace.v2', *args])
 
 
-def test_v3_batch_plan_forwards_allocation_and_topology():
+def test_v3_and_v4_batch_plan_forwards_allocation_and_topology():
     from argparse import Namespace
     from experiments.traceaad.launch_host import build_plan
-    args = Namespace(tasks=['tsp_construct'], method='evotrace.v3', batch='span',
-                     experiment='evotrace_v3', repeats=1, backend='scheduled', budget=1000,
-                     initial_size=5, max_tokens=16384, model_timeout=600,
-                     selection_temperature=1., trajectory_reference_embedding=None,
-                     scheduler_socket='/fake', seconds_per_instance=10., env_file=None,
-                     skip_heldout=False, rank_half_life=5.,
-                     max_representatives=16, cover_distance=0.2, region_size=3)
-    row, = build_plan(args)
-    at = row['command'].index('--rank-half-life')
-    assert row['command'][at+1] == '5.0'
-    for flag, value in [('--max-representatives', '16'), ('--cover-distance', '0.2'), ('--region-size', '3')]:
-        assert row['command'][row['command'].index(flag)+1] == value
+    for method, exp in (('evotrace.v3', 'evotrace_v3'), ('evotrace.v4', 'evotrace_v4')):
+        args = Namespace(tasks=['tsp_construct'], method=method, batch='span',
+                         experiment=exp, repeats=1, backend='scheduled', budget=1000,
+                         initial_size=5, max_tokens=16384, model_timeout=600,
+                         selection_temperature=1., trajectory_reference_embedding=None,
+                         scheduler_socket='/fake', seconds_per_instance=10., env_file=None,
+                         skip_heldout=False, rank_half_life=5., explore_references=4,
+                         max_representatives=16, cover_distance=0.2, region_size=3)
+        row, = build_plan(args)
+        for flag, value in [('--rank-half-life', '5.0'), ('--explore-references', '4'),
+                            ('--max-representatives', '16'), ('--cover-distance', '0.2'), ('--region-size', '3')]:
+            assert row['command'][row['command'].index(flag)+1] == value
     args.method = 'evotrace.v2'
-    with pytest.raises(ValueError, match='V3 only'):
+    with pytest.raises(ValueError, match='V3/V4 only'):
         build_plan(args)
 
 
