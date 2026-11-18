@@ -12,7 +12,7 @@ EvoTrace（论文方法名 **TREES**）以树状种群记录算法的演化关�
 | 核对当前 V4 的规则、公式与参数 | [V4 设计](docs/EvoTrace-v4设计.md) |
 | 阅读完整研究稿、PDF与复现材料 | [论文与PDF](paper/README.md)、[英文主稿](docs/paper.md)、[中文对照](docs/paper-中文.md) |
 | 撰写论文或选择投稿场合 | [顶会顶刊论文写作指南](docs/顶会顶刊论文写作指南.md) |
-| 复查V1容量触发基线 | [V1正式设计](docs/EvoTrace-v1设计.md) |
+| 复查历史版本的设计 | [V1](docs/EvoTrace-v1设计.md)、[V2](docs/EvoTrace-v2设计.md)、[V3](docs/EvoTrace-v3设计.md) |
 | 了解 Base 的个体表示、上下文与提示 | [Base设计](docs/TraceAAD-Base设计.md) |
 | 核对当前对照批次与已验证边界 | [实验与边界台账](docs/记录/README.md) |
 | 独立使用 EvoTrace 或接入任务与模型 | [V4](evotrace_v4/README.md)、[V3](evotrace_v3/README.md)、[V2](evotrace_v2/README.md)、[V1](evotrace_v1/README.md) |
