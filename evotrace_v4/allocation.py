@@ -17,7 +17,7 @@ from .topology import (
 )
 
 OPERATORS: tuple[Operator, ...] = ("Refine", "Crossover", "Explore")
-OPERATOR_WEIGHTS = (0.45, 0.25, 0.30)
+OPERATOR_WEIGHTS = (0.50, 0.30, 0.20)
 
 
 @dataclass(frozen=True)
