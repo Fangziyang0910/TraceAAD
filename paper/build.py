@@ -29,22 +29,22 @@ def latex(markdown):
 
 def algorithm(language):
     pairs = [
-        ('Task, evaluator, LLM, budget $B$, initial size $I$', '任务、评价器、LLM、预算 $B$、初始规模 $I$'),
-        ('Initialize $T$ with virtual root $v_0$', '初始化仅含虚拟根 $v_0$ 的树 $T$'),
-        ('budget remains and stopping rule is not met', '预算尚有剩余且未满足停止条件'),
-        ('fewer than $I$ feasible initial programs collected', '已获得的可行初始程序不足 $I$ 个'),
-        ('Choose initialization at $v_0$', '选择虚拟根上的初始化'),
-        ('Sample a representative parent and an operator', '抽样代表父代与生成算子'),
-        ('Build the corresponding generation context', '构造相应的生成上下文'),
-        ('Generate and evaluate; allow at most one repair', '生成并评价，期间至多修复一次'),
-        ('no program was evaluated', '没有程序进入评价'),
-        ('Attach the final evaluated program to its parent', '将最终被评价程序挂接至父代'),
-        ('Select representatives $R$ and skeleton $\\mathcal H$', '选择代表集 $R$ 与骨架 $\\mathcal H$'),
-        ('Partition non-skeleton nodes into regions', '将非骨架节点划分为区域'),
-        ('Reflect on eligible regions in the pre-update tree', '基于更新前的树反思达到阈值的区域'),
-        ('Contract paths and prune subtrees', '收缩路径并剪除子树'),
-        ('Store experience on retained edges and nodes', '将经验保存至保留的边和节点'),
-        ('best feasible program evaluated during search', '搜索中评价过的最优可行程序'),
+        ('Task interface, evaluator, LLM, budget $B$, initial size $N_0$', '任务接口、评价器、LLM、预算 $B$、初始规模 $N_0$'),
+        ('Initialize tree $T$ with virtual root $v_0$', '初始化仅含虚拟根 $v_0$ 的树 $T$'),
+        ('budget remains and stopping rule is not met', '评价预算尚有剩余且未满足停止条件'),
+        ('fewer than $N_0$ feasible initial heuristics or $\\mathcal P=\\varnothing$', '可行初始启发式不足 $N_0$ 个或 $\\mathcal P=\\varnothing$'),
+        ('Generate an initial heuristic under $v_0$', '在虚拟根 $v_0$ 下生成初始启发式'),
+        ('Sample parent $p\\in\\mathcal P$ and search operator', '从 $\\mathcal P$ 中抽样父代 $p$ 与搜索算子'),
+        ('Build prompt context from $T$', '从树 $T$ 构造提示上下文'),
+        ('Generate candidate and evaluate (at most one repair)', '生成候选程序并评价（至多修复一次）'),
+        ('no candidate was evaluated', '没有候选程序进入评价'),
+        ('Attach evaluated node $v$ under its parent and update counts', '将最终受评节点 $v$ 接入父代下并更新评价计数'),
+        ('fewer than $N_0$ feasible initial heuristics collected', '已获得的可行初始启发式不足 $N_0$ 个'),
+        ('Select representatives $R$ and skeleton $\\mathcal H$', '选出代表集 $R$ 并补齐骨架 $\\mathcal H$'),
+        ('Partition $\\mathcal V\\setminus\\mathcal H$ into path and subtree regions', '将非骨架节点划分为路径区域与子树区域'),
+        ('Reflect on regions with $|C|\\geq m$ using pre-update $T$', '基于更新前的树 $T$ 反思 $|C|\\geq m$ 的区域'),
+        ('Contract paths and prune subtrees; store $E_{u\\to w},E_u$', '收缩路径并剪除子树，保存边经验 $E_{u\\to w}$ 与节点经验 $E_u$'),
+        ('best feasible heuristic evaluated during search', '搜索中评价过的最优可行启发式'),
     ]
     s = [a if language == 'en' else b for a, b in pairs]
     return r'''\begin{algorithm}[H]
@@ -64,10 +64,9 @@ def algorithm(language):
     \STATE \textbf{continue}
   \ENDIF
   \STATE ''' + s[9] + r'''
-  \IF{''' + s[3] + r'''}
+  \IF{''' + s[10] + r'''}
     \STATE \textbf{continue}
   \ENDIF
-  \STATE ''' + s[10] + r'''
   \STATE ''' + s[11] + r'''
   \STATE ''' + s[12] + r'''
   \STATE ''' + s[13] + r'''

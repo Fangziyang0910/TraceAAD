@@ -8,7 +8,7 @@ P = Path(__file__).resolve().parent
 ROOT = P.parent
 files = [
     'paper/paper.md', 'paper/paper-中文.md',
-    'docs/EvoTrace-v3设计.md',
+    'docs/EvoTrace-v3设计.md', 'docs/EvoTrace-v4设计.md',
     'docs/记录/2026-11-16-EvoTrace对比任务筛选.md', 'docs/记录/README.md',
     'paper/README.md', 'paper/build.py', 'paper/validate.py', 'paper/package.py',
     'paper/requirements.txt', 'paper/style.tex', 'paper/references.bib',
