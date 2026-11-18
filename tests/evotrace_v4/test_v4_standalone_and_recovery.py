@@ -41,7 +41,7 @@ class ScriptedModel:
             body = "raise ValueError('bad computation')"
         else:
             body = f"return (x + {n}) if x >= 0 else {n}"
-        return json.dumps({"design": f"Offset computation {n}", "code": f"def solve(x):\n    {body}\n"})
+        return json.dumps({"code": f"def solve(x):\n    {body}\n", "design": f"Offset computation {n}"})
 
 
 def test_last_evaluation_never_overshoots_budget_on_failed_candidate(tmp_path):
@@ -149,7 +149,7 @@ class Model:
         if n == 1:
             return ModelReply("{broken", usage={"total_tokens": 2})
         body = "raise ValueError('bad')" if n == 3 else f"return {50 - n}"
-        return ModelReply(json.dumps({"design": f"Design {n}", "code": f"def solve(x):\n    {body}\n"}), usage={"total_tokens": 4})
+        return ModelReply(json.dumps({"code": f"def solve(x):\n    {body}\n", "design": f"Design {n}"}), usage={"total_tokens": 4})
 
 task = Task("Minimize", "def solve(x):\n    pass\n", lambda src, fn: fn(1), 2)
 search = EvoTrace(task, Model(), config=Config(initial_size=2, evaluation_budget=10),
@@ -179,7 +179,7 @@ def make_task():
 
         def do_POST(self):
             requests.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
-            candidate = json.dumps({"design": "Return one", "code": "def solve(x):\n    return 1\n"})
+            candidate = json.dumps({"code": "def solve(x):\n    return 1\n", "design": "Return one"})
             body = json.dumps({"choices": [{"message": {"content": candidate}, "finish_reason": "stop"}],
                                "usage": {"total_tokens": 9}}).encode()
             self.send_response(200)
@@ -202,7 +202,7 @@ def make_task():
         thread.join()
         server.server_close()
     assert len(requests) == 2
-    assert requests[0]["response_format"]["json_schema"]["schema"]["required"] == ["design", "code"]
+    assert requests[0]["response_format"]["json_schema"]["schema"]["required"] == ["code", "design"]
 
     # Also test unified experiment runner with evotrace.v4!
     from experiments.traceaad import run
@@ -225,7 +225,7 @@ def make_task():
                 state["reflections"] += 1
                 return json.dumps({"experience": "Condensed attempt outcomes."})
             state["calls"] += 1
-            return json.dumps({"design": f"Constant {state['calls']}", "code": f"def solve(x):\n    return {state['calls']}\n"})
+            return json.dumps({"code": f"def solve(x):\n    return {state['calls']}\n", "design": f"Constant {state['calls']}"})
 
     monkeypatch.setattr(run, "ROOT", tmp_path)
     monkeypatch.setattr(run, "load_environment", lambda *_: None)
@@ -241,3 +241,60 @@ def make_task():
     assert out["evaluations"] == 8 and state["reflections"] >= 1
     summary = json.loads((Path(out["run_dir"]) / "summary.json").read_text())
     assert summary["method"] == "evotrace_v4" and summary["status"] == "finished"
+
+
+def test_early_unevaluated_stop_marks_run_stopped_and_resumes_cleanly(tmp_path, monkeypatch, capsys):
+    from experiments.traceaad import run
+    from evotrace_v4.models import Program, Evaluation
+
+    task = Task("Minimize", "def solve(x):\n    pass\n", lambda src, fn: fn(1), 2,
+                metadata={"n_instance": 1, "settings": {"timeout_seconds": 2}})
+    mode = {"broken": True, "calls": 0}
+
+    class FlakyScheduled:
+        model = "offline-test"
+
+        def __init__(self, path, label):
+            self.path, self.scheduler = path, {"endpoints": []}
+            self.request_options = {}
+
+        def complete(self, prompt, **settings):
+            mode["calls"] += 1
+            if mode["broken"] and mode["calls"] > 1:
+                raise TimeoutError("endpoint temporarily unavailable")
+            return json.dumps({"code": f"def solve(x):\n    return {mode['calls']}\n", "design": f"Const {mode['calls']}"})
+
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_environment", lambda *_: None)
+    monkeypatch.setattr(run, "load_evotrace_v4_task", lambda **kwargs: task)
+    monkeypatch.setattr(run, "ScheduledModel", FlakyScheduled)
+    monkeypatch.setattr(run, "ScheduledEvaluator", lambda t, p, l, *, evaluator_factory: evaluator_factory(t))
+    monkeypatch.setattr(run.signal, "signal", lambda *_: None)
+
+    base_args = ["--method", "evotrace.v4", "--task", "tsp_construct", "--run-name", "flaky_v4",
+                 "--batch", "b1", "--budget", "4", "--initial-size", "2",
+                 "--scheduler-socket", "/fake", "--skip-heldout"]
+    run.main(base_args)
+    run_dir = tmp_path / "experiments_result" / "evotrace_v4" / "tsp_construct" / "flaky_v4"
+    summary_stopped = json.loads((run_dir / "summary.json").read_text())
+    assert summary_stopped["status"] == "stopped"
+    assert "consecutive_unevaluated_limit" in summary_stopped["error"]
+    assert not (run_dir / "heldout.json").exists()
+
+    # Recover endpoint and verify --resume progresses to full budget 4/4!
+    mode["broken"] = False
+    capsys.readouterr()
+    run.main([*base_args, "--resume"])
+    summary_done = json.loads((run_dir / "summary.json").read_text())
+    assert summary_done["status"] == "finished" and summary_done["budget_used"] == 4
+
+    # Verify evaluate_heldout rejects stale cache with wrong source_sha256 or split!
+    best = Program(1, "def solve(x):\n    return 1\n", "Const", "Init", 0, None, Evaluation("success", 1.0))
+    (run_dir / "heldout.json").write_text(json.dumps([{
+        "task": "tsp_construct", "split": "wrong_split", "node_id": 1,
+        "source_sha256": "badhash", "condition": "evotrace_v4",
+        "timeout_scope": "whole_task", "seconds_per_instance": 10.0, "evaluation_seeds": [0],
+    }]))
+    with pytest.raises(ValueError, match="different program or evaluation scope"):
+        run.evaluate_heldout(run_dir, "tsp_construct", best, None, evaluation_seed=0,
+                             seconds_per_instance=10.0, condition="evotrace_v4")

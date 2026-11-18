@@ -46,7 +46,7 @@ class EvoTrace:
 
     method = "evotrace_v4"
     selection_rule = "tree_population_rank_direct_sampling"
-    generation_protocol = "tree_population_design_code"
+    generation_protocol = "tree_population_code_design"
     mechanisms = (
         "tree_population",
         "reflective_elimination",
@@ -78,13 +78,13 @@ class EvoTrace:
         self.include_experiences = include_experiences
 
         self.tree = TreePopulation()
-        self.core_ids: tuple[int, ...] = ()
         self.model = with_output_format(model, CANDIDATE_RESPONSE_FORMAT)
         self.reflection_model = with_output_format(model, EXPERIENCE_SCHEMA, role=True)
         self.store = Store(run_dir)
         self.evaluator = Evaluator(task)
         self.archive: dict[int, Program] = {}
         self.attempts: list[Attempt] = []
+        self._resumed_at = 0
         if task.example_code is not None:
             self.archive[0] = Program(0, task.example_code, task.example_design, None, None, None, None)
         if resume:
@@ -100,8 +100,7 @@ class EvoTrace:
                 self._attach_evaluated_attempt(attempt)
                 if "tree_after" in row:
                     self.tree = TreePopulation.from_dict(row["tree_after"])
-            if self._initialized_count >= self.config.initial_size:
-                self.core_ids = representatives(self.tree, self.topology_config)
+            self._resumed_at = len(self.attempts)
         else:
             self.store.write("run_config.json", {
                 **self._run_settings(),
@@ -111,6 +110,12 @@ class EvoTrace:
     @property
     def _initialized_count(self) -> int:
         return sum(p.valid and p.operator == "Init" for p in self.archive.values())
+
+    @property
+    def core_ids(self) -> tuple[int, ...]:
+        if self._initialized_count < self.config.initial_size:
+            return ()
+        return representatives(self.tree, self.topology_config)
 
     def _run_settings(self) -> dict[str, Any]:
         return {
@@ -130,6 +135,8 @@ class EvoTrace:
         if saved is None:
             raise ValueError("Resume requires its original run_config.json")
         expected = json.loads(json.dumps(self._run_settings()))
+        if hasattr(self.model, "model") and "model" in saved:
+            expected["model"] = self.model.model
         differences = [key for key, value in expected.items() if saved.get(key) != value]
         if differences:
             raise ValueError(
@@ -160,7 +167,6 @@ class EvoTrace:
             return False
         if self._initialized_count < self.config.initial_size:
             return False
-        self.core_ids = representatives(self.tree, self.topology_config)
         regions = plan_simplification(self.tree, self.topology_config)
         if not regions:
             return False
@@ -173,7 +179,6 @@ class EvoTrace:
             ),
             timeout=min(self.config.model_timeout, 180.0),
         )
-        self.core_ids = representatives(self.tree, self.topology_config)
         return True
 
     @property
@@ -193,7 +198,8 @@ class EvoTrace:
     def stop_reason(self) -> str | None:
         if self.evaluations_used >= self.config.evaluation_budget:
             return "evaluation_budget_exhausted"
-        unevaluated = next((i for i, a in enumerate(reversed(self.attempts)) if a.evaluations), len(self.attempts))
+        recent = self.attempts[self._resumed_at:]
+        unevaluated = next((i for i, a in enumerate(reversed(recent)) if a.evaluations), len(recent))
         if unevaluated >= self.config.max_unevaluated:
             return "consecutive_unevaluated_limit"
         return None

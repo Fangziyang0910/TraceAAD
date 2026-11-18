@@ -1,4 +1,4 @@
-"""树状种群、候选解析（design + code）与搜索记录模型。"""
+"""树状种群、候选解析（code + design）与搜索记录模型。"""
 
 from dataclasses import dataclass, field
 import json
@@ -25,7 +25,7 @@ def json_schema(name: str, *fields: str) -> dict:
     }
 
 
-CANDIDATE_RESPONSE_FORMAT = json_schema("evotrace_candidate", "design", "code")
+CANDIDATE_RESPONSE_FORMAT = json_schema("evotrace_candidate", "code", "design")
 
 _CTRL_REPAIR = str.maketrans({"\x08": r"\b", "\x0c": r"\f", "\r": " ", "\t": " "})
 
@@ -139,20 +139,19 @@ class Program:
     @classmethod
     def from_dict(cls, data: dict) -> "Program":
         data = dict(data)
-        data.pop("analysis", None)
         if data["evaluation"] is not None:
             data["evaluation"] = Evaluation(**data["evaluation"])
         return cls(**data)
 
 
 class FormatError(ValueError):
-    """The model reply does not contain the design/code JSON object."""
+    """The model reply does not contain the code/design JSON object."""
 
 
 @dataclass(frozen=True)
 class Candidate:
-    design: str
     code: str
+    design: str
 
     @classmethod
     def parse(cls, response: str) -> "Candidate":
@@ -162,10 +161,12 @@ class Candidate:
             raise FormatError(str(exc)) from exc
         if not isinstance(value, dict):
             raise FormatError(f"Expected a JSON object, got {type(value).__name__}")
-        for name in ("design", "code"):
+        if tuple(value) != ("code", "design"):
+            raise FormatError('Expected JSON keys ("code", "design") in exact order without extra fields')
+        for name in ("code", "design"):
             if not isinstance(value.get(name), str) or not value[name].strip():
                 raise FormatError(f"Field {name!r} must be a nonempty string")
-        return cls(design=clean_text(value["design"]), code=value["code"])
+        return cls(code=value["code"], design=clean_text(value["design"]))
 
 
 @dataclass(frozen=True)

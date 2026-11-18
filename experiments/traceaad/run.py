@@ -113,9 +113,23 @@ def metadata_for(args, task, config, model):
 def evaluate_heldout(directory, name, best, scheduler, *, evaluation_seed,
                      seconds_per_instance=None, condition="traceaad_base"):
     path = directory / "heldout.json"
+    source_hash = hashlib.sha256(best.code.encode()).hexdigest()
+    expected_splits = list(PRIMARY_SPLITS[name])
     if path.exists():
         previous = json.loads(path.read_text())
-        if any(row["node_id"] != best.id or row.get("timeout_scope") != "whole_task" for row in previous):
+        if (
+            [row.get("split") for row in previous] != expected_splits
+            or any(
+                row.get("task") != name
+                or row.get("node_id") != best.id
+                or row.get("source_sha256") != source_hash
+                or row.get("condition") != condition
+                or row.get("timeout_scope") != "whole_task"
+                or row.get("seconds_per_instance") != seconds_per_instance
+                or row.get("evaluation_seeds") != [evaluation_seed]
+                for row in previous
+            )
+        ):
             raise ValueError("Existing held-out results have a different program or evaluation scope")
         return previous
     results = []
@@ -306,6 +320,15 @@ def main(argv=None):
         summary.update(status="stopped", error=f"{type(exc).__name__}: {exc}")
         write_json(directory / "summary.json", summary)
         raise
+    if result.status == "finished" and result.evaluations < config.evaluation_budget:
+        summary = json.loads((directory / "summary.json").read_text())
+        summary.update(
+            status="stopped",
+            error=f"Stopped early ({result.evaluations}/{config.evaluation_budget} evaluations): {result.stop_reason}",
+        )
+        write_json(directory / "summary.json", summary)
+        print(json.dumps({"run_dir": str(directory), **asdict(result)}, ensure_ascii=False), flush=True)
+        return
     seal_calls(directory / "native")
     if result.best is not None and not args.skip_heldout:
         evaluate_heldout(directory, args.task, result.best, args.scheduler_socket,

@@ -1,4 +1,4 @@
-"""反思式淘汰：被移除的路径区域凝练为边经验，子树区域凝练为节点经验（或根经验）。"""
+"""反思式淘汰：被移除的路径区域凝练为边经验，子树区域凝练为骨架节点的节点经验（含 v_0）。"""
 
 from collections.abc import Sequence
 from contextlib import nullcontext
@@ -19,8 +19,8 @@ PROMPT_TEMPLATE = """{problem}
 
 [Task]
 Record factual observations from the algorithms above, keeping earlier observations that still matter.
-State what each instructive attempt actually computed (relative to its starting computation, if modified) and its measured fitness or failure.
-Report specific computations and outcomes only, without rules, advice, or speculative reasons.
+For each instructive attempt, state what it actually computed (relative to its starting computation, if modified), its measured fitness or failure, and the stated outcome direction (improved, tied, or regressed; lower fitness is always better, including more negative values).
+Write concrete per-attempt computations and outcomes only; do not add concluding takeaways, general superiority claims, rules, advice, or speculative reasons.
 
 [Output]
 Return one JSON object with an "experience" string of about 120 words. Name computations, not algorithm numbers: these algorithms will not be shown again."""
@@ -134,7 +134,7 @@ def reflect_and_apply(
     max_tokens: int = 1536,
     timeout: float = 180.0,
 ) -> tuple[TreePopulation, list[dict]]:
-    """在同一更新前树状态上对各满块区域执行反思，写回边经验或节点经验（或根经验）。"""
+    """在同一更新前树状态上对各满块区域执行反思，写回边经验或骨架节点的节点经验（含 v_0）。"""
     new_tree = apply_simplification(tree, regions)
     records: list[dict] = []
     for region in regions:

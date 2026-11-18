@@ -63,7 +63,7 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
             assert metadata["selection_rule"] == "tree_population_rank_direct_sampling"
             assert metadata["allocation"] == {"rank_half_life": 6.0, "explore_references": 6}
             schema = metadata["llm"]["sampling"]["response_format"]["json_schema"]["schema"]
-            assert schema["required"] == ["design", "code"]
+            assert schema["required"] == ["code", "design"]
         mechanisms = combinations[method.replace("_", ".")]
         assert metadata["mechanisms"] == mechanisms
         assert metadata["trajectory_reference_embedding"] == (1 in mechanisms)

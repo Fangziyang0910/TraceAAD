@@ -163,18 +163,23 @@ def representatives(tree: TreePopulation, config: TopologyConfig = TopologyConfi
     return tuple(selected)
 
 
-def plan_simplification(tree: TreePopulation, config: TopologyConfig = TopologyConfig()) -> tuple[Region, ...]:
+def plan_simplification(
+    tree: TreePopulation,
+    config: TopologyConfig = TopologyConfig(),
+    *,
+    reps: Sequence[int] | None = None,
+) -> tuple[Region, ...]:
     """补齐核心保留集的 LCA 骨架，划分相邻骨架间的路径区与各骨架节点下的合并子树区，返回满块区域。"""
-    reps = set(representatives(tree, config))
+    reps_set = set(representatives(tree, config) if reps is None else reps)
     children = defaultdict(list)
     for i in sorted(tree.edges):
         children[tree.edges[i].parent_id].append(i)
-    used = set(reps)
+    used = set(reps_set)
     for i in sorted(tree.nodes, reverse=True):
         if i in used:
             used.add(tree.edges[i].parent_id)
     forks = {i for i in used if i != ROOT_ID and sum(c in used for c in children[i]) >= 2}
-    skeleton = reps | forks
+    skeleton = reps_set | forks
 
     chains: list[tuple[int, int, tuple[int, ...]]] = []
     chain_of: dict[int, int] = {}

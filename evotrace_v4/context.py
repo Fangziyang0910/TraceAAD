@@ -25,9 +25,9 @@ Design the computation performed by the following function to improve the comple
 
 [Output]
 Return exactly one valid JSON object with two string fields, in this order:
-- "design": In about 60 words, state the main computation implemented in "code" and its key parameters. Describe the computation itself, not reasoning about prior attempts or expected performance.
-- "code": Provide the complete implementation, including necessary imports and helper definitions.
-Keep "design" and "code" consistent. Preserve the required function signature and satisfy the task constraints and input/output requirements.
+- "code": Provide the complete implementation using only the inputs in [Function interface], including necessary imports and helper definitions.
+- "design": In about 60 words, state the main computation actually implemented in "code" and its key parameters. Describe the computation itself, not reasoning about prior attempts or expected performance.
+Keep "design" faithful to "code". Preserve the required function signature and satisfy the task constraints and input/output requirements.
 Return only the JSON object, without Markdown fences or additional text."""
 
 
@@ -100,6 +100,8 @@ def _lineage_blocks(
 ) -> tuple[list[str], set[tuple[str, int]]]:
     path = _path_from_root(tree, parent_id)
     rows = ["[Development of the Current Algorithm]"]
+    if include_experiences and (root_exp := clean_text(tree.root_experience)):
+        rows.append(f"Experience from other initial attempts: {root_exp}")
     for k, node_id in enumerate(path):
         node, edge = tree.nodes[node_id], tree.edges[node_id]
         prev = tree.nodes.get(edge.parent_id)
@@ -116,7 +118,7 @@ def _lineage_blocks(
     )
     if attempts_text is not None:
         blocks.append(attempts_text)
-    seen = {(kind, j) for j in (*path, *(c.id for c in shown)) for kind in ("edge", "node")}
+    seen = {(kind, j) for j in (ROOT_ID, *path, *(c.id for c in shown)) for kind in ("edge", "node")}
     return blocks, seen
 
 
@@ -165,7 +167,7 @@ def build_evolution_context(
     if operator == "Explore":
         blocks = []
         if include_experiences and (root_exp := clean_text(tree.root_experience)):
-            blocks.append("[Experience from Earlier Approaches]\n" + root_exp)
+            blocks.append("[Other Initial Attempts]\nExperience from other initial attempts: " + root_exp)
         attempts_text, direct_children = _attempts_block(tree, parent_id, include_experiences=include_experiences)
         direct_ids = {c.id for c in direct_children}
         shown = sorted(
@@ -181,10 +183,10 @@ def build_evolution_context(
                 for k, i in enumerate(shown, 1)
             ]
             blocks.append("\n\n".join(["[Other Existing Approaches]\nFrom best to worst fitness.", *cards]))
-        if attempts_text is not None:
-            blocks.append(attempts_text)
         edge_exp = tree.edges[parent_id].experience if include_experiences else ""
         blocks.append(_current_code(parent, include_design=True, edge_experience=edge_exp))
+        if attempts_text is not None:
+            blocks.append(attempts_text)
         instruction = (
             "Starting from the current algorithm and the existing approaches above, rethink how this task can be solved "
             "and implement an alternative whose core computation differs from both the current algorithm and the other approaches. "
@@ -199,10 +201,9 @@ def build_evolution_context(
         lineage, _ = _lineage_blocks(tree, parent_id, include_experiences=include_experiences)
         blocks = [*lineage, _current_code(parent)]
         instruction = (
-            "Improve the current algorithm by examining how it computes its result and where this computation can be improved. "
-            "Use the implementation, outcomes, and development experience to choose a meaningful modification. "
-            "You may revise its representation, the information it uses, or its procedure as well as its parameters; "
-            "implement a coherent improved algorithm."
+            "Improve the current algorithm while preserving its core computational approach. "
+            "Examine its implementation, outcomes, and development experience to identify where its sub-computations, "
+            "feature interactions, boundary handling, or parameters limit solution quality, and implement a targeted refinement."
         )
     elif operator == "Crossover":
         if reference_id is None or reference_id not in tree.nodes:

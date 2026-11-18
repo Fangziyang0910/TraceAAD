@@ -23,16 +23,20 @@ def add(tree, parent, fit, code=None, op="Refine"):
     return i
 
 
-def test_candidate_schema_and_parser_use_design_and_code_without_analysis():
+def test_candidate_schema_and_parser_use_code_and_design_without_analysis():
     schema = CANDIDATE_RESPONSE_FORMAT["json_schema"]["schema"]
-    assert schema["required"] == ["design", "code"]
-    assert list(schema["properties"]) == ["design", "code"]
+    assert schema["required"] == ["code", "design"]
+    assert list(schema["properties"]) == ["code", "design"]
     assert schema["additionalProperties"] is False
 
-    cand = Candidate.parse(json.dumps({"design": "  Greedy   step ", "code": "def solve(x):\n    return x\n"}))
-    assert cand == Candidate(design="Greedy step", code="def solve(x):\n    return x\n")
+    cand = Candidate.parse(json.dumps({"code": "def solve(x):\n    return x\n", "design": "  Greedy   step "}))
+    assert cand == Candidate(code="def solve(x):\n    return x\n", design="Greedy step")
     with pytest.raises(FormatError):
         Candidate.parse(json.dumps({"code": "def solve(x): return x"}))
+    with pytest.raises(FormatError):
+        Candidate.parse(json.dumps({"analysis": "draft", "code": "def solve(x): return x", "design": "Greedy step"}))
+    with pytest.raises(FormatError):
+        Candidate.parse('{"design": "Reversed order", "code": "def solve(x): return x"}')
 
 
 def test_explore_reads_parent_root_experience_and_optional_overview_without_other_rep_code():
@@ -52,10 +56,10 @@ def test_explore_reads_parent_root_experience_and_optional_overview_without_othe
     task = Task("Minimize", "def solve(x): pass", lambda s, f: f(1), 2)
     prompt = evolution_prompt(task, tree, parent, "Explore", explore_ids=(rep_far, rep_best))
     assert '"analysis"' not in prompt
-    assert '- "design":' in prompt and '- "code":' in prompt
-    assert prompt.index("[Experience from Earlier Approaches]") < prompt.index("[Other Existing Approaches]")
-    assert prompt.index("[Other Existing Approaches]") < prompt.index("[Attempts from the Current Algorithm]")
-    assert prompt.index("[Attempts from the Current Algorithm]") < prompt.index("[Current Algorithm]")
+    assert prompt.index('- "code":') < prompt.index('- "design":')
+    assert prompt.index("[Other Initial Attempts]") < prompt.index("[Other Existing Approaches]")
+    assert prompt.index("[Other Existing Approaches]") < prompt.index("[Current Algorithm]")
+    assert prompt.index("[Current Algorithm]") < prompt.index("[Attempts from the Current Algorithm]")
     assert prompt.index(f"Compute offset {rep_best}") < prompt.index(f"Compute offset {rep_far}")
 
     assert "ROOT_OBSERVATION" in prompt
@@ -90,16 +94,23 @@ def test_refine_and_crossover_record_explore_steps_and_contracted_edges_along_li
     b = add(tree, a, 8.0, op="Explore")
     current = add(tree, b, 6.0, op="Refine")
     reference = add(tree, a, 5.5, op="Refine")
+    tree.root_experience = "ROOT_BRANCH_NOTE"
     tree.nodes[a].experience = "A_NOTE"
     tree.edges[b].experience = "EXPLORE_EDGE_NOTE"
     tree.nodes[reference].experience = "REF_NOTE"
     before = deepcopy(tree)
 
     ctx_ref, _ = build_evolution_context(tree, current, "Refine")
+    assert "Experience from other initial attempts: ROOT_BRANCH_NOTE" in ctx_ref
+    assert ctx_ref.index("ROOT_BRANCH_NOTE") < ctx_ref.index("First version")
     assert "Step 1 (rethought with a different core computation): 10 -> 8 (improved)" in ctx_ref
     assert "EXPLORE_EDGE_NOTE" in ctx_ref and "A_NOTE" in ctx_ref
 
+    muted_ref, _ = build_evolution_context(tree, current, "Refine", include_experiences=False)
+    assert "ROOT_BRANCH_NOTE" not in muted_ref
+
     ctx_cross, _ = build_evolution_context(tree, current, "Crossover", reference)
+    assert ctx_cross.count("ROOT_BRANCH_NOTE") == 1
     assert ctx_cross.count("A_NOTE") == 1  # Shared ancestor experience shown once!
     assert "REF_NOTE" in ctx_cross
     assert ctx_cross.count("```python") == 2
