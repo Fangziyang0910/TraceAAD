@@ -515,24 +515,24 @@
       "tsp_construct/20261117_181830_evotrace_v3_clean_co4_tsp_evotrace_v3_rep3"
     ],
     "evotrace_v4": [
-      "cvrp_aco/20261119_135641_evotrace_v4_lineage_intent_co4_cvrp_evotrace_v4_rep1",
-      "cvrp_aco/20261119_135641_evotrace_v4_lineage_intent_co4_cvrp_evotrace_v4_rep2",
-      "cvrp_aco/20261119_135641_evotrace_v4_lineage_intent_co4_cvrp_evotrace_v4_rep3",
-      "fssp_gls/20261119_135641_evotrace_v4_lineage_intent_co4_fssp_evotrace_v4_rep1",
-      "fssp_gls/20261119_135641_evotrace_v4_lineage_intent_co4_fssp_evotrace_v4_rep2",
-      "fssp_gls/20261119_135641_evotrace_v4_lineage_intent_co4_fssp_evotrace_v4_rep3",
-      "op_aco/20261119_135641_evotrace_v4_lineage_intent_co4_op_evotrace_v4_rep1",
-      "op_aco/20261119_135641_evotrace_v4_lineage_intent_co4_op_evotrace_v4_rep2",
-      "op_aco/20261119_135641_evotrace_v4_lineage_intent_co4_op_evotrace_v4_rep3",
-      "tsp_construct/20261119_135641_evotrace_v4_lineage_intent_co4_tsp_evotrace_v4_rep1",
-      "tsp_construct/20261119_135641_evotrace_v4_lineage_intent_co4_tsp_evotrace_v4_rep2",
-      "tsp_construct/20261119_135641_evotrace_v4_lineage_intent_co4_tsp_evotrace_v4_rep3"
+      "cvrp_aco/20261119_154209_evotrace_v4_rawcode_co4_cvrp_evotrace_v4_rep1",
+      "cvrp_aco/20261119_154209_evotrace_v4_rawcode_co4_cvrp_evotrace_v4_rep2",
+      "cvrp_aco/20261119_154209_evotrace_v4_rawcode_co4_cvrp_evotrace_v4_rep3",
+      "fssp_gls/20261119_154209_evotrace_v4_rawcode_co4_fssp_evotrace_v4_rep1",
+      "fssp_gls/20261119_154209_evotrace_v4_rawcode_co4_fssp_evotrace_v4_rep2",
+      "fssp_gls/20261119_154209_evotrace_v4_rawcode_co4_fssp_evotrace_v4_rep3",
+      "op_aco/20261119_154209_evotrace_v4_rawcode_co4_op_evotrace_v4_rep1",
+      "op_aco/20261119_154209_evotrace_v4_rawcode_co4_op_evotrace_v4_rep2",
+      "op_aco/20261119_154209_evotrace_v4_rawcode_co4_op_evotrace_v4_rep3",
+      "tsp_construct/20261119_154209_evotrace_v4_rawcode_co4_tsp_evotrace_v4_rep1",
+      "tsp_construct/20261119_154209_evotrace_v4_rawcode_co4_tsp_evotrace_v4_rep2",
+      "tsp_construct/20261119_154209_evotrace_v4_rawcode_co4_tsp_evotrace_v4_rep3"
     ],
     "evotrace_v4_eco": [
-      "cvrp_aco/20261119_142537_evotrace_v4_eco_co4_cvrp_evotrace_v4_rep1",
-      "fssp_gls/20261119_142537_evotrace_v4_eco_co4_fssp_evotrace_v4_rep1",
-      "op_aco/20261119_142537_evotrace_v4_eco_co4_op_evotrace_v4_rep1",
-      "tsp_construct/20261119_142537_evotrace_v4_eco_co4_tsp_evotrace_v4_rep1"
+      "cvrp_aco/20261119_154209_evotrace_v4_eco_rawcode_co4_cvrp_evotrace_v4_rep1",
+      "fssp_gls/20261119_154209_evotrace_v4_eco_rawcode_co4_fssp_evotrace_v4_rep1",
+      "op_aco/20261119_154209_evotrace_v4_eco_rawcode_co4_op_evotrace_v4_rep1",
+      "tsp_construct/20261119_154209_evotrace_v4_eco_rawcode_co4_tsp_evotrace_v4_rep1"
     ]
   },
   "default_experiment": "evotrace_v4",
@@ -581,8 +581,8 @@
     "evotrace_v1": "20261112_165634_evotrace_v1_co4",
     "evotrace_v2": "20261114_103407_evotrace_v2_repaired_co4",
     "evotrace_v3": "20261117_181830_evotrace_v3_clean_co4",
-    "evotrace_v4": "20261119_135641_evotrace_v4_lineage_intent_co4",
-    "evotrace_v4_eco": "20261119_142537_evotrace_v4_eco_co4"
+    "evotrace_v4": "20261119_154209_evotrace_v4_rawcode_co4",
+    "evotrace_v4_eco": "20261119_154209_evotrace_v4_eco_rawcode_co4"
   },
   "visualization_methods": [
     "evotrace_v4",
@@ -644,7 +644,7 @@
     ]
   },
   "active_campaign": {
-    "batch": "20261119_135641_evotrace_v4_lineage_intent_co4",
+    "batch": "20261119_154209_evotrace_v4_rawcode_co4",
     "tasks": [
       "tsp_construct",
       "cvrp_aco",
