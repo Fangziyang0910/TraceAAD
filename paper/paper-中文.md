@@ -2,7 +2,7 @@
 
 ## 摘要
 
-基于大语言模型的自动启发式设计（AHD）通过演化可执行程序求解优化问题。然而，固定规模种群在淘汰低分启发式时一并丢弃了其修改记录，完整搜索树的节点规模随评价预算持续增长，而全局反思池又使经验脱离了产生它的父代代码。本文提出**TREES（Tree-structured Reflective Evolutionary Search，树状反思式演化搜索）**及其种群更新方法**反思式淘汰（reflective elimination）**，在控制树规模的同时将被删候选的修改过程总结到保留节点与边上。每次更新选出目标值较优且代码结构有别的代表启发式，补齐其最近公共祖先构成保留骨架，并将骨架外节点划分为连接骨架节点的路径区域与位于骨架节点下方的子树区域。节点数少于 $m$ 的区域留在树中继续参与父代抽样，使暂时退化的启发式仍有机会改进；节点数达到 $m$ 的区域在移除时调用语言模型总结具体改动与实测结果，通过路径收缩存为重连边上的边经验，或通过子树剪枝存为父节点上的节点经验，并合并区域内原有的经验。精化、交叉与探索算子进而在可行树节点中抽样父代并读取相关经验生成新启发式。理论分析证明该更新保持代表集不变，且在任意评价预算下使算法节点数不超过紧上界 $4Km-2K-m$。四项组合优化问题上的12次搜索表明，TREES将树规模稳定控制在100个节点以内并持续改善训练目标值，490次反思中有147次（$30.0\%$）继承了更早更新生成的经验。
+基于大语言模型的自动启发式设计（AHD）通过演化可执行程序求解优化问题。然而，固定规模种群在淘汰低分启发式时一并丢弃了其修改记录，完整搜索树的节点规模随评价预算持续增长，而全局反思池又使经验脱离了产生它的父代代码。本文提出**TREES（Tree-structured Reflective Evolutionary Search，树状反思式演化搜索）**及其种群更新方法**反思式淘汰（reflective elimination）**，在控制树规模的同时将被删候选的修改过程总结到保留节点与边上。每次更新选出目标值较优且代码结构有别的代表启发式，补齐其最近公共祖先构成保留骨架，并将骨架外节点划分为连接骨架节点的路径区域与位于骨架节点下方的子树区域。节点数少于 $m$ 的区域留在树中继续参与父代抽样，使暂时退化的启发式仍有机会改进；节点数达到 $m$ 的区域被移除。反思将收缩路径总结为边经验，将算法节点下被剪去的旁支总结为节点经验，并纳入区域内原有的经验。精化、交叉与探索算子进而在可行树节点中抽样父代并读取相关经验生成新启发式。理论分析证明该更新保持代表集不变，且在任意评价预算下使算法节点数不超过紧上界 $4Km-2K-m$。四项组合优化问题上的12次搜索表明，TREES将树规模稳定控制在100个节点以内并持续改善训练目标值，490次反思中有147次（$30.0\%$）继承了更早更新生成的经验。
 
 ## 1. 引言
 
@@ -10,14 +10,14 @@
 
 现有方法在保存和利用这些搜索记录时面临明显权衡。以FunSearch[@funsearch]和EoH[@eoh]为代表的种群方法仅保留固定数量的较优启发式：一旦低分候选被淘汰，搜索既失去了继续改进该方案的机会，也丢掉了这次修改揭示的结果。MCTS-AHD[@mctsahd]将所有生成过的启发式保存在搜索树中，使暂时低分的节点仍可扩展，但树规模随评价预算持续增长，长路径上的原始代码也难以全部放入提示词。ReEvo[@reevo]和RefineEvo[@refineevo]通过LLM反思将比较结果提炼为全局语言提示，使经验脱离了所修改的具体父代程序；近期工作进一步引入系统发育森林[@phyloevolve]、外部蕴含图[@pathwise]、代码差分数据库[@deltaevolve]或分支结束后压入全局池的局部记忆[@memorytree]，但仍需额外部署外部结构，或在分支移除后脱离树上保留的父子位置。
 
-针对这一问题，本文用一棵有根树维护启发式种群，并由保留节点在树上的位置直接决定历史整理范围与经验存放位置。树上每个节点保存一个已评价的启发式函数，有向边记录子代由哪个父代派生。每次更新先选出至多 $K$ 个目标值较优且代码结构有别的**代表启发式**，再补齐它们两两之间的最近公共祖先（lowest common ancestors，LCAs）构成保留骨架。由此，树上其余节点自然划分为两类互不相交的区域：连接相邻骨架节点的**路径区域**，以及位于某个骨架节点下方且不含保留后代的**子树区域**。阈值 $m$ 控制区域移除时机：节点数少于 $m$ 的区域留在树上，其中的可行启发式继续参与父代抽样；节点数达到 $m$ 的区域执行**反思式淘汰**，由**路径收缩**将中间修改步骤总结为重连边上的**边经验**，由**子树剪枝**将被删旁支尝试总结为保留父节点上的**节点经验**。
+针对这一问题，本文用一棵有根树维护启发式种群，并由保留节点在树上的位置直接决定历史整理范围与经验存放位置。树上每个节点保存一个已评价的启发式函数，有向边记录子代由哪个父代派生。每次更新先选出至多 $K$ 个目标值较优且代码结构有别的**代表启发式**，再补齐它们两两之间的最近公共祖先（lowest common ancestors，LCAs）构成保留骨架。由此，树上其余节点自然划分为两类互不相交的区域：连接相邻骨架节点的**路径区域**，以及位于某个骨架节点下方且不含保留后代的**子树区域**。阈值 $m$ 控制区域移除时机：节点数少于 $m$ 的区域留在树上，其中的可行启发式继续参与父代抽样；节点数达到 $m$ 的区域执行**反思式淘汰**，由**路径收缩**将中间修改步骤总结为重连边上的**边经验**，由**子树剪枝**将算法节点下被删的旁支尝试总结为该节点上的**节点经验**。
 
-在此基础上，本文提出**TREES**搜索方法（图1）。每次区域反思仅记录各被删启发式相对父代修改了哪些计算以及目标值如何变化，不将单次结果推广为通用规则；当携带经验的节点或边在后续更新中落入新的待删区域时，原有经验并入新的区域反思继续保留。生成新候选前，TREES在树上全部可行节点中结合目标值名次与已消耗子代评价次数抽样父代，并调用精化（Refine）、交叉（Crossover）或探索（Explore）算子：精化与交叉读取父代路径、子代尝试与源码以修改或组合已有实现；探索仅读取父代与多样代表的目标值、算法描述和经验而不展示源码，从而脱离父代原有代码框架重新设计主要计算。
+在此基础上，本文提出**TREES**搜索方法（图1）。区域反思对照各项尝试的设计意图、实际实现和实测结果，概括设计经验。一个区域原有的经验可随新近尝试一起进入反思，并写回保留节点或重连边。每次生成前，TREES依据目标值名次和已投入的子代评价次数，在树上全部可行节点中抽样主父代。精化与交叉读取父代的形成路径和源码，以修改或组合计算。探索读取父代和多样代表的实现与局部经验，以构思不同的主要计算。
 
 本文的主要贡献如下：
 
 - 提出树状种群上的反思式淘汰更新，结合阈值 $m$ 的短期保留、路径收缩与子树剪枝维护边经验与节点经验，并证明代表集不变性、更新幂等性以及与评价预算无关的节点数紧上界 $4Km-2K-m$。
-- 设计面向全树可行节点的父代抽样规则，以及按算子职责分别提供实现源码或高层描述与经验的精化、交叉与探索提示上下文。
+- 设计面向全树可行节点的父代抽样规则，以及按算子职责组织形成路径、尝试记录与个体卡片的精化、交叉与探索上下文。
 - 在TSP、CVRP、OP与FSSP四项组合优化问题上分析TREES的搜索过程，考察树规模控制、反思词元开销与跨轮经验传递行为。
 
 ## 2. TREES
@@ -26,7 +26,7 @@
 
 遵循标准基于LLM的AHD设置[@eoh; @mctsahd]，本文在固定的外层求解框架（如逐步贪心构造、蚁群优化或引导式局部搜索）内设计一个关键启发式函数。每个候选启发式 $v$ 是一个符合给定函数签名的Python函数，通过在一组训练实例上运行外层求解器获得平均目标值 $f(v)$（越小越优）。正常执行并返回有限目标值的程序称为可行启发式，抛出异常或超时的程序记录失败信息。搜索在至多 $B$ 次程序评价预算内返回训练目标值最小的可行启发式（单次修复与评价细节见附录E）。
 
-TREES将种群维护为有根树 $T=(\mathcal V\cup\{v_0\},\mathcal E)$，其中 $\mathcal V$ 为树中当前保留的已评价启发式节点集，$v_0$ 为不含代码与分数的虚拟根。每个节点 $v\in\mathcal V$ 记录源码 $c_v$、简短算法描述 $d_v$、评价结果，以及以 $v$ 为主父代已消耗的子代评价次数 $n_v$；树中全部可行节点构成当前可行集 $\mathcal P\subseteq\mathcal V$。初始启发式接入 $v_0$ 之下；此后精化、交叉与探索均从选定的主父代 $p\in\mathcal P$ 生成子代 $v$ 并添加有向边 $p\to v$（交叉另记录参考启发式编号）。树简化后，收缩边 $u\to w$ 直接连接保留祖先 $u$ 与保留后代 $w$。TREES在边上保存**边经验** $E_{u\to w}$（图中记为 $E_{uw}$），在节点上保存**节点经验** $E_u$（含虚拟根上的 $E_{v_0}$；图1）。
+TREES将种群维护为有根树 $T=(\mathcal V\cup\{v_0\},\mathcal E)$，其中 $\mathcal V$ 为树中当前保留的已评价启发式节点集，$v_0$ 为不含代码与分数的虚拟根。每个节点 $v\in\mathcal V$ 记录生成分析、源码 $c_v$、设计简述 $d_v$、评价结果，以及以 $v$ 为主父代已消耗的子代评价次数 $n_v$；树中全部可行节点构成当前可行集 $\mathcal P\subseteq\mathcal V$。初始启发式接入 $v_0$ 之下；此后精化、交叉与探索均从选定的主父代 $p\in\mathcal P$ 生成子代 $v$ 并添加有向边 $p\to v$（交叉另记录参考启发式编号）。树简化后，收缩边 $u\to w$ 直接连接保留祖先 $u$ 与保留后代 $w$。TREES在边上保存**边经验** $E_{u\to w}$（图中记为 $E_{uw}$），在算法节点上保存**节点经验** $E_u$（图1）。
 
 ![TREES种群更新与搜索](figures/framework.png)
 
@@ -69,13 +69,13 @@ $$
 
 节点数少于 $m$ 的区域保留在树中，其中的可行节点继续留在 $\mathcal P$ 内参与父代抽样。因此，即使子代目标值暂时劣于父代，或与已有代表的AST距离小于 $\delta$，在该局部区域累积满 $m$ 个节点前仍有机会派生出更优后代。
 
-**第三步：区域反思与移除。** 所有满足 $|C|\geq m$ 的区域均基于同一更新前树 $T$ 执行反思并移除节点。对路径区域 $(u,w)$，**路径收缩**移除中间链及其侧枝并将边重连为 $u\to w$；LLM读取起点 $u$（当 $u\neq v_0$）、全部待删节点及终点 $w$ 的源码、描述、分数变化与已有经验（含 $w$ 原入边上的经验），将从 $u$ 到 $w$ 的修改过程总结为**边经验** $E_{u\to w}$。对骨架节点 $u\in\mathcal H$ 处的子树区域，**子树剪枝**移除这些旁支节点；LLM读取父节点 $u$ 及其已有 $E_u$、连同全部待删节点的代码、描述、评价结果（含失败信息）与已有经验，更新**节点经验** $E_u$（当 $u=v_0$ 时更新 $E_{v_0}$）。两类操作共用同一反思提示词（附录E.5），仅记录各次尝试修改的具体计算与实测结果变化，不作泛化定论或规则限制。若早先保留的节点日后落入新的待删区域，其携带的边经验与节点经验将并入该次反思（图2）。
+**第三步：区域反思与移除。** TREES移除所有满足 $|C|\geq m$ 的区域。执行**路径收缩**时，LLM读取中间链及其侧枝、保留终点 $w$，以及起点算法 $u$（当 $u\neq v_0$）。改动、实测结果和已有经验凝练为重连边上的**边经验** $E_{u\to w}$。在算法节点 $u$ 下执行**子树剪枝**时，LLM将被删尝试与 $u$ 的已有经验一起凝练，更新**节点经验** $E_u$。虚拟根下的子树区域直接剪除。每次反思均使用同一棵更新前的树，对照各尝试的生成分析、代码和实测结果。对比分析随记录存档，设计经验写回保留树（附录E.5及图2）。
 
 ![连续更新中的经验积累](figures/reflective-simplification.png)
 
 **图2｜连续种群更新中的经验传递。** （a）原保留节点 $D$ 与 $u_1$–$u_3$ 一同落入路径区域被收缩时，原有边经验 $E_{AD}$ 与后续修改步骤合并总结为新边上的 $E_{AG}$。（b）节点 $A$ 下方新长出的旁支 $y_1$–$y_4$ 被剪除时，其结果与原有节点经验 $E_A$ 合并更新。原节点移除后，先前总结的经验仍保留在树上。
 
-**命题1（树更新的结构性质）。** 设有限有根树 $T=(\mathcal V\cup\{v_0\},\mathcal E)$ 满足 $K,m\geq 1$ 且 $\delta\in[0,1]$，执行一次反思式淘汰后得到 $T'=(\mathcal V'\cup\{v_0\},\mathcal E')$。则：（i）$T'$ 仍为有根树并保持 $\mathcal K$ 中节点间的祖先关系，$\mathcal C$ 构成 $\mathcal V\setminus\mathcal H$ 的互不相交划分；（ii）当前最优可行启发式必保留，且 $R(T')=R(T)$、$\mathcal H(T')=\mathcal H(T)$；（iii）无新节点加入时重复执行更新不会移除任何节点（幂等性）；（iv）每次更新移除或替换的经验文本均进入生成新经验的反思输入，且对任意评价预算 $B$，更新后在树算法节点数满足紧上界 $|\mathcal V'|\leq 4Km-2K-m$（$K=24,m=4$ 时为332）。证明与紧性构造见附录C。
+**命题1（树更新的结构性质）。** 设有限有根树 $T=(\mathcal V\cup\{v_0\},\mathcal E)$ 满足 $K,m\geq 1$ 且 $\delta\in[0,1]$，执行一次反思式淘汰后得到 $T'=(\mathcal V'\cup\{v_0\},\mathcal E')$。则：（i）$T'$ 仍为有根树并保持 $\mathcal K$ 中节点间的祖先关系，$\mathcal C$ 构成 $\mathcal V\setminus\mathcal H$ 的互不相交划分；（ii）当前最优可行启发式必保留，且 $R(T')=R(T)$、$\mathcal H(T')=\mathcal H(T)$；（iii）无新节点加入时重复执行更新不会移除任何节点（幂等性）；（iv）对于执行反思的区域，移除或替换的经验文本均进入该区域的反思输入，且对任意评价预算 $B$，更新后在树算法节点数满足紧上界 $|\mathcal V'|\leq 4Km-2K-m$（$K=24,m=4$ 时为332）。证明与紧性构造见附录C。
 
 ### 2.3. 父代选择
 
@@ -93,9 +93,9 @@ $$
 
 ### 2.4. 搜索算子与提示上下文
 
-选定主父代 $p\in\mathcal P$ 后，按固定概率 $(\pi_{\text{ref}},\pi_{\text{cross}},\pi_{\text{exp}})$ 抽样精化、交叉或探索算子。每次生成调用要求LLM按顺序输出三个JSON字段：先在 `analysis` 中结合问题结构分析拟采用的计算及其预期作用（仅随记录存档，不进入后续提示词），再在 `code` 中输出完整Python函数 $c_v$，最后在 `design` 中根据已写出的代码概括其主要计算与关键参数作为描述 $d_v$。在代码之后生成描述，可在单次调用内避免EoH等先写思路后写代码时可能出现的描述偏离实现问题[@eoh; @mctsahd]（提示词模板见附录E.3）。
+选定主父代 $p\in\mathcal P$ 后，按固定概率 $(\pi_{\text{ref}},\pi_{\text{cross}},\pi_{\text{exp}})$ 抽样精化、交叉或探索算子。模型依次生成 `analysis`、`code` 和 `design`。`analysis` 依据任务结构规划具体计算及其选择偏好，并供区域反思读取。`code` 给出完整实现 $c_v$。`design` 概括同一次调用实现的计算和关键参数，记为 $d_v$ [@eoh; @mctsahd]。公共模板见附录E.3。
 
-**精化（Refine）** 针对主父代 $p$ 修改其表示方式、所用输入信息、计算步骤或参数。提示词依次给出 $v_0\leadsto p$ 路径上各步的分数变化、算法描述、边经验与节点经验（含 $E_{v_0}$），随后给出 $p$ 的节点经验 $E_p$ 与仍在树上的直接子代结果，最后给出 $p$ 的源码 $c_p$。
+**精化（Refine）** 针对主父代 $p$ 调整表示方式、所用输入信息、计算步骤或参数。提示词依次给出 $p$ 的形成路径，包括各步评价结果、设计简述与经验，随后给出 $p$ 的节点经验 $E_p$ 及仍在树上的直接子代结果，最后给出 $p$ 的源码 $c_p$。
 
 **交叉（Crossover）** 结合主父代 $p$ 与参考启发式 $q$ 的有效机制。参考候选集 $\mathcal Q_p$ 取 $R\setminus\{p\}$ 中标准化AST与 $p$ 不同的代表；若为空则改从 $\mathcal D\setminus\{p\}$ 中选取AST不同的节点；若仍为空则改用精化。记 $r_{\mathcal Q_p}(q)$ 为 $q$ 在 $\mathcal Q_p$ 内从 $0$ 起算的平均名次，按名次衰减与结构距离联合抽样 $q$：
 
@@ -104,9 +104,9 @@ P(q\mid p) = \frac{2^{-r_{\mathcal Q_p}(q)/h}\,d(p,q)}{\sum_{u\in\mathcal Q_p}2^
 \tag{5}
 $$
 
-若 $\mathcal Q_p$ 中候选与 $p$ 的AST距离全为零，则仅按 $2^{-r_{\mathcal Q_p}(q)/h}$ 抽样。交叉提示词在精化上下文（从 $p$ 的子代列表中略去 $q$）之上，加入 $q$ 的目标值、描述、$v_0\leadsto q$ 路径上尚未展示的经验以及源码 $c_q$。
+若 $\mathcal Q_p$ 中候选与 $p$ 的 AST 距离全为零，则仅按 $2^{-r_{\mathcal Q_p}(q)/h}$ 抽样。交叉在 $p$ 的源码之前插入参考个体 $q$ 的卡片，给出其目标值、设计简述、自身的入边与节点经验以及源码 $c_q$。形成路径上已经出现的 $q$ 的经验不再重复。若 $q$ 也是 $p$ 的直接子代，其信息由参考卡片展示。
 
-**探索（Explore）** 从主父代 $p$ 出发设计主要计算不同于现有方案的新启发式。TREES在 $R\setminus\{p\}$ 中排除标准化AST与 $p$ 相同的节点后选出至多 $M$ 个概览代表：先取目标值最优的代表，再依次贪心加入与 $\{p\}$ 及已选代表之间最小AST距离最大的代表。与精化和交叉不同，探索提示词不展示任何源码与直接子代列表，仅给出 $E_{v_0}$、概览代表的目标值与算法描述，以及 $p$ 的目标值、描述 $d_p$、入边经验与节点经验 $E_p$，避免模型沿 $p$ 原有代码结构作局部改写。新生成的子代评价后仍接入 $p$ 之下。算法1总结了TREES的完整流程；默认参数设为 $N_0=5,K=24,\delta=0.15,m=4,h=10,M=6$，算子概率设为 $(0.45,0.25,0.30)$。
+**探索（Explore）** 根据主父代 $p$ 及至多 $M$ 个异质代表的个体卡片重新构思主要计算。每张卡片包含目标值、设计简述、局部经验及源码。在 $R\setminus\{p\}$ 中排除标准化 AST 与 $p$ 相同的个体后，按 $2^{-r(q)/h}\min_{u\in\{p\}\cup S}d(q,u)$ 不放回地抽取代表。其中 $r(q)$ 是池内名次，$S$ 为已抽中的代表集。候选与已选集合的最小距离须大于零。提示将 $p$ 放在首位，其余展示的代表按目标值排序。子代评价后接入 $p$ 之下。算法1给出整体搜索流程。默认参数为 $N_0=5,K=24,\delta=0.15,m=4,h=6,M=5$，算子概率为 $(0.50,0.30,0.20)$。
 
 ```text
 算法1：TREES
@@ -122,7 +122,7 @@ $$
     若已获得的可行初始启发式不足 N_0 个，则继续下一轮
     选出代表集 R 并补齐骨架 H
     将非骨架节点划分为路径区域与子树区域
-    基于更新前的树 T 反思 |C| >= m 的区域
+    基于更新前的树 T 反思 |C| >= m 的路径区与非根子树区
     收缩路径并剪除子树，保存边经验 E_{u->w} 与节点经验 E_u
 返回搜索中评价过的最优可行启发式
 ```
@@ -170,9 +170,9 @@ TSP种子2的一条分支具体展示了这一过程。第97次评价后，路�
 
 ## 5. 讨论与局限
 
-阈值 $m$ 在TREES中同时调节短期父代保留与区域反思粒度：当局部区域少于 $m$ 个节点时，目标值暂时下降或作局部调整的新启发式留在 $\mathcal P$ 中继续参与抽样；当区域达到 $m$ 个节点时，单次反思即可合并总结同一起点或同一演化段上的多次尝试，并将所得边经验与节点经验留在后续算子读取的路径和父节点上。此外，代表集选择、骨架划分和父代抽样仅依赖AST特征、目标值与评价次数，不读取经验文本；因此在任意固定树状态下隐去经验文本，即可单独检验经验对生成质量的影响。
+阈值 $m$ 在TREES中同时调节短期父代保留与区域反思粒度：当局部区域少于 $m$ 个节点时，目标值暂时下降或作局部调整的新启发式留在 $\mathcal P$ 中继续参与抽样；当路径区域或算法节点下的子树区域达到 $m$ 个节点时，单次反思即可合并总结同一起点或同一演化段上的多次尝试，并将所得边经验与节点经验留在后续算子读取的路径和父节点上。此外，代表集选择、骨架划分和父代抽样仅依赖AST特征、目标值与评价次数，不读取经验文本；因此可固定树状态与展示的算法，切换是否展示经验文本，检验经验对生成的影响。
 
-本文方法仍有三方面局限。第一，AST特征距离忽略数值常数，以便代表集 $R$ 保留控制流与算子结构不同的实现；虽然未满 $m$ 区域内的变体仍可短期调整常数并在剪枝时记录结果，但当性能高度依赖连续参数时，专门的参数调优器[@irace]仍具互补价值。第二，每移除一个满 $m$ 节点区域需调用一次短输出LLM反思；若单次程序评价极快而模型调用受限，可增大 $m$ 以降低反思频率。第三，与主流AHD基准一致，本文仅在固定外层求解器内设计单个启发式函数，尚未联合演化完整求解器的多个模块。
+本文方法仍有三方面局限。第一，AST特征距离忽略数值常数，以便代表集 $R$ 保留控制流与算子结构不同的实现；虽然未满 $m$ 区域内的变体仍可短期调整常数并在剪枝时记录结果，但当性能高度依赖连续参数时，专门的参数调优器[@irace]仍具互补价值。第二，每个执行反思的区域需一次LLM调用；若单次程序评价极快而模型调用受限，可增大 $m$ 以降低反思频率。第三，与主流AHD基准一致，本文仅在固定外层求解器内设计单个启发式函数，尚未联合演化完整求解器的多个模块。
 
 ## 6. 结论
 
@@ -229,13 +229,13 @@ MCTS-AHD与Clade-AHD在搜索树中保留全部已生成启发式，通过UCT或
 
 与此同时，TREES在全部可行节点 $\mathcal P$ 上抽样父代，而非仅在 $R$ 中抽样。正如MCTS-AHD所观察到的，有效启发式往往需要先经历一步分数暂时下降的结构修改，或在已有代表附近（$d<\delta$）继续调整细节与参数[@mctsahd]。只要局部区域节点数未达 $m$，这些新节点便以 $n_v=0$ 留在 $\mathcal P$ 中按式(4)参与竞争：若派生出更优后代即可进入 $R$；若累积满 $m$ 个节点仍无保留后代，则被剪除并总结至父节点经验。
 
-### B.2. 边经验、节点经验与虚拟根经验的分工
+### B.2. 边经验与节点经验
 
-边经验 $E_{u\to w}$ 总结保留后代 $w$ 如何从祖先 $u$ 经若干步修改形成；节点经验 $E_u$ 总结从节点 $u$ 出发试过但未留下保留后代的各类改法及结果（包括改善、退化与执行报错），帮助后续生成避开已验证无效的修改。由于虚拟根 $v_0\in\mathcal H$ 属于骨架，被淘汰的初始启发式及其旁支自然组成 $v_0$ 处的子树区域，剪枝后更新为 $E_{v_0}$，并在读取 $v_0\leadsto p$ 路径或构造探索上下文时直接提供初始尝试经验，无需单独设置外部全局记忆。当携带 $E_A$ 或入边经验的节点 $A$ 后来退出骨架并随外层区域被移除时，这些经验会一并进入新区域的反思输入（图2）。
+边经验 $E_{u\to w}$ 记录保留后代 $w$ 如何从祖先 $u$ 经中间尝试演变而来。节点经验 $E_u$ 记录从 $u$ 出发、随后被剪去的旁支尝试及其实测结果。起自虚拟根的收缩边记录相应初始设计的形成过程。若带有节点经验或入边经验的节点后来落入另一个执行反思的区域，其已有经验进入新一轮反思（图2）。
 
 ### B.3. 分析、代码与设计描述的输出顺序
 
-在关闭模型原生思考模式时，每次生成按顺序输出 `analysis`（至多约300词）、`code`（完整函数 $c_v$）与 `design`（约120词描述 $d_v$）。前置的 `analysis` 让模型在写代码前结合问题结构规划具体计算及其选择偏好，但仅随运行记录保存、不进入后续提示词以控制上下文长度；后置的 `design` 则依据已写出的代码概括其实际执行的计算与关键参数，既避免先写描述后写代码时常见的描述偏离实现问题，也无需像MCTS-AHD那样为生成描述额外发起第二次LLM调用[@mctsahd]。此外，探索算子仅读取代表与父代的 `design` 描述和经验而不展示源码，使 `design` 直接承担跨结构构思时的算法表示。
+模型先在 `analysis` 中规划具体计算，再写出 `code`。分析用于后续区域反思，以对照设计意图、代码和结果。程序写成后，模型在同一次调用中用 `design` 概括其实际计算与关键参数 [@mctsahd]。探索读取的个体卡片同时给出设计简述与源码。
 
 ## 附录 C. 命题 1 的证明
 
@@ -247,7 +247,7 @@ MCTS-AHD与Clade-AHD在搜索树中保留全部已生成启发式，通过UCT或
 
 **最优个体保留与代表集、骨架不变性。** 当 $\mathcal P_0\neq\varnothing$ 时，排序首位的 $v_1\in\mathcal D_0$ 在式(1)第一步入选 $R(T_0)\subseteq\mathcal K$，故最优可行启发式必保留。每个原代表 $r\in R(T_0)$ 在 $T_1$ 中仍是其“标准化AST + 目标值”等价类中编号最小的存活节点，故 $R(T_0)\subseteq\mathcal D(T_1)$。按排序归纳扫描 $\mathcal D(T_1)$：设扫描到 $w\in\mathcal D(T_1)$ 前已接受的集合恰为 $R(T_0)$ 中排在 $w$ 之前的前缀。若 $w\in R(T_0)$，它面对的已选前缀与在 $T_0$ 中完全相同，故仍入选；若 $w\notin R(T_0)$，令 $w_0\in\mathcal D_0$ 为 $T_0$ 中同一等价类最早入树的节点（$w_0\leq w$），则 $w_0$ 在 $T_0$ 中或因排在其前的某个 $u\in R(T_0)$ 满足 $d(w_0,u)<\delta$ 而被排除，或因前面已选满 $K$ 个代表而落选。这些排在前面的代表在 $T_1$ 中全部存活且仍位于 $w$ 之前，又因 $d(w,u)=d(w_0,u)$，故 $w$ 在 $T_1$ 中同样落选。由归纳法得 $R(T_1)=R(T_0)$；保持祖先关系的收缩与剪枝不改变 $R(T_0)$ 节点间的两两LCA，故 $F(T_1)=F(T_0)$ 且 $\mathcal H(T_1)=\mathcal H(T_0)$。
 
-**更新幂等性与原有经验的保留。** 由 $\mathcal H(T_1)=\mathcal H(T_0)$ 可知，$T_1$ 上的非骨架区域集为 $\mathcal C(T_1)=\{C\in\mathcal C(T_0):|C|<m\}$，所有区域节点数均少于 $m$，故无新节点加入时再次运行更新不会移除任何节点。每个被删节点 $x\in\mathcal U$ 的节点经验与入边经验均进入所属区域的反思提示，路径收缩同时读入终点 $w$ 原入边上的经验，子树剪枝同时读入父节点原有的 $E_u$（含 $E_{v_0}$）；若反思调用异常，系统直接拼接保留上述原有经验文本。
+**更新幂等性与原有经验的保留。** 由 $\mathcal H(T_1)=\mathcal H(T_0)$ 可知，$T_1$ 上的非骨架区域集为 $\mathcal C(T_1)=\{C\in\mathcal C(T_0):|C|<m\}$，所有区域节点数均少于 $m$，故无新节点加入时再次运行更新不会移除任何节点。在执行反思的区域中，每个被删节点的节点经验与入边经验均进入提示。路径收缩同时读取终点原入边上的经验，子树剪枝同时读取父节点原有的 $E_u$。若反思调用失败，系统拼接保留已进入该提示的经验文本。
 
 **算法节点数紧上界。** 记 $r=|R(T_0)|$，$s=|\mathcal H(T_0)|$。当 $r=0$ 时，$\mathcal H(T_0)=\{v_0\}$，$|\mathcal V_1|\leq m-1\leq 4Km-2K-m$。当 $1\leq r\leq K$ 时，在收缩非骨架路径后的骨架树中，每个分叉节点 $f\in F(T_0)$ 至少有两个骨架子节点且所有叶节点属于 $R(T_0)$，故 $|F(T_0)|\leq r-1$，$s=1+r+|F(T_0)|\leq 2r\leq 2K$。骨架树共有 $s-1$ 条边（至多对应 $s-1$ 个路径区域）和 $s$ 个节点（至多对应 $s$ 个子树区域）。更新后每个剩余区域至多含 $m-1$ 个节点，扣除虚拟根 $v_0$ 后得 $|\mathcal V_1|\leq(s-1)+(2s-1)(m-1)\leq(2K-1)+(4K-1)(m-1)=4Km-2K-m$。该上界紧可达：取 $K$ 个两两AST距离不小于 $\delta$ 且目标值严格最优的可行叶节点，经 $K-1$ 个内部LCA分叉点连在 $v_0$ 下（共 $2K$ 个骨架节点、$2K-1$ 条骨架边），在每条骨架边上串入 $m-1$ 个次优节点，并在每个骨架节点下各接一条含 $m-1$ 个次优节点的旁支，则全部 $4K-1$ 个区域均含 $m-1<m$ 个节点，更新后恰好保留 $4Km-2K-m$ 个算法节点（$K=24,m=4$ 时为332）。
 
@@ -284,7 +284,7 @@ MCTS-AHD与Clade-AHD在搜索树中保留全部已生成启发式，通过UCT或
 
 ### D.4. 语言模型参数
 
-实验统一使用关闭原生思考模式的Qwen3.8-27B，随机种子为0、1、2。候选生成采用温度1.0、top-$p$ 0.8、top-$k$ 20、presence penalty 1.5、最大输出16,384词元；区域反思采用温度0.3、最大输出1,536词元。
+第3节分析的运行使用关闭原生思考模式的Qwen3.8-27B，随机种子为0、1、2。候选生成采用温度1.0、top-$p$ 0.8、top-$k$ 20、presence penalty 1.5、最大输出16,384词元；区域反思采用温度0.3、最大输出1,536词元。
 
 ### D.5. 早期搜索记录统计口径
 
@@ -294,79 +294,189 @@ MCTS-AHD与Clade-AHD在搜索树中保留全部已生成启发式，通过UCT或
 
 ### E.1. 代码结构距离与抽样细节
 
+去掉文档字符串后，系统提取AST父子标签对与深度优先遍历相邻标签二元组的多重集（标签记录语法节点类型、运算符类型及被调用函数或属性名，忽略变量名与数值常数），据此计算多重集Jaccard距离 $d(u,v)$。去重候选集 $\mathcal D$ 比较去掉注释和文档字符串后的完整AST并要求目标值相等，仅作用于当前在树节点。探索按目标值从小到大展示代表卡片，同分按节点编号排序。
+
 **表4｜TREES默认参数设置。**
 
 | 模块 | 默认设置 |
 | --- | --- |
 | 初始化与预算 | $N_0=5$ 个可行初始启发式；总预算 $B=1{,}000$ 次程序评价 |
 | 代表集与骨架 | $K=24$，$\delta=0.15$；补齐两两LCA构成 $\mathcal H$ |
-| 区域简化阈值 | $m=4$（$|C|<m$ 留在 $\mathcal P$；$|C|\geq m$ 反思并移除） |
-| 父代选择 | 在全体可行节点 $\mathcal P$ 上抽样；半衰期 $h=10$；折扣因子 $1/(1+n_p)$ |
-| 算子概率 | 精化 $0.45$；交叉 $0.25$；探索 $0.30$ |
+| 区域简化阈值 | $m=4$ 个节点 |
+| 父代选择 | 在全体可行节点 $\mathcal P$ 上抽样；半衰期 $h=6$，折扣因子 $1/(1+n_p)$ |
+| 算子概率 | 精化 $0.50$，交叉 $0.30$，探索 $0.20$ |
 | 交叉参考选择 | 在标准化AST不同的候选集 $\mathcal Q_p$（优先 $R\setminus\{p\}$，否则 $\mathcal D\setminus\{p\}$）按 $2^{-r/h}\cdot d(p,q)$ 抽样 |
-| 探索概览代表 | 在 $R\setminus\{p\}$ 中排除AST相同节点，先取最优，再按最大最小AST距离选至多 $M=6$ 个 |
-
-去掉文档字符串后，系统提取AST父子标签对与深度优先遍历相邻标签二元组的多重集（标签记录语法节点类型、运算符类型及被调用函数或属性名，忽略变量名与数值常数），据此计算多重集Jaccard距离 $d(u,v)$。去重候选集 $\mathcal D$ 比较去掉注释和文档字符串后的完整AST并要求目标值相等，仅作用于当前在树节点。探索概览贪心选取最小AST距离最大者时，若距离并列则依次取目标值更优、节点编号更小者，并按目标值由优到劣展示。
+| 探索概览代表 | 按名次衰减与最小 AST 距离不放回地抽取至多 $M=5$ 个代表 |
 
 ### E.2. 评价、单次修复与停止条件
 
 每次生成尝试至多执行一次修复：若模型输出无法解析为规定JSON格式，执行一次格式修复（不计评价次数）；若格式合法但执行报错或超时且预算尚有剩余，执行一次程序修复并将重评计入 $B$。仅该次尝试最终受评的程序入树，初始化以外消耗的评价次数计入主父代的 $n_p$。当评价次数达到 $B$ 或连续10次尝试未产生受评程序时搜索停止。若反思调用异常或返回空文本，直接拼接保留该区域内原有的经验文本。
 
-### E.3. 生成提示词结构
+### E.3. 生成模板与上下文
 
-每个生成提示词包含 `[Algorithm-design task]`、`[Function interface]`、`[Context]`、`[Instruction]` 与 `[Output]` 五个区块，要求返回按顺序含 `"analysis"`（至多300词，分析具体计算如何偏向有利选择及原因，仅存档）、`"code"`（完整实现）与 `"design"`（约120词概括代码主要计算与关键参数，存入节点）的JSON对象。表5列出三类算子的 `[Context]` 区块顺序与源码展示范围。
+**表5｜候选生成的上下文顺序。**
 
-**表5｜三类搜索算子的提示上下文顺序与源码展示范围。**
+| 调用 | 上下文顺序 |
+| -------------------- | -------------------------------------------------------------- |
+| 初始化 | `[Example Algorithm]` 参考实现 → `[Existing Approaches]` 已有初始算法的成绩与设计 → `[Failed Attempts]` 失败程序与反馈 |
+| 精化 | `[Development of the Current Algorithm]` 主父代的形成路径 → `[Attempts from the Current Algorithm]` 从主父代出发的尝试 → `[Current Algorithm]` 主父代的成绩与源码 |
+| 交叉 | `[Development of the Current Algorithm]` 主父代的形成路径 → `[Attempts from the Current Algorithm]` 从主父代出发的尝试 → `[Other Algorithm]` 参考算法卡片 → `[Current Algorithm]` 主父代的成绩与源码 |
+| 探索 | `[Current Algorithm]` 主父代卡片 → `[Other Existing Approaches]` 所选代表的卡片 |
 
-| 算子 | 上下文区块顺序 | 展示源码的节点 |
-| --- | --- | --- |
-| 精化 | $p$ 的演化路径（含 $E_{v_0}$）；$p$ 的子代尝试（含 $E_p$）；当前算法 $p$ | $p$ |
-| 交叉 | $p$ 的演化路径（含 $E_{v_0}$）；$p$ 的子代尝试（不含 $q$）；参考算法 $q$（含未重复路径经验）；当前算法 $p$ | $p$ 与 $q$ |
-| 探索 | 其他初始尝试经验（$E_{v_0}$）；现有代表概览（目标值与描述）；当前算法 $p$（目标值、描述、入边经验与 $E_p$） | 无 |
+形成路径和尝试列表包含生成意图、实测结果、设计简述及已有经验。完整个体卡片包含目标值、设计简述、入边经验、节点经验和源码。
 
-在精化与交叉中，演化路径列出 $E_{v_0}$ 及 $v_0\leadsto p$ 上各步的生成来源、相对父代结果、算法描述、入边经验与节点经验（$E_p$ 置于子代尝试区块首位，后接按入树顺序排列的存活直接子代）。初始提示词展示任务模板示例、已生成可行初始启发式的目标值与描述，以及最近至多2条初始失败记录。经验消融对照仅隐去提示词中的经验行，其余内容与抽样分布不变。
+~~~~text
+[Algorithm-design task]
+{task_description}
 
-### E.4. 搜索算子指令原文
+Design the computation performed by the following function to improve the complete solver's objective. Use the available inputs and the role of its returned result in the solver.
 
-**精化（Refine）。**
+[Function interface]
+```python
+{function_template}
+```
 
-> Improve the current algorithm by examining how it computes its result and where this computation can be improved. Use the implementation, outcomes, and development experience to choose a meaningful modification. You may revise its representation, the information it uses, or its procedure as well as its parameters; implement a coherent improved algorithm.
+[Context]
+{context}
 
-**交叉（Crossover）。**
+[Instruction]
+{instruction}
 
-> Understand the computational ideas in both implementations and develop an algorithm that combines their useful strengths. Use their development and experimental experience to reason about how the computations fit together. If no useful combination emerges, improve the current algorithm using what the comparison reveals.
+[Output]
+Return exactly one valid JSON object with three string fields, in this order:
+- "analysis": {analysis_instruction} Use up to 300 words.
+- "code": Provide the complete implementation using only the inputs in [Function interface], including necessary imports and helper definitions.
+- "design": In about 120 words, describe for another algorithm designer the main computation the code performs and its key parameters. Describe the implementation, not expected performance.
+Keep "design" faithful to "code". Preserve the required function signature and satisfy the task constraints and input/output requirements.
+Return only the JSON object, without Markdown fences or additional text.
+~~~~
 
-**探索（Explore）。**
+初始化和三类搜索算子共用以下 `{analysis_instruction}`。
 
-> Rethink how this task can be solved and implement an alternative whose main computation differs from the current algorithm and the existing approaches. Develop a new way to compute the result, rather than another weighting of the same local features. The current algorithm, the other approaches, and the experience above are starting points for ideas, not a structure you must preserve. Consider changes in the information used, the representation, or the procedure that produces the result. For example, an algorithm can estimate downstream consequences, construct and improve a tentative solution, or solve useful subproblems; these are possible inspirations, not required methods. Choose an approach suited to the task and implement its main computation.
+~~~~text
+Use the structure of the problem to work out a concrete computation. Which choices would it favor, and why could they improve the final solution? Draw on earlier results when useful.
+~~~~
 
-### E.5. 反思提示词原文
+### E.4. 生成指令
 
-路径收缩与子树剪枝共用同一反思模板。`{problem}` 给出任务说明、目标方向与函数签名；`{records}` 依次列出区域外的保留父节点基准（子树剪枝含原有 $E_p$）、全部待删节点（含来源、结果、描述、失败信息、已有经验与源码），路径收缩最后列出保留终点 $w$（含原入边经验与源码）。表6列出四类情形的 `{situation}` 原文与保存位置。
+**首次获得可行初始算法前。**
 
-> `{problem}`
->
-> `[Algorithms]`\
-> `{situation}`
->
-> `{records}`
->
-> `[Task]`\
-> Record factual observations from the algorithms above, keeping earlier observations that still matter.\
-> For each instructive attempt, state what it actually computed (relative to its starting computation, if modified), its measured fitness or failure, and the stated outcome direction (improved, tied, or regressed; lower fitness is always better, including more negative values).\
-> Write concrete per-attempt computations and outcomes only; do not add concluding takeaways, general superiority claims, rules, advice, or speculative reasons.
->
-> `[Output]`\
-> Return one JSON object with an "experience" string of about 120 words. Name computations, not algorithm numbers: these algorithms will not be shown again.
+~~~~text
+Design an effective algorithm for this task. Consider how the returned result affects the complete solution and choose a computational approach suited to that role. The example illustrates an implementation, not a structure to preserve. Implement the specified function.
+~~~~
 
-**表6｜反思提示词中的区域说明与经验保存位置。** $u,w,p$ 为骨架节点编号，$\pi$ 为通向终点 $w$ 的节点链，$o$ 为端点目标值变化（如 `6.6737 -> 6.1775 (improved)`）。
+**已有可行初始算法时。**
 
-| 区域 | `{situation}` 原文 | 保存位置 |
-| --- | --- | --- |
-| 路径 $u\leadsto w$（$u\neq v_0$） | Algorithm $w$ was developed from Algorithm $u$ along $\pi$; overall $o$. Side attempts along the way are included. | 重连边 $u\to w$ 上的 $E_{u\to w}$ |
-| 初始路径 $v_0\leadsto w$ | Algorithm $w$ was developed along $\pi$, starting from a design made from scratch. Side attempts along the way are included. | 重连边 $v_0\to w$ 上的 $E_{v_0\to w}$ |
-| $p$ 处子树 | The algorithms below are attempts that started from Algorithm $p$, directly or from one another. | 父节点 $p$ 上的 $E_p$ |
-| $v_0$ 处子树 | The algorithms below were designed from scratch, together with any attempts made from them, listed from best to worst fitness (lower fitness is better). | 虚拟根 $v_0$ 上的 $E_{v_0}$ |
+~~~~text
+Develop an effective algorithm with a different main computation from the ideas already represented. Seek a different way to compute the result, rather than another weighting of the same local features. You can change the representation, the information used, or the computational procedure. Implement the chosen approach as a complete algorithm.
+~~~~
+
+上下文包含失败尝试时，追加以下指令。
+
+~~~~text
+Use the failed attempts and evaluation feedback to inform your implementation.
+~~~~
+
+**精化。**
+
+~~~~text
+Improve the current algorithm by examining how it computes its result and where this computation can be improved. The development path shows what each step changed and how fitness responded; the experience and the attempts show what has been tried and learned along this path. Use them with the implementation to locate what limits the result and to choose a meaningful modification. You may revise its representation, the information it uses, or its procedure as well as its parameters; implement a coherent improved algorithm.
+~~~~
+
+**交叉。**
+
+~~~~text
+Understand the computational ideas in both implementations and develop an algorithm that combines their useful strengths. The development path shows how the current algorithm was formed and what has been tried and learned along it; the other algorithm's code shows what it actually computes, and its experience shows what was learned about it. Use them to decide which of its computations can strengthen the current algorithm and how the two fit together. If no useful combination emerges, improve the current algorithm using what the comparison reveals.
+~~~~
+
+**探索。**
+
+~~~~text
+Design an algorithm whose main computation differs from every algorithm shown above, not another weighting of the same local features. The code shows what each one actually computes, even where a design is inaccurate, and the experience shows what has been tried and learned. The code is not a structure you must preserve. A different computation may use other information, another representation, or another procedure. For example, it can estimate the downstream consequences of a choice, construct and improve a tentative solution, or solve a useful subproblem. Implement the computation that suits this task.
+~~~~
+
+### E.5. 反思模板
+
+~~~~text
+{problem}
+
+[Algorithms]
+{situation}
+
+{records}
+
+[Task]
+{question}
+The analysis of each attempt states its intent before it was coded and evaluated; its code shows what it actually implemented; its results show how it performed. Describe each idea by the computation it introduces or changes, without parameter values, and do not generalize beyond what these algorithms show. If an idea seems worth developing although its attempt scored poorly, say why.{merge}
+
+[Output]
+Return one JSON object with two strings: "analysis", a brief comparison of each attempt's intent, code and results; then "experience", about 120 words of design experience. In the experience, refer to every algorithm by its idea, not by its number.
+~~~~
+
+`{problem}` 给出任务、目标定义和函数接口。`{records}` 汇集生成前分析、源码、设计简述、实测结果或失败信息，以及已有经验。路径收缩区分主路径与侧枝。子树剪枝将尝试结果与起点算法比较。
+
+**表6｜反思提示中的区域说明。**
+
+| 区域 | `{situation}` |
+| ------------------------- | ------------------------------------------------------------- |
+| 从算法节点出发的路径 | Algorithm {v} was developed from Algorithm {u} along {path}; overall {overall_outcome}. Side attempts along the way are included. |
+| 从虚拟根出发的路径 | Algorithm {v} was developed along {path}, starting from a design made from scratch. Side attempts along the way are included. |
+| 算法节点下的子树 | The algorithms below are attempts that started from Algorithm {p}, directly or from one another. |
+
+**路径收缩的反思问题。**
+
+~~~~text
+Reflect, as an algorithm designer, on how Algorithm {v} was developed. Which ideas built it along the path, and what did the side attempts try?
+~~~~
+
+**子树剪枝的反思问题。**
+
+~~~~text
+Reflect, as an algorithm designer, on these attempts to improve Algorithm {p}. Did any idea do better than it, and which ideas did not pay off?
+~~~~
+
+**已有经验时追加。**
+
+~~~~text
+Integrate the earlier experience shown above, revising what these algorithms contradict.
+~~~~
+
+### E.6. 修复模板
+
+格式修复依次给出原始回复 `[Original Response]` 和解析反馈 `[Parsing Feedback]`。程序修复依次给出失败候选的设计与源码 `[Current Algorithm]`、评价反馈 `[Failure Feedback]`。两类修复共用附录E.3的生成模板。
+
+**格式修复。**
+
+~~~~text
+Convert the original response into the JSON object specified in [Output], using the parsing feedback to correct its structure, required fields, and string escaping.
+Preserve the existing algorithmic idea and computational logic.
+Complete any missing or truncated content consistently with that approach and the task requirements.
+~~~~
+
+`{analysis_instruction}`
+
+~~~~text
+Keep the original rationale if present. Otherwise briefly state the intended computation.
+~~~~
+
+**执行报错。**
+
+~~~~text
+Trace the reported exception or invalid result to its cause in the code, using the design to understand the intended algorithm.
+Correct the faulty computations or data handling so the function executes correctly and satisfies the task requirements, while retaining the intended core computation.
+~~~~
+
+**评价超时。**
+
+~~~~text
+Make the algorithm finish within the reported time limit. Reduce the cost of its core computation, using an approximation when needed, while retaining the intended algorithmic idea.
+~~~~
+
+报错与超时修复共用以下 `{analysis_instruction}`。
+
+~~~~text
+Explain the correction for the reported failure.
+~~~~
 
 ## 附录 F. 案例：原节点移除后的跨轮经验传递
 

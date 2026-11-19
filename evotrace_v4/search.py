@@ -46,7 +46,7 @@ class EvoTrace:
 
     method = "evotrace_v4"
     selection_rule = "tree_population_rank_direct_sampling"
-    generation_protocol = "tree_population_lineage_cards_analysis_code_design"
+    generation_protocol = "tree_population_lineage_cards_analysis_code_design_v8"
     mechanisms = (
         "tree_population",
         "reflective_elimination",
@@ -156,6 +156,7 @@ class EvoTrace:
                 prog.design or "",
                 prog.evaluation.fitness if prog.valid else None,
                 prog.evaluation.failure,
+                analysis=prog.analysis or "",
             ),
             Edge(attempt.parent_id, prog.id, op, attempt.reference_id if op == "Crossover" else None),  # type: ignore[arg-type]
             evaluations=len(attempt.evaluations),

@@ -186,3 +186,54 @@ def test_v3_batch_manifest_records_effective_topology(tmp_path, monkeypatch, cap
     manifest = json.loads(capsys.readouterr().out)
     assert manifest['topology'] == {'max_representatives': 16, 'cover_distance': 0.2, 'region_size': 3}
     assert not list(tmp_path.rglob('batch_*.json'))
+
+
+def test_eco_batch_passes_cloud_backend_and_cpu_scheduler_to_worker(entry_environment, monkeypatch, capsys):
+    from experiments.traceaad import launch_host
+    monkeypatch.setattr(launch_host, "scheduler_status", lambda _: {"instance_id": "cpu-pool"})
+    monkeypatch.setattr(run, "scheduler_status", lambda _: {"instance_id": "cpu-pool"})
+    monkeypatch.setattr(run, "ScheduledModel", lambda *_: pytest.fail("Eco must not reserve a GPU"))
+    monkeypatch.setenv("OPENDESIGN_API_KEY", "dummy-eco-test-key")
+    launch_host.main(["--method", "evotrace.v4", "--backend", "opendesign-eco", "--batch", "eco",
+                      "--tasks", "fssp_gls", "--repeats", "1", "--scheduler-socket", "/cpu",
+                      "--env-file", "/private/eco.env"])
+    manifest = json.loads(capsys.readouterr().out)
+    row, = manifest["plan"]
+    command = row["command"]
+    assert command[command.index("--env-file") + 1] == "/private/eco.env"
+    run.main([*command[command.index("experiments.traceaad.run") + 1:], "--dry-run"])
+    metadata = json.loads(capsys.readouterr().out)
+    assert manifest["backend"] == row["backend"] == metadata["backend"] == "opendesign-eco"
+    assert metadata["scheduler_socket"] == "/cpu"
+    assert manifest["model_routing"] == metadata["model_routing"] == run.eco_routing()
+    assert metadata["llm"]["model"] == "deepseek-v4.1-flash-eco"
+    assert metadata["llm"]["sampling"] == {"temperature": 1., **manifest["sampling"]}
+    assert "dummy-eco-test-key" not in json.dumps([manifest, metadata])
+
+
+def test_eco_requests_keep_non_thinking_control_on_schema_change(monkeypatch):
+    from evotrace_v4 import llm
+    from evotrace_v4.models import CANDIDATE_RESPONSE_FORMAT
+    from evotrace_v4.reflection import EXPERIENCE_SCHEMA
+    from evotrace_v4.search import with_output_format
+
+    requests = []
+
+    def capture(_function, args, _timeout):
+        endpoint, key, payload, _ = args
+        assert endpoint == run.ECO_URL + "/chat/completions"
+        assert key == "dummy-key"
+        requests.append(payload)
+        return {"content": "{}", "model": run.ECO_MODEL, "usage": {}, "finish_reason": "stop"}, {}
+
+    monkeypatch.setattr(llm, "isolated_call", capture)
+    client = llm.OpenAIClient(run.ECO_URL, run.ECO_MODEL, api_key="dummy-key",
+                              request_options=run.request_options("evotrace.v4", run.ECO_BACKEND))
+    for schema in (CANDIDATE_RESPONSE_FORMAT, EXPERIENCE_SCHEMA):
+        model = with_output_format(client, schema, role=schema is EXPERIENCE_SCHEMA)
+        model.complete("test", temperature=1., max_tokens=32, timeout=2)
+    assert [p["response_format"] for p in requests] == [CANDIDATE_RESPONSE_FORMAT, EXPERIENCE_SCHEMA]
+    for payload in requests:
+        assert payload["reasoning_effort"] == "none"
+        assert payload["model"] == run.ECO_MODEL
+        assert "chat_template_kwargs" not in payload and "top_k" not in payload

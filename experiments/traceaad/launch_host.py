@@ -18,6 +18,8 @@ from traceaad_base.storage import write_json
 from traceaad_base.selection import SELECTION_RULE
 from .run import (
     ALLOCATION_FIELDS,
+    BACKENDS,
+    ECO_BACKEND,
     EVOTRACE_METHODS,
     METHODS,
     TOPOLOGY_FIELDS,
@@ -26,6 +28,7 @@ from .run import (
     V3TopologyConfig,
     V4AllocationConfig,
     V4TopologyConfig,
+    eco_routing,
     request_options,
     selection_rule_for,
 )
@@ -64,7 +67,8 @@ def build_plan(args):
             session = f"{args.batch}_{TASK_SHORT[task]}_{slug}_r{seed + 1}"
             directory = ROOT / "experiments_result" / args.experiment / task / name
             command = [sys.executable, "-u", "-m", "experiments.traceaad.run",
-                       "--method", args.method, "--backend", args.backend, "--task", task, "--run-name", name, "--batch", args.batch,
+                       "--method", args.method, "--backend", args.backend, "--task", task,
+                       "--run-name", name, "--batch", args.batch,
                        "--experiment", args.experiment, "--seed", str(seed),
                        "--budget", str(args.budget),
                        "--initial-size", str(args.initial_size), "--max-tokens", str(args.max_tokens),
@@ -79,7 +83,7 @@ def build_plan(args):
                 command += ["--scheduler-socket", args.scheduler_socket]
             command += ["--seconds-per-instance", str(args.seconds_per_instance)]
             if args.env_file:
-                command += ["--env-file", str(args.env_file)]
+                command += ["--env-file", str(args.env_file.resolve())]
             if args.skip_heldout:
                 command += ["--skip-heldout"]
             plan.append({"task": task, "seed": seed, "repeat": seed + 1, "backend": args.backend,
@@ -112,7 +116,7 @@ def launch_run(row):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--method", choices=tuple(METHODS), default="base")
-    parser.add_argument("--backend", choices=("scheduled",), default="scheduled")
+    parser.add_argument("--backend", choices=BACKENDS, default="scheduled")
     parser.add_argument("--batch", required=True)
     parser.add_argument("--experiment", help="Result directory name; defaults to the selected method")
     parser.add_argument("--tasks", nargs="+", choices=CO_TASKS,
@@ -151,8 +155,8 @@ def main(argv=None):
             parser.error("Use alphanumeric names with underscores or hyphens")
     plan = build_plan(args)
     scheduler = scheduler_status(args.scheduler_socket) if args.scheduler_socket else None
-    if args.backend == "scheduled" and scheduler is None:
-        parser.error("scheduled backend requires --scheduler-socket")
+    if scheduler is None:
+        parser.error("Evaluation requires --scheduler-socket")
     path = ROOT / "experiments_result" / args.experiment / f"batch_{args.batch}.json"
     manifest = {
         "batch": args.batch, "method": METHODS[args.method][0], "experiment": args.experiment,
@@ -164,13 +168,16 @@ def main(argv=None):
         "trajectory_reference_embedding": False,
         "mechanisms": list(METHODS[args.method][1].mechanisms),
         "generation_protocol": METHODS[args.method][1].generation_protocol,
-        "sampling": request_options(args.method), "final_selection": "training", "eval_workers": EVALUATION_WORKERS,
+        "backend": args.backend, "sampling": request_options(args.method, args.backend),
+        "final_selection": "training", "eval_workers": EVALUATION_WORKERS,
         "evaluation_scope": "whole_task", "resource_scheduler": scheduler,
         "seconds_per_instance": args.seconds_per_instance,
         "source_snapshot": str(ROOT),
         "pipeline": "search -> freeze training best -> independent held-out evaluation",
         "status": "planned", "plan": plan,
     }
+    if args.backend == ECO_BACKEND:
+        manifest["model_routing"] = eco_routing()
     method_id = METHODS[args.method][0]
     if method_id in EVOTRACE_METHODS:
         manifest.pop("selection_temperature")

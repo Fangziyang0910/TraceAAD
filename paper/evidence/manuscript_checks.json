@@ -99,7 +99,7 @@
     "en": {
       "main_end_page": 7,
       "appendix_start_page": 10,
-      "total_pages": 17,
+      "total_pages": 18,
       "paper_size": "Letter",
       "main_columns": 2,
       "appendix_columns": 1
@@ -107,7 +107,7 @@
     "zh": {
       "main_end_page": 6,
       "appendix_start_page": 9,
-      "total_pages": 15,
+      "total_pages": 17,
       "paper_size": "Letter",
       "main_columns": 2,
       "appendix_columns": 1

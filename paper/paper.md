@@ -2,7 +2,7 @@
 
 ## Abstract
 
-Large language model (LLM)-based automatic heuristic design (AHD) evolves executable heuristics for optimization problems. However, fixed-size populations discard lower-scoring heuristics together with what their edits revealed, full search trees grow unboundedly, and global reflection pools detach past lessons from the parent code they modified. We propose **TREES** (*Tree-structured Reflective Evolutionary Search*) with **reflective elimination** to maintain a bounded heuristic tree while summarizing removed candidates onto surviving nodes and edges. Each update retains high-performing, structurally distinct representatives and their lowest common ancestors, partitioning remaining nodes into path regions between retained nodes and subtree regions beneath them. Regions smaller than $m$ stay active as candidate parents so temporarily worse heuristics can still improve. Regions of size at least $m$ are removed with LLM reflection: path contraction summarizes intermediate edits into edge experience on the reconnected edge, and subtree pruning summarizes removed branches into node experience on their parent, merging prior summaries they carried. Refinement, crossover, and exploration then sample feasible parents and read relevant experiences to generate new heuristics. We prove representative invariance and a tight node bound of $4Km-2K-m$ for any evaluation budget. Across 12 runs on four combinatorial optimization tasks, TREES keeps trees under 100 nodes, improves training objectives, and reuses earlier summaries in 147 of 490 reflections ($30.0\%$).
+Large language model (LLM)-based automatic heuristic design (AHD) evolves executable heuristics for optimization problems. However, fixed-size populations discard lower-scoring heuristics together with what their edits revealed, full search trees grow unboundedly, and global reflection pools detach past lessons from the parent code they modified. We propose **TREES** (*Tree-structured Reflective Evolutionary Search*) with **reflective elimination** to maintain a bounded heuristic tree while summarizing removed candidates onto surviving nodes and edges. Each update retains high-performing, structurally distinct representatives and their lowest common ancestors, partitioning remaining nodes into path regions between retained nodes and subtree regions beneath them. Regions smaller than $m$ stay active as candidate parents so temporarily worse heuristics can still improve. Regions of size at least $m$ are removed. Reflection summarizes contracted paths as edge experience and pruned branches at algorithm nodes as node experience, incorporating prior summaries. Refinement, crossover, and exploration then sample feasible parents and read relevant experiences to generate new heuristics. We prove representative invariance and a tight node bound of $4Km-2K-m$ for any evaluation budget. Across 12 runs on four combinatorial optimization tasks, TREES keeps trees under 100 nodes, improves training objectives, and reuses earlier summaries in 147 of 490 reflections ($30.0\%$).
 
 ## 1. Introduction
 
@@ -10,9 +10,9 @@ Automatic heuristic design (AHD) seeks effective decision rules for complex opti
 
 Existing AHD methods handle these records in different ways, each with clear trade-offs. Population-based methods such as FunSearch [@funsearch] and EoH [@eoh] retain only a fixed number of top-scoring heuristics; once a lower-scoring candidate is eliminated, search loses both the chance to refine it further and the record of what its edit changed. MCTS-AHD [@mctsahd] keeps all generated heuristics in a search tree so temporarily weaker nodes can still be expanded, but tree size grows continuously with the evaluation budget and long paths cannot fit all raw code into prompts. Reflection-based methods such as ReEvo [@reevo] and RefineEvo [@refineevo] prompt LLMs to summarize heuristic comparisons into global hint pools, detaching an observation from the specific parent algorithm on which it was tested. Recent structured methods introduce phylogenetic forests [@phyloevolve], external entailment graphs [@pathwise], diff databases [@deltaevolve], or branch memories compressed into a global pool upon closure [@memorytree], yet rely on auxiliary structures outside the population or detach summaries once a branch is removed.
 
-To address this problem, we maintain the heuristic population as a single rooted tree in which the retained nodes directly determine which historical attempts are summarized together and where each summary is stored. Each node stores an evaluated heuristic function, and each directed edge records parent-to-offspring derivation. At each update, we select up to $K$ high-performing, structurally distinct **representatives** and add their pairwise lowest common ancestors (LCAs) to form a retained skeleton. All remaining nodes then fall into two disjoint region types: **path regions** connecting adjacent skeleton nodes, and **subtree regions** beneath skeleton nodes without retained descendants. A threshold $m$ governs when regions are simplified: regions with fewer than $m$ nodes stay in the tree so their feasible heuristics continue to compete as parents, whereas regions of size at least $m$ undergo **reflective elimination**. **Path contraction** summarizes removed intermediate steps into **edge experience** on the reconnected edge, and **subtree pruning** summarizes removed branches into **node experience** on their retained parent.
+To address this problem, we maintain the heuristic population as a single rooted tree in which the retained nodes directly determine which historical attempts are summarized together and where each summary is stored. Each node stores an evaluated heuristic function, and each directed edge records parent-to-offspring derivation. At each update, we select up to $K$ high-performing, structurally distinct **representatives** and add their pairwise lowest common ancestors (LCAs) to form a retained skeleton. All remaining nodes then fall into two disjoint region types: **path regions** connecting adjacent skeleton nodes, and **subtree regions** beneath skeleton nodes without retained descendants. A threshold $m$ governs when regions are simplified: regions with fewer than $m$ nodes stay in the tree so their feasible heuristics continue to compete as parents, whereas regions of size at least $m$ undergo **reflective elimination**. **Path contraction** summarizes removed intermediate steps into **edge experience** on the reconnected edge, and **subtree pruning** summarizes removed branches into **node experience** at their retained algorithm node.
 
-Building on this update, we present **TREES** (Figure 1). Each regional reflection records what computation each removed heuristic changed relative to its parent and how its score changed, without turning single trials into general rules. Whenever a node or edge carrying experience later falls inside a newly removed region, its prior summary enters the next reflection and remains on the surviving tree. Before generating each candidate, TREES samples a primary parent from all feasible nodes in the tree using objective rank and prior offspring evaluations, then applies **refinement**, **crossover**, or **exploration**: refinement and crossover inspect parent source code together with path and branch experiences to modify or combine existing implementations, whereas exploration reads objectives, descriptions, and experiences of the parent and diverse representatives without source code to design a different main computation.
+Building on this update, we present **TREES** (Figure 1). Regional reflection compares the intended computation, its implementation, and the measured outcome of each attempt to summarize design experience. An existing summary can enter a later reflection when the algorithm that carries it falls inside a region selected for reflection. Before generating each candidate, TREES samples a primary parent from all feasible nodes in the tree using objective rank and prior offspring evaluations, then applies **refinement**, **crossover**, or **exploration**: refinement and crossover inspect the parent's development and source code to modify an implementation or combine computations. Exploration uses the implementations and local experiences of the parent and diverse representatives to design a different main computation.
 
 Our main contributions are as follows:
 
@@ -26,7 +26,7 @@ Our main contributions are as follows:
 
 Following standard LLM-based AHD settings [@eoh; @mctsahd], we design a key heuristic function within a fixed outer solver framework (such as sequential greedy construction, ant colony optimization, or guided local search). Each candidate heuristic $v$ is a Python function matching a given signature and is evaluated by running the outer solver on a training set to obtain an average objective value $f(v)$ (lower is better). Candidates that execute properly and return a finite objective are called feasible heuristics; candidates that raise an exception or time out record failure messages. Within $B$ program evaluations, search returns the feasible heuristic with the lowest training objective (repair and evaluation details appear in Appendix E).
 
-TREES maintains the population as a rooted tree $T=(\mathcal V\cup\{v_0\},\mathcal E)$, where $\mathcal V$ is the set of evaluated heuristic nodes currently in the tree and $v_0$ is a virtual root without code or score. Each node $v\in\mathcal V$ stores source code $c_v$, a short algorithm description $d_v$, its evaluation outcome, and the number of offspring evaluations $n_v$ spent with $v$ as primary parent; all feasible nodes in $T$ form the feasible set $\mathcal P\subseteq\mathcal V$. Initial heuristics attach under $v_0$. Thereafter, refinement, crossover, and exploration each generate an offspring $v$ from a selected primary parent $p\in\mathcal P$ and add a directed edge $p\to v$ (crossover also records the reference heuristic's ID). After simplification, contracted edges $u\to w$ connect retained ancestors directly to retained descendants. TREES stores **edge experience** $E_{u\to w}$ (written $E_{uw}$ in figures) on edges and **node experience** $E_u$ (including $E_{v_0}$ at $v_0$) on nodes (Figure 1).
+TREES maintains the population as a rooted tree $T=(\mathcal V\cup\{v_0\},\mathcal E)$, where $\mathcal V$ is the set of evaluated heuristic nodes currently in the tree and $v_0$ is a virtual root without code or score. Each node $v\in\mathcal V$ stores the generation analysis, source code $c_v$, design summary $d_v$, evaluation outcome, and the number of offspring evaluations $n_v$ spent with $v$ as primary parent; all feasible nodes in $T$ form the feasible set $\mathcal P\subseteq\mathcal V$. Initial heuristics attach under $v_0$. Thereafter, refinement, crossover, and exploration each generate an offspring $v$ from a selected primary parent $p\in\mathcal P$ and add a directed edge $p\to v$ (crossover also records the reference heuristic's ID). After simplification, contracted edges $u\to w$ connect retained ancestors directly to retained descendants. TREES stores **edge experience** $E_{u\to w}$ (written $E_{uw}$ in figures) on edges and **node experience** $E_u$ on algorithm nodes (Figure 1).
 
 ![TREES population update and search](figures/framework.png)
 
@@ -69,13 +69,13 @@ $$
 
 Regions with fewer than $m$ nodes remain in $T$, and their feasible nodes stay in $\mathcal P$ for parent sampling. Consequently, an offspring whose objective temporarily drops below its parent's, or whose AST distance to a representative is below $\delta$, still has room to produce better descendants before its local region reaches size $m$.
 
-**Step 3: Regional reflection and removal.** All regions with $|C|\geq m$ are reflected on using the pre-update tree $T$ and then removed. For a path region $(u,w)$, **path contraction** deletes the intermediate chain and its side branches and reconnects $u\to w$; the LLM reads baseline $u$ (when $u\neq v_0$), all removed nodes, and endpoint $w$ with their codes, descriptions, score changes, and existing experiences (including prior experience on $w$'s incoming edge), summarizing how $w$ developed from $u$ into **edge experience** $E_{u\to w}$. For a subtree region at $u\in\mathcal H$, **subtree pruning** deletes those branches; the LLM reads parent $u$ with its prior $E_u$ together with all removed nodes' codes, descriptions, outcomes (including failures), and existing experiences, updating **node experience** $E_u$ (or $E_{v_0}$ when $u=v_0$). Both operations use one reflection prompt (Appendix E.5) that asks only for concrete computations changed and measured outcomes rather than general rules. When a formerly retained node later falls inside a removed region, its edge and node experiences enter that reflection (Figure 2).
+**Step 3: Regional reflection and removal.** TREES removes all regions with $|C|\geq m$. In **path contraction**, the LLM reads the intermediate chain and its side branches, the retained endpoint $w$, and the starting algorithm $u$ when $u\neq v_0$. It summarizes the changes, measured outcomes, and prior experiences into **edge experience** $E_{u\to w}$ on the reconnected edge. In **subtree pruning** at an algorithm node $u$, the LLM summarizes the removed attempts together with $u$'s prior experience into **node experience** $E_u$. TREES prunes the subtree region at the virtual root directly. Each reflection uses the same pre-update tree. It compares the attempts' pre-coding analyses with their code and measured outcomes. It produces a comparison for the record and writes the resulting design experience to the retained tree (Appendix E.5 and Figure 2).
 
 ![Experience accumulation across successive updates](figures/reflective-simplification.png)
 
 **Figure 2. Experience passing across successive population updates.** (a) When former retained node $D$ is contracted together with $u_1$–$u_3$, prior edge experience $E_{AD}$ and the newer steps are summarized together into $E_{AG}$. (b) When new branches $y_1$–$y_4$ under $A$ are pruned, their outcomes are merged with prior node experience $E_A$. Earlier summaries stay in the tree after their original nodes are removed.
 
-**Proposition 1 (Structural Properties of Tree Updates).** *Let $T=(\mathcal V\cup\{v_0\},\mathcal E)$ be any finite rooted tree with $K,m\geq 1$ and $\delta\in[0,1]$, and let $T'=(\mathcal V'\cup\{v_0\},\mathcal E')$ be the tree after one reflective elimination update. Then: (i) $T'$ is a rooted tree preserving ancestry among nodes in $\mathcal K$, and $\mathcal C$ partitions $\mathcal V\setminus\mathcal H$ into disjoint regions; (ii) the best feasible heuristic survives, with $R(T')=R(T)$ and $\mathcal H(T')=\mathcal H(T)$; (iii) repeating the update without new nodes removes zero nodes (idempotence); and (iv) every removed or replaced experience text enters the reflection that replaces it, while for any evaluation budget $B$ the surviving node count satisfies the tight bound $|\mathcal V'|\leq 4Km-2K-m$ (332 for $K=24,m=4$).* Proofs and the tightness construction appear in Appendix C.
+**Proposition 1 (Structural Properties of Tree Updates).** *Let $T=(\mathcal V\cup\{v_0\},\mathcal E)$ be any finite rooted tree with $K,m\geq 1$ and $\delta\in[0,1]$, and let $T'=(\mathcal V'\cup\{v_0\},\mathcal E')$ be the tree after one reflective elimination update. Then: (i) $T'$ is a rooted tree preserving ancestry among nodes in $\mathcal K$, and $\mathcal C$ partitions $\mathcal V\setminus\mathcal H$ into disjoint regions; (ii) the best feasible heuristic survives, with $R(T')=R(T)$ and $\mathcal H(T')=\mathcal H(T)$; (iii) repeating the update without new nodes removes zero nodes (idempotence); and (iv) for each reflected region, every removed or replaced experience text enters its reflection prompt, and for any evaluation budget $B$ the surviving node count satisfies the tight bound $|\mathcal V'|\leq 4Km-2K-m$ (332 for $K=24,m=4$).* Proofs and the tightness construction appear in Appendix C.
 
 ### 2.3. Parent Selection
 
@@ -93,9 +93,9 @@ Here $h>0$ is the rank half-life: at equal $n_p$, sampling weight halves every $
 
 ### 2.4. Search Operators and Prompt Context
 
-Given primary parent $p\in\mathcal P$, TREES samples refinement, crossover, or exploration with fixed probabilities $(\pi_{\text{ref}},\pi_{\text{cross}},\pi_{\text{exp}})$. Each generation call asks the LLM to return three JSON fields in order: `analysis`, which uses the problem structure to work out a concrete computation and why its choices should improve the final solution (archived only and omitted from later prompts); `code`, the complete Python function $c_v$; and `design`, a short summary $d_v$ of the main computation and parameters implemented in `code`. Writing `design` after `code` prevents mismatches between pre-written descriptions and actual code [@eoh; @mctsahd] within a single LLM call (Appendix E.3).
+Given primary parent $p\in\mathcal P$, TREES samples refinement, crossover, or exploration with fixed probabilities $(\pi_{\text{ref}},\pi_{\text{cross}},\pi_{\text{exp}})$. Each generation call asks the LLM to return three JSON fields in order: `analysis`, which uses the problem structure to work out a concrete computation and why its choices should improve the final solution (retained for regional reflection); `code`, the complete Python function $c_v$; and `design`, a short summary $d_v$ of the main computation and parameters implemented in `code`. Writing `design` after `code` lets the model describe its implementation in the same LLM call [@eoh; @mctsahd] (Appendix E.3).
 
-**Refinement** modifies $p$'s representation, input information, procedure, or parameters to improve performance. Its prompt lists each step along $v_0\leadsto p$ with score changes, descriptions, and edge and node experiences (including $E_{v_0}$), followed by $p$'s node experience $E_p$, surviving direct children of $p$, and $p$'s source code $c_p$.
+**Refinement** modifies $p$'s representation, input information, procedure, or parameters to improve performance. The prompt shows $p$'s development path with score changes, design descriptions, and edge and node experiences. It then lists $p$'s node experience $E_p$ and the results of surviving direct children, followed by $p$'s source code $c_p$.
 
 **Crossover** combines useful mechanisms from $p$ and a reference heuristic $q$. Candidate set $\mathcal Q_p$ takes AST-distinct representatives in $R\setminus\{p\}$, or AST-distinct nodes in $\mathcal D\setminus\{p\}$ if empty (falling back to refinement if still empty). Letting $r_{\mathcal Q_p}(q)$ denote $q$'s average rank starting from $0$ within $\mathcal Q_p$, $q$ is sampled by rank decay and structural distance:
 
@@ -104,9 +104,9 @@ P(q\mid p) = \frac{2^{-r_{\mathcal Q_p}(q)/h}\,d(p,q)}{\sum_{u\in\mathcal Q_p}2^
 \tag{5}
 $$
 
-If all distances in $\mathcal Q_p$ are zero, sampling uses $2^{-r_{\mathcal Q_p}(q)/h}$ alone. Crossover adds $q$'s objective, description, any experiences along $v_0\leadsto q$ not yet shown, and source code $c_q$ to $p$'s refinement context (omitting $q$ from $p$'s child list).
+If all distances in $\mathcal Q_p$ are zero, sampling uses $2^{-r_{\mathcal Q_p}(q)/h}$ alone. Crossover inserts $q$'s card before $p$'s source code. The card contains $q$'s objective, design, own incoming-edge and node experiences, and source code $c_q$. The card omits experiences already shown for $q$ in the development path. If $q$ is also a direct child of $p$, it appears in the reference card.
 
-**Exploration** designs a heuristic whose main computation differs from $p$ and existing approaches. From AST-distinct members of $R\setminus\{p\}$, TREES selects up to $M$ overview representatives: picking the best-scoring representative first, then greedily adding the representative maximizing minimum AST distance to $\{p\}$ and those already chosen. Unlike refinement and crossover, exploration omits all source code and child-attempt lists so the LLM is not anchored to editing $p$'s code structure: its prompt provides $E_{v_0}$, the objectives and descriptions of the overview representatives, and $p$'s objective, description $d_p$, incoming edge experience, and node experience $E_p$. Once evaluated, the new offspring attaches under $p$. Algorithm 1 outlines TREES; default parameters are $N_0=5,K=24,\delta=0.15,m=4,h=10,M=6$, and operator probabilities $(0.45,0.25,0.30)$.
+**Exploration** uses a card for $p$ and cards for up to $M$ structurally diverse representatives to design a different main computation. Each card contains the objective, design, local experiences, and source code. TREES draws representatives without replacement from AST-distinct members of $R\setminus\{p\}$ with weights $2^{-r(q)/h}\min_{u\in\{p\}\cup S}d(q,u)$, where $r(q)$ is the candidate's rank in that pool and $S$ is the set already drawn. A candidate must have positive minimum distance. The prompt displays $p$ first and orders the displayed representatives by objective. The evaluated offspring attaches under $p$. Algorithm 1 outlines the search. The defaults are $N_0=5,K=24,\delta=0.15,m=4,h=6,M=5$, with operator probabilities $(0.50,0.30,0.20)$.
 
 ```text
 Algorithm 1: TREES
@@ -122,7 +122,7 @@ while budget remains and stopping rule is not met:
     If fewer than N_0 feasible initial heuristics collected, continue
     Select representatives R and skeleton H
     Partition V \ H into path and subtree regions
-    Reflect on regions with |C| >= m using pre-update T
+    Reflect on path and non-root subtree regions with |C| >= m using pre-update T
     Contract paths and prune subtrees; store E_{u->w}, E_u
 return best feasible heuristic evaluated during search
 ```
@@ -170,9 +170,9 @@ As shown in Figure 3, maintained node counts stay below 100 as new candidates en
 
 ## 5. Discussion and Limitations
 
-In TREES, threshold $m$ jointly controls short-term parent retention and regional summarization. While a region holds fewer than $m$ nodes, new heuristics whose scores temporarily drop or make local adjustments stay in $\mathcal P$ and can still be sampled to produce stronger descendants; once a region reaches $m$ nodes, a single reflection summarizes those related attempts and stores the resulting edge or node experience where refinement, crossover, and exploration read it. Furthermore, because representative selection, skeleton partitioning, and parent sampling depend only on AST features, objectives, and evaluation counts rather than experience text, muting experience text at any fixed tree state cleanly isolates its effect on generation.
+In TREES, threshold $m$ jointly controls short-term parent retention and regional summarization. While a region holds fewer than $m$ nodes, new heuristics whose scores temporarily drop or make local adjustments stay in $\mathcal P$ and can still be sampled to produce stronger descendants; once a path or non-root subtree region reaches $m$ nodes, a single reflection summarizes those related attempts and stores the resulting edge or node experience where refinement, crossover, and exploration read it. Furthermore, because representative selection, skeleton partitioning, and parent sampling depend only on AST features, objectives, and evaluation counts rather than experience text, one can test the effect of experience by toggling its text while holding the tree and displayed algorithms fixed.
 
-TREES has three main limitations. First, AST feature distance ignores numeric constants so that $R$ preserves differences in control flow and operators rather than scalar copies; although variants in regions below size $m$ can still adjust constants and record outcomes upon pruning, dedicated parameter tuners [@irace] remain complementary when continuous constants dominate performance. Second, each removed region invokes one short-output LLM call; when program evaluation is nearly instantaneous and LLM calls dominate runtime, increasing $m$ reduces reflection frequency. Third, following standard AHD benchmarks, we design a single heuristic function inside a fixed outer solver rather than co-evolving multiple solver components.
+TREES has three main limitations. First, AST feature distance ignores numeric constants so that $R$ preserves differences in control flow and operators rather than scalar copies; although variants in regions below size $m$ can still adjust constants and record outcomes upon pruning, dedicated parameter tuners [@irace] remain complementary when continuous constants dominate performance. Second, each reflected region invokes one short-output LLM call; when program evaluation is nearly instantaneous and LLM calls dominate runtime, increasing $m$ reduces reflection frequency. Third, following standard AHD benchmarks, we design a single heuristic function inside a fixed outer solver rather than co-evolving multiple solver components.
 
 ## 6. Conclusion
 
@@ -229,13 +229,13 @@ If TREES kept only representatives $R$ without their pairwise LCAs $F$, a remove
 
 At the same time, TREES samples parents from all feasible nodes $\mathcal P$ rather than only $R$. As observed in MCTS-AHD, strong heuristics often pass through an intermediate structural edit whose score temporarily drops, or require further refinement near an existing representative ($d<\delta$) [@mctsahd]. As long as a region holds fewer than $m$ nodes, these new heuristics stay in $\mathcal P$ with $n_v=0$ and compete under Eq. (4): if they yield a strong descendant it enters $R$, and if $m$ nodes accumulate without a retained descendant the branch is pruned and summarized at its parent.
 
-### B.2. Roles of Edge, Node, and Root Experiences
+### B.2. Roles of Edge and Node Experiences
 
-Edge experience $E_{u\to w}$ summarizes how retained descendant $w$ was obtained from ancestor $u$ across intermediate edits; node experience $E_u$ summarizes modifications tried from $u$ whose branches left no retained descendant (including improvements, regressions, and execution failures), helping subsequent prompts avoid repeating ineffective edits. Because virtual root $v_0\in\mathcal H$ belongs to the skeleton, eliminated initial heuristics and their branches form the subtree region at $v_0$ and update $E_{v_0}$, providing initial-attempt experience at the start of paths $v_0\leadsto p$ and in exploration prompts without an external global memory module. When a node $A$ carrying $E_A$ or incoming edge experience later leaves the skeleton and is removed inside an outer region, those summaries enter the outer region's reflection (Figure 2).
+Edge experience $E_{u\to w}$ records how $w$ developed from $u$ across intermediate attempts. Node experience $E_u$ records computations tried on pruned branches and their measured outcomes. A contracted path starting at $v_0$ records the development of an initial design on the reconnected edge. When a node carrying node or incoming-edge experience later falls in a reflected region, those summaries enter the new reflection (Figure 2).
 
 ### B.3. Ordered Output of Analysis, Code, and Design
 
-With native thinking disabled, each generation call outputs `analysis` (up to ~300 words), `code` ($c_v$), and `design` (~120 words, $d_v$) in order. Writing `analysis` first lets the model work out a concrete computation and why its choices favor better solutions before coding, while archiving `analysis` keeps later prompts compact. Writing `design` after `code` ensures that $d_v$ summarizes the computation actually implemented in $c_v$ rather than an unimplemented plan, avoiding description-code mismatch without making a second LLM call per candidate as in MCTS-AHD [@mctsahd]. In addition, because exploration prompts show `design` descriptions and experiences without source code, $d_v$ directly provides the algorithm representation used when rethinking core computations.
+The model uses `analysis` to plan a concrete computation before writing `code`. The search retains this analysis for comparison with the code and results during regional reflection. The model then uses `design` to summarize the implemented computation and key parameters in the same call [@mctsahd]. Exploration cards show both the design description and the implementation.
 
 ## Appendix C. Proof of Proposition 1
 
@@ -247,7 +247,7 @@ Let $T_0=(\mathcal V_0\cup\{v_0\},\mathcal E_0)$ be a finite rooted tree with fe
 
 **Best-heuristic retention and representative and skeleton invariance.** When $\mathcal P_0\neq\varnothing$, the first ordered candidate $v_1\in\mathcal D_0$ is accepted first in Eq. (1), so the best feasible heuristic survives in $R(T_0)\subseteq\mathcal K$. Every $r\in R(T_0)$ remains the earliest surviving node in its normalized-AST and objective equivalence class in $T_1$, giving $R(T_0)\subseteq\mathcal D(T_1)$. By induction along the sorted scan of $\mathcal D(T_1)$, suppose the set accepted before $w\in\mathcal D(T_1)$ equals the prefix of $R(T_0)$ preceding $w$. If $w\in R(T_0)$, it encounters the same accepted prefix as in $T_0$ and is accepted. If $w\notin R(T_0)$, let $w_0\in\mathcal D_0$ be the earliest node in $T_0$ in $w$'s equivalence class ($w_0\leq w$); $w_0$ was rejected in $T_0$ either because an earlier $u\in R(T_0)$ satisfied $d(w_0,u)<\delta$ or because $K$ representatives were already selected. Those preceding representatives survive ahead of $w$ in $T_1$ with $d(w,u)=d(w_0,u)$, so $w$ is rejected in $T_1$ as well. Induction yields $R(T_1)=R(T_0)$, and ancestry-preserving contractions and prunings preserve pairwise LCAs, giving $F(T_1)=F(T_0)$ and $\mathcal H(T_1)=\mathcal H(T_0)$.
 
-**Idempotence and retention of prior experiences.** Since $\mathcal H(T_1)=\mathcal H(T_0)$, the non-skeleton regions on $T_1$ are $\mathcal C(T_1)=\{C\in\mathcal C(T_0):|C|<m\}$, all smaller than $m$, so repeating the update without new nodes removes zero nodes. Every $x\in\mathcal U$ contributes its node and incoming-edge experiences to its region's reflection prompt, along with endpoint $w$'s prior incoming-edge experience in path contraction or parent $u$'s prior $E_u$ (including $E_{v_0}$) in subtree pruning; if a reflection call fails, concatenating these prior texts retains them.
+**Idempotence and retention of prior experiences.** Since $\mathcal H(T_1)=\mathcal H(T_0)$, the non-skeleton regions on $T_1$ are $\mathcal C(T_1)=\{C\in\mathcal C(T_0):|C|<m\}$, all smaller than $m$, so repeating the update without new nodes removes zero nodes. Every removed node in a reflected region contributes its node and incoming-edge experiences to that prompt. Path contraction also reads the endpoint's prior incoming-edge experience. Subtree pruning reads the parent's prior $E_u$. If reflection fails, the system concatenates the prior texts supplied to the prompt.
 
 **Tight node bound.** Let $r=|R(T_0)|$ and $s=|\mathcal H(T_0)|$. If $r=0$, $\mathcal H(T_0)=\{v_0\}$ and $|\mathcal V_1|\leq m-1\leq 4Km-2K-m$. If $1\leq r\leq K$, in the skeleton tree obtained by contracting non-skeleton paths, every $f\in F(T_0)$ has out-degree at least two and every leaf belongs to $R(T_0)$, so $|F(T_0)|\leq r-1$ and $s=1+r+|F(T_0)|\leq 2r\leq 2K$. The skeleton tree has $s-1$ edges (at most $s-1$ path regions) and $s$ nodes (at most $s$ subtree regions). After simplification each remaining region holds at most $m-1$ nodes, so excluding $v_0$ gives $|\mathcal V_1|\leq(s-1)+(2s-1)(m-1)\leq(2K-1)+(4K-1)(m-1)=4Km-2K-m$. To attain this bound, place $K$ feasible leaves with pairwise AST distance at least $\delta$ and strictly best objectives on a full binary tree of $K-1$ internal LCAs under $v_0$ ($2K$ skeleton nodes and $2K-1$ skeleton edges), insert $m-1$ suboptimal nodes on each skeleton edge, and attach a chain of $m-1$ suboptimal nodes under each skeleton node; all $4K-1$ regions have size $m-1<m$, leaving $4Km-2K-m$ algorithm nodes (332 for $K=24,m=4$).
 
@@ -284,7 +284,7 @@ External baselines include EoH [@eoh], ReEvo [@reevo], MCTS-AHD [@mctsahd], Refi
 
 ### D.4. Language Model Parameters
 
-All runs use Qwen3.8-27B with native thinking disabled across seeds 0, 1, and 2. Candidate generation uses temperature 1.0, top-$p$ 0.8, top-$k$ 20, presence penalty 1.5, and max 16,384 output tokens; regional reflection uses temperature 0.3 and max 1,536 output tokens.
+The runs analyzed in Section 3 use Qwen3.8-27B with native thinking disabled across seeds 0, 1, and 2. Candidate generation uses temperature 1.0, top-$p$ 0.8, top-$k$ 20, presence penalty 1.5, and max 16,384 output tokens; regional reflection uses temperature 0.3 and max 1,536 output tokens.
 
 ### D.5. Preliminary Run Statistics
 
@@ -294,79 +294,189 @@ The 12 preliminary runs in Section 3 contain 243–363 program evaluations each 
 
 ### E.1. Code Distance and Sampling Details
 
+After stripping docstrings, TREES extracts multisets of AST parent-child tag pairs and depth-first adjacent tag bigrams (recording syntax node types, operators, and called function or attribute names while ignoring variable names and numeric constants) and computes multiset Jaccard distance $d(u,v)$. Deduplication in $\mathcal D$ compares full ASTs without comments or docstrings and requires equal objectives among nodes currently in the tree. Exploration displays the selected representative cards in ascending order of objective, breaking ties by node ID.
+
 **Table 4. Default TREES parameters.**
 
 | Module | Default setting |
 | --- | --- |
 | Initialization and budget | $N_0=5$ feasible initial heuristics; budget $B=1{,}000$ program evaluations |
 | Representatives and skeleton | $K=24$, $\delta=0.15$; closed under pairwise LCAs to form $\mathcal H$ |
-| Region threshold | $m=4$ ($|C|<m$ kept in $\mathcal P$; $|C|\geq m$ reflected and removed) |
-| Parent selection | Sampled over all feasible nodes $\mathcal P$; half-life $h=10$; factor $1/(1+n_p)$ |
-| Operator probabilities | Refinement $0.45$; crossover $0.25$; exploration $0.30$ |
+| Region threshold | $m=4$ nodes per region |
+| Parent selection | Sampled over all feasible nodes $\mathcal P$; half-life $h=6$, factor $1/(1+n_p)$ |
+| Operator probabilities | Refinement $0.50$, crossover $0.30$, exploration $0.20$ |
 | Crossover reference | Sampled from AST-distinct $\mathcal Q_p$ ($R\setminus\{p\}$, else $\mathcal D\setminus\{p\}$) via $2^{-r/h}\cdot d(p,q)$ |
-| Exploration overview | AST-distinct members of $R\setminus\{p\}$: best first, then greedy max-min AST distance up to $M=6$ |
-
-After stripping docstrings, TREES extracts multisets of AST parent-child tag pairs and depth-first adjacent tag bigrams (recording syntax node types, operators, and called function or attribute names while ignoring variable names and numeric constants) and computes multiset Jaccard distance $d(u,v)$. Deduplication in $\mathcal D$ compares full ASTs without comments or docstrings and requires equal objectives among nodes currently in the tree. Ties during greedy max-min AST selection for exploration break by better objective and then smaller node ID, and chosen overview representatives are displayed from best to worst objective.
+| Exploration overview | Up to $M=5$ draws without replacement using rank decay and minimum AST distance |
 
 ### E.2. Evaluation, Single Repair, and Stopping Rule
 
 Each generation attempt allows at most one repair: format repair if JSON parsing fails (consuming zero evaluations), or program repair if execution raises an error or times out while budget remains (counting the re-evaluation toward $B$). Only the final evaluated program of the attempt enters $T$, adding evaluations spent to $n_p$ when $p\neq v_0$. Search stops at $B$ evaluations or after 10 consecutive attempts without an evaluated program. If a reflection call fails or returns empty text, existing experience texts in that region are concatenated and retained.
 
-### E.3. Generation Prompt Structure
+### E.3. Generation Template and Context
 
-Every generation prompt comprises five sections (`[Algorithm-design task]`, `[Function interface]`, `[Context]`, `[Instruction]`, `[Output]`) and requests a single JSON object with three ordered string fields: `"analysis"` (up to 300 words working out a concrete computation and why its choices improve the solution; archived only), `"code"` (complete implementation), and `"design"` (~120 words describing the main computation and parameters in `"code"`, stored on the node). Table 5 lists `[Context]` block orders and source-code visibility.
+**Table 5. Context blocks in candidate generation.**
 
-**Table 5. Prompt context order and source-code visibility across search operators.**
+| Call | Context in order |
+| -------------------- | -------------------------------------------------------------- |
+| Initialization | `[Example Algorithm]` task example → `[Existing Approaches]` feasible initial designs and objectives → `[Failed Attempts]` failed programs and feedback |
+| Refinement | `[Development of the Current Algorithm]` parent development → `[Attempts from the Current Algorithm]` attempts from the parent → `[Current Algorithm]` parent objective and code |
+| Crossover | `[Development of the Current Algorithm]` parent development → `[Attempts from the Current Algorithm]` attempts from the parent → `[Other Algorithm]` reference card → `[Current Algorithm]` parent objective and code |
+| Exploration | `[Current Algorithm]` parent card → `[Other Existing Approaches]` cards for the selected representatives |
 
-| Operator | Context block order | Source code shown |
-| --- | --- | --- |
-| Refinement | Path to $p$ (with $E_{v_0}$); child attempts from $p$ (with $E_p$); current algorithm $p$ | $p$ |
-| Crossover | Path to $p$ (with $E_{v_0}$); child attempts from $p$ (excluding $q$); reference $q$ (with unseen path experiences); current algorithm $p$ | $p$ and $q$ |
-| Exploration | Other initial attempts ($E_{v_0}$); existing approaches (scores & descriptions); current algorithm $p$ (score, description, incoming-edge & node experiences) | None |
+The development path and attempt list provide generation intent, measured outcomes, designs, and available experiences. Each full card contains the objective, design, incoming-edge experience, node experience, and source code.
 
-In refinement and crossover, the path block lists $E_{v_0}$ followed by each node along $v_0\leadsto p$ with its origin, score change relative to its parent, description, incoming edge experience, and node experience ($E_p$ opens the child-attempts block ahead of surviving direct children of $p$ in creation order). Initialization prompts show the task example, feasible initial heuristics' objectives and descriptions, and up to two recent initial failures. Experience ablations remove experience lines only while keeping all other context and sampling rules identical.
+~~~~text
+[Algorithm-design task]
+{task_description}
 
-### E.4. Verbatim Operator Instructions
+Design the computation performed by the following function to improve the complete solver's objective. Use the available inputs and the role of its returned result in the solver.
+
+[Function interface]
+```python
+{function_template}
+```
+
+[Context]
+{context}
+
+[Instruction]
+{instruction}
+
+[Output]
+Return exactly one valid JSON object with three string fields, in this order:
+- "analysis": {analysis_instruction} Use up to 300 words.
+- "code": Provide the complete implementation using only the inputs in [Function interface], including necessary imports and helper definitions.
+- "design": In about 120 words, describe for another algorithm designer the main computation the code performs and its key parameters. Describe the implementation, not expected performance.
+Keep "design" faithful to "code". Preserve the required function signature and satisfy the task constraints and input/output requirements.
+Return only the JSON object, without Markdown fences or additional text.
+~~~~
+
+Initialization and the three search operators share the following `{analysis_instruction}`.
+
+~~~~text
+Use the structure of the problem to work out a concrete computation. Which choices would it favor, and why could they improve the final solution? Draw on earlier results when useful.
+~~~~
+
+### E.4. Generation Instructions
+
+**Initialization before the first feasible candidate.**
+
+~~~~text
+Design an effective algorithm for this task. Consider how the returned result affects the complete solution and choose a computational approach suited to that role. The example illustrates an implementation, not a structure to preserve. Implement the specified function.
+~~~~
+
+**Initialization with existing feasible candidates.**
+
+~~~~text
+Develop an effective algorithm with a different main computation from the ideas already represented. Seek a different way to compute the result, rather than another weighting of the same local features. You can change the representation, the information used, or the computational procedure. Implement the chosen approach as a complete algorithm.
+~~~~
+
+When the context includes failed attempts, TREES appends the following sentence.
+
+~~~~text
+Use the failed attempts and evaluation feedback to inform your implementation.
+~~~~
 
 **Refinement.**
 
-> Improve the current algorithm by examining how it computes its result and where this computation can be improved. Use the implementation, outcomes, and development experience to choose a meaningful modification. You may revise its representation, the information it uses, or its procedure as well as its parameters; implement a coherent improved algorithm.
+~~~~text
+Improve the current algorithm by examining how it computes its result and where this computation can be improved. The development path shows what each step changed and how fitness responded; the experience and the attempts show what has been tried and learned along this path. Use them with the implementation to locate what limits the result and to choose a meaningful modification. You may revise its representation, the information it uses, or its procedure as well as its parameters; implement a coherent improved algorithm.
+~~~~
 
 **Crossover.**
 
-> Understand the computational ideas in both implementations and develop an algorithm that combines their useful strengths. Use their development and experimental experience to reason about how the computations fit together. If no useful combination emerges, improve the current algorithm using what the comparison reveals.
+~~~~text
+Understand the computational ideas in both implementations and develop an algorithm that combines their useful strengths. The development path shows how the current algorithm was formed and what has been tried and learned along it; the other algorithm's code shows what it actually computes, and its experience shows what was learned about it. Use them to decide which of its computations can strengthen the current algorithm and how the two fit together. If no useful combination emerges, improve the current algorithm using what the comparison reveals.
+~~~~
 
 **Exploration.**
 
-> Rethink how this task can be solved and implement an alternative whose main computation differs from the current algorithm and the existing approaches. Develop a new way to compute the result, rather than another weighting of the same local features. The current algorithm, the other approaches, and the experience above are starting points for ideas, not a structure you must preserve. Consider changes in the information used, the representation, or the procedure that produces the result. For example, an algorithm can estimate downstream consequences, construct and improve a tentative solution, or solve useful subproblems; these are possible inspirations, not required methods. Choose an approach suited to the task and implement its main computation.
+~~~~text
+Design an algorithm whose main computation differs from every algorithm shown above, not another weighting of the same local features. The code shows what each one actually computes, even where a design is inaccurate, and the experience shows what has been tried and learned. The code is not a structure you must preserve. A different computation may use other information, another representation, or another procedure. For example, it can estimate the downstream consequences of a choice, construct and improve a tentative solution, or solve a useful subproblem. Implement the computation that suits this task.
+~~~~
 
-### E.5. Verbatim Reflection Prompt
+### E.5. Reflection Template
 
-Path contraction and subtree pruning share one reflection template. `{problem}` states the task description, score direction, and function signature; `{records}` lists retained parent baselines outside the region (including prior $E_p$ for subtree pruning), all removed nodes (origin, outcome, description, failure, existing experiences, and code), and retained endpoint $w$ (prior incoming-edge experience and code) for path contraction. Table 6 gives `{situation}` and storage locations.
+~~~~text
+{problem}
 
-> `{problem}`
->
-> `[Algorithms]`\
-> `{situation}`
->
-> `{records}`
->
-> `[Task]`\
-> Record factual observations from the algorithms above, keeping earlier observations that still matter.\
-> For each instructive attempt, state what it actually computed (relative to its starting computation, if modified), its measured fitness or failure, and the stated outcome direction (improved, tied, or regressed; lower fitness is always better, including more negative values).\
-> Write concrete per-attempt computations and outcomes only; do not add concluding takeaways, general superiority claims, rules, advice, or speculative reasons.
->
-> `[Output]`\
-> Return one JSON object with an "experience" string of about 120 words. Name computations, not algorithm numbers: these algorithms will not be shown again.
+[Algorithms]
+{situation}
 
-**Table 6. Region descriptions and storage locations in reflection.** Here $u,w,p$ are skeleton node IDs, $\pi$ is the chain ending at $w$, and $o$ is the endpoint score change (e.g., `6.6737 -> 6.1775 (improved)`).
+{records}
 
-| Region | Verbatim `{situation}` | Stored at |
-| --- | --- | --- |
-| Path $u\leadsto w$ ($u\neq v_0$) | Algorithm $w$ was developed from Algorithm $u$ along $\pi$; overall $o$. Side attempts along the way are included. | $E_{u\to w}$ on edge $u\to w$ |
-| Initial path $v_0\leadsto w$ | Algorithm $w$ was developed along $\pi$, starting from a design made from scratch. Side attempts along the way are included. | $E_{v_0\to w}$ on edge $v_0\to w$ |
-| Subtree at $p$ | The algorithms below are attempts that started from Algorithm $p$, directly or from one another. | $E_p$ at parent $p$ |
-| Subtree at $v_0$ | The algorithms below were designed from scratch, together with any attempts made from them, listed from best to worst fitness (lower fitness is better). | $E_{v_0}$ at root $v_0$ |
+[Task]
+{question}
+The analysis of each attempt states its intent before it was coded and evaluated; its code shows what it actually implemented; its results show how it performed. Describe each idea by the computation it introduces or changes, without parameter values, and do not generalize beyond what these algorithms show. If an idea seems worth developing although its attempt scored poorly, say why.{merge}
+
+[Output]
+Return one JSON object with two strings: "analysis", a brief comparison of each attempt's intent, code and results; then "experience", about 120 words of design experience. In the experience, refer to every algorithm by its idea, not by its number.
+~~~~
+
+`{problem}` gives the task, objective definition, and function interface. `{records}` gives pre-coding analyses, source code, design descriptions, measured outcomes or failures, and prior experiences. Path contraction distinguishes the main path from side attempts. Subtree pruning compares attempts with the starting algorithm.
+
+**Table 6. Region statements in the reflection prompt.**
+
+| Region | `{situation}` |
+| ------------------------- | ------------------------------------------------------------- |
+| Path from an algorithm node | Algorithm {v} was developed from Algorithm {u} along {path}; overall {overall_outcome}. Side attempts along the way are included. |
+| Path from the virtual root | Algorithm {v} was developed along {path}, starting from a design made from scratch. Side attempts along the way are included. |
+| Subtree at an algorithm node | The algorithms below are attempts that started from Algorithm {p}, directly or from one another. |
+
+**Path contraction question.**
+
+~~~~text
+Reflect, as an algorithm designer, on how Algorithm {v} was developed. Which ideas built it along the path, and what did the side attempts try?
+~~~~
+
+**Subtree pruning question.**
+
+~~~~text
+Reflect, as an algorithm designer, on these attempts to improve Algorithm {p}. Did any idea do better than it, and which ideas did not pay off?
+~~~~
+
+**Additional instruction when prior experience is available.**
+
+~~~~text
+Integrate the earlier experience shown above, revising what these algorithms contradict.
+~~~~
+
+### E.6. Repair Templates
+
+Format repair gives `[Original Response]` followed by `[Parsing Feedback]`. Program repair gives the failed candidate's design and code under `[Current Algorithm]`, followed by `[Failure Feedback]`. Both use the generation template in Appendix E.3.
+
+**Format repair.**
+
+~~~~text
+Convert the original response into the JSON object specified in [Output], using the parsing feedback to correct its structure, required fields, and string escaping.
+Preserve the existing algorithmic idea and computational logic.
+Complete any missing or truncated content consistently with that approach and the task requirements.
+~~~~
+
+`{analysis_instruction}`
+
+~~~~text
+Keep the original rationale if present. Otherwise briefly state the intended computation.
+~~~~
+
+**Execution error.**
+
+~~~~text
+Trace the reported exception or invalid result to its cause in the code, using the design to understand the intended algorithm.
+Correct the faulty computations or data handling so the function executes correctly and satisfies the task requirements, while retaining the intended core computation.
+~~~~
+
+**Evaluation timeout.**
+
+~~~~text
+Make the algorithm finish within the reported time limit. Reduce the cost of its core computation, using an approximation when needed, while retaining the intended algorithmic idea.
+~~~~
+
+The execution-error and timeout prompts share the following `{analysis_instruction}`.
+
+~~~~text
+Explain the correction for the reported failure.
+~~~~
 
 ## Appendix F. Case Study: Cross-Update Experience Passing After Node Removal
 

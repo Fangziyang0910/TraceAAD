@@ -13,9 +13,8 @@ ALGORITHM_ANALYSIS = (
     "Draw on earlier results when useful."
 )
 
-# 端点上下文为 49152 token，生成预留 16384，输入须低于 32768 token。代码约 3–4 字符/token，
-# 探索的上下文以 9 万字符为限，放不下的代表卡片按抽样顺序略去，主父代卡片始终保留。
-EXPLORE_CONTEXT_CHARS = 90_000
+# 可选材料按渲染后的树上下文字符数取舍。主父代始终保留，端点分词随模型而异。
+CONTEXT_CHARS = 90_000
 
 COMMON_TEMPLATE = """[Algorithm-design task]
 {task_description}
@@ -77,9 +76,9 @@ def _experiences(
         return []
     lines = []
     if tree.edges[node_id].experience and ("edge", node_id) not in seen:
-        lines.append(f"Experience from the steps that led to it: {tree.edges[node_id].experience}")
+        lines.append(f"Local reflection on the steps that led to it: {tree.edges[node_id].experience}")
     if node and tree.nodes[node_id].experience and ("node", node_id) not in seen:
-        lines.append(f"Experience from attempts made from it: {tree.nodes[node_id].experience}")
+        lines.append(f"Local reflection on attempts made from it: {tree.nodes[node_id].experience}")
     return lines
 
 
@@ -97,7 +96,7 @@ def _attempts_block(
     ]
     parts = []
     if include_experiences and parent.experience:
-        parts.append(f"Experience from earlier attempts: {parent.experience}")
+        parts.append(f"Local reflection on earlier attempts: {parent.experience}")
     for idx, child in enumerate(shown, 1):
         edge = tree.edges[child.id]
         result = (
@@ -106,7 +105,7 @@ def _attempts_block(
         )
         parts.append("\n".join([
             f"Attempt {idx} ({_origin(edge)}): {result}",
-            f"Design: {child.design}",
+            f"Reported design: {child.design}",
             *_experiences(tree, child.id, include=include_experiences),
         ]))
     if not parts:
@@ -118,7 +117,7 @@ def _attempts_block(
 def _lineage_blocks(
     tree: TreePopulation, parent_id: int, *, include_experiences: bool, exclude: frozenset[int] = frozenset()
 ) -> tuple[list[str], set[tuple[str, int]]]:
-    """形成路径（各步设计、成绩变化与路径上的经验），随后是从主父代出发的尝试及其节点经验。"""
+    """逐边展示形成路径上的生成意图或收缩经验，随后列出从主父代出发的尝试。"""
     path = _path_from_root(tree, parent_id)
     rows = ["[Development of the Current Algorithm]"]
     for k, node_id in enumerate(path):
@@ -128,11 +127,12 @@ def _lineage_blocks(
         if node_id == parent_id:
             label += ", the current algorithm"
         head = f"{label} ({_origin(edge)}): {outcome_text(None if prev is None else prev.fitness, node.fitness)}"
-        rows.append("\n".join([
-            head,
-            f"Design: {node.design}",
-            *_experiences(tree, node_id, include=include_experiences, node=node_id != parent_id),
-        ]))
+        lines = [head]
+        if not edge.contracted and node.analysis:
+            lines.append(f"Reported intent when this version was generated (references are local to that step): {node.analysis}")
+        lines.append(f"Reported design: {node.design}")
+        lines.extend(_experiences(tree, node_id, include=include_experiences, node=node_id != parent_id))
+        rows.append("\n".join(lines))
     blocks = ["\n\n".join(rows)]
     attempts_text, shown = _attempts_block(
         tree, parent_id, include_experiences=include_experiences, exclude=exclude
@@ -153,14 +153,14 @@ def _card(
     """个体卡片：设计简述、自身的入边与节点经验，源码放在最后。"""
     node = tree.nodes[node_id]
     return [
-        f"Design: {node.design}",
+        f"Reported design: {node.design}",
         *_experiences(tree, node_id, include=include_experiences, seen=seen),
         f"```python\n{bare_code(node.code)}\n```",
     ]
 
 
 def _current_code(node: Node) -> str:
-    return f"[Current Algorithm]\nfitness = {node.fitness:.6g}\n```python\n{bare_code(node.code)}\n```"
+    return f"[Current Algorithm]\n{outcome_text(None, node.fitness)}\n```python\n{bare_code(node.code)}\n```"
 
 
 def build_evolution_context(
@@ -174,8 +174,8 @@ def build_evolution_context(
 ) -> tuple[str, str]:
     """按算子返回 (树上下文文本, 指令文本)。
 
-    精化：形成路径上各步的设计、成绩变化与经验，主父代的近期尝试与节点经验，最后是主父代源码。
-    交叉：精化的上下文，加参考个体卡片（设计、成绩、自身经验与源码），主父代源码仍在最后。
+    精化：形成路径、近期尝试及局部反思，空间允许时附上保留前驱的源码，最后是主父代源码。
+    交叉：形成路径、近期尝试、参考个体卡片与主父代源码。
     探索：主父代卡片与至多 M 个异质代表卡片，各含设计、成绩、自身经验与源码；不含形成路径与尝试列表。
     """
     if parent_id not in tree.nodes or tree.nodes[parent_id].fitness is None:
@@ -185,51 +185,52 @@ def build_evolution_context(
     if operator == "Explore":
         blocks = ["\n".join([
             "[Current Algorithm]",
-            f"fitness = {parent.fitness:.6g}",
+            outcome_text(None, parent.fitness),
             *_card(tree, parent_id, include_experiences=include_experiences),
         ])]
-        size = len(blocks[0])
+        heading = "[Other Existing Approaches]\nFrom best to worst fitness."
+        size = len(blocks[0]) + len("\n\n" + heading)
         cards: list[tuple[float, int, str]] = []
         for i in dict.fromkeys(explore_ids):
-            if i not in tree.nodes or i == parent_id or tree.nodes[i].fitness is None:
+            node = tree.nodes.get(i)
+            if node is None or i == parent_id or node.fitness is None:
                 continue
-            body = "\n".join(_card(tree, i, include_experiences=include_experiences))
-            if size + len(body) > EXPLORE_CONTEXT_CHARS:
-                continue
-            size += len(body)
-            cards.append((tree.nodes[i].fitness, i, body))  # type: ignore[arg-type]
+            body = "\n".join([outcome_text(None, node.fitness), *_card(tree, i, include_experiences=include_experiences)])
+            # 排序只改变编号归属，整组编号的字符总数不变。
+            card_size = len(f"\n\nApproach {len(cards) + 1}: ") + len(body)
+            if size + card_size <= CONTEXT_CHARS:
+                size += card_size
+                cards.append((node.fitness, i, body))
         if cards:
             cards.sort(key=lambda c: (c[0], c[1]))
             blocks.append("\n\n".join([
-                "[Other Existing Approaches]\nFrom best to worst fitness.",
-                *(f"Approach {k}: fitness = {fit:.6g}\n{body}" for k, (fit, _, body) in enumerate(cards, 1)),
+                heading,
+                *(f"Approach {k}: {body}" for k, (_, _, body) in enumerate(cards, 1)),
             ]))
         instruction = (
-            "Design an algorithm whose main computation differs from every algorithm shown above, "
-            "not another weighting of the same local features. "
-            "The code shows what each one actually computes, even where a design is inaccurate, "
-            "and the experience shows what has already been tried. "
-            "The code is not a structure you must preserve. "
-            "A different computation may use other information, another representation, or another procedure. "
-            "For example, it can estimate the downstream consequences of a choice, construct and improve a tentative "
-            "solution, or solve a useful subproblem. "
-            "Implement the computation that suits this task."
+            "Develop a different way to compute the result. Choose an approach that looks promising for this task."
         )
         return "\n\n".join(blocks), instruction
 
     if operator == "Refine":
         lineage, _ = _lineage_blocks(tree, parent_id, include_experiences=include_experiences)
-        blocks = [*lineage, _current_code(parent)]
-        instruction = (
-            "Improve the current algorithm by examining how it computes its result and where this computation can be improved. "
-            "The development path shows what each step changed and how fitness responded; "
-            "the experience and the attempts show what has already been tried along this path. "
-            "Use them with the implementation to locate what limits the result and to choose a meaningful modification. "
-            "You may revise its representation, the information it uses, or its procedure as well as its parameters; "
-            "implement a coherent improved algorithm."
-        )
+        current = _current_code(parent)
+        blocks = list(lineage)
+        previous = tree.nodes.get(tree.edges[parent_id].parent_id)
+        if previous is not None:
+            outcome = outcome_text(None, previous.fitness)
+            previous_code = bare_code(previous.code)
+            implementation = (
+                "Same displayed code as the current algorithm."
+                if previous_code == bare_code(parent.code) else f"```python\n{previous_code}\n```"
+            )
+            comparison = f"[Previous Retained Implementation]\n{outcome}\n{implementation}"
+            if len("\n\n".join([*blocks, comparison, current])) <= CONTEXT_CHARS:
+                blocks.append(comparison)
+        blocks.append(current)
+        instruction = "Improve the current algorithm. Choose the modification you judge most promising for this task."
     elif operator == "Crossover":
-        if reference_id is None or reference_id not in tree.nodes:
+        if reference_id == parent_id or reference_id not in tree.nodes or tree.nodes[reference_id].fitness is None:
             raise ValueError("Crossover requires a valid retained reference_id")
         lineage, seen = _lineage_blocks(
             tree, parent_id, include_experiences=include_experiences, exclude=frozenset({reference_id})
@@ -240,17 +241,13 @@ def build_evolution_context(
             "\n".join([
                 "[Other Algorithm]",
                 "An algorithm whose ideas may be combined with the current algorithm.",
-                f"fitness = {ref.fitness:.6g}",
+                outcome_text(None, ref.fitness),
                 *_card(tree, reference_id, include_experiences=include_experiences, seen=seen),
             ]),
             _current_code(parent),
         ]
         instruction = (
-            "Understand the computational ideas in both implementations and develop an algorithm that combines their useful strengths. "
-            "The development path shows how the current algorithm was formed and what has been tried along it; "
-            "the other algorithm's code shows what it actually computes, and its experience shows what was learned about it. "
-            "Use them to decide which of its computations can strengthen the current algorithm and how the two fit together. "
-            "If no useful combination emerges, improve the current algorithm using what the comparison reveals."
+            "Develop the current algorithm by combining ideas from the two implementations where they work well together."
         )
     else:
         raise ValueError(f"Unsupported evolution operator: {operator!r}")
@@ -309,7 +306,7 @@ def init_prompt(task: Task, archive: dict[int, Program], failure_count: int = 2)
     )
     if valid:
         algorithms = [
-            f"Approach {k}: fitness = {p.evaluation.fitness:.6g}\nDesign: {clean_text(p.design)}"
+            f"Approach {k}: {outcome_text(None, p.evaluation.fitness)}\nReported design: {clean_text(p.design)}"
             for k, p in enumerate(valid, 1)
         ]
         context.append("[Existing Approaches]\nFrom best to worst fitness.\n\n" + "\n\n".join(algorithms))
@@ -322,20 +319,25 @@ def init_prompt(task: Task, archive: dict[int, Program], failure_count: int = 2)
     )
     if failed:
         context.append("[Failed Attempts]\n" + "\n\n".join(
-            f"Failed attempt {k}\nDesign: {clean_text(p.design)}\n"
+            f"Failed attempt {k}\nReported design: {clean_text(p.design)}\n"
             f"```python\n{bare_code(p.code)}\n```\nFailure: {failure_feedback(p.evaluation.failure)}"
             for k, p in enumerate(failed, 1)
         ))
-    instruction = (
-        "Develop an effective algorithm with a different main computation from the ideas already represented. "
-        "Seek a different way to compute the result, rather than another weighting of the same local features. "
-        "You can change the representation, the information used, or the computational procedure. "
-        "Implement the chosen approach as a complete algorithm."
-    ) if valid else (
-        "Design an effective algorithm for this task. Consider how the returned result affects the complete solution "
-        "and choose a computational approach suited to that role. The example illustrates an implementation, "
-        "not a structure to preserve. Implement the specified function."
-    )
+    if valid:
+        instruction = (
+            "Develop an effective algorithm with a different main computation from the ideas already represented. "
+            "Seek a different way to compute the result, rather than another weighting of the same local features. "
+            "You can change the representation, the information used, or the computational procedure. "
+            "Implement the chosen approach as a complete algorithm."
+        )
+    else:
+        instruction = (
+            "Design an effective algorithm for this task. Consider how the returned result affects the complete solution "
+            "and choose a computational approach suited to that role."
+        )
+        if 0 in archive:
+            instruction += " The example illustrates an implementation, not a structure to preserve."
+        instruction += " Implement the specified function."
     if failed:
         instruction += "\nUse the failed attempts and evaluation feedback to inform your implementation."
     return _render(task, "\n\n".join(context), instruction, has_scores=bool(valid))
@@ -363,7 +365,7 @@ def repair_program_prompt(task: Task, program: Program) -> str:
         if failure.startswith(TIMEOUT_PREFIX) else failure_feedback(failure)
     )
     context = (
-        f"[Current Algorithm]\nDesign: {clean_text(program.design)}\n"
+        f"[Current Algorithm]\nReported design: {clean_text(program.design)}\n"
         f"```python\n{bare_code(program.code)}\n```\n\n[Failure Feedback]\n{feedback}"
     )
     instruction = (

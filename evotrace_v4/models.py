@@ -39,13 +39,18 @@ def clean_text(text: str | None) -> str:
     return " ".join(repaired.split())
 
 
+def fitness_text(fitness: float) -> str:
+    """保留可还原为实测值的精度，让相邻分数在提示中仍可区分。"""
+    return str(fitness).removesuffix(".0")
+
+
 def outcome_text(parent_fit: float | None, child_fit: float | None) -> str:
     if child_fit is None:
         return "failed"
     if parent_fit is None:
-        return f"fitness = {child_fit:.6g}"
+        return f"fitness = {fitness_text(child_fit)}"
     word = "improved" if child_fit < parent_fit else "tied" if child_fit == parent_fit else "regressed"
-    return f"{parent_fit:.6g} -> {child_fit:.6g} ({word})"
+    return f"{fitness_text(parent_fit)} -> {fitness_text(child_fit)} ({word})"
 
 
 @dataclass(frozen=True)
@@ -62,7 +67,7 @@ class Config:
 
 @dataclass
 class Node:
-    """受评算法个体，以及围绕该位置剪除旁支所凝练的节点经验。"""
+    """受评算法个体（含生成前分析，供反思对照意图与实现），以及围绕该位置剪除旁支所凝练的节点经验。"""
 
     id: int
     code: str
@@ -71,10 +76,12 @@ class Node:
     failure: str | None = None
     experience: str = ""
     direct_evaluations: int = 0
+    analysis: str = ""
 
     def __post_init__(self) -> None:
         self.design = clean_text(self.design)
         self.experience = clean_text(self.experience)
+        self.analysis = clean_text(self.analysis)
 
 
 @dataclass
@@ -107,9 +114,13 @@ class TreePopulation:
 
     @classmethod
     def from_dict(cls, data: dict) -> "TreePopulation":
+        # Earlier experimental checkpoints also stored an untested direction.
+        def single_note(record: dict) -> dict:
+            return {key: value for key, value in record.items() if key != "direction"}
+
         return cls(
-            nodes={int(i): Node(**n) for i, n in data["nodes"].items()},
-            edges={int(i): Edge(**e) for i, e in data["edges"].items()},
+            nodes={int(i): Node(**single_note(n)) for i, n in data["nodes"].items()},
+            edges={int(i): Edge(**single_note(e)) for i, e in data["edges"].items()},
         )
 
 

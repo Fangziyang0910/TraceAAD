@@ -1,13 +1,14 @@
 from copy import deepcopy
+from dataclasses import asdict
 import json
 
 import pytest
 
 from evotrace_v4 import Task
-from evotrace_v4.context import EXPLORE_CONTEXT_CHARS, build_evolution_context, evolution_prompt
+from evotrace_v4.context import CONTEXT_CHARS, build_evolution_context, evolution_prompt, init_prompt
 from evotrace_v4.models import CANDIDATE_RESPONSE_FORMAT, Candidate, Edge, FormatError, Node, ROOT_ID, TreePopulation
-from evotrace_v4.reflection import build_reflection_prompt, reflect_and_apply
-from evotrace_v4.topology import PathContraction, SubtreePruning
+from evotrace_v4.reflection import EXPERIENCE_SCHEMA, build_reflection_prompt, reflect_and_apply
+from evotrace_v4.topology import PathContraction, SubtreePruning, TopologyConfig, plan_simplification
 
 PROBLEM = "[Problem]\nMinimize.\nScore: lower is better."
 
@@ -76,7 +77,7 @@ def test_explore_shows_parent_and_diverse_cards_with_their_own_experience_and_co
     assert "ANCESTOR_NOTE" not in context
     assert f"Compute offset {init_a}" not in context and f"Compute offset {tried_child}" not in context
 
-    # When S \\ {p} is empty (explore_ids=()), only the current algorithm card remains.
+    # With no eligible references, only the current algorithm card remains.
     solo_ctx, _ = build_evolution_context(tree, parent, "Explore", explore_ids=())
     assert "[Other Existing Approaches]" not in solo_ctx and solo_ctx.count("```python") == 1
 
@@ -90,13 +91,13 @@ def test_explore_shows_parent_and_diverse_cards_with_their_own_experience_and_co
 
 
 def test_explore_skips_reference_cards_that_would_exceed_the_input_limit():
-    """端点输入上限是硬约束：放不下的代表卡片按抽样顺序略去，主父代卡片始终保留。"""
+    """可选材料按完整树上下文的字符数计入，主父代卡片始终保留。"""
     tree = TreePopulation()
     parent = add(tree, 0, 6.0)
     body = "".join(f"    v{k} = x + {k}\n" for k in range(1800))
     reps = [add(tree, 0, 5.0 + k, code=f"def solve(x):\n{body}    return x + {k}\n") for k in range(3)]
     context, _ = build_evolution_context(tree, parent, "Explore", explore_ids=tuple(reps))
-    assert len(context) <= EXPLORE_CONTEXT_CHARS
+    assert len(context) <= CONTEXT_CHARS
     assert f"Compute offset {parent}" in context and context.count("```python") == 3
     assert f"Compute offset {reps[2]}" not in context
 
@@ -121,11 +122,13 @@ def test_refine_and_crossover_read_the_development_path_and_the_reference_card()
     assert "Step 1 (aimed at a different core computation): 10 -> 8 (improved)" in ctx_ref
     assert "Step 2, the current algorithm (aimed at improvement): 8 -> 6 (improved)" in ctx_ref
     assert "EXPLORE_EDGE_NOTE" in ctx_ref and "A_NOTE" in ctx_ref
-    assert "Experience from earlier attempts: CURRENT_ATTEMPTS_NOTE" in ctx_ref
+    assert "Local reflection on earlier attempts: CURRENT_ATTEMPTS_NOTE" in ctx_ref
     assert f"Compute offset {tried}" in ctx_ref
     assert ctx_ref.index("[Development of the Current Algorithm]") < ctx_ref.index("[Attempts from the Current Algorithm]")
     assert ctx_ref.index("[Attempts from the Current Algorithm]") < ctx_ref.index("[Current Algorithm]")
-    assert ctx_ref.count("```python") == 1 and ctx_ref.endswith("```")
+    assert ctx_ref.count("```python") == 2 and ctx_ref.endswith("```")
+    previous = ctx_ref.split("[Previous Retained Implementation]")[1].split("[Current Algorithm]")[0]
+    assert "return x + 2" in previous and "fitness = 8" in previous
     assert "SIDE_NOTE" not in ctx_ref and "REF_NOTE" not in ctx_ref
 
     ctx_cross, _ = build_evolution_context(tree, current, "Crossover", reference)
@@ -143,7 +146,36 @@ def test_refine_and_crossover_read_the_development_path_and_the_reference_card()
     assert tree == before
 
 
-def test_reflection_distinguishes_explore_origin_and_preserves_experience_on_failure():
+def test_refine_and_crossover_read_each_original_edge_intent_in_lineage_order():
+    tree = TreePopulation()
+    first = add(tree, ROOT_ID, 10.0)
+    mid = add(tree, first, 9.0)
+    parent = add(tree, mid, 8.0)
+    attempt = add(tree, parent, 9.0)
+    donor = add(tree, ROOT_ID, 7.0)
+    for i in (first, mid, parent, attempt, donor):
+        tree.nodes[i].analysis = f"INTENT_{i}."
+
+    for op, ref in [("Refine", None), ("Crossover", donor), ("Crossover", attempt), ("Crossover", first)]:
+        context, _ = build_evolution_context(tree, parent, op, ref)
+        assert context.count("INTENT_") == 3
+        positions = []
+        for i in (first, mid, parent):
+            positions.extend((context.index(tree.nodes[i].analysis), context.index(f"Reported design: Compute offset {i}")))
+        assert positions == sorted(positions)
+    explore, _ = build_evolution_context(tree, parent, "Explore", explore_ids=(first, attempt, donor))
+    assert "INTENT_" not in explore
+
+    # Init also has an original incoming edge. Its design intent predates reflection.
+    initial, _ = build_evolution_context(tree, first, "Refine", include_experiences=False)
+    assert "designed from scratch" in initial and tree.nodes[first].analysis in initial
+    saved = asdict(tree)
+    del saved["nodes"][first]["analysis"]
+    legacy, _ = build_evolution_context(TreePopulation.from_dict(saved), first, "Refine")
+    assert "Reported intent" not in legacy
+
+
+def test_path_reflection_labels_steps_without_ranking_them_against_the_end_and_keeps_experience_on_failure():
     tree = TreePopulation()
     a = add(tree, 0, 10.0, "def f(): return 0")
     b = add(tree, a, 12.0, "def f(): return 1", op="Explore")
@@ -152,7 +184,9 @@ def test_reflection_distinguishes_explore_origin_and_preserves_experience_on_fai
 
     region = PathContraction(a, c, (b,))
     prompt, _ = build_reflection_prompt(tree, region, PROBLEM)
-    assert f"Algorithm {b}, generated from Algorithm {a} aiming at a different core computation: 10 -> 12 (regressed)" in prompt
+    assert f"Algorithm {b}, on the path, generated from Algorithm {a} aiming at a different core computation: 10 -> 12 (regressed)" in prompt
+    assert f"Algorithm {c}, the end of the path" in prompt
+    assert " than Algorithm" not in prompt  # Stepping stones are not marked worse than the algorithm they built.
 
     class Broken:
         def complete(self, *args, **kwargs):
@@ -162,6 +196,137 @@ def test_reflection_distinguishes_explore_origin_and_preserves_experience_on_fai
     assert calls[0]["status"] == "error"
     assert after.edges[c].contracted and after.edges[c].parent_id == a
     assert after.edges[c].experience == "Tried jumping from a."
+
+
+def test_subtree_reflection_compares_attempts_from_removed_parents_with_the_starting_algorithm():
+    tree = TreePopulation()
+    p = add(tree, 0, 7.0)
+    worse = add(tree, p, 8.0, op="Explore")
+    recovered = add(tree, worse, 7.5)  # Better than its removed parent, still worse than p.
+    prompt, _ = build_reflection_prompt(tree, SubtreePruning(p, (worse, recovered)), PROBLEM)
+    assert f"Algorithm {worse}, generated from Algorithm {p} aiming at a different core computation: 7 -> 8 (regressed)" in prompt
+    assert f"attempts to improve Algorithm {p}" not in prompt
+    assert f"Algorithm {recovered}, generated from Algorithm {worse} aiming to improve it: 8 -> 7.5 (improved); worse than Algorithm {p}" in prompt
+
+
+@pytest.mark.parametrize("kind", ["node", "edge"])
+@pytest.mark.parametrize(("prior", "reply", "expected", "status"), [
+    ("", "", "", "success"),
+    ("Try a sweep.", "", "Try a sweep.", "success"),
+    ("Try a sweep.", "The actual sweep beat the starting design.", "The actual sweep beat the starting design.", "success"),
+    ("Try a sweep.", None, "Try a sweep.", "error"),
+])
+def test_reflection_updates_the_experience_seen_by_the_next_parent(kind, prior, reply, expected, status):
+    tree = TreePopulation()
+    start = add(tree, ROOT_ID, 8.0)
+    mid = add(tree, start, 9.0)
+    tree.nodes[mid].experience = prior
+    if kind == "edge":
+        target = add(tree, mid, 7.0)
+        tree.edges[target].experience = prior
+        region = PathContraction(start, target, (mid,))
+    else:
+        target = start
+        tree.nodes[target].experience = prior
+        region = SubtreePruning(start, (mid,))
+
+    tree.nodes[target].analysis = "Target's original design intent."
+    tree.nodes[mid].analysis = "Intermediate attempt's intent."
+
+    class Model:
+        def complete(self, prompt, **kwargs):
+            assert "about 120 words" not in prompt
+            assert tree.nodes[mid].analysis in prompt
+            if kind == "edge":
+                assert tree.nodes[target].analysis in prompt
+            return json.dumps({"analysis": "ANALYSIS_ONLY", "experience": reply})
+
+    after, (record,) = reflect_and_apply(tree, (region,), model=Model(), problem=PROBLEM)
+    assert record["status"] == status
+    assert record["experience"] == expected
+    context, _ = build_evolution_context(after, target, "Refine")
+    if expected:
+        assert context.count(expected) == 1
+    else:
+        assert "Local reflection on" not in context
+    if prior and prior != expected:
+        assert prior not in context
+    assert "ANALYSIS_ONLY" not in context
+    intent = tree.nodes[target].analysis
+    if kind == "node":
+        assert context.count(intent) == 1  # Pruning outgoing branches preserves the original incoming edge.
+    else:
+        assert intent not in context
+        cross, _ = build_evolution_context(after, target, "Crossover", start)
+        assert intent not in cross
+        if expected:
+            assert cross.count(expected) == 1
+        muted, _ = build_evolution_context(after, target, "Refine", include_experiences=False)
+        assert intent not in muted and "Local reflection on" not in muted
+    assert "direction" not in record
+    restored = TreePopulation.from_dict(asdict(after))
+    leaf = add(restored, target, 6.0)
+    restored.nodes[leaf].analysis = "New step's intent."
+    if kind == "edge":
+        # The contracted incoming edge is now upstream of a new original edge.
+        for op, ref in [("Refine", None), ("Crossover", target)]:
+            context, _ = build_evolution_context(restored, leaf, op, ref)
+            assert intent not in context and context.count(restored.nodes[leaf].analysis) == 1
+            if expected:
+                assert context.count(expected) == 1
+                assert context.index(expected) < context.index(restored.nodes[leaf].analysis)
+    next_region = (PathContraction(start, leaf, (target,)) if kind == "edge"
+                   else SubtreePruning(target, (leaf,)))
+    next_prompt, earlier = build_reflection_prompt(restored, next_region, PROBLEM)
+    assert expected in next_prompt
+    assert earlier == ([expected] if expected else [])
+    assert restored.nodes[leaf].analysis in next_prompt
+    assert intent not in next_prompt  # A contracted step or the anchor for branch pruning.
+
+
+
+def test_single_reflection_schema_and_loading_experimental_checkpoints():
+    assert EXPERIENCE_SCHEMA["json_schema"]["schema"]["required"] == ["analysis", "experience"]
+    tree = TreePopulation()
+    node_id = add(tree, ROOT_ID, 7.0)
+    tree.nodes[node_id].experience = "Original note"
+    saved = asdict(tree)
+    for carrier in (saved["nodes"][node_id], saved["edges"][node_id]):
+        carrier["direction"] = "UNTESTED_NOTE"
+    restored = TreePopulation.from_dict(saved)
+    prompt, _ = build_evolution_context(restored, node_id, "Refine")
+    assert "Original note" in prompt
+    assert "UNTESTED_NOTE" not in prompt and "direction" not in asdict(restored.nodes[node_id])
+
+
+def test_same_round_contraction_and_pruning_keep_the_shared_endpoints_notes_separate():
+    tree = TreePopulation()
+    start = add(tree, ROOT_ID, 9.0)
+    mid = add(tree, start, 8.0)
+    end = add(tree, mid, 7.0)
+    add(tree, end, 8.5)
+    tree.nodes[mid].experience = "Earlier side attempt."
+    tree.edges[end].experience = "Earlier path step."
+    tree.nodes[end].experience = "Earlier endpoint attempt."
+    regions = plan_simplification(tree, TopologyConfig(region_size=1), reps=(start, end))
+
+    class Model:
+        def complete(self, prompt, **kwargs):
+            if "Earlier path step." in prompt:
+                assert "Earlier side attempt." in prompt
+                assert "Earlier endpoint attempt." not in prompt
+                return '{"analysis": "interrupted'
+            assert "Earlier endpoint attempt." in prompt and "Earlier side attempt." not in prompt
+            return json.dumps({"analysis": "Local update.", "experience": "Revised endpoint note."})
+
+    updated, calls = reflect_and_apply(tree, regions, model=Model(), problem=PROBLEM)
+    assert {(c["kind"], c["status"]) for c in calls} == {("edge", "error"), ("node", "success")}
+    assert updated.edges[end].experience == "Earlier side attempt. Earlier path step."
+    assert updated.nodes[end].experience == "Revised endpoint note."
+    context, _ = build_evolution_context(updated, end, "Refine")
+    assert all(context.count(note) == 1 for note in (updated.edges[end].experience, updated.nodes[end].experience))
+    previous = context.split("[Previous Retained Implementation]")[1].split("[Current Algorithm]")[0]
+    assert "return x + 1" in previous
 
 
 def test_subtree_regions_under_the_virtual_root_are_removed_without_reflection():
@@ -185,14 +350,47 @@ def test_subtree_regions_under_the_virtual_root_are_removed_without_reflection()
         build_reflection_prompt(tree, region, PROBLEM)
 
 
-def test_refine_and_explore_instructions_allow_procedure_change():
+def test_refine_keeps_the_current_implementation_when_the_previous_one_does_not_fit(monkeypatch):
     tree = TreePopulation()
-    init_a = add(tree, 0, 9.0)
-    parent = add(tree, init_a, 6.0)
-    _, refine = build_evolution_context(tree, parent, "Refine")
-    assert "preserving its core" not in refine
-    assert "or its procedure as well as its parameters" in refine
-    _, explore = build_evolution_context(tree, parent, "Explore")
-    assert "not a structure you must preserve" in explore
-    assert "not another weighting of the same local features" in explore
-    assert "construct and improve a tentative solution" in explore
+    first = add(tree, 0, 9.0)
+    parent = add(tree, first, 6.0)
+    monkeypatch.setattr("evotrace_v4.context.CONTEXT_CHARS", 1)
+    context, _ = build_evolution_context(tree, parent, "Refine")
+    assert "[Previous Retained Implementation]" not in context
+    assert "[Current Algorithm]" in context and "return x + 2" in context
+
+
+def test_optional_reference_fits_only_when_the_whole_rendered_context_fits(monkeypatch):
+    tree = TreePopulation()
+    parent = add(tree, ROOT_ID, 9.0)
+    reference = add(tree, ROOT_ID, 8.0)
+    full, _ = build_evolution_context(tree, parent, "Explore", explore_ids=(reference,))
+    for limit, expected in [(len(full), full), (len(full) - 1, full.split("\n\n[Other Existing Approaches]")[0])]:
+        monkeypatch.setattr("evotrace_v4.context.CONTEXT_CHARS", limit)
+        context, _ = build_evolution_context(tree, parent, "Explore", explore_ids=(reference,))
+        assert context == expected
+
+
+def test_identical_displayed_predecessor_code_shares_one_listing_and_keeps_both_scores():
+    tree = TreePopulation()
+    first = add(tree, ROOT_ID, 1.0000002)
+    parent = add(tree, first, 1.0000001, code=tree.nodes[first].code)
+    context, _ = build_evolution_context(tree, parent, "Refine")
+    assert "1.0000002 -> 1.0000001 (improved)" in context
+    assert "fitness = 1.0000002\nSame displayed code" in context
+    assert "fitness = 1.0000001\n```python" in context
+    assert context.count("```python") == 1
+    prompt, _ = build_reflection_prompt(tree, SubtreePruning(first, (parent,)), PROBLEM)
+    assert "1.0000002 -> 1.0000001 (improved)" in prompt
+    assert "Reported design:" in prompt
+
+
+def test_crossover_rejects_self_or_failed_reference_and_init_can_start_without_example():
+    tree = TreePopulation()
+    parent = add(tree, ROOT_ID, 7.0)
+    failed = add(tree, parent, None)
+    for ref in (parent, failed):
+        with pytest.raises(ValueError, match="reference_id"):
+            build_evolution_context(tree, parent, "Crossover", ref)
+    task = Task("Minimize", "def solve(x): pass", lambda s, f: f(1), 2)
+    assert "example" not in init_prompt(task, {}).lower()

@@ -36,11 +36,18 @@ from traceaad_base.cli import load_task
 from traceaad_base.selection import SELECTION_RULE
 from experiments.infra.storage import seal_calls
 from traceaad_base.storage import write_json
-from .scheduling import EVALUATION_WORKERS, REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel, load_environment
+from .scheduling import (
+    EVALUATION_WORKERS, REQUEST_OPTIONS, ScheduledEvaluator, ScheduledModel,
+    load_environment, scheduler_status,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
 MEMORY_BYTES = 2 << 30
+ECO_BACKEND = "opendesign-eco"
+BACKENDS = ("scheduled", ECO_BACKEND)
+ECO_URL = "https://amr-link.open-design.ai/v1"
+ECO_MODEL = "deepseek-v4.1-flash-eco"
 TOPOLOGY_FIELDS = tuple(f.name for f in fields(V3TopologyConfig))
 ALLOCATION_FIELDS = tuple(f.name for f in fields(V4AllocationConfig))
 EVOTRACE_METHODS = {"evotrace_v1", "evotrace_v2", "evotrace_v3", "evotrace_v4"}
@@ -71,19 +78,22 @@ def selection_rule_for(method):
     return getattr(METHODS[method][1], "selection_rule", SELECTION_RULE)
 
 
-def request_options(method):
+def request_options(method, backend="scheduled"):
     module = {"evotrace_v1": evotrace_v1, "evotrace_v2": evotrace_v2,
               "evotrace_v3": evotrace_v3, "evotrace_v4": evotrace_v4}.get(METHODS[method][0])
-    if module is not None:
-        return {**REQUEST_OPTIONS, "response_format": module.models.CANDIDATE_RESPONSE_FORMAT}
-    return REQUEST_OPTIONS
+    schema = module.models.CANDIDATE_RESPONSE_FORMAT if module is not None else REQUEST_OPTIONS["response_format"]
+    sampling = {"reasoning_effort": "none"} if backend == ECO_BACKEND else REQUEST_OPTIONS
+    return {**sampling, "response_format": schema}
 
 
+def eco_routing():
+    return {"policy": "direct", "endpoints": [{"base_url": ECO_URL, "model": ECO_MODEL}]}
 
-def metadata_for(args, task, config, model):
+
+def metadata_for(args, task, config, model, routing):
     return {
         "method": METHODS[args.method][0], "experiment": args.experiment, "task": args.task,
-        "run_name": args.run_name, "batch": args.batch,
+        "run_name": args.run_name, "batch": args.batch, "backend": args.backend,
         "seed": args.seed, "repeat": args.seed + 1,
         "budget": config.evaluation_budget, "budget_axis": "评价次数", "budget_basis": "evaluate_calls",
         "method_params": asdict(config), "final_selection": "training", "eval_workers": EVALUATION_WORKERS,
@@ -104,9 +114,10 @@ def metadata_for(args, task, config, model):
         },
         "llm": {"model": model.model, "temperature": config.temperature,
                 "max_tokens": config.max_tokens, "timeout": config.model_timeout,
-                "enable_thinking": False, "sampling": {"temperature": config.temperature, **request_options(args.method)}},
-        "model_routing": {"policy": "shared", "endpoints": model.scheduler["endpoints"]},
-        "scheduler_socket": model.path,
+                "enable_thinking": False,
+                "sampling": {"temperature": config.temperature, **request_options(args.method, args.backend)}},
+        "model_routing": routing,
+        "scheduler_socket": args.scheduler_socket,
     }
 
 
@@ -177,7 +188,7 @@ def evaluate_heldout(directory, name, best, scheduler, *, evaluation_seed,
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--method", choices=tuple(METHODS), default="base")
-    parser.add_argument("--backend", choices=("scheduled",), default="scheduled")
+    parser.add_argument("--backend", choices=BACKENDS, default="scheduled")
     parser.add_argument("--task", choices=ALL_TASKS, required=True)
     parser.add_argument("--run-name", required=True)
     parser.add_argument("--batch", required=True)
@@ -210,8 +221,8 @@ def main(argv=None):
             parser.error(f"{name.replace('_', '-')} applies to EvoTrace V3/V4 only")
     if args.reference_code and METHODS[args.method][0] not in EVOTRACE_METHODS:
         parser.error("--reference-code applies to EvoTrace only")
-    if not args.scheduler_socket and args.backend == "scheduled":
-        parser.error("A resource scheduler socket is required")
+    if not args.scheduler_socket:
+        parser.error("A resource scheduler socket is required for evaluation")
     if not math.isfinite(args.seconds_per_instance) or args.seconds_per_instance <= 0:
         parser.error("seconds-per-instance must be finite and positive")
     if not math.isfinite(args.selection_temperature) or args.selection_temperature <= 0:
@@ -243,10 +254,21 @@ def main(argv=None):
     task = task_loader(name=args.task)
     configure_time_budget(task, args.seconds_per_instance)
     task.memory_limit_bytes = MEMORY_BYTES
-    model = ScheduledModel(args.scheduler_socket, args.run_name)
-    if is_evotrace:
-        model.factory = evotrace.OpenAIClient
-    metadata = metadata_for(args, task, config, model)
+    if args.backend == ECO_BACKEND:
+        key = os.environ.pop("OPENDESIGN_API_KEY", "")
+        if not args.dry_run and not key:
+            parser.error("Set OPENDESIGN_API_KEY in the environment or --env-file")
+        scheduler_status(args.scheduler_socket)
+        client = (evotrace or traceaad_base).OpenAIClient
+        model = client(ECO_URL, ECO_MODEL, api_key=key,
+                       request_options=request_options(args.method, args.backend))
+        routing = eco_routing()
+    else:
+        model = ScheduledModel(args.scheduler_socket, args.run_name)
+        if is_evotrace:
+            model.factory = evotrace.OpenAIClient
+        routing = {"policy": "shared", "endpoints": model.scheduler["endpoints"]}
+    metadata = metadata_for(args, task, config, model, routing)
     if allocation_config is not None:
         metadata["allocation"] = asdict(allocation_config)
         metadata["topology"] = asdict(topology_config)
@@ -259,6 +281,8 @@ def main(argv=None):
     directory.mkdir(parents=True, exist_ok=True)
     if args.resume and (directory / "run_config.json").exists():
         metadata = json.loads((directory / "run_config.json").read_text())
+        if metadata.get("backend", "scheduled") != args.backend:
+            parser.error("Resume requires the original model backend")
     if args.resume and allocation_config is not None:
         alloc_cls = V4AllocationConfig if method_id == "evotrace_v4" else V3AllocationConfig
         topo_cls = V4TopologyConfig if method_id == "evotrace_v4" else V3TopologyConfig

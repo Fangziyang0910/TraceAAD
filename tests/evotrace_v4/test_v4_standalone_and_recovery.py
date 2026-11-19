@@ -28,13 +28,15 @@ class ScriptedModel:
 
     def __init__(self, fail_on_calls=()):
         self.state = {"calls": 0, "reflections": 0}
+        self.reflection_prompts = []
         self.fail_on = set(fail_on_calls)
 
     def complete(self, prompt, **kwargs):
         schema = self.request_options["response_format"]["json_schema"]["name"]
         if schema == "evotrace_experience":
             self.state["reflections"] += 1
-            return json.dumps({"experience": "Summarized factual computations and outcomes."})
+            self.reflection_prompts.append(prompt)
+            return json.dumps({"analysis": "Compared intents and results.", "experience": "Offset ideas did not pay off."})
         self.state["calls"] += 1
         n = self.state["calls"]
         if n in self.fail_on:
@@ -82,7 +84,8 @@ def test_all_evolution_operators_attach_to_living_parents_and_resume_identically
     config = Config(initial_size=3, evaluation_budget=60, seed=7)
     topology = TopologyConfig(max_representatives=8, cover_distance=0.15, region_size=3)
 
-    full = EvoTrace(task, ScriptedModel(), config=config, topology_config=topology, run_dir=tmp_path / "full")
+    full_model = ScriptedModel()
+    full = EvoTrace(task, full_model, config=config, topology_config=topology, run_dir=tmp_path / "full")
     attached = []
     orig_attach = full._attach_evaluated_attempt
 
@@ -95,6 +98,8 @@ def test_all_evolution_operators_attach_to_living_parents_and_resume_identically
     full.run()
     ops = {op for op, _, _ in attached}
     assert {"Init", "Refine", "Explore"} <= ops
+    # Reflection reads each attempt's pre-code analysis next to its design and code.
+    assert any("Analysis before coding: Plan" in p for p in full_model.reflection_prompts)
     for op, parent_id, edge_parent in attached:
         assert parent_id == edge_parent
         if op == "Init":

@@ -42,7 +42,8 @@ def algorithm(language):
         ('fewer than $N_0$ feasible initial heuristics collected', '已获得的可行初始启发式不足 $N_0$ 个'),
         ('Select representatives $R$ and skeleton $\\mathcal H$', '选出代表集 $R$ 并补齐骨架 $\\mathcal H$'),
         ('Partition $\\mathcal V\\setminus\\mathcal H$ into path and subtree regions', '将非骨架节点划分为路径区域与子树区域'),
-        ('Reflect on regions with $|C|\\geq m$ using pre-update $T$', '基于更新前的树 $T$ 反思 $|C|\\geq m$ 的区域'),
+        ('Reflect on path and non-root subtree regions with $|C|\\geq m$ using pre-update $T$',
+         '基于更新前的树 $T$ 反思 $|C|\\geq m$ 的路径区与非根子树区'),
         ('Contract paths and prune subtrees; store $E_{u\\to w},E_u$', '收缩路径并剪除子树，保存边经验 $E_{u\\to w}$ 与节点经验 $E_u$'),
         ('best feasible heuristic evaluated during search', '搜索中评价过的最优可行启发式'),
     ]
@@ -89,7 +90,8 @@ def convert_body(markdown, language):
                 'figures/inheritance-case.png': 'figures/inheritance-case.pdf'}.get(path, path)
         caption = latex(lead.strip() + ' ' + tail.strip())
         number = len(graphics) + 1
-        graphics.append('\\begin{figure*}[t]\n\\centering\n'
+        placement = 'htbp' if Path(path).stem == 'inheritance-case' else 't'
+        graphics.append(f'\\begin{{figure*}}[{placement}]\n\\centering\n'
                         + f'\\includegraphics[width=\\textwidth]{{{path}}}\n'
                         + f'\\caption{{{caption}}}\\label{{fig:trees-{Path(path).stem}}}\n'
                         + '\\end{figure*}')
@@ -121,6 +123,14 @@ def convert_body(markdown, language):
         markdown = markdown.replace('EVOTRACEFIGURE3', '').replace('EVOTRACESCORETABLE', '')
         markdown = markdown.replace(heading, heading + '\n\nEVOTRACEFIGURE3\n\nEVOTRACESCORETABLE', 1)
     result = latex(markdown)
+    # Keep each verbatim prompt together with its short label in the appendix.
+    result = re.sub(
+        r'^(?:\\text(?:bf|tt)\{[^\n]+\}\n\n)?\\begin\{verbatim\}\n.*?^\\end\{verbatim\}$',
+        lambda match: r'\noindent\begin{minipage}{\linewidth}' + '\n'
+        + match[0] + '\n' + r'\end{minipage}\par',
+        result,
+        flags=re.M | re.S,
+    )
     for i, graphic in enumerate(graphics, 1):
         result = result.replace(f'EVOTRACEFIGURE{i}', graphic)
     if score_table:
@@ -204,6 +214,7 @@ for language, source, name in [('en', 'paper.md', 'main'), ('zh', 'paper-中文.
 
 \clearpage
 \onecolumn
+\raggedbottom
 \appendix
 ''' + appendix_tex + '\n\\end{document}\n'
     tex = '% Markdown SHA256: ' + hashlib.sha256(text.encode()).hexdigest() + '\n' + tex

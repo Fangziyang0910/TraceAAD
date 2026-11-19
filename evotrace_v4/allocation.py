@@ -97,11 +97,8 @@ def select_explore_references(
     parent_id: int,
     rng: random.Random,
     config: AllocationConfig = AllocationConfig(),
-    topology_config: TopologyConfig = TopologyConfig(),
-    *,
-    reps: Sequence[int] | None = None,
 ) -> tuple[int, ...]:
-    """从 S \\ {p}（去除与 p 源码相同者）中不放回依次抽取至多 M 个代表。
+    """从全树存活的可行个体中按标准化源码去重，排除主父代源码，抽取至多 M 个代表。
 
     候选 q 的权重为池内名次衰减 2**(-r(q) / h) 乘以 q 到 {p} 与已选代表的最小 AST 距离；
     名次衰减每轮以剩余候选中的最优名次为基准（不改变抽样分布，只避免极小 h 下的浮点下溢）。
@@ -109,9 +106,13 @@ def select_explore_references(
     """
     if config.explore_references == 0:
         return ()
-    parent_ident = identity(tree.nodes[parent_id].code)
-    core = representatives(tree, topology_config) if reps is None else reps
-    pool = [i for i in core if i != parent_id and identity(tree.nodes[i].code) != parent_ident]
+    seen = {identity(tree.nodes[parent_id].code)}
+    pool = []
+    for i in feasible_individuals(tree):
+        source = identity(tree.nodes[i].code)
+        if source not in seen:
+            seen.add(source)
+            pool.append(i)
     if not pool:
         return ()
     rank = ranks(tree, pool)
@@ -141,13 +142,10 @@ def allocate_step(
     operator = rng.choices(OPERATORS, weights=OPERATOR_WEIGHTS, k=1)[0]
     if operator == "Refine":
         return parent_id, "Refine", None, ()
-    reps = representatives(tree, topology_config)
     if operator == "Crossover":
-        ref_probs = reference_probabilities(tree, parent_id, config, topology_config, reps=reps)
+        ref_probs = reference_probabilities(tree, parent_id, config, topology_config)
         if not ref_probs:
             return parent_id, "Refine", None, ()
         ref_id = rng.choices(list(ref_probs), weights=list(ref_probs.values()), k=1)[0]
         return parent_id, "Crossover", ref_id, ()
-    return parent_id, "Explore", None, select_explore_references(
-        tree, parent_id, rng, config, topology_config, reps=reps
-    )
+    return parent_id, "Explore", None, select_explore_references(tree, parent_id, rng, config)

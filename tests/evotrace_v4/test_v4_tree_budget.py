@@ -176,16 +176,16 @@ def test_merged_single_leaf_siblings_and_contracted_regressing_refine_to_root():
 
 
 def test_five_close_initial_algorithms_handle_empty_core_complement_in_explore_and_crossover():
-    """复核默认参数边界：5 个结构接近的初始算法使 S = {p} 时，Explore 返回空概览，Crossover 退至 V_dist \\ {p}。"""
+    """结构距离均为零时探索没有参考，交叉仍可使用源码不同的候选。"""
     cfg = TopologyConfig(max_representatives=24, cover_distance=0.15, region_size=4)
     alloc = AllocationConfig(rank_half_life=6.0, explore_references=6)
     tree = TreePopulation()
     inits = [add(tree, 0, float(k + 1), code=f"def solve(x):\n    return x + {k + 1}\n") for k in range(5)]
     p = inits[0]
     assert representatives(tree, cfg) == (p,)
-    assert select_explore_references(tree, p, random.Random(0), alloc, cfg) == ()
-    # A parent outside S whose only core member differs by constants (AST distance 0) gets no reference card.
-    assert select_explore_references(tree, inits[1], random.Random(0), alloc, cfg) == ()
+    assert select_explore_references(tree, p, random.Random(0), alloc) == ()
+    # Changing the parent leaves all candidate distances at zero.
+    assert select_explore_references(tree, inits[1], random.Random(0), alloc) == ()
     ref_probs = reference_probabilities(tree, p, alloc, cfg)
     assert set(ref_probs) == set(inits[1:])
     assert sum(ref_probs.values()) == pytest.approx(1.0)
@@ -202,37 +202,46 @@ def test_five_close_initial_algorithms_handle_empty_core_complement_in_explore_a
         assert op in {"Refine", "Explore"} and ref_id is None
 
 
-def test_explore_references_sample_distinct_core_members_without_replacement():
-    """复核探索代表抽样：从 S \\ {p} 不放回抽取至多 M 个互异代表，排除与 p 同码者，同一随机种子结果可复现。"""
-    cfg = TopologyConfig(max_representatives=24, cover_distance=0.15, region_size=4)
-    alloc = AllocationConfig(rank_half_life=6.0, explore_references=5)
+def test_explore_samples_all_living_sources_without_replacement():
     tree = TreePopulation()
     ids = [add(tree, 0, float(k + 1), code=distinct_code(k)) for k in range(9)]
     p = ids[0]
-    reps = representatives(tree, cfg)
-    assert p in reps and len(reps) > 6
-    twin = add(tree, p, 0.5, code="# same computation\n" + tree.nodes[p].code)
-    pool = (*reps, twin)  # The twin enters the passed pool and must be filtered by source identity.
+    add(tree, p, 0.5, code="# parent copy\n" + tree.nodes[p].code)
+    add(tree, p, 0.8, code="# reference copy\n" + tree.nodes[ids[1]].code)
+    add(tree, p, None, code=distinct_code(12))
+    eligible = set(ids[1:])
+    cfg = TopologyConfig(max_representatives=2)
+    core = set(representatives(tree, cfg))
+    assert eligible - core
+    alloc = AllocationConfig(explore_references=5)
     seen = set()
     for seed in range(30):
-        chosen = select_explore_references(tree, p, random.Random(seed), alloc, cfg, reps=pool)
-        assert len(chosen) == 5 and len(set(chosen)) == 5
-        assert p not in chosen and twin not in chosen and set(chosen) <= set(reps)
-        assert chosen == select_explore_references(tree, p, random.Random(seed), alloc, cfg, reps=pool)
+        chosen = select_explore_references(tree, p, random.Random(seed), alloc)
+        assert len(chosen) == len(set(chosen)) == 5
+        assert set(chosen) <= eligible
+        assert chosen == select_explore_references(tree, p, random.Random(seed), alloc)
         seen.update(chosen)
-    assert len(seen) > 5  # Sampling, not a fixed greedy set.
-    wide = AllocationConfig(rank_half_life=6.0, explore_references=24)
-    assert set(select_explore_references(tree, p, random.Random(0), wide, cfg, reps=pool)) == set(reps) - {p}
+    assert seen == eligible
+    wide = AllocationConfig(explore_references=24)
+    assert set(select_explore_references(tree, p, random.Random(0), wide)) == eligible
+
+    operators = set()
+    for seed in range(50):
+        _, operator, reference, cards = allocate_step(tree, random.Random(seed), alloc, cfg)
+        operators.add(operator)
+        if operator == "Explore":
+            assert set(cards) - core
+        if operator == "Crossover":
+            assert reference in core
+    assert {"Explore", "Crossover"} <= operators
 
 
 def test_explore_reference_weights_use_pool_ranks_and_nearest_distance():
     """复核每轮权重：池内名次衰减乘以到 {p} 与已选代表的最小 AST 距离。"""
-    cfg = TopologyConfig(max_representatives=24, cover_distance=0.15, region_size=4)
     alloc = AllocationConfig(rank_half_life=6.0, explore_references=2)
     tree = TreePopulation()
     ids = [add(tree, 0, float(k + 1), code=distinct_code(k)) for k in range(6)]
     p = ids[2]  # A parent in the middle of the ranking: pool ranks must exclude it.
-    reps = representatives(tree, cfg)
 
     class Recorder:
         def __init__(self):
@@ -243,10 +252,10 @@ def test_explore_reference_weights_use_pool_ranks_and_nearest_distance():
             return [population[-1]]
 
     rng = Recorder()
-    chosen = select_explore_references(tree, p, rng, alloc, cfg, reps=reps)
-    pool = [i for i in reps if i != p]
+    chosen = select_explore_references(tree, p, rng, alloc)
+    pool = [i for i in ids if i != p]
     rank = ranks(tree, pool)
-    code = {i: tree.nodes[i].code for i in reps}
+    code = {i: tree.nodes[i].code for i in ids}
     first, second = rng.rounds
     best = min(rank.values())
     assert first == pytest.approx({i: 2 ** (-(rank[i] - best) / 6.0) * code_distance(code[p], code[i]) for i in pool})
