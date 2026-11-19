@@ -287,21 +287,10 @@ def main(argv=None):
         alloc_cls = V4AllocationConfig if method_id == "evotrace_v4" else V3AllocationConfig
         topo_cls = V4TopologyConfig if method_id == "evotrace_v4" else V3TopologyConfig
         native = json.loads((directory / "native" / "run_config.json").read_text())
-        if native.get("selection_rule") != METHODS[args.method][1].selection_rule:
-            raise ValueError("Incompatible selection_rule; resume with the original frozen source")
-        allocation = dict(native["allocation"])
-        for key in ALLOCATION_FIELDS:
-            if getattr(args, key) is not None:
-                allocation[key] = getattr(args, key)
-        allocation_config = alloc_cls(**allocation)
-        topology = dict(native["topology"])
-        for key in TOPOLOGY_FIELDS:
-            if getattr(args, key) is not None:
-                topology[key] = getattr(args, key)
-        try:
-            topology_config = topo_cls(**topology)
-        except TypeError as exc:
-            raise ValueError("Incompatible topology; resume with the original frozen source") from exc
+        allocation_config = alloc_cls(**{**native["allocation"], **{
+            key: getattr(args, key) for key in ALLOCATION_FIELDS if getattr(args, key) is not None}})
+        topology_config = topo_cls(**{**native["topology"], **{
+            key: getattr(args, key) for key in TOPOLOGY_FIELDS if getattr(args, key) is not None}})
     if allocation_config is not None:
         metadata["allocation"] = asdict(allocation_config)
         metadata["topology"] = asdict(topology_config)

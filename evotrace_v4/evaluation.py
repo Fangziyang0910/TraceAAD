@@ -16,14 +16,14 @@ from .task import Task
 TIMEOUT_PREFIX = "Evaluation exceeded"
 
 
-def _parse_failure(failure: str):
-    """The exception message and the traceback blocks that lie in the candidate's own code."""
+def _parse_failure(failure: str, code: str | None = None) -> tuple[str, list[list[str]]]:
+    """异常信息，以及候选自身代码中的报错帧（帧行、源码行与标记行）。
+
+    以 exec 运行的源码只给出 "<string>" 帧的行号，这一行从执行的原文中补出。
+    """
     lines = failure.strip().splitlines()
-    start = len(lines) - 1
-    for i, line in enumerate(lines):
-        if line and not line[0].isspace() and not line.startswith("Traceback"):
-            start = i
-    message = re.sub(r"^(?:\w+\.)+(?=\w+(?::|$))", "", "\n".join(lines[start:]))
+    start = max((i for i, line in enumerate(lines)
+                 if line and not line[0].isspace() and not line.startswith("Traceback")), default=len(lines) - 1)
     blocks, keep = [], False
     for line in lines[:start]:
         if line.lstrip().startswith('File "'):
@@ -34,30 +34,31 @@ def _parse_failure(failure: str):
             blocks[-1].append(line)
         else:
             keep = False
-    return re.sub(r"\d+(?:\.\d+)?", "N", message), blocks
+    source = (code or "").splitlines()
+    for block in blocks:
+        number = re.search(r", line (\d+)", block[0])
+        if len(block) == 1 and number and 0 < int(number.group(1)) <= len(source):
+            block.append("    " + source[int(number.group(1)) - 1].strip())
+    # 去掉异常类的模块前缀（如 core.evaluate.），只留类名与信息。
+    return re.sub(r"^(?:\w+\.)+(?=\w+(?::|$))", "", "\n".join(lines[start:])), blocks
 
 
-def failure_feedback(failure: str) -> str:
-    """Candidate traceback lines plus normalized exception message for repair."""
-    message, blocks = _parse_failure(failure)
+def failure_feedback(failure: str, code: str | None = None) -> str:
+    """修复用的报错：候选代码中的报错帧与异常信息。"""
+    message, blocks = _parse_failure(failure, code)
     return "\n".join([*(line for block in blocks for line in block), message])
 
 
-def compact_failure(failure_text: str | None) -> str:
-    """Short one-line failure reason with offending candidate source line."""
-    text = (failure_text or "").strip()
+def compact_failure(failure: str | None, code: str | None = None) -> str:
+    """一行失败原因，附出错的源码行。"""
+    text = (failure or "").strip()
     if not text:
         return "infeasible (unknown error)"
     if text.startswith(TIMEOUT_PREFIX):
         return "timeout (exceeded evaluation time limit)"
-    message, blocks = _parse_failure(text)
-    if blocks:
-        source = next(
-            (line.strip() for line in blocks[-1][1:] if line.strip() and set(line.strip()) - set("~^ ")),
-            None,
-        )
-        if source:
-            return f"{message} at `{source[:80]}`"
+    message, blocks = _parse_failure(text, code)
+    if blocks and len(blocks[-1]) > 1:
+        return f"{message} at `{blocks[-1][1].strip()[:80]}`"
     return message[:120]
 
 
@@ -106,8 +107,7 @@ class Evaluator:
 
     def evaluate(self, code: str) -> Evaluation:
         try:
-            fitness, _ = isolated_call(_execute, (self.task, code), self.task.time_limit)
-            return Evaluation("success", fitness=fitness)
+            return Evaluation("success", fitness=isolated_call(_execute, (self.task, code), self.task.time_limit))
         except ProcessTimeout:
             return Evaluation(
                 "timeout",

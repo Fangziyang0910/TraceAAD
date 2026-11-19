@@ -219,14 +219,13 @@ def test_eco_requests_keep_non_thinking_control_on_schema_change(monkeypatch):
 
     requests = []
 
-    def capture(_function, args, _timeout):
-        endpoint, key, payload, _ = args
+    def capture(endpoint, key, payload, _timeout):
         assert endpoint == run.ECO_URL + "/chat/completions"
         assert key == "dummy-key"
         requests.append(payload)
-        return {"content": "{}", "model": run.ECO_MODEL, "usage": {}, "finish_reason": "stop"}, {}
+        return {"choices": [{"message": {"content": "{}"}, "finish_reason": "stop"}], "model": run.ECO_MODEL}
 
-    monkeypatch.setattr(llm, "isolated_call", capture)
+    monkeypatch.setattr(llm, "_post", capture)
     client = llm.OpenAIClient(run.ECO_URL, run.ECO_MODEL, api_key="dummy-key",
                               request_options=run.request_options("evotrace.v4", run.ECO_BACKEND))
     for schema in (CANDIDATE_RESPONSE_FORMAT, EXPERIENCE_SCHEMA):

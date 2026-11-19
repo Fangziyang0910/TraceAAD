@@ -6,26 +6,55 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from functools import lru_cache
 import hashlib
+import io
+import tokenize
 
 from .models import ROOT_ID, TreePopulation
+
+
+def _docstring(node: ast.AST) -> ast.Expr | None:
+    """模块、类或函数体开头的文档字符串语句。"""
+    if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
+        first = node.body[0]
+        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+            return first
+    return None
 
 
 def _strip_docstrings(code: str) -> ast.AST:
     tree = ast.parse(code)
     for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
-            first = node.body[0]
-            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
-                node.body = node.body[1:] or [ast.Pass()]
+        if _docstring(node) is not None:
+            node.body = node.body[1:] or [ast.Pass()]
     return tree
 
 
 def bare_code(code: str) -> str:
-    """去除文档字符串后的标准化源码。"""
+    """去掉文档字符串与注释、其余保持原写法的源码；不能整行去掉时原样返回。
+
+    不用 ast.unparse 重排：它把 min(x for x in y) 写成 min((x for x in y))，模型照抄时会漏写右括号。
+    """
+    text = code.replace("\r\n", "\n").replace("\r", "\n")
     try:
-        return ast.unparse(_strip_docstrings(code))
-    except (SyntaxError, ValueError):
-        return code.strip()
+        lines: list[str | None] = list(text.split("\n"))
+        for token in tokenize.generate_tokens(io.StringIO(text).readline):
+            if token.type == tokenize.COMMENT:
+                row, col = token.start
+                kept = (lines[row - 1] or "")[:col].rstrip()
+                lines[row - 1] = kept if kept.strip() else None
+        for node in ast.walk(ast.parse(text)):
+            if (doc := _docstring(node)) is None:
+                continue
+            start, end = doc.lineno - 1, (doc.end_lineno or doc.lineno) - 1
+            head, tail = lines[start] or "", lines[end] or ""
+            if head[:doc.col_offset].strip() or tail.encode()[doc.end_col_offset or 0:].decode().strip():
+                return text.strip()
+            lines[start:end + 1] = [head[:doc.col_offset] + "pass" if len(node.body) == 1 else None] + [None] * (end - start)
+        bare = "\n".join(line for line in lines if line is not None).strip()
+        ast.parse(bare)
+        return bare
+    except (SyntaxError, ValueError, tokenize.TokenError):
+        return text.strip()
 
 
 @lru_cache(maxsize=4096)
@@ -94,13 +123,6 @@ class TopologyConfig:
     max_representatives: int = 24
     cover_distance: float = 0.15
     region_size: int = 4
-
-    def __post_init__(self) -> None:
-        for name in ("max_representatives", "region_size"):
-            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
-                raise ValueError(f"{name} must be an integer >= 1")
-        if type(self.cover_distance) not in (int, float) or not (0.0 <= self.cover_distance <= 1.0):
-            raise ValueError("cover_distance must be a finite number in [0, 1]")
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,5 @@
 """全树可行节点上的父代预算分配、交叉参考抽样与探索代表抽样。"""
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 import math
 import random
@@ -25,11 +24,11 @@ class AllocationConfig:
     rank_half_life: float = 6.0
     explore_references: int = 5
 
-    def __post_init__(self) -> None:
-        if not math.isfinite(self.rank_half_life) or self.rank_half_life <= 0:
-            raise ValueError("rank_half_life must be finite and positive")
-        if type(self.explore_references) is not int or self.explore_references < 0:
-            raise ValueError("explore_references must be an integer >= 0")
+
+def _decay(rank: dict[int, float], ids, half_life: float) -> dict[int, float]:
+    """名次衰减 2**(-r / h)，以 ids 中的最优名次为基准（不改变比例，只避免极小 h 下的浮点下溢）。"""
+    best = min(rank[i] for i in ids)
+    return {i: 2.0 ** (-(rank[i] - best) / half_life) for i in ids}
 
 
 def parent_probabilities(
@@ -40,12 +39,8 @@ def parent_probabilities(
     feasible = feasible_individuals(tree)
     if not feasible:
         return {}
-    rank = ranks(tree, feasible)
-    best = min(rank.values())
-    weights = {
-        i: 2.0 ** (-(rank[i] - best) / config.rank_half_life) / (1 + tree.nodes[i].direct_evaluations)
-        for i in feasible
-    }
+    quality = _decay(ranks(tree, feasible), feasible, config.rank_half_life)
+    weights = {i: quality[i] / (1 + tree.nodes[i].direct_evaluations) for i in feasible}
     total = math.fsum(weights.values())
     return {i: w / total for i, w in weights.items()}
 
@@ -56,8 +51,6 @@ def select_parent(
     config: AllocationConfig = AllocationConfig(),
 ) -> int:
     probs = parent_probabilities(tree, config)
-    if not probs:
-        raise ValueError("TreePopulation has no feasible algorithms to select from")
     return rng.choices(list(probs), weights=list(probs.values()), k=1)[0]
 
 
@@ -66,24 +59,19 @@ def reference_probabilities(
     parent_id: int,
     config: AllocationConfig = AllocationConfig(),
     topology_config: TopologyConfig = TopologyConfig(),
-    *,
-    reps: Sequence[int] | None = None,
 ) -> dict[int, float]:
     """在 S \\ {p}（为空时退至 V_dist \\ {p}）中联合名次衰减与 AST 结构距离抽样异构交叉参考。"""
     parent_code = tree.nodes[parent_id].code
     parent_ident = identity(parent_code)
-    core = representatives(tree, topology_config) if reps is None else reps
-    pool = [i for i in core if i != parent_id and identity(tree.nodes[i].code) != parent_ident]
-    if not pool:
-        pool = [
-            i for i in sorted(distinct_individuals(tree))
-            if i != parent_id and identity(tree.nodes[i].code) != parent_ident
-        ]
+
+    def others(ids):
+        return [i for i in ids if i != parent_id and identity(tree.nodes[i].code) != parent_ident]
+
+    pool = others(representatives(tree, topology_config)) or others(sorted(distinct_individuals(tree)))
     if not pool:
         return {}
     rank = ranks(tree, pool)
-    best = min(rank.values())
-    quality = {i: 2.0 ** (-(rank[i] - best) / config.rank_half_life) for i in sorted(rank)}
+    quality = _decay(rank, sorted(rank), config.rank_half_life)
     weights = {i: quality[i] * code_distance(parent_code, tree.nodes[i].code) for i in quality}
     total = math.fsum(weights.values())
     if total <= 0.0:
@@ -104,8 +92,6 @@ def select_explore_references(
     名次衰减每轮以剩余候选中的最优名次为基准（不改变抽样分布，只避免极小 h 下的浮点下溢）。
     距离为零的候选不参与抽样，没有正距离候选时提前停止。
     """
-    if config.explore_references == 0:
-        return ()
     seen = {identity(tree.nodes[parent_id].code)}
     pool = []
     for i in feasible_individuals(tree):
@@ -113,8 +99,6 @@ def select_explore_references(
         if source not in seen:
             seen.add(source)
             pool.append(i)
-    if not pool:
-        return ()
     rank = ranks(tree, pool)
     nearest = {i: code_distance(tree.nodes[parent_id].code, tree.nodes[i].code) for i in pool}
     chosen: list[int] = []
@@ -122,8 +106,8 @@ def select_explore_references(
         remaining = [i for i in pool if i not in chosen and nearest[i] > 0.0]
         if not remaining:
             break
-        best = min(rank[i] for i in remaining)
-        weights = [2.0 ** (-(rank[i] - best) / config.rank_half_life) * nearest[i] for i in remaining]
+        quality = _decay(rank, remaining, config.rank_half_life)
+        weights = [quality[i] * nearest[i] for i in remaining]
         pick = rng.choices(remaining, weights=weights, k=1)[0]
         chosen.append(pick)
         for i in pool:

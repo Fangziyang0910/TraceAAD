@@ -114,13 +114,9 @@ class TreePopulation:
 
     @classmethod
     def from_dict(cls, data: dict) -> "TreePopulation":
-        # Earlier experimental checkpoints also stored an untested direction.
-        def single_note(record: dict) -> dict:
-            return {key: value for key, value in record.items() if key != "direction"}
-
         return cls(
-            nodes={int(i): Node(**single_note(n)) for i, n in data["nodes"].items()},
-            edges={int(i): Edge(**single_note(e)) for i, e in data["edges"].items()},
+            nodes={int(i): Node(**n) for i, n in data["nodes"].items()},
+            edges={int(i): Edge(**e) for i, e in data["edges"].items()},
         )
 
 
@@ -172,8 +168,6 @@ class Candidate:
             raise FormatError(str(exc)) from exc
         if not isinstance(value, dict):
             raise FormatError(f"Expected a JSON object, got {type(value).__name__}")
-        if tuple(value) != ("analysis", "code", "design"):
-            raise FormatError('Expected JSON keys ("analysis", "code", "design") in exact order without extra fields')
         for name in ("analysis", "code", "design"):
             if not isinstance(value.get(name), str) or not value[name].strip():
                 raise FormatError(f"Field {name!r} must be a nonempty string")

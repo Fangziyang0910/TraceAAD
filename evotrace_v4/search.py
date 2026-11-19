@@ -27,9 +27,27 @@ from .models import (
     TreePopulation,
 )
 from .reflection import EXPERIENCE_SCHEMA, problem_header, reflect_and_apply
-from .storage import Store
 from .task import Task
-from .topology import TopologyConfig, feasible_individuals, plan_simplification, representatives
+from .topology import TopologyConfig, feasible_individuals, plan_simplification
+
+
+def _write_json(path: Path, value) -> None:
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+
+
+def _append_json(path: Path, row: dict) -> None:
+    with path.open("a") as output:
+        output.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def _complete_lines(path: Path) -> bytes:
+    """文件中的完整行；被中断进程写了一半的末行先截掉，后续追加从新行开始。"""
+    data = path.read_bytes() if path.exists() else b""
+    end = data.rfind(b"\n") + 1
+    if end < len(data):
+        with path.open("r+b") as output:
+            output.truncate(end)
+    return data[:end]
 
 
 def with_output_format(model: Any, schema: dict, *, role: bool = False) -> Any:
@@ -46,7 +64,7 @@ class EvoTrace:
 
     method = "evotrace_v4"
     selection_rule = "tree_population_rank_direct_sampling"
-    generation_protocol = "tree_population_lineage_cards_analysis_code_design_v8"
+    generation_protocol = "tree_population_lineage_cards_analysis_code_design_v9"
     mechanisms = (
         "tree_population",
         "reflective_elimination",
@@ -63,16 +81,11 @@ class EvoTrace:
         topology_config: TopologyConfig | None = None,
         allocation_config: AllocationConfig | None = None,
         include_experiences: bool = True,
-        run_dir: str | Path | None = None,
+        run_dir: str | Path,
         resume: bool = False,
     ) -> None:
-        config = config or Config()
-        if config.initial_size < 1:
-            raise ValueError("EvoTrace requires initial_size >= 1")
-        if config.evaluation_budget < 1:
-            raise ValueError("EvoTrace requires evaluation_budget >= 1")
         self.task = task
-        self.config = config
+        self.config = config or Config()
         self.topology_config = topology_config or TopologyConfig()
         self.allocation_config = allocation_config or AllocationConfig()
         self.include_experiences = include_experiences
@@ -80,18 +93,18 @@ class EvoTrace:
         self.tree = TreePopulation()
         self.model = with_output_format(model, CANDIDATE_RESPONSE_FORMAT)
         self.reflection_model = with_output_format(model, EXPERIENCE_SCHEMA, role=True)
-        self.store = Store(run_dir)
+        self.problem = problem_header(task.task_description, task.score_definition, task.function_template)
+        self.run_dir = Path(run_dir)
+        self.run_dir.mkdir(parents=True, exist_ok=True)
         self.evaluator = Evaluator(task)
         self.archive: dict[int, Program] = {}
         self.attempts: list[Attempt] = []
-        self._resumed_at = 0
         if task.example_code is not None:
             self.archive[0] = Program(0, task.example_code, task.example_design, None, None, None, None)
         if resume:
-            self._validate_resume()
-            for name in ("attempts.jsonl", "calls.jsonl"):
-                self.store.repair_tail(name)
-            for row in self.store.rows("attempts.jsonl"):
+            _complete_lines(self.run_dir / "calls.jsonl")
+            for line in _complete_lines(self.run_dir / "attempts.jsonl").splitlines():
+                row = json.loads(line)
                 attempt = Attempt(**row["attempt"])
                 self.attempts.append(attempt)
                 if row["program"] is not None:
@@ -100,49 +113,24 @@ class EvoTrace:
                 self._attach_evaluated_attempt(attempt)
                 if "tree_after" in row:
                     self.tree = TreePopulation.from_dict(row["tree_after"])
-            self._resumed_at = len(self.attempts)
         else:
-            self.store.write("run_config.json", {
-                **self._run_settings(),
+            _write_json(self.run_dir / "run_config.json", {
+                "method": self.method,
+                "config": asdict(self.config),
+                "task": task.description(),
+                "selection_rule": self.selection_rule,
+                "generation_protocol": self.generation_protocol,
+                "mechanisms": list(self.mechanisms),
+                "topology": asdict(self.topology_config),
+                "allocation": asdict(self.allocation_config),
+                "include_experiences": include_experiences,
                 "model": getattr(self.model, "model", type(self.model).__name__),
             })
+        self._resumed_at = len(self.attempts)
 
     @property
     def _initialized_count(self) -> int:
         return sum(p.valid and p.operator == "Init" for p in self.archive.values())
-
-    @property
-    def core_ids(self) -> tuple[int, ...]:
-        if self._initialized_count < self.config.initial_size:
-            return ()
-        return representatives(self.tree, self.topology_config)
-
-    def _run_settings(self) -> dict[str, Any]:
-        return {
-            "method": self.method,
-            "config": asdict(self.config),
-            "task": self.task.description(),
-            "selection_rule": self.selection_rule,
-            "generation_protocol": self.generation_protocol,
-            "mechanisms": list(self.mechanisms),
-            "topology": asdict(self.topology_config),
-            "allocation": asdict(self.allocation_config),
-            "include_experiences": self.include_experiences,
-        }
-
-    def _validate_resume(self) -> None:
-        saved = self.store.read("run_config.json")
-        if saved is None:
-            raise ValueError("Resume requires its original run_config.json")
-        expected = json.loads(json.dumps(self._run_settings()))
-        if hasattr(self.model, "model") and "model" in saved:
-            expected["model"] = self.model.model
-        differences = [key for key, value in expected.items() if saved.get(key) != value]
-        if differences:
-            raise ValueError(
-                "Incompatible EvoTrace resume settings: " + ", ".join(differences)
-                + "; resume with its original frozen source"
-            )
 
     def _attach_evaluated_attempt(self, attempt: Attempt) -> None:
         prog = self.archive.get(attempt.program_id) if attempt.program_id else None
@@ -164,9 +152,7 @@ class EvoTrace:
 
     def _update_population(self, attempt: Attempt) -> bool:
         self._attach_evaluated_attempt(attempt)
-        if attempt.program_id not in self.tree.nodes:
-            return False
-        if self._initialized_count < self.config.initial_size:
+        if attempt.program_id not in self.tree.nodes or self._initialized_count < self.config.initial_size:
             return False
         regions = plan_simplification(self.tree, self.topology_config)
         if not regions:
@@ -175,9 +161,7 @@ class EvoTrace:
             self.tree,
             regions,
             model=self.reflection_model,
-            problem=problem_header(
-                self.task.task_description, self.task.score_definition, self.task.function_template
-            ),
+            problem=self.problem,
             timeout=min(self.config.model_timeout, 180.0),
         )
         return True
@@ -225,20 +209,34 @@ class EvoTrace:
                 content = None
             record["seconds"] = time.monotonic() - started
         attempt.calls.append(record)
-        self.store.append("calls.jsonl", {**record, "attempt_id": attempt.id,
-                                          "prompt": prompt, "response": content})
+        _append_json(self.run_dir / "calls.jsonl", {**record, "attempt_id": attempt.id,
+                                                    "prompt": prompt, "response": content})
         return content
 
-    def _parse(self, attempt: Attempt, response: str) -> Candidate | None:
+    def _parse(self, attempt: Attempt, response: str | None) -> Candidate | None:
+        if response is None:
+            return None
         try:
             return Candidate.parse(response)
         except FormatError as exc:
             attempt.calls[-1]["format_failure"] = str(exc)
             return None
 
-    def _evaluate(self, attempt: Attempt, candidate: Candidate) -> None:
-        if self.evaluations_used >= self.config.evaluation_budget:
-            raise RuntimeError("Evaluation budget exhausted before evaluator call")
+    def _generate(self, attempt: Attempt, prompt: str, repair_kind: str | None = None) -> Candidate | None:
+        """一次生成；回复不合格式且本次尝试尚未修复时，做一次格式修复。"""
+        response = self._call(attempt, prompt, repair_kind)
+        candidate = self._parse(attempt, response)
+        if candidate is None and response is not None and not attempt.repair_used:
+            attempt.repair_used = True
+            feedback = attempt.calls[-1]["format_failure"]
+            response = self._call(attempt, repair_format_prompt(self.task, response, feedback), "format")
+            candidate = self._parse(attempt, response)
+        return candidate
+
+    def _budget_left(self) -> bool:
+        return self.evaluations_used < self.config.evaluation_budget
+
+    def _evaluate(self, attempt: Attempt, candidate: Candidate) -> Program:
         with getattr(self.evaluator, "evaluation_context", nullcontext)():
             started = time.monotonic()
             evaluation = self.evaluator.evaluate(candidate.code)
@@ -255,6 +253,7 @@ class EvoTrace:
             "seconds": seconds, "repair": attempt.repair_used, "program_id": program.id,
             "resources": getattr(self.evaluator, "last_dispatch", {}),
         })
+        return program
 
     def step(self) -> Attempt | None:
         if self.stop_reason is not None:
@@ -277,33 +276,21 @@ class EvoTrace:
                 explore_ids=explore_ids, include_experiences=self.include_experiences,
             )
         self.attempts.append(attempt)
-        response = self._call(attempt, prompt)
-        if response is not None:
-            candidate = self._parse(attempt, response)
-            if candidate is None:
+        candidate = self._generate(attempt, prompt)
+        if candidate is not None and self._budget_left():
+            program = self._evaluate(attempt, candidate)
+            if not program.valid and not attempt.repair_used and self._budget_left():
                 attempt.repair_used = True
-                prompt = repair_format_prompt(self.task, response, attempt.calls[-1]["format_failure"])
-                response = self._call(attempt, prompt, "format")
-                candidate = self._parse(attempt, response) if response is not None else None
-            if candidate is not None and self.evaluations_used < self.config.evaluation_budget:
-                self._evaluate(attempt, candidate)
-                program = self.archive[attempt.program_id]
-                if (not program.valid and not attempt.repair_used
-                        and self.evaluations_used < self.config.evaluation_budget):
-                    attempt.repair_used = True
-                    prompt = repair_program_prompt(self.task, program)
-                    response = self._call(attempt, prompt, program.evaluation.status)
-                    repaired = self._parse(attempt, response) if response is not None else None
-                    if repaired is not None and self.evaluations_used < self.config.evaluation_budget:
-                        analysis = f"{program.analysis}\nRepair: {repaired.analysis}"
-                        self._evaluate(attempt, replace(repaired, analysis=analysis))
+                repaired = self._generate(attempt, repair_program_prompt(self.task, program), program.evaluation.status)
+                if repaired is not None and self._budget_left():
+                    self._evaluate(attempt, replace(repaired, analysis=f"{program.analysis}\nRepair: {repaired.analysis}"))
         simplified = self._update_population(attempt)
         attempt.finished_at = time.time()
         program = self.archive.get(attempt.program_id)
         row = {"attempt": asdict(attempt), "program": asdict(program) if program else None}
         if simplified:
             row["tree_after"] = asdict(self.tree)
-        self.store.append("attempts.jsonl", row)
+        _append_json(self.run_dir / "attempts.jsonl", row)
         return attempt
 
     def run(self, *, on_attempt=None) -> SearchResult:
@@ -315,7 +302,5 @@ class EvoTrace:
             self.evaluations_used, self.model_calls, len(self.attempts),
             sum(p.valid for p in self.archive.values()),
         )
-        self.store.write("result.json", asdict(result))
-        if result.best is not None and self.store.path is not None:
-            (self.store.path / "best.py").write_text(result.best.code)
+        _write_json(self.run_dir / "result.json", asdict(result))
         return result

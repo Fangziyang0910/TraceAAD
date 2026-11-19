@@ -64,60 +64,23 @@ def _origin(edge: Edge) -> str:
 
 
 def _experiences(
-    tree: TreePopulation,
-    node_id: int,
-    *,
-    include: bool,
-    node: bool = True,
-    seen: set[tuple[str, int]] | frozenset = frozenset(),
+    tree: TreePopulation, node_id: int, *, include: bool, node: bool = True, seen: frozenset[int] | set[int] = frozenset(),
 ) -> list[str]:
-    """个体自身的入边经验与节点经验；已在上文出现的经验不重复。"""
-    if not include:
+    """个体自身的入边经验与节点经验；已在上文出现过的个体不再重复。"""
+    if not include or node_id in seen:
         return []
     lines = []
-    if tree.edges[node_id].experience and ("edge", node_id) not in seen:
+    if tree.edges[node_id].experience:
         lines.append(f"Local reflection on the steps that led to it: {tree.edges[node_id].experience}")
-    if node and tree.nodes[node_id].experience and ("node", node_id) not in seen:
+    if node and tree.nodes[node_id].experience:
         lines.append(f"Local reflection on attempts made from it: {tree.nodes[node_id].experience}")
     return lines
 
 
-def _attempts_block(
-    tree: TreePopulation,
-    parent_id: int,
-    *,
-    include_experiences: bool,
-    exclude: frozenset[int] = frozenset(),
-) -> tuple[str | None, list[Node]]:
-    parent = tree.nodes[parent_id]
-    shown = [
-        tree.nodes[cid] for cid, edge in sorted(tree.edges.items())
-        if edge.parent_id == parent_id and cid not in exclude
-    ]
-    parts = []
-    if include_experiences and parent.experience:
-        parts.append(f"Local reflection on earlier attempts: {parent.experience}")
-    for idx, child in enumerate(shown, 1):
-        edge = tree.edges[child.id]
-        result = (
-            f"failed - {compact_failure(child.failure)}" if child.fitness is None
-            else outcome_text(parent.fitness, child.fitness)
-        )
-        parts.append("\n".join([
-            f"Attempt {idx} ({_origin(edge)}): {result}",
-            f"Reported design: {child.design}",
-            *_experiences(tree, child.id, include=include_experiences),
-        ]))
-    if not parts:
-        return None, shown
-    heading = "[Attempts from the Current Algorithm]" + ("\nIn order of creation." if shown else "")
-    return "\n\n".join([heading, *parts]), shown
-
-
 def _lineage_blocks(
-    tree: TreePopulation, parent_id: int, *, include_experiences: bool, exclude: frozenset[int] = frozenset()
-) -> tuple[list[str], set[tuple[str, int]]]:
-    """逐边展示形成路径上的生成意图或收缩经验，随后列出从主父代出发的尝试。"""
+    tree: TreePopulation, parent_id: int, *, include_experiences: bool, exclude: int | None = None,
+) -> tuple[list[str], set[int]]:
+    """形成路径（逐边的生成意图或收缩经验），以及从主父代出发、仍在树上的尝试；返回已展示的个体。"""
     path = _path_from_root(tree, parent_id)
     rows = ["[Development of the Current Algorithm]"]
     for k, node_id in enumerate(path):
@@ -126,36 +89,40 @@ def _lineage_blocks(
         label = "First version" if k == 0 else f"Step {k}"
         if node_id == parent_id:
             label += ", the current algorithm"
-        head = f"{label} ({_origin(edge)}): {outcome_text(None if prev is None else prev.fitness, node.fitness)}"
-        lines = [head]
+        lines = [f"{label} ({_origin(edge)}): {outcome_text(None if prev is None else prev.fitness, node.fitness)}"]
         if not edge.contracted and node.analysis:
             lines.append(f"Reported intent when this version was generated (references are local to that step): {node.analysis}")
         lines.append(f"Reported design: {node.design}")
         lines.extend(_experiences(tree, node_id, include=include_experiences, node=node_id != parent_id))
         rows.append("\n".join(lines))
     blocks = ["\n\n".join(rows)]
-    attempts_text, shown = _attempts_block(
-        tree, parent_id, include_experiences=include_experiences, exclude=exclude
-    )
-    if attempts_text is not None:
-        blocks.append(attempts_text)
-    seen = {(kind, j) for j in (*path, *(c.id for c in shown)) for kind in ("edge", "node")}
-    return blocks, seen
+
+    parent = tree.nodes[parent_id]
+    children = [i for i, edge in sorted(tree.edges.items()) if edge.parent_id == parent_id and i != exclude]
+    attempts = []
+    if include_experiences and parent.experience:
+        attempts.append(f"Local reflection on earlier attempts: {parent.experience}")
+    for k, i in enumerate(children, 1):
+        child = tree.nodes[i]
+        result = (f"failed - {compact_failure(child.failure, child.code)}" if child.fitness is None
+                  else outcome_text(parent.fitness, child.fitness))
+        attempts.append("\n".join([
+            f"Attempt {k} ({_origin(tree.edges[i])}): {result}",
+            f"Reported design: {child.design}",
+            *_experiences(tree, i, include=include_experiences),
+        ]))
+    if attempts:
+        heading = "[Attempts from the Current Algorithm]" + ("\nIn order of creation." if children else "")
+        blocks.append("\n\n".join([heading, *attempts]))
+    return blocks, {*path, *children}
 
 
-def _card(
-    tree: TreePopulation,
-    node_id: int,
-    *,
-    include_experiences: bool,
-    seen: set[tuple[str, int]] | frozenset = frozenset(),
-) -> list[str]:
+def _card(tree: TreePopulation, node_id: int, *, include_experiences: bool, seen: frozenset[int] | set[int] = frozenset()) -> list[str]:
     """个体卡片：设计简述、自身的入边与节点经验，源码放在最后。"""
-    node = tree.nodes[node_id]
     return [
-        f"Reported design: {node.design}",
+        f"Reported design: {tree.nodes[node_id].design}",
         *_experiences(tree, node_id, include=include_experiences, seen=seen),
-        f"```python\n{bare_code(node.code)}\n```",
+        f"```python\n{bare_code(tree.nodes[node_id].code)}\n```",
     ]
 
 
@@ -177,80 +144,53 @@ def build_evolution_context(
     精化：形成路径、近期尝试及局部反思，空间允许时附上保留前驱的源码，最后是主父代源码。
     交叉：形成路径、近期尝试、参考个体卡片与主父代源码。
     探索：主父代卡片与至多 M 个异质代表卡片，各含设计、成绩、自身经验与源码；不含形成路径与尝试列表。
+    可选材料（前驱源码、代表卡片）只在渲染后的树上下文不超过 CONTEXT_CHARS 时放入。
     """
-    if parent_id not in tree.nodes or tree.nodes[parent_id].fitness is None:
-        raise ValueError("Evolution requires a valid retained feasible parent_id")
     parent = tree.nodes[parent_id]
-
     if operator == "Explore":
-        blocks = ["\n".join([
-            "[Current Algorithm]",
-            outcome_text(None, parent.fitness),
-            *_card(tree, parent_id, include_experiences=include_experiences),
-        ])]
-        heading = "[Other Existing Approaches]\nFrom best to worst fitness."
-        size = len(blocks[0]) + len("\n\n" + heading)
+        current = "\n".join(["[Current Algorithm]", outcome_text(None, parent.fitness),
+                             *_card(tree, parent_id, include_experiences=include_experiences)])
+
+        def render(cards: list[tuple[float, int, str]]) -> str:
+            if not cards:
+                return current
+            approaches = [f"Approach {k}: {body}" for k, (_, _, body) in enumerate(sorted(cards), 1)]
+            return "\n\n".join([current, "[Other Existing Approaches]\nFrom best to worst fitness.", *approaches])
+
         cards: list[tuple[float, int, str]] = []
-        for i in dict.fromkeys(explore_ids):
-            node = tree.nodes.get(i)
-            if node is None or i == parent_id or node.fitness is None:
-                continue
-            body = "\n".join([outcome_text(None, node.fitness), *_card(tree, i, include_experiences=include_experiences)])
-            # 排序只改变编号归属，整组编号的字符总数不变。
-            card_size = len(f"\n\nApproach {len(cards) + 1}: ") + len(body)
-            if size + card_size <= CONTEXT_CHARS:
-                size += card_size
-                cards.append((node.fitness, i, body))
-        if cards:
-            cards.sort(key=lambda c: (c[0], c[1]))
-            blocks.append("\n\n".join([
-                heading,
-                *(f"Approach {k}: {body}" for k, (_, _, body) in enumerate(cards, 1)),
-            ]))
-        instruction = (
-            "Develop a different way to compute the result. Choose an approach that looks promising for this task."
-        )
-        return "\n\n".join(blocks), instruction
+        for i in explore_ids:
+            fitness = tree.nodes[i].fitness
+            card = (fitness, i, "\n".join([outcome_text(None, fitness),
+                                           *_card(tree, i, include_experiences=include_experiences)]))
+            if len(render([*cards, card])) <= CONTEXT_CHARS:
+                cards.append(card)
+        instruction = "Develop a different way to compute the result. Choose an approach that looks promising for this task."
+        return render(cards), instruction
 
     if operator == "Refine":
-        lineage, _ = _lineage_blocks(tree, parent_id, include_experiences=include_experiences)
+        blocks, _ = _lineage_blocks(tree, parent_id, include_experiences=include_experiences)
         current = _current_code(parent)
-        blocks = list(lineage)
         previous = tree.nodes.get(tree.edges[parent_id].parent_id)
         if previous is not None:
-            outcome = outcome_text(None, previous.fitness)
-            previous_code = bare_code(previous.code)
-            implementation = (
-                "Same displayed code as the current algorithm."
-                if previous_code == bare_code(parent.code) else f"```python\n{previous_code}\n```"
-            )
-            comparison = f"[Previous Retained Implementation]\n{outcome}\n{implementation}"
+            code = bare_code(previous.code)
+            listing = ("Same displayed code as the current algorithm." if code == bare_code(parent.code)
+                       else f"```python\n{code}\n```")
+            comparison = f"[Previous Retained Implementation]\n{outcome_text(None, previous.fitness)}\n{listing}"
             if len("\n\n".join([*blocks, comparison, current])) <= CONTEXT_CHARS:
                 blocks.append(comparison)
         blocks.append(current)
         instruction = "Improve the current algorithm. Choose the modification you judge most promising for this task."
-    elif operator == "Crossover":
-        if reference_id == parent_id or reference_id not in tree.nodes or tree.nodes[reference_id].fitness is None:
-            raise ValueError("Crossover requires a valid retained reference_id")
-        lineage, seen = _lineage_blocks(
-            tree, parent_id, include_experiences=include_experiences, exclude=frozenset({reference_id})
-        )
-        ref = tree.nodes[reference_id]
-        blocks = [
-            *lineage,
-            "\n".join([
-                "[Other Algorithm]",
-                "An algorithm whose ideas may be combined with the current algorithm.",
-                outcome_text(None, ref.fitness),
-                *_card(tree, reference_id, include_experiences=include_experiences, seen=seen),
-            ]),
-            _current_code(parent),
-        ]
-        instruction = (
-            "Develop the current algorithm by combining ideas from the two implementations where they work well together."
-        )
     else:
-        raise ValueError(f"Unsupported evolution operator: {operator!r}")
+        blocks, seen = _lineage_blocks(tree, parent_id, include_experiences=include_experiences, exclude=reference_id)
+        ref = tree.nodes[reference_id]
+        blocks.append("\n".join([
+            "[Other Algorithm]",
+            "An algorithm whose ideas may be combined with the current algorithm.",
+            outcome_text(None, ref.fitness),
+            *_card(tree, reference_id, include_experiences=include_experiences, seen=seen),
+        ]))
+        blocks.append(_current_code(parent))
+        instruction = "Develop the current algorithm by combining ideas from the two implementations where they work well together."
     return "\n\n".join(blocks), instruction
 
 
@@ -310,17 +250,13 @@ def init_prompt(task: Task, archive: dict[int, Program], failure_count: int = 2)
             for k, p in enumerate(valid, 1)
         ]
         context.append("[Existing Approaches]\nFrom best to worst fitness.\n\n" + "\n\n".join(algorithms))
-    failed = sorted(
-        sorted(
-            (p for p in archive.values() if p.parent_id == 0 and p.evaluation is not None and p.evaluation.status != "success"),
-            key=lambda p: -p.id,
-        )[:failure_count],
-        key=lambda p: p.id,
-    )
+    failed_ids = sorted(p.id for p in archive.values()
+                        if p.parent_id == ROOT_ID and p.evaluation is not None and not p.valid)
+    failed = [archive[i] for i in failed_ids[-failure_count:]] if failure_count else []
     if failed:
         context.append("[Failed Attempts]\n" + "\n\n".join(
             f"Failed attempt {k}\nReported design: {clean_text(p.design)}\n"
-            f"```python\n{bare_code(p.code)}\n```\nFailure: {failure_feedback(p.evaluation.failure)}"
+            f"```python\n{p.code.rstrip()}\n```\nFailure: {failure_feedback(p.evaluation.failure, p.code)}"
             for k, p in enumerate(failed, 1)
         ))
     if valid:
@@ -362,11 +298,11 @@ def repair_program_prompt(task: Task, program: Program) -> str:
     failure = program.evaluation.failure
     feedback = (
         f"The evaluation did not finish within the total time limit of {task.time_limit:g} seconds."
-        if failure.startswith(TIMEOUT_PREFIX) else failure_feedback(failure)
+        if failure.startswith(TIMEOUT_PREFIX) else failure_feedback(failure, program.code)
     )
     context = (
         f"[Current Algorithm]\nReported design: {clean_text(program.design)}\n"
-        f"```python\n{bare_code(program.code)}\n```\n\n[Failure Feedback]\n{feedback}"
+        f"```python\n{program.code.rstrip()}\n```\n\n[Failure Feedback]\n{feedback}"
     )
     instruction = (
         "Trace the reported exception or invalid result to its cause in the code, using the "

@@ -14,7 +14,7 @@ import pytest
 
 from evotrace_v4 import Config, EvoTrace, OpenAIClient, Task
 from evotrace_v4.evaluation import Evaluator
-from evotrace_v4.topology import TopologyConfig
+from evotrace_v4.topology import TopologyConfig, representatives
 
 
 def _copy_package(tmp_path):
@@ -74,7 +74,7 @@ def test_initialization_completion_computes_core_set_and_simplifies_excess_init_
     for _ in range(6):
         search.step()
     assert search._initialized_count == 2
-    assert len(search.core_ids) == 2
+    assert len(representatives(search.tree, search.topology_config)) == 2
     assert model.state["reflections"] == 0  # Root regions are removed without reflection.
     assert len(search.tree.nodes) == 2  # The 4 failed init nodes were pruned on init completion!
 

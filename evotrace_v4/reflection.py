@@ -70,7 +70,7 @@ def _record(
         lines.append(f"Analysis before coding: {node.analysis}")
     lines.append(f"Reported design: {node.design}")
     if node.fitness is None:
-        lines.append(f"Failure: {compact_failure(node.failure)}")
+        lines.append(f"Failure: {compact_failure(node.failure, node.code)}")
     if edge.experience:
         lines.append(f"Earlier experience from the steps that led to it: {edge.experience}")
         earlier.append(edge.experience)
@@ -114,8 +114,6 @@ def build_reflection_prompt(tree: TreePopulation, region: Region, problem: str) 
                     "Which ideas shaped it, and did any intermediate or side approach work better than the final design?")
     else:
         p = region.parent_id
-        if p == ROOT_ID:
-            raise ValueError("Subtree regions under the virtual root are removed without reflection")
         removed = sorted(region.removed_ids)
         anchors = sorted({tree.edges[i].parent_id for i in removed} - set(removed) - {p})
         records = [_anchor(tree, p, earlier, role="the starting algorithm", attempts=True)]

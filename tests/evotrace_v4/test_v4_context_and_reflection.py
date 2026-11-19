@@ -5,10 +5,12 @@ import json
 import pytest
 
 from evotrace_v4 import Task
-from evotrace_v4.context import CONTEXT_CHARS, build_evolution_context, evolution_prompt, init_prompt
-from evotrace_v4.models import CANDIDATE_RESPONSE_FORMAT, Candidate, Edge, FormatError, Node, ROOT_ID, TreePopulation
+from evotrace_v4.context import CONTEXT_CHARS, build_evolution_context, evolution_prompt, init_prompt, repair_program_prompt
+from evotrace_v4.models import (
+    CANDIDATE_RESPONSE_FORMAT, Candidate, Edge, Evaluation, FormatError, Node, Program, ROOT_ID, TreePopulation,
+)
 from evotrace_v4.reflection import EXPERIENCE_SCHEMA, build_reflection_prompt, reflect_and_apply
-from evotrace_v4.topology import PathContraction, SubtreePruning, TopologyConfig, plan_simplification
+from evotrace_v4.topology import PathContraction, SubtreePruning, TopologyConfig, bare_code, plan_simplification
 
 PROBLEM = "[Problem]\nMinimize.\nScore: lower is better."
 
@@ -24,7 +26,7 @@ def add(tree, parent, fit, code=None, op="Refine"):
     return i
 
 
-def test_candidate_schema_and_parser_use_analysis_code_and_design_in_order():
+def test_candidate_schema_orders_analysis_code_and_design_and_the_parser_reads_the_three_fields():
     schema = CANDIDATE_RESPONSE_FORMAT["json_schema"]["schema"]
     assert schema["required"] == ["analysis", "code", "design"]
     assert list(schema["properties"]) == ["analysis", "code", "design"]
@@ -38,8 +40,33 @@ def test_candidate_schema_and_parser_use_analysis_code_and_design_in_order():
         Candidate.parse(json.dumps({"code": "def solve(x): return x", "design": "Greedy step"}))
     with pytest.raises(FormatError):
         Candidate.parse(json.dumps({"analysis": "", "code": "def solve(x): return x", "design": "Greedy step"}))
-    with pytest.raises(FormatError):
-        Candidate.parse('{"analysis": "Plan", "design": "Reversed order", "code": "def solve(x): return x"}')
+    reordered = Candidate.parse('{"analysis": "Plan", "design": "Reversed order", "code": "def solve(x): return x"}')
+    assert reordered.design == "Reversed order"
+
+
+def test_displayed_code_keeps_the_original_writing_without_docstrings_or_comments():
+    """ast.unparse 把 min(x for x in y) 改写成 min((x for x in y))，模型照抄时会漏写右括号。"""
+    code = 'def solve(x):\n    """Doc."""\n    # pick the best\n    return float(min(v + 1 for v in x))  # tail\n'
+    assert bare_code(code) == "def solve(x):\n    return float(min(v + 1 for v in x))"
+    assert bare_code('def f():\n    """Only a docstring."""\n') == "def f():\n    pass"
+
+
+def test_repair_shows_the_executed_code_and_the_failing_line_with_its_numbers():
+    """评测器用 exec 运行源码时，报错只有 "<string>" 行号；修复提示要能对上这一行。"""
+    code = 'import numpy as np\n\ndef solve(x):\n    """Doc."""\n    # widen\n    return np.zeros(3) + np.ones((1, 4))\n'
+    failure = (
+        "Traceback (most recent call last):\n"
+        '  File "/srv/benchmarks/shared/fixed_evaluation.py", line 42, in evaluate_program\n'
+        "    _, objective = self.SOLVER(data, namespace[self.FUNCTION_NAME])\n"
+        '  File "<string>", line 6, in solve\n'
+        "ValueError: operands could not be broadcast together with shapes (3,) (1,4)\n"
+    )
+    program = Program(1, code, "Add arrays", "Init", 0, None, Evaluation("error", failure=failure))
+    prompt = repair_program_prompt(Task("Minimize", "def solve(x): pass", lambda s, f: f(1), 2), program)
+    assert code.rstrip() in prompt
+    assert ('File "<string>", line 6, in solve\n    return np.zeros(3) + np.ones((1, 4))\n'
+            "ValueError: operands could not be broadcast together with shapes (3,) (1,4)") in prompt
+    assert "fixed_evaluation" not in prompt
 
 
 def test_explore_shows_parent_and_diverse_cards_with_their_own_experience_and_code():
@@ -85,9 +112,6 @@ def test_explore_shows_parent_and_diverse_cards_with_their_own_experience_and_co
     muted, _ = build_evolution_context(tree, parent, "Explore", explore_ids=(rep_best,), include_experiences=False)
     assert not any(note in muted for note in notes)
     assert f"Compute offset {rep_best}" in muted and f"Compute offset {parent}" in muted
-
-    with pytest.raises(ValueError, match="parent_id"):
-        build_evolution_context(tree, ROOT_ID, "Explore")
 
 
 def test_explore_skips_reference_cards_that_would_exceed_the_input_limit():
@@ -285,18 +309,15 @@ def test_reflection_updates_the_experience_seen_by_the_next_parent(kind, prior, 
 
 
 
-def test_single_reflection_schema_and_loading_experimental_checkpoints():
+def test_reflection_schema_and_saved_tree_round_trip():
     assert EXPERIENCE_SCHEMA["json_schema"]["schema"]["required"] == ["analysis", "experience"]
     tree = TreePopulation()
     node_id = add(tree, ROOT_ID, 7.0)
     tree.nodes[node_id].experience = "Original note"
-    saved = asdict(tree)
-    for carrier in (saved["nodes"][node_id], saved["edges"][node_id]):
-        carrier["direction"] = "UNTESTED_NOTE"
-    restored = TreePopulation.from_dict(saved)
+    restored = TreePopulation.from_dict(json.loads(json.dumps(asdict(tree))))
+    assert restored == tree
     prompt, _ = build_evolution_context(restored, node_id, "Refine")
     assert "Original note" in prompt
-    assert "UNTESTED_NOTE" not in prompt and "direction" not in asdict(restored.nodes[node_id])
 
 
 def test_same_round_contraction_and_pruning_keep_the_shared_endpoints_notes_separate():
@@ -346,8 +367,6 @@ def test_subtree_regions_under_the_virtual_root_are_removed_without_reflection()
     after, calls = reflect_and_apply(tree, (region,), model=Counting(), problem=PROBLEM)
     assert Counting.calls == 0 and calls == []
     assert set(after.nodes) == {kept} and not after.nodes[kept].experience
-    with pytest.raises(ValueError, match="virtual root"):
-        build_reflection_prompt(tree, region, PROBLEM)
 
 
 def test_refine_keeps_the_current_implementation_when_the_previous_one_does_not_fit(monkeypatch):
@@ -385,12 +404,6 @@ def test_identical_displayed_predecessor_code_shares_one_listing_and_keeps_both_
     assert "Reported design:" in prompt
 
 
-def test_crossover_rejects_self_or_failed_reference_and_init_can_start_without_example():
-    tree = TreePopulation()
-    parent = add(tree, ROOT_ID, 7.0)
-    failed = add(tree, parent, None)
-    for ref in (parent, failed):
-        with pytest.raises(ValueError, match="reference_id"):
-            build_evolution_context(tree, parent, "Crossover", ref)
+def test_init_can_start_without_example():
     task = Task("Minimize", "def solve(x): pass", lambda s, f: f(1), 2)
     assert "example" not in init_prompt(task, {}).lower()
