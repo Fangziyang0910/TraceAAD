@@ -57,6 +57,9 @@ def build_plan(args):
         if method_id not in TREE_PARAM_METHODS:
             raise ValueError("Allocation triggers apply to EvoTrace V3/V4 only")
         (V4AllocationConfig if method_id == "evotrace_v4" else V3AllocationConfig)(**allocation)
+    reflection = getattr(args, "reflection", None)
+    if reflection is not None and method_id != "evotrace_v4":
+        raise ValueError("Reflection toggle applies to EvoTrace V4 only")
     slug = _slug(args.method)
     tasks = args.tasks if args.tasks is not None else CO_TASKS
     if not tasks or len(set(tasks)) != len(tasks) or any(task not in CO_TASKS for task in tasks):
@@ -79,6 +82,10 @@ def build_plan(args):
                 command += ["--" + key.replace("_", "-"), str(value)]
             for key, value in topology.items():
                 command += ["--" + key.replace("_", "-"), str(value)]
+            if reflection is False:
+                command += ["--no-reflection"]
+            elif reflection is True:
+                command += ["--reflection"]
             if args.scheduler_socket:
                 command += ["--scheduler-socket", args.scheduler_socket]
             command += ["--seconds-per-instance", str(args.seconds_per_instance)]
@@ -133,6 +140,8 @@ def main(argv=None):
     parser.add_argument("--max-representatives", type=int, help="V3/V4 maximum mutually uncovered core representatives")
     parser.add_argument("--cover-distance", type=float, help="V3/V4 AST shingle distance covered by a better representative")
     parser.add_argument("--region-size", type=int, help="V3/V4 minimum non-skeleton nodes per simplified region")
+    parser.add_argument("--reflection", action=argparse.BooleanOptionalAction, default=None,
+                        help="V4 only: enable or disable reflection during tree simplification (default: enabled)")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
                         help="Time allowance per instance; their sum is the whole-task deadline")
     parser.add_argument("--scheduler-socket")
@@ -188,6 +197,11 @@ def main(argv=None):
             key: getattr(args, key) for key in ALLOCATION_FIELDS if getattr(args, key) is not None}))
         manifest["topology"] = asdict(topo_cls(**{
             key: getattr(args, key) for key in TOPOLOGY_FIELDS if getattr(args, key) is not None}))
+    if method_id == "evotrace_v4":
+        reflection = True if args.reflection is None else args.reflection
+        manifest["reflection"] = reflection
+        manifest["include_experiences"] = reflection
+        manifest["mechanisms"] = list(METHODS[args.method][1].mechanisms_for(reflection))
     if not args.launch and not args.enqueue:
         print(json.dumps({"manifest": str(path), **manifest}, ensure_ascii=False, indent=2))
         return

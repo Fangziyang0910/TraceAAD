@@ -253,7 +253,7 @@ def apply_simplification(tree: TreePopulation, regions: Sequence[Region]) -> Tre
     return TreePopulation(
         nodes={i: replace(tree.nodes[i]) for i in kept},
         edges={
-            i: (replace(tree.edges[i], parent_id=rewired[i], operator=None, reference_id=None, contracted=True)
+            i: (replace(tree.edges[i], parent_id=rewired[i], operator=None, reference_id=None, experience="", contracted=True)
                 if i in rewired else replace(tree.edges[i]))
             for i in kept
         },

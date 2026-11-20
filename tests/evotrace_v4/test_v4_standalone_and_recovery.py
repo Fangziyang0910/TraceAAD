@@ -303,3 +303,149 @@ def test_early_unevaluated_stop_marks_run_stopped_and_resumes_cleanly(tmp_path, 
     with pytest.raises(ValueError, match="different program or evaluation scope"):
         run.evaluate_heldout(run_dir, "tsp_construct", best, None, evaluation_seed=0,
                              seconds_per_instance=10.0, condition="evotrace_v4")
+
+
+def test_reflection_disabled_simplifies_tree_without_reflection_or_experiences_and_resumes_identically(tmp_path):
+    task = Task("Minimize", "def solve(x):\n    pass\n", lambda src, fn: fn(1), 2)
+    config = Config(initial_size=3, evaluation_budget=45, seed=7)
+    topology = TopologyConfig(max_representatives=4, cover_distance=0.15, region_size=2)
+
+    class TrackingModel:
+        request_options = {}
+
+        def __init__(self):
+            self.state = {"calls": 0, "reflections": 0}
+            self.prompts = []
+
+        def complete(self, prompt, **kwargs):
+            schema = self.request_options["response_format"]["json_schema"]["name"]
+            if schema == "evotrace_experience":
+                self.state["reflections"] += 1
+                raise AssertionError("Reflection model must not be called when reflection=False")
+            self.state["calls"] += 1
+            self.prompts.append(prompt)
+            n = self.state["calls"]
+            # Mix distinct AST shapes and improving scores so both contraction and subtree pruning trigger.
+            if n % 3 == 0:
+                body = f"return sum(i for i in range(max(1, x))) + {50 - n}"
+            elif n % 3 == 1:
+                body = f"return (x * {n} + 1) - {n - 1}"
+            else:
+                body = f"return max(0, x + {50 - n})"
+            return json.dumps({
+                "analysis": f"Step plan {n}",
+                "code": f"def solve(x):\n    {body}\n",
+                "design": f"Computation {n}",
+            })
+
+    full_model = TrackingModel()
+    full = EvoTrace(
+        task, full_model, config=config, topology_config=topology,
+        reflection=False, run_dir=tmp_path / "no_ref_full",
+    )
+    assert full.reflection is False
+    assert full.include_experiences is False
+    assert full.reflection_model is None
+    result = full.run()
+
+    assert result.evaluations == 45
+    assert full_model.state["reflections"] == 0
+    assert len(full.tree.nodes) < len(full.archive)
+    assert any(edge.contracted for edge in full.tree.edges.values())
+    assert all(node.experience == "" for node in full.tree.nodes.values())
+    assert all(edge.experience == "" for edge in full.tree.edges.values())
+    assert all("aux" not in attempt.record for attempt in full.attempts)
+    assert all("Local reflection" not in prompt for prompt in full_model.prompts)
+
+    rows = [json.loads(line) for line in (tmp_path / "no_ref_full" / "attempts.jsonl").read_text().splitlines()]
+    assert any("tree_after" in row for row in rows)
+    saved_cfg = json.loads((tmp_path / "no_ref_full" / "run_config.json").read_text())
+    assert saved_cfg["reflection"] is False
+    assert saved_cfg["include_experiences"] is False
+    assert "tree_simplification" in saved_cfg["mechanisms"]
+    assert "reflective_elimination" not in saved_cfg["mechanisms"]
+
+    # Split mid-run, corrupt trailing bytes, and verify deterministic resume without reflection.
+    part_model = TrackingModel()
+    part = EvoTrace(
+        task, part_model, config=config, topology_config=topology,
+        reflection=False, run_dir=tmp_path / "no_ref_split",
+    )
+    for _ in range(20):
+        assert part.step() is not None
+    for name in ("calls.jsonl", "attempts.jsonl"):
+        with (tmp_path / "no_ref_split" / name).open("ab") as f:
+            f.write(b'{"truncated":')
+    resumed = EvoTrace(
+        task, part_model, config=config, topology_config=topology,
+        reflection=False, run_dir=tmp_path / "no_ref_split", resume=True,
+    )
+    assert resumed.tree == part.tree
+    resumed.run()
+    assert resumed.tree == full.tree
+    assert resumed.evaluations_used == 45
+    assert part_model.state["reflections"] == 0
+
+
+def test_independent_cli_no_reflection_and_resume_validation(tmp_path):
+    env = _copy_package(tmp_path)
+    (tmp_path / "sample_task.py").write_text('''from evotrace_v4 import Task
+def make_task():
+    return Task("Minimize", "def solve(x):\\n    pass\\n", lambda src, fn: fn(1), 2)
+''')
+    requests = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            requests.append(payload)
+            n = len(requests)
+            candidate = json.dumps({
+                "analysis": f"Plan {n}",
+                "code": f"def solve(x):\n    return x + {20 - n}\n",
+                "design": f"Return offset {n}",
+            })
+            body = json.dumps({"choices": [{"message": {"content": candidate}, "finish_reason": "stop"}],
+                               "usage": {"total_tokens": 9}}).encode()
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        base_cmd = [
+            sys.executable, "-S", "-m", "evotrace_v4", "--task-factory", "sample_task:make_task",
+            "--run-dir", "cli_no_ref", "--initial-size", "2", "--region-size", "2",
+            "--base-url", f"http://127.0.0.1:{server.server_port}/v1", "--model", "local-test",
+        ]
+        first = subprocess.run(base_cmd + ["--budget", "6", "--no-reflection"],
+                               cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
+        assert first.returncode == 0, first.stdout + first.stderr
+        assert json.loads(first.stdout)["evaluations"] == 6
+
+        # Resuming without repeating --no-reflection inherits reflection=False from run_config.json.
+        resumed = subprocess.run(base_cmd + ["--budget", "8", "--resume"],
+                                 cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
+        assert resumed.returncode == 0, resumed.stdout + resumed.stderr
+        assert json.loads(resumed.stdout)["evaluations"] == 8
+
+        # Resuming with a conflicting --reflection flag is rejected cleanly.
+        mismatch = subprocess.run(base_cmd + ["--budget", "10", "--resume", "--reflection"],
+                                  cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
+        assert mismatch.returncode == 2
+        assert "original reflection setting" in mismatch.stderr
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+    assert len(requests) == 8
+    assert all(req["response_format"]["json_schema"]["name"] == "evotrace_candidate" for req in requests)
+    assert all("Local reflection" not in req["messages"][0]["content"] for req in requests)
+    saved_cfg = json.loads((tmp_path / "cli_no_ref" / "run_config.json").read_text())
+    assert saved_cfg["reflection"] is False and saved_cfg["include_experiences"] is False

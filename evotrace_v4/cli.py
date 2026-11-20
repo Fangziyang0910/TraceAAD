@@ -65,12 +65,18 @@ def main(argv=None):
     parser.add_argument("--max-representatives", type=int)
     parser.add_argument("--cover-distance", type=float)
     parser.add_argument("--region-size", type=int)
+    parser.add_argument("--reflection", action=argparse.BooleanOptionalAction, default=None,
+                        help="Enable or disable reflection during tree simplification (default: enabled)")
     parser.add_argument("--no-example", action="store_true")
     args = parser.parse_args(argv)
     directory = Path(args.run_dir)
     if not args.resume and (directory / "run_config.json").exists():
         parser.error("Run already exists; use --resume")
     saved = json.loads((directory / "run_config.json").read_text()) if args.resume else {}
+    saved_reflection = saved.get("reflection", True)
+    if args.resume and args.reflection is not None and args.reflection != saved_reflection:
+        parser.error("Resume requires the original reflection setting")
+    reflection = saved_reflection if args.reflection is None else args.reflection
     task = load_task(name=args.task, factory=args.task_factory, options=json.loads(args.task_options))
     if args.no_example:
         task.example_code = task.example_design = None
@@ -80,6 +86,7 @@ def main(argv=None):
         topology_config=_settings(TopologyConfig, saved.get("topology", {}), args),
         allocation_config=_settings(AllocationConfig, saved.get("allocation", {}), args),
         include_experiences=saved.get("include_experiences", True),
+        reflection=reflection,
         run_dir=directory, resume=args.resume,
     )
     result = search.run()

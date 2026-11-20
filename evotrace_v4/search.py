@@ -28,7 +28,7 @@ from .models import (
 )
 from .reflection import EXPERIENCE_SCHEMA, problem_header, reflect_and_apply
 from .task import Task
-from .topology import TopologyConfig, feasible_individuals, plan_simplification
+from .topology import TopologyConfig, apply_simplification, feasible_individuals, plan_simplification
 
 
 def _write_json(path: Path, value) -> None:
@@ -72,6 +72,12 @@ class EvoTrace:
         "traceable_lineage_context",
     )
 
+    @classmethod
+    def mechanisms_for(cls, reflection: bool = True) -> tuple[str, ...]:
+        if reflection:
+            return cls.mechanisms
+        return tuple("tree_simplification" if m == "reflective_elimination" else m for m in cls.mechanisms)
+
     def __init__(
         self,
         task: Task,
@@ -81,6 +87,7 @@ class EvoTrace:
         topology_config: TopologyConfig | None = None,
         allocation_config: AllocationConfig | None = None,
         include_experiences: bool = True,
+        reflection: bool = True,
         run_dir: str | Path,
         resume: bool = False,
     ) -> None:
@@ -88,12 +95,14 @@ class EvoTrace:
         self.config = config or Config()
         self.topology_config = topology_config or TopologyConfig()
         self.allocation_config = allocation_config or AllocationConfig()
-        self.include_experiences = include_experiences
+        self.reflection = reflection
+        self.include_experiences = include_experiences and reflection
+        self.mechanisms = self.mechanisms_for(reflection)
 
         self.tree = TreePopulation()
         self.model = with_output_format(model, CANDIDATE_RESPONSE_FORMAT)
-        self.reflection_model = with_output_format(model, EXPERIENCE_SCHEMA, role=True)
-        self.problem = problem_header(task.task_description, task.score_definition, task.function_template)
+        self.reflection_model = with_output_format(model, EXPERIENCE_SCHEMA, role=True) if self.reflection else None
+        self.problem = problem_header(task.task_description, task.score_definition, task.function_template) if self.reflection else ""
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.evaluator = Evaluator(task)
@@ -123,7 +132,8 @@ class EvoTrace:
                 "mechanisms": list(self.mechanisms),
                 "topology": asdict(self.topology_config),
                 "allocation": asdict(self.allocation_config),
-                "include_experiences": include_experiences,
+                "reflection": self.reflection,
+                "include_experiences": self.include_experiences,
                 "model": getattr(self.model, "model", type(self.model).__name__),
             })
         self._resumed_at = len(self.attempts)
@@ -157,6 +167,9 @@ class EvoTrace:
         regions = plan_simplification(self.tree, self.topology_config)
         if not regions:
             return False
+        if not self.reflection:
+            self.tree = apply_simplification(self.tree, regions)
+            return True
         self.tree, attempt.record["aux"] = reflect_and_apply(
             self.tree,
             regions,

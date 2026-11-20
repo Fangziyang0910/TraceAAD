@@ -40,7 +40,7 @@ python3 -m evotrace_v4 --task-factory my_task:make_task \
   --run-dir runs/example_v4 --base-url http://localhost:8000/v1 --model my-model
 ```
 
-仓库统一实验入口使用 `--method evotrace.v4` 或 `evotrace_v4`。
+仓库统一实验入口使用 `--method evotrace.v4` 或 `evotrace_v4`。加 `--no-reflection`（Python 接口 `reflection=False`）可关闭所有反思：保留树剪枝与路径收缩，不调用反思模型、不向边或节点写入经验，上下文也不包含反思信息。
 
 本地测试：
 

@@ -236,3 +236,117 @@ def test_eco_requests_keep_non_thinking_control_on_schema_change(monkeypatch):
         assert payload["reasoning_effort"] == "none"
         assert payload["model"] == run.ECO_MODEL
         assert "chat_template_kwargs" not in payload and "top_k" not in payload
+
+
+def test_v4_no_reflection_toggle_in_run_and_launch_host(entry_environment, monkeypatch, capsys):
+    from argparse import Namespace
+    from experiments.traceaad import launch_host
+
+    base_args = ["--task", "tsp_construct", "--run-name", "no_ref", "--batch", "no_ref",
+                 "--scheduler-socket", "/fake", "--dry-run"]
+    run.main(["--method", "evotrace.v4", *base_args])
+    full_meta = json.loads(capsys.readouterr().out)
+    assert full_meta["reflection"] is True
+    assert full_meta["include_experiences"] is True
+    assert "reflective_elimination" in full_meta["mechanisms"]
+
+    run.main(["--method", "evotrace.v4", *base_args, "--no-reflection"])
+    ablation_meta = json.loads(capsys.readouterr().out)
+    assert ablation_meta["reflection"] is False
+    assert ablation_meta["include_experiences"] is False
+    assert ablation_meta["mechanisms"] == [
+        "tree_population", "tree_simplification", "tree_node_allocation", "traceable_lineage_context",
+    ]
+
+    for other in ("base", "evotrace.v1", "evotrace.v2", "evotrace.v3"):
+        for flag in ("--no-reflection", "--reflection"):
+            with pytest.raises(SystemExit) as error:
+                run.main(["--method", other, *base_args, flag])
+            assert error.value.code == 2
+
+    monkeypatch.setattr(launch_host, "scheduler_status", lambda _: {"instance_id": "test"})
+    launch_host.main(["--method", "evotrace.v4", "--experiment", "evotrace_v4_no_ref",
+                      "--batch", "ablation", "--tasks", "tsp_construct", "--repeats", "1",
+                      "--scheduler-socket", "/fake", "--no-reflection"])
+    manifest = json.loads(capsys.readouterr().out)
+    assert manifest["reflection"] is False
+    assert manifest["include_experiences"] is False
+    assert manifest["mechanisms"] == ablation_meta["mechanisms"]
+    row, = manifest["plan"]
+    assert "--no-reflection" in row["command"]
+
+    bad_args = Namespace(tasks=["tsp_construct"], method="evotrace.v3", batch="ablation",
+                         experiment="evotrace_v3", repeats=1, backend="scheduled", budget=1000,
+                         initial_size=5, max_tokens=16384, model_timeout=600,
+                         selection_temperature=1.0, scheduler_socket="/fake",
+                         seconds_per_instance=10.0, env_file=None, skip_heldout=False,
+                         reflection=False)
+    with pytest.raises(ValueError, match="V4 only"):
+        launch_host.build_plan(bad_args)
+
+
+def test_v4_run_no_reflection_end_to_end_and_resume(tmp_path, monkeypatch, capsys):
+    from evotrace_v4 import OpenAIClient, Task as V4Task
+
+    task = V4Task("Minimize", "def solve(x):\n    pass\n", lambda src, fn: fn(1), 2,
+                  metadata={"n_instance": 1, "settings": {"timeout_seconds": 2}})
+    state = {"calls": 0, "reflections": 0, "prompts": []}
+
+    class Scheduled:
+        model = "offline-test"
+
+        def __init__(self, path, label):
+            self.path, self.scheduler = path, {"endpoints": []}
+            self.request_options = {}
+
+        def complete(self, prompt, **settings):
+            assert self.factory is OpenAIClient
+            schema = self.request_options.get("response_format", {}).get("json_schema", {}).get("name", "")
+            if schema == "evotrace_experience":
+                state["reflections"] += 1
+                raise AssertionError("Reflection must not run when --no-reflection is set")
+            state["calls"] += 1
+            state["prompts"].append(prompt)
+            n = state["calls"]
+            return json.dumps({
+                "analysis": f"Plan {n}",
+                "code": f"def solve(x):\n    return x + {30 - n}\n",
+                "design": f"Offset {n}",
+            })
+
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_environment", lambda *_: None)
+    monkeypatch.setattr(run, "load_evotrace_v4_task", lambda **kwargs: task)
+    monkeypatch.setattr(run, "ScheduledModel", Scheduled)
+    monkeypatch.setattr(run, "ScheduledEvaluator", lambda t, p, l, *, evaluator_factory: evaluator_factory(t))
+    monkeypatch.setattr(run.signal, "signal", lambda *_: None)
+
+    common = ["--method", "evotrace.v4", "--experiment", "evotrace_v4_no_ref",
+              "--task", "tsp_construct", "--run-name", "v4_no_ref", "--batch", "ablation",
+              "--initial-size", "2", "--region-size", "2",
+              "--scheduler-socket", "/fake", "--skip-heldout"]
+    run.main([*common, "--budget", "8", "--no-reflection"])
+    out = json.loads(capsys.readouterr().out.splitlines()[-1])
+    run_dir = Path(out["run_dir"])
+    assert out["evaluations"] == 8
+    assert state["reflections"] == 0
+    assert all("Local reflection" not in p for p in state["prompts"])
+
+    summary = json.loads((run_dir / "summary.json").read_text())
+    assert summary["status"] == "finished" and summary["auxiliary"] == {}
+    public_cfg = json.loads((run_dir / "run_config.json").read_text())
+    native_cfg = json.loads((run_dir / "native" / "run_config.json").read_text())
+    assert public_cfg["reflection"] is False and public_cfg["include_experiences"] is False
+    assert native_cfg["reflection"] is False and native_cfg["include_experiences"] is False
+    rows = [json.loads(line) for line in (run_dir / "native" / "attempts.jsonl").read_text().splitlines()]
+    assert any("tree_after" in row for row in rows)
+
+    # Resume without repeating --no-reflection keeps reflection disabled.
+    run.main([*common, "--budget", "10", "--resume"])
+    out2 = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert out2["evaluations"] == 10 and state["reflections"] == 0
+
+    # Resume with conflicting --reflection fails fast.
+    with pytest.raises(SystemExit) as error:
+        run.main([*common, "--budget", "12", "--resume", "--reflection"])
+    assert error.value.code == 2

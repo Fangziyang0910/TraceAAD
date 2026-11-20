@@ -205,6 +205,8 @@ def main(argv=None):
     parser.add_argument("--max-representatives", type=int, help="V3/V4 maximum mutually uncovered core representatives")
     parser.add_argument("--cover-distance", type=float, help="V3/V4 AST shingle distance covered by a better representative")
     parser.add_argument("--region-size", type=int, help="V3/V4 minimum nodes per simplified path or subtree region")
+    parser.add_argument("--reflection", action=argparse.BooleanOptionalAction, default=None,
+                        help="V4 only: enable or disable reflection during tree simplification (default: enabled)")
     parser.add_argument("--reference-code", action="store_true",
                         help="Crossover also shows the reference algorithm source")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
@@ -219,6 +221,8 @@ def main(argv=None):
     for name in (*ALLOCATION_FIELDS, *TOPOLOGY_FIELDS):
         if getattr(args, name) is not None and METHODS[args.method][0] not in TREE_PARAM_METHODS:
             parser.error(f"{name.replace('_', '-')} applies to EvoTrace V3/V4 only")
+    if args.reflection is not None and METHODS[args.method][0] != "evotrace_v4":
+        parser.error("--reflection/--no-reflection applies to EvoTrace V4 only")
     if args.reference_code and METHODS[args.method][0] not in EVOTRACE_METHODS:
         parser.error("--reference-code applies to EvoTrace only")
     if not args.scheduler_socket:
@@ -269,9 +273,14 @@ def main(argv=None):
             model.factory = evotrace.OpenAIClient
         routing = {"policy": "shared", "endpoints": model.scheduler["endpoints"]}
     metadata = metadata_for(args, task, config, model, routing)
+    reflection = (True if args.reflection is None else args.reflection) if method_id == "evotrace_v4" else None
     if allocation_config is not None:
         metadata["allocation"] = asdict(allocation_config)
         metadata["topology"] = asdict(topology_config)
+    if reflection is not None:
+        metadata["reflection"] = reflection
+        metadata["include_experiences"] = reflection
+        metadata["mechanisms"] = list(evotrace_v4.EvoTrace.mechanisms_for(reflection))
     if args.dry_run:
         print(json.dumps(metadata, ensure_ascii=False, indent=2))
         return
@@ -291,9 +300,18 @@ def main(argv=None):
             key: getattr(args, key) for key in ALLOCATION_FIELDS if getattr(args, key) is not None}})
         topology_config = topo_cls(**{**native["topology"], **{
             key: getattr(args, key) for key in TOPOLOGY_FIELDS if getattr(args, key) is not None}})
+        if method_id == "evotrace_v4":
+            saved_reflection = native.get("reflection", True)
+            if args.reflection is not None and args.reflection != saved_reflection:
+                parser.error("Resume requires the original reflection setting")
+            reflection = saved_reflection
     if allocation_config is not None:
         metadata["allocation"] = asdict(allocation_config)
         metadata["topology"] = asdict(topology_config)
+    if reflection is not None:
+        metadata["reflection"] = reflection
+        metadata["include_experiences"] = reflection
+        metadata["mechanisms"] = list(evotrace_v4.EvoTrace.mechanisms_for(reflection))
 
     def stop(signum, frame):
         raise KeyboardInterrupt(f"Received signal {signum}")
@@ -306,6 +324,7 @@ def main(argv=None):
                               run_dir=directory / "native", resume=args.resume,
                               **({"allocation_config": allocation_config} if allocation_config is not None else {}),
                               **({"topology_config": topology_config} if topology_config is not None else {}),
+                              **({"reflection": reflection} if reflection is not None else {}),
                               **({"reference_code": True}
                                  if args.reference_code and method_id not in TREE_PARAM_METHODS else {}))
     search.evaluator = ScheduledEvaluator(
