@@ -1,10 +1,11 @@
 # TraceAAD 统一实验入口
 
-保留 Base、EvoTrace V1–V4。使用 `--method` 选择；默认 `base`。EvoTrace 支持点号与下划线两种写法。V21–V24 源码、测试和旧入口已移入本地 `archive/trajectory_methods_20261116/`。
+保留 Base、EvoTrace V1–V5。使用 `--method` 选择；默认 `base`。EvoTrace 支持点号与下划线两种写法。V21–V24 源码、测试和旧入口已移入本地 `archive/trajectory_methods_20261116/`。
 
 | 方法 | 搜索实现 |
 | --- | --- |
 | `base` | Base 基础演化对照。 |
+| `evotrace.v5` | 独立EvoTrace v5：树状种群、动态压缩与反思淘汰，评价预算按各条子路已走出的进步分配；[设计与用法](../../evotrace_v5/README.md)。参数只有评价预算、初始个体数、种子、采样与反思开关，V3/V4 树参数不适用。 |
 | `evotrace.v4` | 独立EvoTrace v4：全树可行个体按排名与同一谱系位置投入抽样主父代，三算子统一建立真实父子派生边，局部满块路径收缩与合并子树剪枝凝练经验；[设计与用法](../../evotrace_v4/README.md)。 |
 | `evotrace.v3` | 独立EvoTrace v3：在贪心覆盖代表集上按名次质量与直接投入抽样父代，通过路径收缩与子树剪枝成批凝练边经验与节点经验；[设计与用法](../../evotrace_v3/README.md)。 |
 | `evotrace.v2` | 独立EvoTrace v2：按最近使用与质量差异一次选择，补齐必要分叉后联合剪枝和路径收缩；[设计与用法](../../evotrace_v2/README.md)。 |
@@ -22,7 +23,9 @@
   --env-file ~/.config/traceaad/opendesign-eco.env
 ```
 
-EvoTrace的独立入口、配置与恢复约定见[V3](../../evotrace_v3/README.md)、[V2](../../evotrace_v2/README.md)、[V1](../../evotrace_v1/README.md#配置与恢复)。不同版本分别建立批次并由各自冻结源码恢复；当前运行与保留批次清单以[实验与边界台账](../../docs/记录/README.md)为准。下方真实轨迹harness面向V2冻结记录，不能用V2树快照恢复V3。
+V5 用同样的 `run`、`launch_host` 与队列入口，结果写入 `experiments_result/evotrace_v5/`（或 `--experiment` 指定的目录）。`--reflection/--no-reflection` 与 V4 相同；`--rank-half-life` 等 V3/V4 树参数、`--selection-temperature` 和 `--reference-code` 对 V5 报错。恢复沿用该运行保存的条件（种子、初始个体数、采样、`--seconds-per-instance`、反思开关与后端），与保存值不同时拒绝；只有 `--budget` 可以改，用于有意延长预算，原预算记入运行配置的 `budget_extended_from`。训练最好程序固定后的独立测试只调用评价器的单次评价并保存目标值。
+
+EvoTrace的独立入口、配置与恢复约定见[V5](../../evotrace_v5/README.md)、[V3](../../evotrace_v3/README.md)、[V2](../../evotrace_v2/README.md)、[V1](../../evotrace_v1/README.md#配置与恢复)。不同版本分别建立批次并由各自冻结源码恢复；当前运行与保留批次清单以[实验与边界台账](../../docs/记录/README.md)为准。下方真实轨迹harness面向V2冻结记录，不能用V2树快照恢复V3。
 
 默认初始化5个有效程序，每路1000次评价。初始化、失败与修复重评按实际评价计费，辅助模型调用与token单列。训练16例共享160秒、内存2 GiB；训练最好程序固定后，再执行独立测试。条件见[实验协议](../PROTOCOL.md)。
 

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evotrace"
+version = "5.0"
+description = "Independent algorithm design with a tree-structured population, dynamic compression and reflective elimination"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+evotrace = "evotrace_v5.cli:main"
+
+[tool.setuptools]
+packages = ["evotrace_v5"]
+package-dir = {evotrace_v5 = "."}

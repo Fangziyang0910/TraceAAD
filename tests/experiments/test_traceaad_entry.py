@@ -42,7 +42,12 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
         "evotrace.v3": ["tree_population", "reflective_tree_simplification", "representative_cover_allocation", "tree_context"],
         "evotrace.v4": ["tree_population", "reflective_elimination", "tree_node_allocation", "traceable_lineage_context"],
     }
-    assert set(run.METHODS) == set(combinations) | {m.replace(".", "_") for m in combinations}
+    # V5 and V5.1 have their own entry tests in tests/evotrace_v5/ and tests/evotrace_v5_1/.
+    assert set(run.METHODS) == (
+        set(combinations)
+        | {m.replace(".", "_") for m in combinations}
+        | {"evotrace.v5", "evotrace_v5", "evotrace.v5.1", "evotrace_v5_1"}
+    )
     arguments = ["--task", "tsp_construct", "--run-name", "test", "--batch", "test",
                  "--scheduler-socket", "/fake", "--dry-run", "--selection-temperature", "0.1"]
     run.main(arguments)
@@ -53,6 +58,8 @@ def test_retained_dry_runs_preserve_conditions_and_method_result_folders(entry_e
     assert base["method_params"]["selection_temperature"] == 0.1
     assert base["llm"]["temperature"] == 1.0
     for method, (directory, _search_type) in run.METHODS.items():
+        if directory in {"evotrace_v5", "evotrace_v5_1"}:
+            continue
         run.main([*arguments, "--method", method])
         metadata = json.loads(capsys.readouterr().out)
         assert metadata["method"] == metadata["experiment"] == directory
@@ -281,7 +288,7 @@ def test_v4_no_reflection_toggle_in_run_and_launch_host(entry_environment, monke
                          selection_temperature=1.0, scheduler_socket="/fake",
                          seconds_per_instance=10.0, env_file=None, skip_heldout=False,
                          reflection=False)
-    with pytest.raises(ValueError, match="V4 only"):
+    with pytest.raises(ValueError, match="V4/V5 only"):
         launch_host.build_plan(bad_args)
 
 

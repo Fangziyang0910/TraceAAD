@@ -15,15 +15,17 @@ import time
 from benchmarks.tasks import CO_TASKS, TASK_SHORT
 from experiments.infra.launcher import is_session_alive
 from traceaad_base.storage import write_json
-from traceaad_base.selection import SELECTION_RULE
 from .run import (
     ALLOCATION_FIELDS,
     BACKENDS,
     ECO_BACKEND,
     EVOTRACE_METHODS,
     METHODS,
+    REFLECTION_METHODS,
     TOPOLOGY_FIELDS,
     TREE_PARAM_METHODS,
+    V5_FAMILY,
+    V51_PARAM_FIELDS,
     V3AllocationConfig,
     V3TopologyConfig,
     V4AllocationConfig,
@@ -49,6 +51,10 @@ def build_plan(args):
                   if getattr(args, key, None) is not None}
     topology = {key: getattr(args, key) for key in TOPOLOGY_FIELDS
                 if getattr(args, key, None) is not None}
+    v51_params = {key: getattr(args, key) for key in V51_PARAM_FIELDS
+                  if getattr(args, key, None) is not None}
+    if method_id == "evotrace_v5_1" and "explore_references" in allocation:
+        v51_params["explore_references"] = allocation.pop("explore_references")
     if topology:
         if method_id not in TREE_PARAM_METHODS:
             raise ValueError("Topology triggers apply to EvoTrace V3/V4 only")
@@ -57,9 +63,11 @@ def build_plan(args):
         if method_id not in TREE_PARAM_METHODS:
             raise ValueError("Allocation triggers apply to EvoTrace V3/V4 only")
         (V4AllocationConfig if method_id == "evotrace_v4" else V3AllocationConfig)(**allocation)
+    if v51_params and method_id != "evotrace_v5_1":
+        raise ValueError("V5.1 parameters apply to EvoTrace V5.1 only")
     reflection = getattr(args, "reflection", None)
-    if reflection is not None and method_id != "evotrace_v4":
-        raise ValueError("Reflection toggle applies to EvoTrace V4 only")
+    if reflection is not None and method_id not in REFLECTION_METHODS:
+        raise ValueError("Reflection toggle applies to EvoTrace V4/V5 only")
     slug = _slug(args.method)
     tasks = args.tasks if args.tasks is not None else CO_TASKS
     if not tasks or len(set(tasks)) != len(tasks) or any(task not in CO_TASKS for task in tasks):
@@ -81,6 +89,8 @@ def build_plan(args):
             for key, value in allocation.items():
                 command += ["--" + key.replace("_", "-"), str(value)]
             for key, value in topology.items():
+                command += ["--" + key.replace("_", "-"), str(value)]
+            for key, value in v51_params.items():
                 command += ["--" + key.replace("_", "-"), str(value)]
             if reflection is False:
                 command += ["--no-reflection"]
@@ -133,15 +143,18 @@ def main(argv=None):
     parser.add_argument("--initial-size", type=int, default=5)
     parser.add_argument("--max-tokens", type=int, default=16384)
     parser.add_argument("--model-timeout", type=float, default=600)
-    parser.add_argument("--selection-temperature", type=float, default=1.0,
-                        help="Boltzmann parent temperature in fitness units")
+    parser.add_argument("--selection-temperature", type=float,
+                        help="Base only: Boltzmann parent temperature in fitness units (default: 1.0)")
     parser.add_argument("--rank-half-life", type=float, help="V3/V4 quality weight half-life in ranks")
-    parser.add_argument("--explore-references", type=int, help="V3/V4 maximum diverse Explore overview cards")
+    parser.add_argument("--explore-references", type=int, help="V3/V4/V5.1 maximum diverse Explore overview cards")
     parser.add_argument("--max-representatives", type=int, help="V3/V4 maximum mutually uncovered core representatives")
     parser.add_argument("--cover-distance", type=float, help="V3/V4 AST shingle distance covered by a better representative")
     parser.add_argument("--region-size", type=int, help="V3/V4 minimum non-skeleton nodes per simplified region")
+    parser.add_argument("--population-capacity", type=int, help="V5.1 only: bounded lineage forest capacity K")
+    parser.add_argument("--selection-lambda", type=float, help="V5.1 only: median/MAD sigmoid steepness")
+    parser.add_argument("--reflection-mask-prob", type=float, help="V5.1 only: within-run Refine memory masking probability")
     parser.add_argument("--reflection", action=argparse.BooleanOptionalAction, default=None,
-                        help="V4 only: enable or disable reflection during tree simplification (default: enabled)")
+                        help="V4/V5 only: enable or disable reflection during tree simplification (default: enabled)")
     parser.add_argument("--seconds-per-instance", type=float, default=10.,
                         help="Time allowance per instance; their sum is the whole-task deadline")
     parser.add_argument("--scheduler-socket")
@@ -155,6 +168,10 @@ def main(argv=None):
     args.experiment = args.experiment or METHODS[args.method][0]
     if args.repeats < 1 or args.spacing < 0:
         parser.error("repeats must be positive and spacing must be nonnegative")
+    if args.selection_temperature is not None and METHODS[args.method][0] in V5_FAMILY:
+        parser.error("--selection-temperature applies to Base only")
+    if args.selection_temperature is None:
+        args.selection_temperature = 1.0
     if not math.isfinite(args.seconds_per_instance) or args.seconds_per_instance <= 0:
         parser.error("seconds-per-instance must be finite and positive")
     if not math.isfinite(args.selection_temperature) or args.selection_temperature <= 0:
@@ -197,7 +214,24 @@ def main(argv=None):
             key: getattr(args, key) for key in ALLOCATION_FIELDS if getattr(args, key) is not None}))
         manifest["topology"] = asdict(topo_cls(**{
             key: getattr(args, key) for key in TOPOLOGY_FIELDS if getattr(args, key) is not None}))
-    if method_id == "evotrace_v4":
+    if method_id == "evotrace_v5_1":
+        from evotrace_v5_1 import Config as V51Config
+
+        cfg = V51Config(
+            evaluation_budget=args.budget,
+            initial_size=args.initial_size,
+            max_tokens=args.max_tokens,
+            model_timeout=args.model_timeout,
+            **{
+                key: getattr(args, key)
+                for key in (*V51_PARAM_FIELDS, "explore_references")
+                if getattr(args, key, None) is not None
+            },
+        )
+        manifest["v5_1"] = {
+            key: getattr(cfg, key) for key in (*V51_PARAM_FIELDS, "explore_references")
+        }
+    if method_id in REFLECTION_METHODS:
         reflection = True if args.reflection is None else args.reflection
         manifest["reflection"] = reflection
         manifest["include_experiences"] = reflection
