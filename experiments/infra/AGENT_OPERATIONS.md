@@ -90,7 +90,7 @@ vLLM 启动日志给出每卡 KV 空间 14.43 GiB、317,773 个 token，48K 上�
 
 ## server4 入口
 
-server4 统一执行搜索与 CPU 评价，并调度 server3、server1 和本机的模型请求。仓库位于 `/home/fzy/code/LLM4AD/TraceAAD`，Python 为仓库内 `.venv/bin/python`。模型鉴权由该目录的 `.env` 加载。
+server4 统一执行搜索与 CPU 评价，并调度 server3、server1 和本机的模型请求。仓库位于 `/home/fzy/code/LLM4AD/TraceAAD`，Python 为仓库内 `.venv/bin/python`。模型鉴权由该目录的 `.env` 加载；使用 `--backend opendesign-eco`（直连 `deepseek-v4.1-flash-eco`）时通过 `--env-file ~/.config/traceaad/opendesign-eco.env` 加载 `OPENDESIGN_API_KEY`。
 
 ```bash
 ssh B3-server4
